@@ -1,6 +1,6 @@
 # WP 1.5 — Mock hosting
 
-**SRD ids:** D17, ARC-7, DOC-10, DOC-17 · **Depends on:** 1.4 · **Status:** to do
+**SRD ids:** D17, ARC-7, DOC-10, DOC-17 · **Depends on:** 1.4 · **Status:** done
 
 ## Goal
 

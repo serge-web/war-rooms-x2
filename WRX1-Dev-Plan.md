@@ -229,5 +229,7 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 0.8's objectives schema gains `updatedAt`; each author publishes its own item (§3 rule 14) | Found by 1.2: a PubSub publisher cannot overwrite another publisher's item, which blocked umpire edits (PLY-35) |
 | 1.1 interface clarified in comments only: subscriptions are per full JID, and document nodes use item id `current` | Found by 1.6; several sessions share a role (D22) |
 | 2.1 must create every node before publishing, give objectives nodes room for one item per author, and revoke subscriptions per full JID | Found by 1.2: ejabberd auto-creates a missing node with an open config when the admin publishes to it |
+| 1.4's mock leaves out the raw-stanza contract tests, which run against ejabberd only, and lists every behaviour the contract does not cover | ARC-10; raw stanzas are not part of the 1.1 interface |
+| 1.5's mock controls return promises, and the mock saves to IndexedDB after every change rather than debounced | The server runs in another tab or worker; a debounce lost the last messages when the leader tab closed |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 
