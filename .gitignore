@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 # Playwright
 playwright-report/
 test-results/
+
+# Site build inputs generated at build time (tools/site/build-site.ts)
+site/.generated/

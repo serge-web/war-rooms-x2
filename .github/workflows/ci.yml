@@ -32,6 +32,8 @@ jobs:
         run: pnpm check:trace
       - name: Data dictionary is current (DOC-3)
         run: pnpm check:dictionary
+      - name: Blog posts' front matter, gate links and deny-list (DOC-24 to DOC-26)
+        run: pnpm check:blog
       - name: Install Chromium for the Mermaid check
         run: pnpm exec playwright install --with-deps chromium
       - name: Mermaid blocks parse (DOC-22)
@@ -51,6 +53,12 @@ jobs:
       - run: pnpm build
       - name: Bundle has no external references (NFR-7, DOC-11)
         run: pnpm check:bundle
+      - name: Site deny-list scan (DOC-2)
+        run: node tools/site/check-deny-list.ts site/dist
+      - name: Site has no secrets or real-server endpoints (NFR-1, DOC-12)
+        run: node tools/site/check-site-bundle.ts site/dist
+      - name: Site size (DOC-14)
+        run: node tools/site/size-report.ts site/dist --title "Site build size"
       - run: pnpm --filter @wrx/web exec playwright install --with-deps chromium
       - run: pnpm e2e
         env:
@@ -60,6 +68,16 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report
+          retention-days: 7
+      - name: Site end to end, offline, under a nested base path (DOC-6, DOC-11, DOC-15)
+        run: pnpm --filter @wrx/site e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: site-playwright-report
+          path: site/playwright-report
           retention-days: 7
 
   # The ejabberd contract-suite job (NFR-16, NFR-22) joins this workflow in WP 1.2, when the

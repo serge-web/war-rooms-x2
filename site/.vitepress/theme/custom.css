@@ -1,0 +1,37 @@
+.wrx-mermaid {
+  margin: 16px 0;
+  overflow-x: auto;
+}
+
+/* VitePress's paragraph spacing would overflow the label boxes Mermaid measured. */
+.vp-doc .wrx-mermaid p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.wrx-mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.wrx-mermaid-pending pre {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: pre-wrap;
+}
+
+.wrx-demo {
+  margin: 24px 0;
+}
+
+.wrx-demo iframe {
+  width: 100%;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg);
+}
+
+.wrx-demo figcaption {
+  font-size: 14px;
+  color: var(--vp-c-text-2);
+}

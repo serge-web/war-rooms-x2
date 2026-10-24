@@ -1,0 +1,90 @@
+{
+  "$comment": "DOC-2: terms that suggest security-sensitive detail. A match blocks the deploy and the blog auto-merge (DOC-25) until a person reviews it. Kept out of site/ so it is never published. Patterns are JavaScript regular expressions; flags default to \"i\". An allowance needs a reason a reviewer agreed.",
+  "terms": [
+    {
+      "id": "admin-rule-ids",
+      "pattern": "\\bADM-(?:3[5-9]|4[0-2])\\b",
+      "flags": "",
+      "why": "Admin-tooling rules ADM-35 to ADM-42"
+    },
+    {
+      "id": "admin-rule-labels",
+      "pattern": "\\bR-[A-F]\\b",
+      "flags": "",
+      "why": "Spike admin rules R-A to R-F"
+    },
+    {
+      "id": "admin-ops-module",
+      "pattern": "\\bAdmin[- ]?Ops\\b",
+      "why": "The module that applies the admin rules"
+    },
+    {
+      "id": "risk-ids",
+      "pattern": "\\bR(?:1|1[3-7])\\b",
+      "flags": "",
+      "why": "Risks R1 and R13 to R17: access-control weaknesses and their mitigations"
+    },
+    {
+      "id": "spike-check-ids",
+      "pattern": "\\b(?:S13|S01b?|C01)\\b",
+      "flags": "",
+      "why": "Spike checks and contract tests for observer enforcement"
+    },
+    {
+      "id": "voice-revocation",
+      "pattern": "\\bvoice[- ]revo\\w*|\\brevok\\w*\\s+(?:\\w+\\s+){0,3}voice\\b|\\bobserver[- ]voice\\b",
+      "why": "How observer read-only is enforced (R13, R14)"
+    },
+    {
+      "id": "stored-role",
+      "pattern": "\\bstored[- ](?:visitor[- ])?role\\b",
+      "why": "Server behaviour the read-only enforcement relies on (R13)"
+    },
+    {
+      "id": "observer-vault",
+      "pattern": "\\b(?:password[- ]vault|vault[- ]passphrase)\\b",
+      "why": "Observer password handling (ADM-37 fallback)"
+    },
+    {
+      "id": "tooling-gaps",
+      "pattern": "\\b(?:unmoderated|orphaned\\s+(?:affiliation|subscription)s?|subscriptions?\\s+left\\s+in\\s+place|silently\\s+leaks?)\\b",
+      "why": "Ways a missed admin step leaks access (R14)"
+    },
+    {
+      "id": "stanza-cap",
+      "pattern": "\\bmax_stanza_size\\b|\\bstanza[- ](?:size[- ])?cap\\b|\\b885\\s?KB\\b|\\bdrops?\\s+the\\s+sender",
+      "why": "The missing WebSocket stanza cap (R15)"
+    },
+    {
+      "id": "room-history-loss",
+      "pattern": "\\broom\\b[^.]{0,40}\\b(?:deletes|destroys)\\s+(?:its\\s+)?history\\b",
+      "why": "Destroying a room destroys its history (R16)"
+    },
+    {
+      "id": "node-name-listing",
+      "pattern": "\\blist\\s+(?:pubsub\\s+)?node\\s+names\\b|\\bopaque\\s+node\\s+ids?\\b",
+      "why": "Anonymous users can list node names (R17)"
+    },
+    {
+      "id": "sasl-hardening",
+      "pattern": "\\bSCRAM-SHA-\\d+\\b|\\bsasl_mechanisms\\b|\\banonymous_protocol\\b|\\ballow_multiple_connections\\b",
+      "why": "Server authentication hardening"
+    },
+    {
+      "id": "registration-and-admin-surfaces",
+      "pattern": "\\bin-band\\s+registration\\b|\\bmod_register\\b|\\bmod_http_api\\b|\\bejabberd_web_admin\\b|\\bweb\\s+admin\\b|\\bREST\\s*/api\\b",
+      "why": "Server hardening: registration and admin interfaces"
+    },
+    {
+      "id": "rate-limits",
+      "pattern": "\\brate[- ]limit\\w*\\b|\\bshaper(?:_rules)?\\b|\\bmax_user_sessions\\b",
+      "why": "Server hardening: rate limits"
+    },
+    {
+      "id": "server-config",
+      "pattern": "\\bejabberd\\.ya?ml\\b|\\baccess_rules\\b|\\baccess_model\\b|\\bpublish_model\\b|\\bmuc#roomconfig_\\w+|\\bstarttls_required\\b|\\bcertfiles\\b|\\bprotocol_options\\b|\\bdhfile\\b",
+      "why": "Server hardening configuration"
+    }
+  ],
+  "allow": []
+}
