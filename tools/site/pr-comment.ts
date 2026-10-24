@@ -1,11 +1,13 @@
 // Creates or updates the one preview comment on a PR (DOC-7, DOC-8).
 //
 //   node tools/site/pr-comment.ts preview --pr <n> --sha <sha> [--size <summary line>]
+//                                         [--section-file <markdown>]
 //   node tools/site/pr-comment.ts closed --pr <n> --merged true|false
 //   node tools/site/pr-comment.ts failed --pr <n> --run-url <url>
 //
 // Needs GITHUB_TOKEN and GITHUB_REPOSITORY; SITE_PAGES_ROOT and SITE_PAGES_URL override the
 // gh-pages location.
+import { existsSync, readFileSync } from 'node:fs'
 import { parseArgs } from 'node:util'
 import { PREVIEW_MARKER, closedComment, failedComment, previewComment } from './lib/comment.ts'
 import { checkRepository, gitHub, upsertComment } from './lib/github.ts'
@@ -18,6 +20,7 @@ const { values, positionals } = parseArgs({
     merged: { type: 'string' },
     'run-url': { type: 'string' },
     size: { type: 'string' },
+    'section-file': { type: 'string' },
   },
   allowPositionals: true,
 })
@@ -43,6 +46,11 @@ if (kind === 'preview') {
     appUrl: `${siteUrl}app/`,
     sha: values.sha ?? '',
     size: values.size === undefined || values.size === '' ? undefined : values.size,
+    // Screenshots (DOC-19); absent when the build took none, e.g. on an older workflow run.
+    sections:
+      values['section-file'] !== undefined && existsSync(values['section-file'])
+        ? [readFileSync(values['section-file'], 'utf8').trim()]
+        : [],
   })
 } else if (kind === 'closed') {
   body = closedComment(values.merged === 'true', siteUrl)

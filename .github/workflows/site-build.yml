@@ -14,6 +14,10 @@ on:
         description: Branch or commit to build; empty for the triggering event's
         type: string
         default: ''
+      pr:
+        description: The PR number for a preview build; its screenshots are compared with main's
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -51,6 +55,55 @@ jobs:
         run: node tools/site/check-deny-list.ts site/dist
       - name: No secrets or real-server endpoints (NFR-1, DOC-12)
         run: node tools/site/check-site-bundle.ts site/dist
+      - name: Take screenshots only if the PR touches UI or site files (WP 0.7)
+        id: shots
+        run: |
+          if [ -z "$PR" ]; then run=true; else run=$(node tools/screenshots/changed-files.ts --pr "$PR"); fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+      - name: Install Chromium for screenshots
+        if: steps.shots.outputs.run == 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Screenshots, taken twice to prove they repeat (DOC-19, DOC-20)
+        if: steps.shots.outputs.run == 'true'
+        run: node tools/screenshots/capture.ts --out site/dist/screenshots --target "$TARGET" --repeat
+        env:
+          TARGET: ${{ inputs.target }}
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}
+      - name: Main's published screenshots
+        if: steps.shots.outputs.run == 'true' && inputs.pr != ''
+        # gh-pages or its screenshots/ may not exist yet; compare then shows every shot as new.
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          ref: gh-pages
+          path: .gh-pages-base
+          sparse-checkout: screenshots
+          persist-credentials: false
+      - name: Compare with main (DOC-21)
+        if: inputs.pr != ''
+        run: |
+          if [ "$RUN" = true ]; then
+            node tools/screenshots/compare.ts --target "$TARGET" --head site/dist/screenshots \
+              --base .gh-pages-base/screenshots --section "$RUNNER_TEMP/screenshots.md"
+          else
+            node tools/screenshots/compare.ts --skipped --section "$RUNNER_TEMP/screenshots.md"
+          fi
+        env:
+          RUN: ${{ steps.shots.outputs.run }}
+          TARGET: ${{ inputs.target }}
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}
+      - uses: actions/upload-artifact@v4
+        if: inputs.pr != ''
+        with:
+          name: screenshots-comment
+          path: ${{ runner.temp }}/screenshots.md
+          retention-days: 3
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: site
