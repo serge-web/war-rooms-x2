@@ -222,4 +222,8 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | SRD ids assigned that no WP covered: ADM-17 → 2.3; NFR-1 → 0.6; NFR-3 → 2.1; NFR-4 → 2.3 and 3.3; NFR-5 → 1.6; NFR-6 → 2.3; NFR-7 → 0.5; NFR-8–9 → 2.4; NFR-10 → 3.3; NFR-21 → 1.2 and 1.4 | Found by the traceability check |
 | 0.5 leaves two items to later WPs: the ejabberd CI job moves to 1.2, and Storybook (NFR-18) to 2.4 | No contract suite exists for the ejabberd job to run until 1.2, and no presentational component for Storybook to show until 2.4. CI gets both when they have something to check |
 | Phase 0 work is built on the session branch `claude/gracious-thompson-aowbqs`, and its PR stands in for the `phase-0` PR | This session can push only to that branch. Later phases use phase branches as planned |
+| 2.1 grows: it builds the encrypted observer-password vault (ADM-37) | WP 0.1 found no documented way to make an offline observer read-only (`plan/decisions/S13.md`) |
+| 1.2 and 1.4: the contract suite covers the errors for a role change on an absent occupant (`not-allowed`, `not-acceptable`), and the mock matches them | Found by WP 0.1; the earlier spike had recorded a different error |
+| 1.3 uses StanzaJS 12.22.1; 2.5 uses FlexLayout; the site uses VitePress 1.6.4 | Decisions from WP 0.3, 0.2 and 0.6 (`plan/decisions/`, `site/README.md`) |
+| PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 

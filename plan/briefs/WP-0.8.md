@@ -1,6 +1,6 @@
 # WP 0.8 — Runtime schemas and data dictionary (P5)
 
-**SRD ids:** ARC-6, NFR-20, DOC-3 · **Depends on:** 0.5 · **Status:** active · **Designated interface WP**
+**SRD ids:** ARC-6, NFR-20, DOC-3 · **Depends on:** 0.5 · **Status:** done · **Designated interface WP**
 
 ## Goal
 

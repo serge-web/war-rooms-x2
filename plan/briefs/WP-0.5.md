@@ -1,6 +1,6 @@
 # WP 0.5 — Repo scaffold
 
-**SRD ids:** D18, NFR-7, NFR-15–19, NFR-22, DOC-22 · **Depends on:** — · **Status:** active
+**SRD ids:** D18, NFR-7, NFR-15–19, NFR-22, DOC-22 · **Depends on:** — · **Status:** done
 
 ## Goal
 

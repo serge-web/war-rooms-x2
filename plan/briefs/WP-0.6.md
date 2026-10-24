@@ -1,6 +1,6 @@
 # WP 0.6 — Site and PR previews
 
-**SRD ids:** NFR-1, DOC-1–2, DOC-6–9, DOC-11–16, DOC-23–26 · **Depends on:** 0.5 · **Status:** to do
+**SRD ids:** NFR-1, DOC-1–2, DOC-6–9, DOC-11–16, DOC-23–26 · **Depends on:** 0.5 · **Status:** done
 
 ## Goal
 
