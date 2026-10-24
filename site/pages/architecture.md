@@ -115,11 +115,20 @@ flowchart TB
         secrets["Secrets and endpoint scan"]
         sizeCheck["Size report"]
     end
+    subgraph Shots["Screenshots: tools/screenshots"]
+        capture["capture.ts: tagged Playwright scenarios, fixed clock, run twice"]
+        compareShots["compare.ts: against main's published set"]
+        capture --> compareShots
+    end
     out --> Checks
-    Checks --> Queue["Deploy queue: one at a time, retried on conflict"]
+    Checks --> Shots
+    compareShots --> comment["PR comment: changed and new shots"]
+    Shots --> Queue["Deploy queue: one at a time, retried on conflict"]
     Queue --> ghp[("gh-pages")]
     ghp --> root["root: the site, from main"]
     ghp --> demo["demo: the app, from main"]
     ghp --> pr["pr/n: one preview per pull request"]
     ghp --> snap["snapshots/slug: frozen builds for blog posts"]
 ```
+
+Each build also takes screenshots when a pull request changes the app or the site. The scenarios run on a fixed clock, and each build takes them twice and fails if the two runs differ, so an image changes only when the page does. A preview keeps only the screenshots that differ from `main`, with `main`'s version beside each changed one; the root keeps the full set, which later pull requests compare against.

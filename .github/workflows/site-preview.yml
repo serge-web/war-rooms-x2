@@ -18,6 +18,7 @@ jobs:
     uses: ./.github/workflows/site-build.yml
     with:
       target: pr/${{ github.event.pull_request.number }}
+      pr: ${{ github.event.pull_request.number }}
     permissions:
       contents: read
       pull-requests: read
@@ -46,7 +47,13 @@ jobs:
           node-version: 22
           # No pnpm in this job; setup-node would otherwise try to cache it.
           package-manager-cache: false
-      - run: node tools/site/pr-comment.ts preview --pr "$PR" --sha "$SHA" --size "$SIZE"
+      - uses: actions/download-artifact@v4
+        with:
+          name: screenshots-comment
+          path: ${{ runner.temp }}/shots
+      - run: >-
+          node tools/site/pr-comment.ts preview --pr "$PR" --sha "$SHA" --size "$SIZE"
+          --section-file "$RUNNER_TEMP/shots/screenshots.md"
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
