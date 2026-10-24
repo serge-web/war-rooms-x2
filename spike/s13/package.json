@@ -1,0 +1,26 @@
+{
+  "name": "wrx1-spike-s13",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WP 0.1: S13 offline observer voice revocation and the R15 WebSocket stanza cap, against the reference ejabberd",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "up": "sh scripts/up.sh",
+    "down": "sh scripts/down.sh",
+    "test": "vitest run",
+    "test:s13": "vitest run tests/s13-revocation.test.ts",
+    "test:r15": "vitest run tests/r15-stanza-cap.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "stanza": "12.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

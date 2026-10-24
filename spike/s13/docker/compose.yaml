@@ -1,0 +1,50 @@
+# S13 stack: the WRX1 reference ejabberd (image and config from serge-web/xmpp-spike,
+# spike/docker/ejabberd/compose.yaml, pinned by the same digest) plus two probe variants.
+# Own project name and host ports so it can run beside other stacks (the spike uses 5280/5443).
+#   ejabberd           reference config                    ws://localhost:15280/ws
+#   ejabberd-wscap     c2s max_stanza_size 65536 (R15)       ws://localhost:15281/ws
+#   ejabberd-adhocapi  + mod_adhoc_api for admin (route d)   ws://localhost:15282/ws
+# ejabberd-httpcap.yml (max_stanza_size on the HTTP listener) is not a service: ejabberd refuses it,
+# and tests/r15-stanza-cap.test.ts starts it once with `docker run` to prove that.
+# Only plain ws:// is published: the tests compare listeners, and wss:// (5443) uses the same
+# ejabberd_http_ws handler. c2s 5222 stays inside the container.
+name: wrx-s13
+
+x-ejabberd: &ejabberd
+  image: ejabberd/ecs:26.09@sha256:8ebff5b218e686d5dbd93850ea17556d5b70d4c15918c3613e9302a357798e0e
+  healthcheck:
+    test: ['CMD', 'ejabberdctl', 'status']
+    interval: 3s
+    timeout: 5s
+    retries: 30
+
+services:
+  ejabberd:
+    <<: *ejabberd
+    ports:
+      - '15280:5280'
+    volumes:
+      - ./ejabberd.yml:/home/ejabberd/conf/ejabberd.yml:ro
+      - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
+      - db:/home/ejabberd/database
+  ejabberd-wscap:
+    <<: *ejabberd
+    ports:
+      - '15281:5280'
+    volumes:
+      - ./ejabberd-wscap.yml:/home/ejabberd/conf/ejabberd.yml:ro
+      - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
+      - db-wscap:/home/ejabberd/database
+  ejabberd-adhocapi:
+    <<: *ejabberd
+    ports:
+      - '15282:5280'
+    volumes:
+      - ./ejabberd-adhocapi.yml:/home/ejabberd/conf/ejabberd.yml:ro
+      - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
+      - db-adhocapi:/home/ejabberd/database
+
+volumes:
+  db:
+  db-wscap:
+  db-adhocapi:
