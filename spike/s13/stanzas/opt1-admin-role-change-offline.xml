@@ -1,0 +1,80 @@
+<!-- out admin -->
+<presence xmlns="jabber:client" id="4e1c7166-186e-48a3-abe6-397f09635d68" to="o1-mvmqhnh9-buqf@conference.localhost/admin"><x xmlns="http://jabber.org/protocol/muc"/></presence>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<a h='11' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<presence xmlns='jabber:client' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' id='14423603491334857459'><c ver='50sinYkHbjy4R9ZIJTFYLFhpyDA=' node='https://www.process-one.net/ejabberd/' hash='sha-1' xmlns='http://jabber.org/protocol/caps'/></presence>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="18"/>
+
+<!-- in admin -->
+<presence xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost/admin' id='4e1c7166-186e-48a3-abe6-397f09635d68'><occupant-id id='g20AAAAgaS5ORSMia37Cfi9KGrmoV07eMTAk44+HO+EFXoSQlgg=' xmlns='urn:xmpp:occupant-id:0'/><x xmlns='http://jabber.org/protocol/muc#user'><item jid='admin@localhost/o1-mvmqhnhg-fe84' role='moderator' affiliation='owner'/><status code='110'/></x></presence>
+
+<!-- in admin -->
+<message xmlns='jabber:client' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='groupchat'><occupant-id id='g20AAAAgBltB1SZWTs7NiqK81kl7YNhDKK9RROV/eXJgOSTLH7g=' xmlns='urn:xmpp:occupant-id:0'/><subject/></message>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="20"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='error' id='role-mvmqhnmd-ie48'><query xmlns='http://jabber.org/protocol/muc#admin'><item jid='o1-mvmqhnh9-buqf-obs@localhost' role='visitor'/></query><error type='cancel'><text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>Changing role/affiliation is not allowed</text><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="21"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='error' id='role-mvmqhnme-hugq'><query xmlns='http://jabber.org/protocol/muc#admin'><item jid='o1-mvmqhnh9-buqf-obs@localhost/browser' role='visitor'/></query><error type='cancel'><text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>Changing role/affiliation is not allowed</text><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="22"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='error' id='role-mvmqhnmf-rtun'><query xmlns='http://jabber.org/protocol/muc#admin'><item nick='o1-mvmqhnh9-buqf-obs' role='visitor'/></query><error type='modify'><text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>Nickname o1-mvmqhnh9-buqf-obs does not exist in the room</text><not-acceptable xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="23"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='error' id='role-mvmqhnmg-utzm'><query xmlns='http://jabber.org/protocol/muc#admin'><item jid='o1-mvmqhnh9-buqf-obs@localhost' affiliation='member' role='visitor'/></query><error type='cancel'><text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>Changing role/affiliation is not allowed</text><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- out admin -->
+<presence xmlns="jabber:client" id="6b3bfc0a-8215-4218-aef7-2d63d0a65271" to="o1-mvmqhnh9-buqf@conference.localhost/admin" type="unavailable"/>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="24"/>
+
+<!-- in admin -->
+<presence xmlns='jabber:client' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost' type='unavailable' id='5419545264739676664'/>
+
+<!-- in admin -->
+<presence xmlns='jabber:client' xml:lang='en' to='admin@localhost/o1-mvmqhnhg-fe84' from='o1-mvmqhnh9-buqf@conference.localhost/admin' type='unavailable' id='6b3bfc0a-8215-4218-aef7-2d63d0a65271'><occupant-id id='g20AAAAgaS5ORSMia37Cfi9KGrmoV07eMTAk44+HO+EFXoSQlgg=' xmlns='urn:xmpp:occupant-id:0'/><x xmlns='http://jabber.org/protocol/muc#user'><item jid='admin@localhost/o1-mvmqhnhg-fe84' role='none' affiliation='owner'/><status code='110'/></x></presence>
+
+<!-- in admin -->
+<a h='16' xmlns='urn:xmpp:sm:3'/>

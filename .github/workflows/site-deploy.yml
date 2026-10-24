@@ -1,0 +1,59 @@
+# The one deploy queue for gh-pages (DOC-13). Every site workflow deploys through this job,
+# so deploys run one at a time and none is cancelled; tools/site/deploy.ts fetches, rebases
+# and retries if a push still races. Op folders name artifacts of the calling run.
+name: Site deploy
+
+on:
+  workflow_call:
+    inputs:
+      ops:
+        description: Space-separated deploy ops, e.g. `put:pr/7=site` or `root=site put:demo=app`
+        type: string
+        required: true
+      message:
+        description: Commit message on gh-pages
+        type: string
+        required: true
+    outputs:
+      size:
+        description: One-line size report of gh-pages after the deploy (DOC-14)
+        value: ${{ jobs.deploy.outputs.size }}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to gh-pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # One queue for all deploys. `queue: max` keeps up to 100 waiting runs instead of
+    # replacing the pending one, so parallel PRs are never dropped.
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      size: ${{ steps.deploy.outputs.size }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          # No pnpm in this job; setup-node would otherwise try to cache it.
+          package-manager-cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/artifacts
+      - name: Deploy, creating gh-pages if missing (DOC-13)
+        id: deploy
+        run: |
+          # shellcheck disable=SC2086 # ops are separate words, checked by deploy.ts
+          node tools/site/deploy.ts --message "$MESSAGE" --from "$RUNNER_TEMP/artifacts" \
+            --summary "$RUNNER_TEMP/size.md" --size-line "$RUNNER_TEMP/size.txt" $OPS
+          cat "$RUNNER_TEMP/size.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "size=$(cat "$RUNNER_TEMP/size.txt")" >> "$GITHUB_OUTPUT"
+        env:
+          MESSAGE: ${{ inputs.message }}
+          OPS: ${{ inputs.ops }}

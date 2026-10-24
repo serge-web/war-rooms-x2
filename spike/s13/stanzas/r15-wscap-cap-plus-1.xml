@@ -1,0 +1,16 @@
+<!-- probe {"target":"wscap","who":"player","via":"raw","bodyBytes":65399,"stanzaBytes":65537,"outcome":"delivered","ms":34} -->
+
+<!-- out sender: 65537 bytes, first 200 -->
+<message xmlns="jabber:client" to="r15-mvmqc1nf-6181@conference.localhost" type="groupchat" id="big-mvmqelx0-dx5r"><body>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in sender: 65965 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='r15-mvmqc1nf-6181-sender@localhost/r15-player-mvmqelvv-5yyr' from='r15-mvmqc1nf-6181@conference.localhost/r15-mvmqc1nf-6181-sender-n-mvmqelwv-dbn4' type='groupchat' id='big-mvmqelx0-dx5r'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='17928…
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in receiver: 65960 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='r15-mvmqc1nf-6181-receiver@localhost/rcv-mvmqc1s9-a79e' from='r15-mvmqc1nf-6181@conference.localhost/r15-mvmqc1nf-6181-sender-n-mvmqelwv-dbn4' type='groupchat' id='big-mvmqelx0-dx5r'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866470…

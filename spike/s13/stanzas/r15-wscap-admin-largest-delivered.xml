@@ -1,0 +1,43 @@
+<!-- probe {"target":"wscap","who":"admin","via":"raw","bodyBytes":67108864,"stanzaBytes":67109002,"outcome":"delivered","ms":22519} -->
+
+<!-- out sender: 67109002 bytes, first 200 -->
+<message xmlns="jabber:client" to="r15-mvmqc1nf-6181@conference.localhost" type="groupchat" id="big-mvmqgmr7-5qnp"><body>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+
+<!-- in sender: 66058 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/r15-mvmqc1nf-6181-sender-n-mvmqelwv-dbn4' type='groupchat' id='big-mvmqelx0-dx5r'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866470007060' xmlns='…
+
+<!-- in sender: 2097811 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/r15-mvmqc1nf-6181-sender-n-mvmqem1z-ijgu' type='groupchat' id='big-mvmqem24-ao06'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866506162032' xmlns='…
+
+<!-- in sender: 2097869 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/r15-mvmqc1nf-6181-sender-n-mvmqfe9w-pj7u' type='groupchat' id='big-mvmqfea0-0z2h'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866542739243' xmlns='…
+
+<!-- in sender: 2097792 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqg6m3-v5t6' type='groupchat' id='big-mvmqg6m7-9its'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866543552427' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender: 4194944 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqg75g-qak5' type='groupchat' id='big-mvmqg75k-6rmi'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866544310988' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender: 8389248 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqg84l-icyb' type='groupchat' id='big-mvmqg84q-5aw4'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866545718524' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender: 16777856 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqga09-mgww' type='groupchat' id='big-mvmqga0c-n868'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866548350461' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender: 33555072 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqgdle-s3p8' type='groupchat' id='big-mvmqgdlk-n3u0'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866555164898' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender -->
+<message xmlns='jabber:client' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost' type='groupchat'><occupant-id id='g20AAAAg7axGaROA+wXaurltV/BYG5k/tGtAuDYQzn5ej5uj5bs=' xmlns='urn:xmpp:occupant-id:0'/><subject/></message>
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in sender: 67109391 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='admin@localhost/r15-admin-mvmqgmmi-285h' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqgmqz-f26f' type='groupchat' id='big-mvmqgmr7-5qnp'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866569058390' xmlns='urn:xmpp:mam:tmp'/>…
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in receiver: 67109406 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='r15-mvmqc1nf-6181-receiver@localhost/rcv-mvmqc1s9-a79e' from='r15-mvmqc1nf-6181@conference.localhost/admin-n-mvmqgmqz-f26f' type='groupchat' id='big-mvmqgmr7-5qnp'><archived by='r15-mvmqc1nf-6181@conference.localhost' id='1792866569058390' xmlns='urn:…

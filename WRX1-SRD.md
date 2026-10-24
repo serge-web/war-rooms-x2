@@ -171,7 +171,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-35 Every admin operation SHALL go through a single admin-operations module that applies rules ADM-36–40 (the spike's `AdminOps`, rules R-A to R-F).
 - ADM-36 Revoking a role's read access to a node SHALL remove both its whitelist affiliation and its subscriptions (R-A).
-- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Preferred: revoke voice for the offline observer account directly as admin, without logging in as it, if follow-up spike S13 confirms ejabberd supports this. Fallback: an encrypted observer-password vault, encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only; if the passphrase is lost, passwords are reset (ADM-26).
+- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Because S13 failed (§10), voice SHALL be revoked by the admin tooling logging in as the observer, using an encrypted observer-password vault: encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only. If the passphrase is lost, passwords are reset (ADM-26). The vault SHALL be updated by password resets (ADM-26) and role deletion (ADM-39). Making an observer a room member and revoking its voice SHALL run back to back, before the room is published to the observer, so an online observer has no window in which to post.
 - ADM-38 Moving a role between forces SHALL grant the new access before revoking the old (R-D).
 - ADM-39 Deleting a role SHALL remove its room and node affiliations and subscriptions, then the account; `item-not-found` on account deletion SHALL be treated as already deleted (R-E).
 - ADM-40 Destroying a room deletes its history (R-F). The admin UI SHALL warn, show the message count and require confirmation.
@@ -257,7 +257,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-50 The stream errors `policy-violation` (session ended) and `conflict` (account removed) SHALL be treated as forced logout, with an explanation.
 - PLY-51 Unavailable self-presence with status codes 110 and 321 (removed by an affiliation change) SHALL close the room panel with a notice (PLY-30).
 - PLY-52 Access changes are not notified, so `<not-allowed/>` and `<forbidden/>` from MUC or PubSub SHALL be handled gracefully: the panel shows that access was withdrawn, and the client does not crash or retry endlessly.
-- PLY-53 The client SHALL cap outgoing message size and keep PubSub items well under the 250 KB server limit, rejecting oversized content with a message (R15).
+- PLY-53 The client SHALL cap each outgoing message stanza at 65,536 bytes (UTF-8, after XML escaping) and keep PubSub items well under the 250 KB server limit, rejecting oversized content with a message (R15).
 
 **Multi-client view**
 
@@ -334,7 +334,7 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 - NFR-9 Backend endpoints (WebSocket URL, XMPP domain) SHALL be runtime configuration, not build-time constants.
 - NFR-10 A container image (ejabberd + client + config, per NFR-22) SHOULD be provided for one-command deployment.
 
-- NFR-22 The reference deployment SHALL be `spike/docker/ejabberd/` from the spike repo: image pinned by digest, `wss://` only, SCRAM-SHA-256, no REST `/api` or web admin, in-band registration off, per-player rate limit. CI SHALL run the contract suite on every push, and an ejabberd upgrade SHALL NOT be adopted until the R1 tests (S01, S01b, C01) pass.
+- NFR-22 The reference deployment SHALL be `spike/docker/ejabberd/` from the spike repo: image pinned by digest, `wss://` only, SCRAM-SHA-256, no REST `/api`, web admin or `mod_adhoc_api`, in-band registration off, per-player rate limit. CI SHALL run the contract suite on every push, and an ejabberd upgrade SHALL NOT be adopted until the R1 tests (S01, S01b, C01) pass.
 - NFR-23 The air-gapped host install SHALL be verified on real hardware before first deployment (open; `ops/offline-install.sh`).
 
 **Performance and scale**
@@ -401,7 +401,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 
 - R13 **R1 depends on ejabberd's stored-role behaviour**, which is deliberate but not an XMPP standard. Medium. Mitigation: R1 contract tests gate every ejabberd upgrade (NFR-22); fallback is Prosody with a small module, which would relax D2.
 - R14 **Enforcement depends on correct admin tooling.** A missed step (subscription left in place, observer voice not re-applied, room left unmoderated) silently leaks access or voice. Medium–High. Mitigation: ADM-35 and ADM-41, contract test C01.
-- R15 **No WebSocket stanza size cap.** Room messages over \~885 KB drop the sender's connection. Medium. Mitigation: PLY-53 and the rate limit; check whether ejabberd's `max_stanza_size` applies to the WebSocket listener.
+- R15 **No WebSocket stanza size cap.** WP 0.1 found no size limit on the WebSocket listener: room messages up to 64 MiB were delivered, `max_stanza_size` does not apply to it, and the \~885 KB connection drop seen earlier did not reproduce. Medium. Mitigation: the 64 KiB client cap (PLY-53) and the per-player rate limit. A modified client can still post large messages; accepted for v1.
 - R16 **Destroying a room destroys its history.** Medium, given live editing (D23). Mitigation: ADM-40.
 - R17 **Anonymous users can list PubSub node names** (not contents). Low, accepted. Mitigation: ADM-42.
 
@@ -420,7 +420,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Server groups: dropped, not needed (R6, S7)
 - [x] Server choice: ejabberd 26.09 (D16, §10)
 - [ ] Air-gapped host install verified on real hardware (S8, NFR-23)
-- [ ] Follow-up spike S13: can the admin revoke an offline observer's voice without its password? Decides ADM-37 (direct revocation, else encrypted vault)
+- [x] Follow-up spike S13: failed, so ADM-37 uses the encrypted vault (§10)
 - [ ] Repo visibility: should the spike and WRX1 code repos stay public, given DOC-2 keeps security detail off the site? (R18)
 - [x] Welcome page: before login, via anonymous read access (D20)
 - [x] Objectives: admin-written per force, force read-only, umpires may edit (D21)
@@ -434,7 +434,7 @@ The server question is settled. These remaining checks come first in the develop
 
 | # | Check | When | Owner | Decides |
 | --- | --- | --- | --- | --- |
-| P1 | S13 offline voice revocation, plus whether `max_stanza_size` applies to the WebSocket listener | Before start | Claude Code / dev | ADM-37, R15 |
+| P1 | S13 offline voice revocation, plus whether `max_stanza_size` applies to the WebSocket listener. **Done:** S13 failed (vault); no WebSocket size limit (64 KiB client cap) | Before start | Claude Code / dev | ADM-37, R15 |
 | P2 | Target environment: analyst browsers and versions (SharedWorker, IndexedDB, Web Locks), approval to run ejabberd/Erlang on internal and air-gapped hosts, who verifies NFR-23 | Before start | Doc, with customer | D12, D17, NFR-23 |
 | P3 | Layout library, FlexLayout vs dockview: four independent workspaces with pop-outs on one page (D15), add to the fewest-tab tabset via public API only (PLY-41), save/restore across room changes (D6) | Sprint 1 | Claude Code / dev | ARC, PLY-40–42 |
 | P4 | StanzaJS health: maintenance status, typing of ad-hoc commands, MAM and RSM, and a fallback library if needed | Sprint 1 | Claude Code / dev | ARC-12 |
@@ -468,6 +468,8 @@ OpenFire, ejabberd and Prosody were each evaluated against the same pass/fail cr
 **Outcome (24 October 2026).** **ejabberd 26.09 is selected.** It was the only server to pass every mandatory check using standard controls. Prosody failed S1 unless a \~45-line custom module is added, which D2 rules out; OpenFire failed S1, S2, S5 and S10. ejabberd needs no REST and no server groups, and its indicative capacity is 200 players at p95 678 ms. Evidence: [serge-web/xmpp-spike, results/architect-findings.md](https://github.com/serge-web/xmpp-spike/blob/main/results/architect-findings.md). The choice rests on D2: if D2 is ever relaxed, Prosody with a small module is the alternative (R13). Requirements arising: ADM-35–42, PLY-49–53, NFR-22–23, R13–R17.
 
 **Follow-up check S13.** Can the admin set the stored visitor role for an observer account that is offline, without logging in as it: via ejabberd's MUC admin commands over XMPP (XEP-0133), or the room's stored state? Pass: the observer's next join is as a visitor, it cannot post, and no password or REST was used. Pass selects direct revocation for ADM-37; fail selects the encrypted vault.
+
+**S13 outcome (24 October 2026): fail.** Run by WP 0.1 against ejabberd 26.09. No documented admin feature over XMPP makes a member observer a visitor before it first joins: a MUC role change for an absent occupant is refused (`not-allowed` or `not-acceptable`); `members_by_default=false` affects only unaffiliated users, whom members-only rooms refuse; and ejabberd's admin commands over ad-hoc have no role operation. An open room with unaffiliated observers does make them visitors, but lets other forces and anonymous users read, so breaks NFR-3 and NFR-21. ADM-37 therefore uses the encrypted vault. The full record is internal (`plan/decisions/S13.md`).
 
 ## 11. Mock development process
 
@@ -654,4 +656,11 @@ Changes made on Oct 24, 2026, while the schemas (P5, WP 0.8) were being written.
 - §3 table: an `announcements` row (PLY-37 used the node but the table didn't list it), and `briefing` added to `game-setup` (PLY-46).
 - §6: the client architecture diagram, missing from the exported text, redrawn in Mermaid.
 - Requirement language now lists the DOC area. Bullet and numbering formatting made consistent.
+
+Changes made later on Oct 24, 2026, from the Phase 0 checks (WP 0.1–0.3):
+
+- ADM-37: S13 failed, so the encrypted observer-password vault is the route, not a fallback. Added that the vault follows password resets and role deletion, and that membership and voice revocation run back to back.
+- §10: S13 outcome added; the open issue is closed.
+- R15 rewritten: no WebSocket size limit up to 64 MiB, and the earlier ~885 KB drop did not reproduce. PLY-53 now states a 64 KiB cap.
+- NFR-22: `mod_adhoc_api` added to what the reference deployment excludes.
 

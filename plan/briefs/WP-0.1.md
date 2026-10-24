@@ -1,6 +1,6 @@
 # WP 0.1 — S13 offline voice revocation, and the WebSocket stanza cap (P1)
 
-**SRD ids:** ADM-37, R15 · **Depends on:** — · **Status:** to do
+**SRD ids:** ADM-37, R15 · **Depends on:** — · **Status:** done
 
 ## Goal
 

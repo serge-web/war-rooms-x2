@@ -11,9 +11,11 @@ export const LIMITS = Object.freeze({
   /** Largest asset whose base64 form still fits in one PubSub item. */
   assetHardBytes: 180_000,
   /**
-   * Message text cap in characters. Provisional until WP 0.1 measures the WebSocket stanza
-   * limit; set far below the ~885 KB drop point seen in the spike.
+   * Cap on each outgoing message stanza (UTF-8, after XML escaping). The server sets no
+   * WebSocket limit (WP 0.1), so the client enforces this one (PLY-53, R15).
    */
+  messageStanzaBytes: 65_536,
+  /** Message text cap in characters; fits the stanza cap even at 7 bytes a character escaped. */
   messageTextChars: 8_000,
   announcementTextChars: 2_000,
   nameChars: 120,

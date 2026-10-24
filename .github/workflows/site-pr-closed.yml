@@ -1,0 +1,61 @@
+# When a PR closes: keep its preview if it merged, remove it if not (DOC-8), and rebuild the
+# site root from the default branch so the PR index is current (DOC-9).
+name: Site PR closed
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/site-build.yml
+    with:
+      target: root
+      ref: ${{ github.event.repository.default_branch }}
+    permissions:
+      contents: read
+      pull-requests: read
+
+  deploy:
+    needs: build
+    uses: ./.github/workflows/site-deploy.yml
+    with:
+      ops: >-
+        root=site
+        ${{ !github.event.pull_request.merged && format('remove:pr/{0}', github.event.pull_request.number) || '' }}
+      message: >-
+        #${{ github.event.pull_request.number }}
+        ${{ github.event.pull_request.merged && 'merged: preview kept' || 'closed: preview removed' }},
+        PR index updated
+    permissions:
+      contents: write
+
+  comment:
+    name: Preview comment
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          # No pnpm in this job; setup-node would otherwise try to cache it.
+          package-manager-cache: false
+      - run: node tools/site/pr-comment.ts closed --pr "$PR" --merged "$MERGED"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}

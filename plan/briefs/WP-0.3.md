@@ -1,6 +1,6 @@
 # WP 0.3 — StanzaJS health check (P4)
 
-**SRD ids:** ARC-1, ARC-12 · **Depends on:** — · **Status:** to do
+**SRD ids:** ARC-1, ARC-12 · **Depends on:** — · **Status:** done
 
 ## Goal
 

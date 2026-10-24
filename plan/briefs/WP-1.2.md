@@ -20,7 +20,7 @@ One test suite that defines how the transport behaves, run against real ejabberd
   - S11 two sessions on one role;
   - S12 live changes;
   - S13 from WP 0.1.
-- Extensions that the mock will need: the error conditions for each refused operation (ARC-11), and event ordering on join (history, then self-presence).
+- Extensions that the mock will need: the error conditions for each refused operation (ARC-11), including a role change for an absent occupant (`not-allowed` by JID, `not-acceptable` by nickname; WP 0.1), and event ordering on join (history, then self-presence).
 - The suite takes a backend factory, so 1.4 can run it unchanged against the mock.
 - A CI job, `contract-ejabberd`, using the reference stack copied to `deploy/ejabberd/` with its image pinned by digest. It runs on every push and PR, and fails, not skips, when the server is unreachable (NFR-16).
 - R1 tests tagged, so the plan's "R1 tests" gate can be run on its own.

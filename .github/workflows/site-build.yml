@@ -1,0 +1,65 @@
+# Builds the whole site with the app embedded, runs the site checks, and uploads two
+# artifacts: `site` (the site, app at app/) and `app` (the app alone, for demo/). Called by
+# the other site workflows; the logic is in tools/site/.
+name: Site build
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Where the build will be deployed, `root` or `pr/<n>` (sets the base path)
+        type: string
+        required: true
+      ref:
+        description: Branch or commit to build; empty for the triggering event's
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and check the site
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: PR list for the index (DOC-9)
+        run: node tools/site/fetch-pulls.ts "$RUNNER_TEMP/pulls.json"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Build the site and the mock-only app (DOC-1, DOC-6, DOC-11)
+        run: pnpm site:build
+        env:
+          WRX_SITE_TARGET: ${{ inputs.target }}
+          WRX_PULLS_FILE: ${{ runner.temp }}/pulls.json
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}
+      - name: Deny-list scan (DOC-2)
+        run: node tools/site/check-deny-list.ts site/dist
+      - name: No secrets or real-server endpoints (NFR-1, DOC-12)
+        run: node tools/site/check-site-bundle.ts site/dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/dist
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: apps/web/dist
+          retention-days: 3
+          if-no-files-found: error

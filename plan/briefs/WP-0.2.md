@@ -1,6 +1,6 @@
 # WP 0.2 — Layout library evaluation, FlexLayout vs dockview (P3)
 
-**SRD ids:** PLY-4–6, PLY-40–42, ARC-9 · **Depends on:** — · **Status:** to do
+**SRD ids:** PLY-4–6, PLY-40–42, ARC-9 · **Depends on:** — · **Status:** done
 
 ## Goal
 

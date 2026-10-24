@@ -1,0 +1,118 @@
+# Blog-only PRs to main (labelled `blog`, or from a `blog/` branch) merge automatically when
+# CI is green (DOC-23). The auto-merge is refused if the PR changes anything outside
+# site/pages/blog/ (DOC-23) or the deny-list flags a post (DOC-25). A post that shows the app
+# gets a frozen snapshot of the phase-branch commit its front matter names (DOC-24).
+name: Site blog
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: Review the blog PR
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      blog: ${{ steps.review.outputs.blog }}
+      eligible: ${{ steps.review.outputs.eligible }}
+      snapshots: ${{ steps.review.outputs.snapshots }}
+      ops: ${{ steps.review.outputs.ops }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          # No pnpm in this job; setup-node would otherwise try to cache it.
+          package-manager-cache: false
+      - id: review
+        run: node tools/site/blog-pr.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  snapshot:
+    name: Snapshot for ${{ matrix.snapshot.slug }}
+    needs: review
+    if: needs.review.outputs.eligible == 'true' && needs.review.outputs.snapshots != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        snapshot: ${{ fromJSON(needs.review.outputs.snapshots) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Build the app at the post's phase-branch commit (DOC-24)
+        run: >-
+          node tools/site/snapshot.ts --slug "$SLUG" --branch "$BRANCH" --commit "$COMMIT"
+          --out "$RUNNER_TEMP/snapshot"
+        env:
+          SLUG: ${{ matrix.snapshot.slug }}
+          BRANCH: ${{ matrix.snapshot.branch }}
+          COMMIT: ${{ matrix.snapshot.commit }}
+      - name: No secrets or real-server endpoints (NFR-1, DOC-12)
+        run: node tools/site/check-site-bundle.ts "$RUNNER_TEMP/snapshot"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-${{ matrix.snapshot.slug }}
+          path: ${{ runner.temp }}/snapshot
+          include-hidden-files: true
+          retention-days: 3
+          if-no-files-found: error
+
+  deploy:
+    needs: [review, snapshot]
+    if: needs.review.outputs.eligible == 'true' && needs.review.outputs.snapshots != '[]'
+    uses: ./.github/workflows/site-deploy.yml
+    with:
+      ops: ${{ needs.review.outputs.ops }}
+      message: 'Snapshots for blog PR #${{ github.event.pull_request.number }}'
+    permissions:
+      contents: write
+
+  auto-merge:
+    name: Blog auto-merge
+    needs: [review, snapshot, deploy]
+    if: always() && needs.review.outputs.blog == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable auto-merge, or refuse it (DOC-23, DOC-25)
+        run: |
+          if [ "$OK" = "true" ]; then
+            gh pr merge "$PR" --repo "$REPO" --auto --squash
+            echo "Auto-merge enabled: #$PR merges when the required checks pass."
+          else
+            gh pr merge "$PR" --repo "$REPO" --disable-auto || true
+            echo "::error::Blog PR #$PR will not auto-merge. See the review job's summary; a person must review it."
+            exit 1
+          fi
+        env:
+          OK: >-
+            ${{ needs.review.outputs.eligible == 'true' &&
+            needs.snapshot.result != 'failure' && needs.snapshot.result != 'cancelled' &&
+            needs.deploy.result != 'failure' && needs.deploy.result != 'cancelled' }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          # A token from a person or app, so the merge starts the main deploy; GITHUB_TOKEN
+          # merges start no workflows, and the daily site-main run catches up instead.
+          GH_TOKEN: ${{ secrets.SITE_AUTOMERGE_TOKEN || github.token }}

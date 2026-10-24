@@ -1,0 +1,17 @@
+.lib-root {
+  position: absolute;
+  inset: 0;
+}
+
+/* PLY-26 check: dockview declares its --dv-* tokens on the theme class at the component root,
+   so an override must target that element (here by a more specific selector). */
+.ws-theme-1 .dockview-theme-light {
+  --dv-tabs-and-actions-container-background-color: rgb(255, 236, 179);
+}
+
+.popout-action {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0 8px;
+}

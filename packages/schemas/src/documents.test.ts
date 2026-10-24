@@ -172,6 +172,18 @@ describe('message bodies (§3, PLY-53)', () => {
     const text = 'x'.repeat(LIMITS.messageTextChars + 1)
     expect(chatMessageBodySchema.safeParse({ ...valid, content: { text } }).success).toBe(false)
   })
+  it('keeps the largest text, escaped and wrapped in JSON, inside the stanza cap', () => {
+    // Worst case per character: `"` becomes `\"` in JSON, then `\&quot;` in XML: 7 bytes.
+    const body = JSON.stringify({
+      ...valid,
+      content: { text: '"'.repeat(LIMITS.messageTextChars) },
+    })
+    const escaped = body.replaceAll('&', '&amp;').replaceAll('"', '&quot;')
+    const stanzaOverhead = 1_000
+    expect(new TextEncoder().encode(escaped).length + stanzaOverhead).toBeLessThan(
+      LIMITS.messageStanzaBytes,
+    )
+  })
   it('strips a sender claimed in the body (§3 rule 3, R9)', () => {
     const parsed = messageBodySchema.parse({ ...valid, from: 'umpire-1' })
     expect(parsed).not.toHaveProperty('from')
