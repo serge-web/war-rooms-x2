@@ -1,0 +1,9 @@
+{
+  // The browser code alone, without Node's global types, as a browser package (apps/web) would compile it.
+  // Checks that the library typings don't silently need @types/node globals.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["src"]
+}
