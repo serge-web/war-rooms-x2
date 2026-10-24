@@ -5,7 +5,15 @@ import wrx from './tools/eslint-rules/index.js'
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**'],
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+      // Throwaway Phase 0 prototypes; each has its own tooling.
+      'spike/**',
+      '.claude/**',
+    ],
   },
   js.configs.recommended,
   {

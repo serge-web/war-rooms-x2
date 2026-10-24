@@ -9,4 +9,4 @@ Each work package (WP) in [the development plan](../../WRX1-Dev-Plan.md) has a b
 - **Consumes**: the frozen interfaces it may use but not change;
 - **Notes**: open points and decisions.
 
-Phase 0 briefs are written. Briefs for later phases are written at the start of each phase, after the gate review of the one before.
+Phase 0 and Phase 1 briefs are written. Phase 1 briefs are drafts until Gate G0, and are revised then with the results of WP 0.1–0.3. Briefs for Phases 2 and 3 are written at the start of each phase.
