@@ -1,0 +1,206 @@
+<!-- out admin -->
+<iq xmlns="jabber:client" id="9920d890-9449-414d-994c-0736be08ee77" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='9920d890-9449-414d-994c-0736be08ee77'><command status='executing' sessionid='2026-10-24T18:30:28.906251Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field><field var='user' type='text-single' label='user'><required/><desc>user name</desc></field><field var='host' type='text-single' label='host'><required/><desc>user host</desc><value>localhost</value></field><field var='affiliation' type='text-single' label='affiliation'><required/><desc>affiliation to set</desc><value>member</value></field></x></command></iq>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="979ff521-33d8-4f2e-a0c7-24e1be3c9981" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" sessionid="2026-10-24T18:30:28.906251Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field><field var="user"><value>o3-mvmqi0b2-acjo-obs</value></field><field var="host"><value>localhost</value></field><field var="affiliation"><value>member</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<a h='12' xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="17"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='979ff521-33d8-4f2e-a0c7-24e1be3c9981'><command status='completed' sessionid='2026-10-24T18:30:28.906251Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field var='user'><value>o3-mvmqi0b2-acjo-obs</value></field><field var='host'><value>localhost</value></field><field var='affiliation'><value>member</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='res' type='text-single' label='res'><value>0</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='13' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="5631dc8e-91a8-45d3-ad94-60544a4f85b9" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="18"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='5631dc8e-91a8-45d3-ad94-60544a4f85b9'><command status='executing' sessionid='2026-10-24T18:30:28.914676Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field><field var='user' type='text-single' label='user'><required/><desc>user name</desc></field><field var='host' type='text-single' label='host'><required/><desc>user host</desc><value>localhost</value></field><field var='affiliation' type='text-single' label='affiliation'><required/><desc>affiliation to set</desc><value>member</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='14' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="74dbefc5-6f93-495c-ac3d-efeabebb09eb" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" sessionid="2026-10-24T18:30:28.914676Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field><field var="user"><value>o3-mvmqi0b2-acjo-poster</value></field><field var="host"><value>localhost</value></field><field var="affiliation"><value>member</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="19"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='74dbefc5-6f93-495c-ac3d-efeabebb09eb'><command status='completed' sessionid='2026-10-24T18:30:28.914676Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field var='user'><value>o3-mvmqi0b2-acjo-poster</value></field><field var='host'><value>localhost</value></field><field var='affiliation'><value>member</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='res' type='text-single' label='res'><value>0</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='15' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="0bf45d4b-0608-4e0a-9412-19448beeb10c" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/change_room_option" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="20"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='0bf45d4b-0608-4e0a-9412-19448beeb10c'><command status='executing' sessionid='2026-10-24T18:30:28.920320Z' xml:lang='en' node='api-commands/change_room_option' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Change an option in a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Change Room Option</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>Room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field><field var='option' type='text-single' label='option'><required/><desc>Option name</desc><value>members_only</value></field><field var='value' type='text-single' label='value'><required/><desc>Value to assign</desc><value>true</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='16' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="d060aee9-de44-42c8-aa9e-57f21041a0c8" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/change_room_option" sessionid="2026-10-24T18:30:28.920320Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field><field var="option"><value>moderated</value></field><field var="value"><value>true</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="21"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='d060aee9-de44-42c8-aa9e-57f21041a0c8'><command status='completed' sessionid='2026-10-24T18:30:28.920320Z' xml:lang='en' node='api-commands/change_room_option' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Change an option in a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Change Room Option</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field var='option'><value>moderated</value></field><field var='value'><value>true</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='res' type='text-single' label='res'><value>0</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='17' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="795ae801-02dd-47a3-955b-d6a68c59477f" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/change_room_option" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="22"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='795ae801-02dd-47a3-955b-d6a68c59477f'><command status='executing' sessionid='2026-10-24T18:30:28.925304Z' xml:lang='en' node='api-commands/change_room_option' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Change an option in a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Change Room Option</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>Room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field><field var='option' type='text-single' label='option'><required/><desc>Option name</desc><value>members_only</value></field><field var='value' type='text-single' label='value'><required/><desc>Value to assign</desc><value>true</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='18' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="03c820fe-87f5-45dd-972b-5c3c092dd134" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/change_room_option" sessionid="2026-10-24T18:30:28.925304Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field><field var="option"><value>members_by_default</value></field><field var="value"><value>false</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="23"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='03c820fe-87f5-45dd-972b-5c3c092dd134'><command status='completed' sessionid='2026-10-24T18:30:28.925304Z' xml:lang='en' node='api-commands/change_room_option' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Change an option in a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Change Room Option</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field var='option'><value>members_by_default</value></field><field var='value'><value>false</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='res' type='text-single' label='res'><value>0</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='19' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="e2f83985-5a46-46fe-93ea-e9e783c16ea9" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/get_room_options" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="24"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='e2f83985-5a46-46fe-93ea-e9e783c16ea9'><command status='executing' sessionid='2026-10-24T18:30:28.930377Z' xml:lang='en' node='api-commands/get_room_options' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Get options from a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Get Room Options</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>Room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='20' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="4b265094-bec5-4702-be00-08f02f486628" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/get_room_options" sessionid="2026-10-24T18:30:28.930377Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="25"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='4b265094-bec5-4702-be00-08f02f486628'><command status='completed' sessionid='2026-10-24T18:30:28.930377Z' xml:lang='en' node='api-commands/get_room_options' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Get options from a MUC room</instructions><instructions>Tags: muc_room</instructions><instructions>Module: mod_muc_admin</instructions><title>Get Room Options</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='options' type='text-multi' label='options'><desc>List of room options tuples with name and value</desc><value>allow_change_subj:true</value><value>allow_private_messages_from_visitors:nobody</value><value>allow_query_users:true</value><value>allow_subscription:false</value><value>allow_user_invites:false</value><value>allow_visitor_nickchange:false</value><value>allow_visitor_status:false</value><value>allow_voice_requests:false</value><value>allowpm:anyone</value><value>anonymous:true</value><value>captcha_protected:false</value><value>captcha_whitelist:{0,nil}</value><value>description:</value><value>enable_hats:true</value><value>lang:en</value><value>logging:false</value><value>mam:true</value><value>max_users:200</value><value>members_by_default:false</value><value>members_only:true</value><value>moderated:true</value><value>password:</value><value>password_protected:false</value><value>persistent:true</value><value>presence_broadcast:[moderator,participant,visitor]</value><value>public:false</value><value>public_list:true</value><value>pubsub:</value><value>title:</value><value>vcard:</value><value>vcard_xupdate:undefined</value><value>voice_request_min_interval:1800</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='21' xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="00e78457-b60c-43af-8a76-249920a33c1d" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/get_room_affiliations" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="26"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='00e78457-b60c-43af-8a76-249920a33c1d'><command status='executing' sessionid='2026-10-24T18:30:28.933960Z' xml:lang='en' node='api-commands/get_room_affiliations' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Get the list of affiliations of a MUC room</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Get Room Affiliations</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>Room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field></x></command></iq>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="163a338c-ea40-45da-9349-9e89fbdcd46f" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/get_room_affiliations" sessionid="2026-10-24T18:30:28.933960Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<a h='22' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="27"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='163a338c-ea40-45da-9349-9e89fbdcd46f'><command status='completed' sessionid='2026-10-24T18:30:28.933960Z' xml:lang='en' node='api-commands/get_room_affiliations' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Get the list of affiliations of a MUC room</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Get Room Affiliations</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='affiliations' type='text-multi' label='affiliations'><desc>The list of affiliations with jid, affiliation and reason</desc><value>admin@localhost : owner : </value><value>o3-mvmqi0b2-acjo-obs@localhost : member : </value><value>o3-mvmqi0b2-acjo-poster@localhost : member : </value></field></x></command></iq>

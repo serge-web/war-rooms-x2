@@ -1,0 +1,16 @@
+<!-- probe {"target":"reference","who":"player","via":"raw","bodyBytes":262007,"stanzaBytes":262145,"outcome":"delivered","ms":97} -->
+
+<!-- out sender: 262145 bytes, first 200 -->
+<message xmlns="jabber:client" to="r15-mvmqc1bi-lh2g@conference.localhost" type="groupchat" id="big-mvmqc1ug-ojyw"><body>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in sender: 262573 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='r15-mvmqc1bi-lh2g-sender@localhost/r15-player-mvmqc1tb-uj8t' from='r15-mvmqc1bi-lh2g@conference.localhost/r15-mvmqc1bi-lh2g-sender-n-mvmqc1ub-a7db' type='groupchat' id='big-mvmqc1ug-ojyw'><archived by='r15-mvmqc1bi-lh2g@conference.localhost' id='17928…
+
+<!-- in sender -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in receiver: 262568 chars, first 300 -->
+<message xmlns='jabber:client' xml:lang='en' to='r15-mvmqc1bi-lh2g-receiver@localhost/rcv-mvmqc1hq-xiri' from='r15-mvmqc1bi-lh2g@conference.localhost/r15-mvmqc1bi-lh2g-sender-n-mvmqc1ub-a7db' type='groupchat' id='big-mvmqc1ug-ojyw'><archived by='r15-mvmqc1bi-lh2g@conference.localhost' id='1792866350…
