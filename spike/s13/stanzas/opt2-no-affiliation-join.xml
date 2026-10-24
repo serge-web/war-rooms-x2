@@ -1,0 +1,65 @@
+<!-- out no-affiliation -->
+<open xmlns="urn:ietf:params:xml:ns:xmpp-framing" xml:lang="en" to="localhost" version="1.0"/>
+
+<!-- in no-affiliation -->
+<open xmlns='urn:ietf:params:xml:ns:xmpp-framing' id='10781912968668799653' version='1.0' xml:lang='en' from='localhost'/>
+
+<!-- in no-affiliation -->
+<stream:features xmlns:stream='http://etherx.jabber.org/streams'><mechanisms xmlns='urn:ietf:params:xml:ns:xmpp-sasl'><mechanism>ANONYMOUS</mechanism><mechanism>PLAIN</mechanism><mechanism>SCRAM-SHA-256</mechanism><mechanism>X-OAUTH2</mechanism></mechanisms></stream:features>
+
+<!-- out no-affiliation -->
+<auth xmlns="urn:ietf:params:xml:ns:xmpp-sasl" mechanism="SCRAM-SHA-256">[sasl payload removed]</auth>
+
+<!-- in no-affiliation -->
+<challenge xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>[sasl payload removed]</challenge>
+
+<!-- out no-affiliation -->
+<response xmlns="urn:ietf:params:xml:ns:xmpp-sasl">[sasl payload removed]</response>
+
+<!-- in no-affiliation -->
+<success xmlns='urn:ietf:params:xml:ns:xmpp-sasl'>[sasl payload removed]</success>
+
+<!-- out no-affiliation -->
+<open xmlns="urn:ietf:params:xml:ns:xmpp-framing" xml:lang="en" to="localhost" version="1.0"/>
+
+<!-- in no-affiliation -->
+<open xmlns='urn:ietf:params:xml:ns:xmpp-framing' id='3730611347581855793' version='1.0' xml:lang='en' from='localhost'/>
+
+<!-- in no-affiliation -->
+<stream:features xmlns:stream='http://etherx.jabber.org/streams'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/><session xmlns='urn:ietf:params:xml:ns:xmpp-session'><optional/></session><c ver='Yw9uXBrncnBAuO8l5Cjkg9+mGRI=' node='https://www.process-one.net/ejabberd/' hash='sha-1' xmlns='http://jabber.org/protocol/caps'/><sm xmlns='urn:xmpp:sm:2'/><sm xmlns='urn:xmpp:sm:3'/><sub xmlns='urn:xmpp:features:pre-approval'/><ver xmlns='urn:xmpp:features:rosterver'/></stream:features>
+
+<!-- out no-affiliation -->
+<iq xmlns="jabber:client" id="d8ef0608-cc18-4206-a3c2-662f35217487" type="set"><bind xmlns="urn:ietf:params:xml:ns:xmpp-bind"><resource>noaff-mvmqi992-ek50</resource></bind></iq>
+
+<!-- in no-affiliation -->
+<iq xmlns='jabber:client' type='result' id='d8ef0608-cc18-4206-a3c2-662f35217487'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'><jid>o2-mvmqi4y9-o2gy-noaff@localhost/noaff-mvmqi992-ek50</jid></bind></iq>
+
+<!-- out no-affiliation -->
+<presence xmlns="jabber:client" id="093b8720-bae6-4095-8e71-2f091ba708de"/>
+
+<!-- out no-affiliation -->
+<enable xmlns="urn:xmpp:sm:3" resume="0"/>
+
+<!-- out no-affiliation -->
+<presence xmlns="jabber:client" id="89fb721f-e694-4973-a652-0eadf980dbe4" to="o2-mvmqi4y9-o2gy@conference.localhost/o2-mvmqi4y9-o2gy-noaff"><x xmlns="http://jabber.org/protocol/muc"/></presence>
+
+<!-- out no-affiliation -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in no-affiliation -->
+<presence xmlns='jabber:client' xml:lang='en' to='o2-mvmqi4y9-o2gy-noaff@localhost/noaff-mvmqi992-ek50' from='o2-mvmqi4y9-o2gy-noaff@localhost/noaff-mvmqi992-ek50' id='093b8720-bae6-4095-8e71-2f091ba708de'/>
+
+<!-- in no-affiliation -->
+<enabled xmlns='urn:xmpp:sm:3'/>
+
+<!-- in no-affiliation -->
+<a h='1' xmlns='urn:xmpp:sm:3'/>
+
+<!-- in no-affiliation -->
+<presence xmlns='jabber:client' xml:lang='en' to='o2-mvmqi4y9-o2gy-noaff@localhost/noaff-mvmqi992-ek50' from='o2-mvmqi4y9-o2gy@conference.localhost/o2-mvmqi4y9-o2gy-noaff' type='error' id='89fb721f-e694-4973-a652-0eadf980dbe4'><x xmlns='http://jabber.org/protocol/muc'/><occupant-id id='g20AAAAga/dHINCSN6tGLZYKleHTFg1gk+FYmpeMkh5pxtQKdQA=' xmlns='urn:xmpp:occupant-id:0'/><error type='auth'><text xml:lang='en' xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>Membership is required to enter this room</text><registration-required xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></presence>
+
+<!-- in no-affiliation -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- out no-affiliation -->
+<a xmlns="urn:xmpp:sm:3" h="1"/>

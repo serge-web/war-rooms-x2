@@ -11,7 +11,7 @@
     "up": "sh scripts/up.sh",
     "down": "sh scripts/down.sh",
     "test": "vitest run",
-    "test:s13": "vitest run tests/s13-revocation.test.ts",
+    "test:s13": "vitest run tests/opt1-muc-admin-role.test.ts tests/opt2-members-by-default.test.ts tests/opt3-adhoc-api.test.ts tests/opt4-other-settings.test.ts tests/no-rest.test.ts",
     "test:r15": "vitest run tests/r15-stanza-cap.test.ts",
     "typecheck": "tsc --noEmit"
   },

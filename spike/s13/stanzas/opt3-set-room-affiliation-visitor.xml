@@ -1,0 +1,29 @@
+<!-- out admin -->
+<iq xmlns="jabber:client" id="1ffbbb82-da78-4982-9d02-033717633bec" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" action="execute"/></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='1ffbbb82-da78-4982-9d02-033717633bec'><command status='executing' sessionid='2026-10-24T18:30:28.894599Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><actions execute='complete'><complete/></actions><x type='form' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room' type='text-single' label='room'><required/><desc>room name</desc><value>room1</value></field><field var='service' type='text-single' label='service'><required/><desc>MUC service</desc><value>conference.localhost</value></field><field var='user' type='text-single' label='user'><required/><desc>user name</desc></field><field var='host' type='text-single' label='host'><required/><desc>user host</desc><value>localhost</value></field><field var='affiliation' type='text-single' label='affiliation'><required/><desc>affiliation to set</desc><value>member</value></field></x></command></iq>
+
+<!-- in admin -->
+<r xmlns='urn:xmpp:sm:3'/>
+
+<!-- in admin -->
+<a h='10' xmlns='urn:xmpp:sm:3'/>
+
+<!-- out admin -->
+<iq xmlns="jabber:client" id="aaa0c4af-4654-48b9-96d9-7d0730c77791" to="localhost" type="set"><command xmlns="http://jabber.org/protocol/commands" node="api-commands/set_room_affiliation" sessionid="2026-10-24T18:30:28.894599Z" action="complete"><x xmlns="jabber:x:data" type="submit"><field var="room"><value>o3-mvmqi0b2-acjo</value></field><field var="service"><value>conference.localhost</value></field><field var="user"><value>o3-mvmqi0b2-acjo-obs</value></field><field var="host"><value>localhost</value></field><field var="affiliation"><value>visitor</value></field></x></command></iq>
+
+<!-- out admin -->
+<r xmlns="urn:xmpp:sm:3"/>
+
+<!-- out admin -->
+<a xmlns="urn:xmpp:sm:3" h="15"/>
+
+<!-- in admin -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/o3-mvmqi0b8-red1' from='localhost' type='result' id='aaa0c4af-4654-48b9-96d9-7d0730c77791'><command status='completed' sessionid='2026-10-24T18:30:28.894599Z' xml:lang='en' node='api-commands/set_room_affiliation' xmlns='http://jabber.org/protocol/commands'><x type='result' xmlns='jabber:x:data'><instructions>Change an affiliation in a MUC room</instructions><instructions>If affiliation is `none`, then the affiliation is removed.</instructions><instructions>Note: updated in 24.12</instructions><instructions>Tags: muc_room, v3</instructions><instructions>Module: mod_muc_admin</instructions><instructions>API version: 3</instructions><title>Set Room Affiliation</title><field type='fixed' label='Arguments'/><field var='room'><value>o3-mvmqi0b2-acjo</value></field><field var='service'><value>conference.localhost</value></field><field var='user'><value>o3-mvmqi0b2-acjo-obs</value></field><field var='host'><value>localhost</value></field><field var='affiliation'><value>visitor</value></field><field type='fixed'/><field type='fixed' label='Result'/><field var='error' type='text-single' label='Error 400'><value>Invalid affiliation</value></field></x></command></iq>
+
+<!-- in admin -->
+<a h='11' xmlns='urn:xmpp:sm:3'/>

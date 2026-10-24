@@ -1,11 +1,12 @@
 # S13 stack: the WRX1 reference ejabberd (image and config from serge-web/xmpp-spike,
 # spike/docker/ejabberd/compose.yaml, pinned by the same digest) plus two probe variants.
+# Started by scripts/up.sh, stopped (volumes deleted) by scripts/down.sh.
 # Own project name and host ports so it can run beside other stacks (the spike uses 5280/5443).
-#   ejabberd           reference config                    ws://localhost:15280/ws
-#   ejabberd-wscap     c2s max_stanza_size 65536 (R15)       ws://localhost:15281/ws
-#   ejabberd-adhocapi  + mod_adhoc_api for admin (route d)   ws://localhost:15282/ws
+#   ejabberd           reference config                                 ws://localhost:15280/ws
+#   ejabberd-wscap     c2s max_stanza_size 65536 (R15)                   ws://localhost:15281/ws
+#   ejabberd-adhocapi  + mod_adhoc_api, room commands only (option 3)   ws://localhost:15282/ws
 # ejabberd-httpcap.yml (max_stanza_size on the HTTP listener) is not a service: ejabberd refuses it,
-# and tests/r15-stanza-cap.test.ts starts it once with `docker run` to prove that.
+# and tests/r15-stanza-cap.test.ts starts it once with `docker run -d` (then removes it) to prove that.
 # Only plain ws:// is published: the tests compare listeners, and wss:// (5443) uses the same
 # ejabberd_http_ws handler. c2s 5222 stays inside the container.
 name: wrx-s13

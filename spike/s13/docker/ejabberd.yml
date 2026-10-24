@@ -1,6 +1,7 @@
-# S13 copy of the WRX1 reference deployment (NFR-22): copied unchanged from serge-web/xmpp-spike,
-# spike/docker/ejabberd/ejabberd.yml at commit 4992530. Only these three lines are added. The S13
-# variants (ejabberd-wscap.yml, ejabberd-adhocapi.yml) start from this file; see their headers.
+# S13 copy of the WRX1 reference deployment (NFR-22): copied from serge-web/xmpp-spike,
+# spike/docker/ejabberd/ejabberd.yml at commit 4992530. Every key and value is unchanged; only this
+# header was added and the repo's Prettier normalised quoting and list-item layout. The S13 variants
+# (ejabberd-wscap.yml, ejabberd-adhocapi.yml, ejabberd-httpcap.yml) start from this file.
 #
 # WRX1 spike config for ejabberd 26.09. Derived from the image's default ejabberd.yml,
 # trimmed to what the spike needs. Comments mark each deliberate change.
@@ -31,27 +32,24 @@ anonymous_protocol: sasl_anon
 allow_multiple_connections: true
 
 listen:
-  -
-    port: 5222
-    ip: "0.0.0.0"  # container has no IPv6
+  - port: 5222
+    ip: '0.0.0.0' # container has no IPv6
     module: ejabberd_c2s
     max_stanza_size: 262144
     shaper: c2s_shaper
     access: c2s
     starttls_required: false
-  -
-    # Plain HTTP for dev (ws://). TLS (wss://) is covered in S8.
+  - # Plain HTTP for dev (ws://). TLS (wss://) is covered in S8.
     port: 5280
-    ip: "0.0.0.0"  # container has no IPv6
+    ip: '0.0.0.0' # container has no IPv6
     module: ejabberd_http
     request_handlers:
       /ws: ejabberd_http_ws
       # Hardening: no /api (REST isn't needed, S4) and no public web admin; use `ejabberdctl`.
-  -
-    # S8: TLS WebSocket (wss://localhost:5443/ws). Cert comes from certfiles above; compose.tls.yaml
+  - # S8: TLS WebSocket (wss://localhost:5443/ws). Cert comes from certfiles above; compose.tls.yaml
     # swaps in a server cert issued by the spike's internal test CA (spike/docker/tls).
     port: 5443
-    ip: "0.0.0.0"
+    ip: '0.0.0.0'
     module: ejabberd_http
     tls: true
     request_handlers:
@@ -59,7 +57,7 @@ listen:
 
 acl:
   local:
-    user_regexp: ""
+    user_regexp: ''
   loopback:
     ip:
       - 127.0.0.0/8
@@ -86,10 +84,10 @@ access_rules:
 
 # Hardening: only ejabberdctl (console) and nothing over HTTP or ad-hoc API commands.
 api_permissions:
-  "console commands":
+  'console commands':
     from: ejabberd_ctl
     who: all
-    what: "*"
+    what: '*'
 # Per-connection inbound rate limits. "player": 50 kB/s sustained with a 300 kB burst, so a ~100 kB
 # PubSub item (S3) goes through at once and S5's 10k-message seed (~25 kB/s) isn't throttled, while a
 # runaway client is held to a modest rate. The admin (provisioning, bulk publishes) is unlimited.
