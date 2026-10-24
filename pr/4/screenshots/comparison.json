@@ -1,0 +1,30 @@
+[
+  {
+    "name": "app-shell",
+    "status": "new"
+  },
+  {
+    "name": "page-architecture",
+    "status": "new"
+  },
+  {
+    "name": "page-background",
+    "status": "new"
+  },
+  {
+    "name": "page-blog",
+    "status": "new"
+  },
+  {
+    "name": "page-data-dictionary",
+    "status": "new"
+  },
+  {
+    "name": "page-home",
+    "status": "new"
+  },
+  {
+    "name": "page-technical",
+    "status": "new"
+  }
+]
