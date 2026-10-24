@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WP 0.3 @xmpp/client smoke</title>
+  </head>
+  <body>
+    <h1>@xmpp/client smoke</h1>
+    <form>
+      <label>WebSocket <input name="url" value="wss://localhost:25443/ws" /></label>
+      <label>Domain <input name="domain" value="localhost" /></label>
+      <label>User (blank = anonymous) <input name="user" /></label>
+      <label>Password <input name="password" type="password" /></label>
+      <button>Connect</button>
+    </form>
+    <output></output>
+    <script type="module" src="/src/xmppjs-app.ts"></script>
+  </body>
+</html>

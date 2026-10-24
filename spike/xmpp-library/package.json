@@ -1,0 +1,30 @@
+{
+  "name": "wrx-spike-xmpp-library",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WP 0.3: StanzaJS health check, with @xmpp/client as the compared fallback. Outside the pnpm workspace.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.browser.json",
+    "build": "tsc -p tsconfig.json && vite build && node scripts/bundle-size.ts",
+    "stack:up": "sh docker/up.sh",
+    "stack:down": "sh docker/down.sh",
+    "test": "NODE_EXTRA_CA_CERTS=docker/tls-out/ca.crt vitest run"
+  },
+  "dependencies": {
+    "@xmpp/client": "0.14.0",
+    "events": "3.3.0",
+    "stanza": "12.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/xmpp__client": "0.14.1",
+    "playwright": "1.63.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}
