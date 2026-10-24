@@ -1309,9 +1309,17 @@ class Store implements SessionStore {
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
-    const parsed = parseDocument('objectives', { schemaVersion: 1, forceId, markdown })
+    const parsed = parseDocument('objectives', {
+      schemaVersion: 1,
+      forceId,
+      markdown,
+      updatedAt: this.now(),
+    })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    return this.publish(node, DOCUMENT_ITEM_ID, parsed.value, 'Publishing objectives')
+    // One item per author: ejabberd refuses to let a publisher overwrite another's item, so the
+    // admin and each umpire keep their own, and readers take the newest (§3 rule 14).
+    const author = localpart(this.session.jid) ?? DOCUMENT_ITEM_ID
+    return this.publish(node, author, parsed.value, 'Publishing objectives')
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -1408,7 +1416,18 @@ function noop(): void {
 
 function latest(entry: NodeEntry): LiveDocument | undefined {
   let doc: LiveDocument | undefined
-  for (const item of entry.items.values()) doc = item.doc
+  for (const item of entry.items.values()) {
+    // Objectives carry their own time, as several authors' items share the node; other
+    // documents have one item, so the last one received is the newest.
+    if (
+      doc?.kind === 'objectives' &&
+      item.doc.kind === 'objectives' &&
+      Date.parse(item.doc.value.updatedAt) < Date.parse(doc.value.updatedAt)
+    ) {
+      continue
+    }
+    doc = item.doc
+  }
   return doc
 }
 

@@ -1,6 +1,6 @@
 # WP 1.3 — Real transport
 
-**SRD ids:** ARC-1, ARC-8 · **Depends on:** 1.1 · **Status:** to do
+**SRD ids:** ARC-1, ARC-8 · **Depends on:** 1.1 · **Status:** done
 
 ## Goal
 

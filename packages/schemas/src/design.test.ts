@@ -4,6 +4,8 @@ import { checkDesign, designFileSchema, publicAssetIds } from './design.ts'
 import type { DesignFile } from './design.ts'
 import { pixelAsset, sampleDesign } from './fixtures.ts'
 
+const T = '2026-10-24T12:00:00.000Z'
+
 function messages(design: DesignFile) {
   return checkDesign(design).map((i) => `${i.severity} ${i.path}: ${i.message}`)
 }
@@ -86,8 +88,8 @@ describe('checkDesign', () => {
 
   it('finds objectives for unknown or repeated forces', () => {
     const design = sampleDesign()
-    design.objectives.push({ schemaVersion: 1, forceId: 'blue', markdown: '' })
-    design.objectives.push({ schemaVersion: 1, forceId: 'green', markdown: '' })
+    design.objectives.push({ schemaVersion: 1, forceId: 'blue', markdown: '', updatedAt: T })
+    design.objectives.push({ schemaVersion: 1, forceId: 'green', markdown: '', updatedAt: T })
     expect(messages(design)).toEqual([
       'error objectives[2].forceId: second objectives document for force "blue"',
       'error objectives[3].forceId: unknown force "green"',

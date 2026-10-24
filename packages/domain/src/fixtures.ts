@@ -52,8 +52,12 @@ export function room(id: string, participants: Room['participants'], extra: Part
   return doc
 }
 
-export function objectives(forceId: string, markdown: string): Objectives {
-  return { schemaVersion: 1, forceId, markdown }
+export function objectives(
+  forceId: string,
+  markdown: string,
+  updatedAt = '2026-10-24T09:00:00.000Z',
+): Objectives {
+  return { schemaVersion: 1, forceId, markdown, updatedAt }
 }
 
 export function chatBody(text: string): string {

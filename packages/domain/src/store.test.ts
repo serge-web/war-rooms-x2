@@ -387,8 +387,41 @@ describe('session store: operations', () => {
     await h.store.ready()
     expect(await h.store.publishObjectives('red', '1. Hold the line.')).toEqual(ok(undefined))
     const call = h.session.calls.find((c) => c.op === 'publish')
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'current'])
-    expect(JSON.parse(String(call?.args[2]))).toEqual(objectives('red', '1. Hold the line.'))
+    // Each author has its own item: a publisher cannot overwrite another's (§3 rule 14).
+    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'umpire-1'])
+    expect(JSON.parse(String(call?.args[2]))).toMatchObject({
+      schemaVersion: 1,
+      forceId: 'red',
+      markdown: '1. Hold the line.',
+    })
+  })
+
+  it("shows the newest author's objectives, whatever order items arrive in", async () => {
+    const h = harness()
+    await h.store.ready()
+    const item = (id: string, markdown: string, updatedAt: string) => ({
+      id,
+      payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
+      publisher: undefined,
+    })
+    h.session.emitItems({
+      node: 'objectives:blue',
+      items: [
+        item('umpire-1', 'Umpire edit', '2026-10-24T11:00:00.000Z'),
+        item('admin', 'Admin original', '2026-10-24T10:00:00+00:00'),
+      ],
+      retracted: [],
+      deleted: false,
+    })
+    expect(h.store.objectives('blue').data?.markdown).toBe('Umpire edit')
+    h.session.emitItems({
+      node: 'objectives:blue',
+      items: [item('admin', 'Admin revision', '2026-10-24T13:00:00+01:00')],
+      retracted: [],
+      deleted: false,
+    })
+    // 13:00+01:00 is 12:00Z, after the umpire's 11:00Z.
+    expect(h.store.objectives('blue').data?.markdown).toBe('Admin revision')
   })
 
   it('refuses objectives from a player, and invalid ones', async () => {
