@@ -12,7 +12,7 @@ The interface is XMPP-level, not domain-level (ARC-12). It covers:
 
 | Area | Operations and events |
 | --- | --- |
-| Connection | connect as a role, as `admin` or anonymously (D20); disconnect; status events (connecting, online, reconnecting, offline); forced-logout reasons from `policy-violation` and `conflict` (PLY-50); service discovery, which resolves the ready state (ARC-2) |
+| Connection | connect as a role, as `admin` or anonymously (D20); disconnect; status events (connecting, online, reconnecting, offline), with recovery reported as `resumed` (XEP-0198: nothing missed) or `reconnected` (rejoin rooms and fetch from MAM, PLY-2); forced-logout reasons from `policy-violation` and `conflict` (PLY-50); service discovery, which resolves the ready state (ARC-2) |
 | MUC (XEP-0045) | join with nickname, returning own role and affiliation; leave; send groupchat; message and occupant-presence events; self-presence status codes 110 and 321 (PLY-51) |
 | MAM (XEP-0313, 0059) | query a room backwards from the latest message by RSM id, returning items with `stanza-id`, sender occupant JID, server timestamp and body, plus `first`, `last` and `complete` |
 | PubSub (XEP-0060) | get items, publish, retract, subscribe and unsubscribe, item events; owner operations: create, configure and delete node, get and set affiliations and subscriptions |
@@ -24,6 +24,7 @@ The interface is XMPP-level, not domain-level (ARC-12). It covers:
 - **Error convention (ARC-14).** Proposed: every operation returns `Promise<Result<T, TransportError>>`, reusing the `Result` shape from `@wrx/schemas`. `TransportError` carries the XMPP defined condition (`not-allowed`, `forbidden`, `item-not-found`, `conflict`, …) or `timeout` or `disconnected`, plus optional text. Nothing throws for a server refusal.
 - **Events (ARC-13).** Every subscription is `on…(callback) → unsubscribe`.
 - **Payloads stay raw.** Bodies and items cross the interface as strings. Validation belongs to the domain layer (1.6), using `parseDocument`, so both implementations stay schema-agnostic.
+- **No library types.** Nothing from the XMPP library appears in the interface, so the library can be replaced (WP 0.3 exit plan).
 - **Clock.** Timestamps are server-supplied, never `Date.now()` in the client, so the mock's controllable clock (ARC-7) works.
 
 ## Acceptance
@@ -39,7 +40,7 @@ The interface is XMPP-level, not domain-level (ARC-12). It covers:
 
 ## Consumes
 
-`@wrx/schemas` (`Result`, node names); WP 0.3's library decision.
+`@wrx/schemas` (`Result`, node names); WP 0.3's library decision: StanzaJS 12.22.1 (`plan/decisions/xmpp-library.md`).
 
 ## Notes
 
