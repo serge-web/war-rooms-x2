@@ -11,7 +11,7 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool. Version 1 delivers admin-
 - The admin backend designs and provisions one wargame: forces, roles, chat rooms, themes and objectives.
 - The player client has a themed welcome page, a dockable chat workspace and a fixed out-of-game column.
 
-A browser-only mock backend and a multi-client view of 2–4 panes support review and demos. Other room types, turns and exports are deferred, but adding them must not need re-architecture (section 8).
+A browser-only mock backend and a multi-client view of 2–4 panes support review and demos, and a public GitHub Pages site documents the project and hosts a live demo of every PR (section 13). Other room types, turns and exports are deferred, but adding them must not need re-architecture (section 8).
 
 **Sources.** Serge v3.0.0 (`serge-web/serge`), War Rooms X (`serge-web/war-rooms-x`), and the technical summary of both.
 
@@ -457,6 +457,14 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 | R16 | **Destroying a room destroys its history** | Medium, given live editing (D23) | ADM-40 |
 | R17 | **Anonymous users can list PubSub node names** (but not their contents) | Low, accepted | ADM-42 |
 
+**Risks added by the publishing strategy**
+
+| # | Risk | Severity | Mitigation |
+| --- | --- | --- | --- |
+| R18 | **Public repos already expose security detail.** The xmpp-spike findings and the future `AdminOps` code describe the admin rules and the accepted weaknesses that DOC-2 keeps off the site | Medium | Decide repo visibility (open issue) |
+| R19 | **Preview storage growth.** Keeping every merged preview approaches the Pages size limit after about 200–300 PRs | Low–Medium | DOC-14 |
+| R20 | **Diagram updates rely on a review checklist** while human review is light, so diagrams may drift from the code | Medium | Milestone posts include a diagram review |
+
 **Open issues**
 
 - [x] Read-only member enforcement: ejabberd stored visitor role (R1, S1)
@@ -465,6 +473,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Server choice: ejabberd 26.09 (D16, §10)
 - [ ] Air-gapped host install verified on real hardware (S8, NFR-23)
 - [ ] Follow-up spike S13: can the admin revoke an offline observer's voice without its password? This decides ADM-37 (direct revocation, or else the encrypted vault)
+- [ ] Repo visibility: should the spike and WRX1 code repos stay public, given DOC-2 keeps security detail off the site? (R18)
 - [x] Welcome page: before login, using anonymous read access (D20)
 - [x] Objectives: written by the admin per force; force read-only; umpires may edit (D21)
 - [x] Concurrent logins per role: allowed silently (D22)
@@ -656,3 +665,36 @@ Nine end-to-end scenarios walk each actor through v1. Each traces to the require
 - PLY-32 (from SC-2) The client SHALL show clear empty states for when no game is published (the welcome page falls back to the default) and for a role with no rooms.
 - PLY-33 (from SC-4 and SC-6) When the server rejects a post, or access is revoked mid-composition, the client SHALL show why and keep the unsent text so it can be copied.
 - PLY-34 (from SC-7) Seed scenarios SHALL include message history, and SHALL be creatable by exporting a mock database after a rehearsal run (PLY-21).
+
+## 13. Documentation and publishing
+
+The repo publishes a public static site on GitHub Pages (the `gh-pages` branch) that explains WRX1 and hosts an interactive mock-backend demo of every PR. Security-sensitive detail stays off the site.
+
+**Site content**
+
+- DOC-1 The site SHALL have these sections: background, architecture, technical details, data dictionary, blog, and PR index.
+- DOC-2 The site SHALL NOT publish security-sensitive detail: access-control weaknesses and their mitigations (R13–R17), admin-tooling rules (ADM-35–42, rules R-A to R-F), or server hardening configuration. CI SHOULD flag any page that matches a deny-list of such terms, for human review.
+- DOC-3 The data dictionary SHALL be generated at build time from the runtime schemas (ARC-6, NFR-20). It covers every PubSub document, room config and message body: fields, types, constraints and `schemaVersion`.
+- DOC-4 The architecture section SHALL have a Mermaid overview of each sub-system (its components or classes). A PR that changes a sub-system SHALL update its diagram, enforced by the PR review checklist.
+- DOC-5 Blog posts SHALL be written at milestones. A post about a graphical feature SHALL embed or link the merged PR previews where it was built, so readers see the real implementation.
+
+**PR previews**
+
+- DOC-6 Every PR from the main repo SHALL deploy a fully interactive build, using the mock backend, to `pr/<number>/` on `gh-pages`, redeployed on each push. PRs from forks get no preview.
+- DOC-7 Each PR SHALL carry one bot comment linking to its preview, updated in place on each push.
+- DOC-8 Previews of merged PRs SHALL be kept; previews of PRs closed without merging SHALL be removed.
+- DOC-9 The site SHALL include an automatically generated, growing index of open and merged PRs: number, title, status, merge date and preview link, newest first.
+- DOC-10 Each deployment SHALL isolate its mock state. IndexedDB, SharedWorker, BroadcastChannel, Web Lock and localStorage names SHALL be prefixed with the deployment's base path, so previews on the shared origin cannot read or corrupt each other (extends ARC-7, PLY-5).
+- DOC-11 The client build SHALL run under any base path, using relative asset URLs (NFR-8, third mode).
+- DOC-12 Preview builds SHALL run on the mock only and SHALL contain no secrets or real-server endpoints.
+
+**Live demo**
+
+- DOC-16 Every push to `main` SHALL deploy a fully interactive mock-backend build to `demo/` on `gh-pages`, linked from the site's home page and the PR index. It uses the same deploy queue (DOC-13) and state isolation (DOC-10) as the previews.
+- DOC-17 The live demo's mock database persists in each visitor's browser across releases. On a mock schema change the demo SHALL migrate stored data, or else reset to the seed scenario with a notice, and never fail to load.
+
+**Operation**
+
+- DOC-13 Deploys to `gh-pages` SHALL be serialised (one at a time) and retried on conflict, so parallel PRs cannot overwrite each other.
+- DOC-14 CI SHALL report the site's size and warn at 70% of the GitHub Pages limit (about 1 GB). The fallback is pruning the oldest merged previews while keeping their index entries.
+- DOC-15 The site generator is the development team's choice, provided it builds statically and offline, renders Mermaid, and can embed live demos in posts.
