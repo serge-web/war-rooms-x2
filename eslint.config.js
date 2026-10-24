@@ -49,6 +49,22 @@ export default tseslint.config(
     rules: { 'wrx/no-module-mutable-state': 'error' },
   },
   {
+    // WP 0.3: StanzaJS stays inside the real transport, so no library type leaks out of it.
+    files: ['**/*.{ts,tsx,js}'],
+    ignores: ['packages/transport-xmpp/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [{ name: 'stanza', message: 'Import StanzaJS only in packages/transport-xmpp.' }],
+          patterns: [
+            { group: ['stanza/*'], message: 'Import StanzaJS only in packages/transport-xmpp.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.test.{ts,tsx}'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
   },

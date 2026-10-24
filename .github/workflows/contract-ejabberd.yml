@@ -1,0 +1,53 @@
+# The transport contract suite (WP 1.2) against the reference ejabberd (deploy/ejabberd, image
+# pinned by digest), through the real transport (WP 1.3). NFR-16: an unreachable server fails
+# the job; nothing is skipped. NFR-22: the R1 tests (S01, S01b, C01) are part of every run.
+name: contract-ejabberd
+
+on:
+  push:
+    branches: [main, 'phase-*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: contract-ejabberd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract-ejabberd:
+    name: Contract suite on ejabberd
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Start the reference ejabberd
+        run: pnpm stack:up
+
+      - name: Contract suite (S00–S13, R1, errors, ordering)
+        run: pnpm test:contract
+
+      - name: Install Chromium for the bundle check
+        run: pnpm --filter @wrx/transport-xmpp exec playwright install --with-deps chromium
+
+      - name: Production bundle loads and logs in from Chromium
+        env:
+          WRX_XMPP_WS: wss://localhost:35443/ws
+        run: pnpm --filter @wrx/transport-xmpp test:bundle
+
+      - name: Server log on failure
+        if: failure()
+        run: docker compose -f deploy/ejabberd/compose.yaml logs --tail 300
+
+      - name: Stop the stack
+        if: always()
+        run: pnpm stack:down

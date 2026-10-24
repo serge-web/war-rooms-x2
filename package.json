@@ -23,6 +23,9 @@
     "check:blog": "node tools/site/check-blog.ts",
     "check:site": "node tools/site/check-deny-list.ts site/dist && node tools/site/check-site-bundle.ts site/dist && node tools/site/size-report.ts site/dist",
     "site:build": "pnpm --filter \"@wrx/site...\" build",
+    "stack:up": "sh deploy/ejabberd/up.sh",
+    "stack:down": "sh deploy/ejabberd/down.sh",
+    "test:contract": "pnpm --filter @wrx/contract-suite test:ejabberd",
     "site:serve": "node tools/site/serve.ts site/dist 4174 /",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:trace && pnpm check:dictionary && pnpm check:blog"
   },

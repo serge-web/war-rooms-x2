@@ -1,0 +1,24 @@
+{
+  "name": "@wrx/contract-suite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The transport contract suite (WP 1.2): one set of tests, run against ejabberd and the mock (NFR-16, ARC-10, ARC-11).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test:ejabberd": "node scripts/run-ejabberd.ts",
+    "test:ejabberd:r1": "node scripts/run-ejabberd.ts --r1"
+  },
+  "dependencies": {
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "vitest": "^5.0.5"
+  },
+  "devDependencies": {
+    "@wrx/transport-xmpp": "workspace:*"
+  }
+}

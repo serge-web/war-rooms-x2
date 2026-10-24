@@ -73,6 +73,22 @@ importers:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@22.20.5)
 
+  packages/contract-suite:
+    dependencies:
+      '@wrx/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@wrx/transport':
+        specifier: workspace:*
+        version: link:../transport
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(happy-dom@20.14.6)(vite@8.3.5(@types/node@22.20.5))
+    devDependencies:
+      '@wrx/transport-xmpp':
+        specifier: workspace:*
+        version: link:../transport-xmpp
+
   packages/domain:
     dependencies:
       '@wrx/schemas':
@@ -127,6 +143,31 @@ importers:
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas
+
+  packages/transport-xmpp:
+    dependencies:
+      '@wrx/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@wrx/transport':
+        specifier: workspace:*
+        version: link:../transport
+      events:
+        specifier: 3.3.0
+        version: 3.3.0
+      stanza:
+        specifier: 12.22.1
+        version: 12.22.1
+    devDependencies:
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@22.20.5)
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(happy-dom@20.14.6)(vite@8.3.5(@types/node@22.20.5))
 
   site:
     devDependencies:
@@ -942,6 +983,9 @@ packages:
   '@types/node@22.20.5':
     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
 
+  '@types/punycode@2.1.4':
+    resolution: {integrity: sha512-trzh6NzBnq8yw5e35f8xe8VTYjqM3NE7bohBtvDVf/dtUer3zYTLK1Ka3DG3p7bdtoaOHZucma6FfVKlQ134pQ==}
+
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
     peerDependencies:
@@ -1539,6 +1583,10 @@ packages:
     resolution: {integrity: sha512-kVscqXk4OCp68SZ0dkgEKVi6/8ij300KBWTJq32P/dYeWTSwK41WyTxalN1eRmA5Z9UU/LX9D7FWSmV9SAYx6g==}
     engines: {node: '>=0.10.0'}
 
+  events@3.3.0:
+    resolution: {integrity: sha512-mQw+2fkQbALzQ7V0MY0IqdnXNOeTtP4r0lN9z7AAawCXgqea7bDii20AYrIBrFd/Hx0M2Ocz6S111CaFkUcb0Q==}
+    engines: {node: '>=0.8.x'}
+
   expect-type@1.4.0:
     resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
     engines: {node: '>=12.0.0'}
@@ -1981,6 +2029,9 @@ packages:
   scheduler@0.28.0:
     resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
 
+  sdp@3.2.2:
+    resolution: {integrity: sha512-xZocWwfyp4hkbN4hLWxMjmv2Q8aNa9MhmOZ7L9aCZPT+dZsgRr6wZRrSYE3HTdyk/2pZKPSgqI7ns7Een1xMSA==}
+
   search-insights@2.17.3:
     resolution: {integrity: sha512-RQPdCYTa8A68uM2jwxoY842xDhvx3E5LFL1LxvxCNMev4o5mLuokczhzjAgGwUZBAmOKZknArSxLKmXtIi2AxQ==}
 
@@ -2010,6 +2061,9 @@ packages:
   speakingurl@14.0.1:
     resolution: {integrity: sha512-1POYv7uv2gXoyGFpBCmpDVSNV74IfsWlDW216UPjbWufNf+bSU6GdbDsxdcxtfwb4xlI3yxzOTKClUosxARYrQ==}
     engines: {node: '>=0.10.0'}
+
+  stanza@12.22.1:
+    resolution: {integrity: sha512-WwoSl3u5cCEAbed5ao+yt8ByH6AsBJcPDY0gax3JGQkBX/7wEZ2oxu9nMJ7O1tm8slDyH4FBYIpeluHrT+g/LA==}
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
@@ -2973,6 +3027,8 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/punycode@2.1.4': {}
+
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:
       '@types/react': 19.3.0
@@ -3658,6 +3714,8 @@ snapshots:
 
   esutils@2.0.3: {}
 
+  events@3.3.0: {}
+
   expect-type@1.4.0: {}
 
   fast-deep-equal@3.1.3: {}
@@ -4137,6 +4195,8 @@ snapshots:
 
   scheduler@0.28.0: {}
 
+  sdp@3.2.2: {}
+
   search-insights@2.17.3: {}
 
   semver@7.8.5: {}
@@ -4163,6 +4223,18 @@ snapshots:
   space-separated-tokens@2.0.2: {}
 
   speakingurl@14.0.1: {}
+
+  stanza@12.22.1:
+    dependencies:
+      '@types/node': 22.20.5
+      '@types/punycode': 2.1.4
+      '@types/ws': 8.18.2
+      punycode: 2.3.1
+      sdp: 3.2.2
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   std-env@4.3.0: {}
 
