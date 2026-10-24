@@ -1,0 +1,26 @@
+{
+  "name": "@wrx/transport-xmpp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The real transport (WP 1.3): @wrx/transport over StanzaJS, with the ejabberd specifics in one server adapter (ARC-8).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.browser.json",
+    "build": "tsc --noEmit",
+    "test:bundle": "vitest run --config smoke/vitest.config.ts"
+  },
+  "dependencies": {
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "events": "3.3.0",
+    "stanza": "12.22.1"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

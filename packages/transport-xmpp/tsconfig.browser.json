@@ -1,0 +1,10 @@
+{
+  // The shipped code alone, as the browser bundle compiles it: DOM, no Node globals. StanzaJS's
+  // own typings still reference @types/node (WP 0.3), so this checks our code, not theirs.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}
