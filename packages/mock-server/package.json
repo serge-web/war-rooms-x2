@@ -1,0 +1,24 @@
+{
+  "name": "@wrx/mock-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The mock server core (WP 1.4): an in-memory XMPP-level server that behaves like ejabberd for everything the contract suite covers, and a Transport over it (D14, ARC-7, ARC-10, ARC-11).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wrx/domain": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@wrx/contract-suite": "workspace:*",
+    "vitest": "^5.0.5"
+  }
+}
