@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "**/*.js", "../vitest.config.ts"]
+}

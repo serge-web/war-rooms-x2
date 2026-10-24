@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'phase-*']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Type check, lint, unit tests, docs checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test:coverage
+      - name: Traceability (SRD ids, plan, README chart)
+        run: pnpm check:trace
+      - name: Data dictionary is current (DOC-3)
+        run: pnpm check:dictionary
+      - name: Install Chromium for the Mermaid check
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Mermaid blocks parse (DOC-22)
+        run: pnpm check:mermaid
+
+  build-e2e:
+    name: Build and Playwright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Bundle has no external references (NFR-7, DOC-11)
+        run: pnpm check:bundle
+      - run: pnpm --filter @wrx/web exec playwright install --with-deps chromium
+      - run: pnpm e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  # The ejabberd contract-suite job (NFR-16, NFR-22) joins this workflow in WP 1.2, when the
+  # suite exists. It must fail, not skip, when the server is unavailable.

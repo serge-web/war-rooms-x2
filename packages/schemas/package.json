@@ -1,0 +1,17 @@
+{
+  "name": "@wrx/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "dictionary": "node scripts/generate-dictionary.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}
