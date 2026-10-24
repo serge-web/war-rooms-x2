@@ -1,0 +1,66 @@
+[
+  [
+    {
+      "number": 12,
+      "title": "Phase 1: transports | contracts <draft>",
+      "state": "open",
+      "draft": true,
+      "merged_at": null,
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/12",
+      "user": { "login": "IanMayo" },
+      "head": { "repo": { "full_name": "serge-web/war-rooms-x2" } }
+    },
+    {
+      "number": 11,
+      "title": "Blog: [click](javascript:alert(1)) *bold* {{ secret }}",
+      "state": "open",
+      "draft": false,
+      "merged_at": null,
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/11",
+      "user": { "login": "IanMayo" },
+      "head": { "repo": { "full_name": "serge-web/war-rooms-x2" } }
+    },
+    {
+      "number": 10,
+      "title": "Fix typo from a fork",
+      "state": "open",
+      "draft": false,
+      "merged_at": null,
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/10",
+      "user": { "login": "someone" },
+      "head": { "repo": { "full_name": "someone/war-rooms-x2" } }
+    }
+  ],
+  [
+    {
+      "number": 9,
+      "title": "Closed without merging",
+      "state": "closed",
+      "draft": false,
+      "merged_at": null,
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/9",
+      "user": { "login": "IanMayo" },
+      "head": { "repo": { "full_name": "serge-web/war-rooms-x2" } }
+    },
+    {
+      "number": 8,
+      "title": "Bump zod",
+      "state": "closed",
+      "draft": false,
+      "merged_at": "2026-10-20T09:15:00Z",
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/8",
+      "user": { "login": "dependabot[bot]" },
+      "head": { "repo": { "full_name": "serge-web/war-rooms-x2" } }
+    },
+    {
+      "number": 1,
+      "title": "From a fork since deleted",
+      "state": "closed",
+      "draft": false,
+      "merged_at": "2026-10-24T16:58:01Z",
+      "html_url": "https://github.com/serge-web/war-rooms-x2/pull/1",
+      "user": { "login": "IanMayo" },
+      "head": { "repo": null }
+    }
+  ]
+]

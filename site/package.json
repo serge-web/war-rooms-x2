@@ -1,0 +1,21 @@
+{
+  "name": "@wrx/site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "node ../tools/site/build-site.ts",
+    "preview": "node ../tools/site/serve.ts dist 4174 /",
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.0.0",
+    "@wrx/web": "workspace:*",
+    "mermaid": "12.1.0",
+    "vitepress": "1.6.4",
+    "vue": "3.5.43"
+  }
+}

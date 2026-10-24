@@ -1,0 +1,33 @@
+# On every push to main: the site at the gh-pages root and the live demo at demo/ (DOC-16).
+# The daily run refreshes the PR index, and catches a push made with GITHUB_TOKEN (such as a
+# bot auto-merge), which starts no workflow of its own.
+name: Site main
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/site-build.yml
+    with:
+      target: root
+      ref: ${{ github.event_name == 'push' && github.sha || github.event.repository.default_branch }}
+    permissions:
+      contents: read
+      pull-requests: read
+
+  deploy:
+    needs: build
+    uses: ./.github/workflows/site-deploy.yml
+    with:
+      ops: root=site put:demo=app
+      message: 'Site and demo from main at ${{ github.sha }}'
+    permissions:
+      contents: write

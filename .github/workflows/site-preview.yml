@@ -1,0 +1,79 @@
+# A preview of the whole site, with the app on the mock backend, at gh-pages:/pr/<n>/ on
+# every push to a PR from this repo (DOC-6), and one bot comment updated in place (DOC-7).
+# Fork PRs get no preview: their token cannot write, and their code is not trusted.
+name: Site preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/site-build.yml
+    with:
+      target: pr/${{ github.event.pull_request.number }}
+    permissions:
+      contents: read
+      pull-requests: read
+
+  deploy:
+    needs: build
+    uses: ./.github/workflows/site-deploy.yml
+    with:
+      ops: put:pr/${{ github.event.pull_request.number }}=site
+      message: 'Preview of #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }}'
+    permissions:
+      contents: write
+
+  comment:
+    name: Preview comment
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node tools/site/pr-comment.ts preview --pr "$PR" --sha "$SHA" --size "$SIZE"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SIZE: ${{ needs.deploy.outputs.size }}
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}
+
+  failed:
+    name: Report a failed preview
+    needs: [build, deploy]
+    if: >-
+      failure() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node tools/site/pr-comment.ts failed --pr "$PR" --run-url "$RUN_URL"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}
+          SITE_PAGES_URL: ${{ vars.SITE_PAGES_URL }}

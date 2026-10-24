@@ -154,3 +154,6 @@ test-results/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Site build inputs generated at build time (tools/site/build-site.ts)
+site/.generated/
