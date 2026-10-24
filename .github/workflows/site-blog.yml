@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # No pnpm in this job; setup-node would otherwise try to cache it.
+          package-manager-cache: false
       - id: review
         run: node tools/site/blog-pr.ts
         env:
