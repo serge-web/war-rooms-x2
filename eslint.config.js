@@ -12,6 +12,7 @@ export default tseslint.config(
       '**/test-results/**',
       // Throwaway Phase 0 prototypes; each has its own tooling.
       'spike/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,
