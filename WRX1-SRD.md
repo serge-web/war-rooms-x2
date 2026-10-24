@@ -1,6 +1,6 @@
 # War Rooms X1 — Software Requirements Document
 
-Oct 20, 2026 · @Ian Mayo
+Oct 20, 2026 (revised Oct 24, 2026, see §14) · @Ian Mayo
 
 ## 1. Introduction
 
@@ -10,7 +10,7 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-de
 
 **Sources.** Serge v3.0.0 (`serge-web/serge`), War Rooms X (`serge-web/war-rooms-x`), and the technical summary of both.
 
-**Requirement language.** SHALL = mandatory for v1; SHOULD = expected unless justified; MAY = optional. Requirements are numbered by area (ADM, PLY, ARC, NFR). Retired ids are not reused: ADM-32–34 (merged into ADM-18–20), PLY-7 (merged into PLY-42) and PLY-23 (merged into PLY-46).
+**Requirement language.** SHALL = mandatory for v1; SHOULD = expected unless justified; MAY = optional. Requirements are numbered by area (ADM, PLY, ARC, NFR, DOC). Retired ids are not reused: ADM-32–34 (merged into ADM-18–20), PLY-7 (merged into PLY-42) and PLY-23 (merged into PLY-46).
 
 **Definitions**
 
@@ -51,7 +51,7 @@ Twenty-four decisions frame v1; each has a consequence the requirements below de
 
 **D18 — TypeScript.** All client, mock and test code SHALL be TypeScript in strict mode. Consequence: one set of shared types for domain documents, derived from the runtime schemas (ARC-6) so types and validation cannot drift.
 
-**D19 — Themes for the game, each room and each force, edited by the admin and stored in PubSub.** The game theme styles the welcome page and app default; a room theme styles that room's panel; a force theme styles only the force/role/objectives panel. Themes hold design tokens plus logo and icon images. Consequence: image size and SVG safety must be controlled (§3, R11), and the pre-login welcome page needs anonymous read access (D20).
+**D19 — Themes for the game, each room and each force, edited by the admin and stored in PubSub.** The game theme styles the welcome page and app default; a room theme styles that room's panel; a force theme styles only the force/role/objectives panel. Themes hold design tokens plus logo and icon images. Consequence: image size and SVG safety must be controlled (§3 rule 12, R11), and the pre-login welcome page needs anonymous read access (D20).
 
 **D20 — Themed welcome page before login, via anonymous read-only access.** Consequence: SASL ANONYMOUS is enabled, and anonymous sessions may read only `game-setup` and the game theme's assets. Those must hold nothing sensitive, and every other node must use a non-open access model. The mock emulates anonymous login; spike check S10 verifies the server.
 
@@ -69,12 +69,13 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 
 | Entity | Enforcement construct | Config / metadata | Access model |
 | --- | --- | --- | --- |
-| Wargame | — | PubSub leaf `game-setup` (name, description, theme, room-type defaults) | Read: anyone, including anonymous (D20); publish: admin |
+| Wargame | — | PubSub leaf `game-setup` (name, description, briefing, theme, room-type defaults, `designVersion`) | Read: anyone, including anonymous (D20); publish: admin |
 | Force | Room and node affiliations of its roles (no server group) | PubSub leaf `forces:<forceId>` (name, colour, icon, `isUmpire`) | Read: all game users; publish: admin |
 | Role | XMPP user `<roleId>@<domain>` | PubSub leaf `roles:<roleId>` (name, `forceId`, `isObserver`) | Read: all game users; publish: admin |
 | Room | MUC room `<roomId>@<mucService>` | PubSub leaf `rooms:<roomId>` (name, `roomType`, participants, type-specific config) | Read: room participants SHOULD; all users MAY; publish: admin |
 | Message | MUC groupchat stanza | Body = JSON `{type, schemaVersion, content}` | MUC membership |
 | History | MAM (XEP-0313); join history not relied on (PLY-49) | — | MUC membership |
+| Announcement | — | PubSub leaf `announcements`, one item per announcement (text, posted time) | Read: every role; publish: admin (PLY-37) |
 | Reserved | — | PubSub leaf `game-state` (created empty in v1 for the future turn model) | Publish: admin |
 
 **Rules**
@@ -85,6 +86,9 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and all umpire-force roles.
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
 6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents, kept live by subscription.
+7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
+8. `game-setup.designVersion` SHALL be a positive integer that publishing increments whenever the design changes; it keys saved layouts (PLY-5).
+9. Role passwords SHALL NOT be stored in any PubSub document or design export (ADM-16, ADM-26, NFR-1).
 
 **Themes and assets**
 
@@ -97,13 +101,13 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 | Force theme | `forces:<forceId>.theme` | The force/role/objectives panel only (inherits game theme) |
 | Asset | PubSub leaf `assets:<assetId>` (base64, MIME type, size, hash) | Referenced by id from themes |
 
-7. A theme SHALL contain tokens (primary, secondary, background, surface, text colours; font family from the bundled set) and optional `logoAssetId` and `iconAssetId`.
-8. Unset tokens SHALL inherit from the game theme, then from the built-in default.
-9. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
-10. Force colour (used for message authors) remains a separate force field, not a theme token.
+10. A theme SHALL contain tokens (primary, secondary, background, surface, text colours; font family from the bundled set) and optional `logoAssetId` and `iconAssetId`.
+11. Unset tokens SHALL inherit from the game theme, then from the built-in default.
+12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
+13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-11) Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `schemaVersion`), with whitelist read for that force's roles, umpire-force roles and admin, and publish by admin and umpire-force roles.
-12) `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements node SHALL be readable by every role and publishable only by the admin (PLY-37).
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `schemaVersion`), with whitelist read for that force's roles, umpire-force roles and admin, and publish by admin and umpire-force roles.
+15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements node SHALL be readable by every role and publishable only by the admin (PLY-37).
 
 ## 4. Functional requirements — admin backend
 
@@ -135,7 +139,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 **Objectives and live editing**
 
 - ADM-23 The admin SHALL write objectives for each force as Markdown, with a preview; players see them read-only (PLY-25).
-- ADM-24 Publishing SHALL store objectives per §3 rule 11 and re-sync the whitelist when roles join, leave or change force.
+- ADM-24 Publishing SHALL store objectives per §3 rule 14 and re-sync the whitelist when roles join, leave or change force.
 - ADM-25 Any design change MAY be published while players are online. Publishing SHALL grant new access before revoking old, and SHALL show which online roles a change affects before it is applied.
 
 **Provisioning**
@@ -218,9 +222,9 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 **Umpire**
 
-- PLY-15 Umpire-force roles SHALL see and post in every room. A combined cross-room view is deferred to the backlog (§8)
+- PLY-15 Umpire-force roles SHALL see and post in every room. A combined cross-room view is deferred to the backlog (§8).
 
-* PLY-35 Umpire-force roles SHALL view and edit every force's objectives from the player client, with a Markdown preview; edits SHALL publish live to that force's force panel.
+- PLY-35 Umpire-force roles SHALL view and edit every force's objectives from the player client, with a Markdown preview; edits SHALL publish live to that force's force panel.
 
 **Out-of-game column**
 
@@ -272,7 +276,21 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 The client is layered so that every pane in the multi-client view is fully independent, and swapping real XMPP for the in-browser mock changes only the transport implementation.
 
-&#91;embedded content: client architecture · 4 layers per pane, 2 interchangeable backends\]
+```mermaid
+flowchart TB
+    subgraph Pane["Each pane (one per client in the multi-client view)"]
+        direction TB
+        UI["UI: presentational components and room-type panels"]
+        Hooks["Hooks: thin useSyncExternalStore wrappers (ARC-3)"]
+        Store["Session store and domain layer (ARC-2, ARC-4, ARC-12)"]
+        Transport["XMPP-level transport interface (ARC-1)"]
+        UI --> Hooks --> Store --> Transport
+    end
+    Transport --> Real["Real: StanzaJS plus ejabberd adapter (ARC-8)"]
+    Transport --> Mock["Mock: shared in-browser server (ARC-7, D17)"]
+    Real --> Server[("ejabberd 26.09")]
+    Mock --> Host[("SharedWorker or leader tab, IndexedDB")]
+```
 
 The same code above the transport interface runs against both backends; that is what makes the mock a fair demo.
 
@@ -292,7 +310,7 @@ The same code above the transport interface runs against both backends; that is 
 - ARC-13 Live events SHOULD be delivered by callbacks that return an unsubscribe function, for direct use with useSyncExternalStore (recommendation; team may change).
 - ARC-14 The error-reporting convention (exceptions or typed results) is left to the development team, but SHALL be consistent across both layers and identical in mock and real implementations.
 
-* ARC-15 Package structure, state management and caching are left to the development team, within ARC-1–14 and NFR-18–20.
+- ARC-15 Package structure, state management and caching are left to the development team, within ARC-1–14 and NFR-18–20.
 
 ## 7. Non-functional requirements
 
@@ -307,7 +325,7 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 - NFR-5 Payloads from the network SHALL be schema-validated; invalid items are logged and ignored, never crash the UI.
 - NFR-6 Generated role passwords SHALL be random by default; the mock MAY use known demo passwords, clearly labelled.
 
-* NFR-21 Anonymous login SHALL be limited to reading `game-setup` and the game theme's assets; anonymous sessions SHALL NOT join rooms or read any other node (verified by S10, and enforced identically in the mock).
+- NFR-21 Anonymous login SHALL be limited to reading `game-setup` and the game theme's assets; anonymous sessions SHALL NOT join rooms or read any other node (verified by S10, and enforced identically in the mock).
 
 **Deployment**
 
@@ -316,8 +334,8 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 - NFR-9 Backend endpoints (WebSocket URL, XMPP domain) SHALL be runtime configuration, not build-time constants.
 - NFR-10 A container image (ejabberd + client + config, per NFR-22) SHOULD be provided for one-command deployment.
 
-* NFR-22 The reference deployment SHALL be `spike/docker/ejabberd/` from the spike repo: image pinned by digest, `wss://` only, SCRAM-SHA-256, no REST `/api` or web admin, in-band registration off, per-player rate limit. CI SHALL run the contract suite on every push, and an ejabberd upgrade SHALL NOT be adopted until the R1 tests (S01, S01b, C01) pass.
-* NFR-23 The air-gapped host install SHALL be verified on real hardware before first deployment (open; `ops/offline-install.sh`).
+- NFR-22 The reference deployment SHALL be `spike/docker/ejabberd/` from the spike repo: image pinned by digest, `wss://` only, SCRAM-SHA-256, no REST `/api` or web admin, in-band registration off, per-player rate limit. CI SHALL run the contract suite on every push, and an ejabberd upgrade SHALL NOT be adopted until the R1 tests (S01, S01b, C01) pass.
+- NFR-23 The air-gapped host install SHALL be verified on real hardware before first deployment (open; `ops/offline-install.sh`).
 
 **Performance and scale**
 
@@ -376,7 +394,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 | R8 | **Browser-only layouts.** Demo laptops lose arrangements | Low | Layout export/import MAY be added cheaply |
 | R9 | **Message `type` is client-asserted.** A modified client can send arbitrary body JSON | Low in v1 (chat only) | Validate and render as plain text; never trust body for identity or permissions |
 | R10 | **Force objectives are confidential but would sit in readable PubSub.** The force panel shows objectives; WRX's open nodes let any player read every force's objectives | High | **Closed by spike:** `objectives:<forceId>` with whitelist read (force, umpires, admin) and publishers (admin, umpires) is enforced; revocation per ADM-36 |
-| R11 | **Theme images vs PubSub limits and SVG scripting.** Large images can exceed item limits; SVG can carry script | Medium | **Closed by spike:** ejabberd caps items at 250,000 bytes (operator-configurable); 100 KB assets work. SVG sanitised and rendered via `<img>` only (§3 rule 9) |
+| R11 | **Theme images vs PubSub limits and SVG scripting.** Large images can exceed item limits; SVG can carry script | Medium | **Closed by spike:** ejabberd caps items at 250,000 bytes (operator-configurable); 100 KB assets work. SVG sanitised and rendered via `<img>` only (§3 rule 12) |
 | R12 | **Welcome page precedes login,** but PubSub requires an authenticated session | Medium | Decided (D20): anonymous read access limited to `game-setup` and its theme assets (NFR-21), verified by S10 |
 
 **Risks added by the spike**
@@ -393,7 +411,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - R19 **Preview storage growth.** Keeping every merged preview approaches the Pages size limit after about 200–300 PRs. Low–Medium. Mitigation: DOC-14.
 - R20 **Diagram updates rely on a review checklist** while human review is light, so diagrams may drift from the code. Medium. Mitigation: milestone posts include a diagram review.
 
-* R21 **Unreviewed public posts.** Intermediate posts go public with no human review, so one could be inaccurate or reveal something sensitive. Medium. Mitigation: the deny-list check blocks auto-merge (DOC-25); posts are labelled as work in progress (DOC-26); a post can be withdrawn by reverting its PR.
+- R21 **Unreviewed public posts.** Intermediate posts go public with no human review, so one could be inaccurate or reveal something sensitive. Medium. Mitigation: the deny-list check blocks auto-merge (DOC-25); posts are labelled as work in progress (DOC-26); a post can be withdrawn by reverting its PR.
 
 **Open issues**
 
@@ -526,7 +544,7 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 3. Posts a clarification in Red HQ, which Red sees attributed to the umpire.
 4. Opens Red's objectives, amends one, and Red's force panel updates live.
 
-**Outcome:** umpires see all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 11.
+**Outcome:** umpires see all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
 
 ### SC-6 Admin changes the game during play
 
@@ -626,4 +644,14 @@ The repo publishes a public static site on GitHub Pages (the `gh-pages` branch) 
 - DOC-14 CI SHALL report the site's size and warn at 70% of the GitHub Pages limit (about 1 GB). The fallback is pruning the oldest merged previews while keeping their index entries.
 - DOC-15 The site generator is the development team's choice, provided it builds statically and offline, renders Mermaid, and can embed live demos in posts.
 
-* DOC-22 The repo README SHALL open with a Mermaid flowchart of the development plan's work packages and dependencies, coloured by status (to do, active, done). Every PR SHALL update it with progress or plan changes; the plan carries no dates or durations, and CI SHALL fail if it doesn't parse.
+- DOC-22 The repo README SHALL open with a Mermaid flowchart of the development plan's work packages and dependencies, coloured by status (to do, active, done). Every PR SHALL update it with progress or plan changes; the plan carries no dates or durations, and CI SHALL fail if it doesn't parse.
+
+## 14. Revision notes
+
+Changes made on Oct 24, 2026, while the schemas (P5, WP 0.8) were being written. None changes a decision.
+
+- §3 rules 7–9 added: an `order` field for forces, roles and rooms; `designVersion` in `game-setup`, which PLY-5 already used but didn't define; and a rule that passwords are never stored in PubSub. The theme and asset rules are now numbered 10–15, and the references to them updated.
+- §3 table: an `announcements` row (PLY-37 used the node but the table didn't list it), and `briefing` added to `game-setup` (PLY-46).
+- §6: the client architecture diagram, missing from the exported text, redrawn in Mermaid.
+- Requirement language now lists the DOC area. Bullet and numbering formatting made consistent.
+

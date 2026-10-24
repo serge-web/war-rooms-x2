@@ -1,0 +1,39 @@
+:root {
+  --wrx-primary: #1d4ed8;
+  --wrx-background: #f8fafc;
+  --wrx-surface: #ffffff;
+  --wrx-text: #0f172a;
+  font-family: system-ui, sans-serif;
+  color: var(--wrx-text);
+  background: var(--wrx-background);
+}
+
+body {
+  margin: 0;
+}
+
+.shell-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: var(--wrx-primary);
+  color: #ffffff;
+}
+
+.shell-header h1 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.backend-badge {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.875rem;
+}
+
+.shell-main {
+  padding: 1rem;
+}
