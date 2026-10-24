@@ -1,0 +1,10 @@
+.lib-root {
+  position: absolute;
+  inset: 0;
+}
+
+/* PLY-26 check: FlexLayout resolves its --fl-* tokens on .flexlayout__layout from inherited
+   --flexlayout-* properties, so one workspace can be themed without touching the others. */
+.ws-theme-1 {
+  --flexlayout-color-tabset-background: rgb(255, 236, 179);
+}
