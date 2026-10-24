@@ -1,6 +1,6 @@
 # WP 1.6 — Domain layer, session store, hooks and room-type registry
 
-**SRD ids:** ARC-2–5, ARC-13, NFR-5 · **Depends on:** 1.1 · **Status:** to do · **Designated interface WP (room-type registry)**
+**SRD ids:** ARC-2–5, ARC-13, NFR-5 · **Depends on:** 1.1 · **Status:** done · **Designated interface WP (room-type registry)**
 
 ## Goal
 

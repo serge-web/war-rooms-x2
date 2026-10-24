@@ -1,5 +1,6 @@
 // XEP-0060 Publish-Subscribe on the game's PubSub service: entity use (§6–7) and owner use (§8).
 // Items carry one JSON payload each (XEP-0335, `urn:xmpp:json:0`), passed here as a string.
+// Single-document nodes (`game-setup`, `forces:<id>` and the like) hold one item, id `current`.
 import type { Outcome } from './errors.ts'
 import type { Unsubscribe } from './session.ts'
 
@@ -53,6 +54,10 @@ export interface PubsubApi {
   /** Fails `too-large` before sending if over the item limit (PLY-53). */
   publish(node: string, itemId: string, payload: string): Outcome<void>
   retract(node: string, itemId: string): Outcome<void>
+  /**
+   * Subscribes this session's full JID, so other sessions of the same account (D22) are not
+   * affected by this one subscribing or unsubscribing.
+   */
   subscribe(node: string): Outcome<void>
   unsubscribe(node: string): Outcome<void>
   /**
