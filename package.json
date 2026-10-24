@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "build": "pnpm -r build",
     "e2e": "pnpm --filter @wrx/web e2e",
+    "e2e:mock-host": "pnpm --filter @wrx/mock-host e2e",
     "dictionary": "pnpm --filter @wrx/schemas dictionary",
     "check:dictionary": "pnpm --filter @wrx/schemas dictionary --check",
     "check:mermaid": "node tools/check-mermaid.ts",
