@@ -24,7 +24,6 @@ export type {
 export {
   ConnectionIndicatorCore,
   NoGameCore,
-  OutOfGameColumnPlaceholder,
   RoomList,
   RoomListCore,
   Shell,
@@ -35,4 +34,5 @@ export { WelcomePage, WelcomePageCore } from './welcome.tsx'
 export type { WelcomePageCoreProps, WelcomePageProps } from './welcome.tsx'
 export { assetUrl, useWelcomeData } from './welcome-data.ts'
 export type { WelcomeData, WelcomeStatus } from './welcome-data.ts'
+export * from './column/index.ts'
 export * from './workspace/index.ts'

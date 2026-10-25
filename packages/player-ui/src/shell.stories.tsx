@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { BackendBadge } from './backend.tsx'
-import { OutOfGameColumnPlaceholder, RoomListCore, ShellCore } from './shell.tsx'
+import { AnnouncementsPanelCore, ForcePanelCore, OutOfGameColumnCore } from './column/index.ts'
+import { RoomListCore, ShellCore } from './shell.tsx'
 
 const meta: Meta<typeof ShellCore> = {
   title: 'Player/ShellCore',
@@ -22,7 +23,32 @@ const meta: Meta<typeof ShellCore> = {
         ]}
       />
     ),
-    column: <OutOfGameColumnPlaceholder />,
+    column: (
+      <OutOfGameColumnCore
+        announcements={
+          <AnnouncementsPanelCore
+            items={[
+              {
+                id: 'a1',
+                text: 'Break until 10:30.',
+                postedAt: '2026-10-24T10:00:00.000Z',
+                live: false,
+              },
+            ]}
+          />
+        }
+        force={
+          <section className="wrx-force-panel" aria-label="Force panel">
+            <ForcePanelCore
+              roleName="Blue CO"
+              forceName="Blue"
+              objectivesForce={{ id: 'blue', name: 'Blue' }}
+              objectives={'1. Secure the crossing.'}
+            />
+          </section>
+        }
+      />
+    ),
   },
 }
 export default meta

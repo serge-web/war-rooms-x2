@@ -1,5 +1,5 @@
-// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed out-of-game
-// column on the right (PLY-36, WP 2.7 fills it). Each part has a *Core that takes plain props
+// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed
+// out-of-game column on the right (PLY-36, WP 2.7). Each part has a *Core that takes plain props
 // and a wrapper that reads @wrx/hooks (NFR-18).
 import type { StoreStatus } from '@wrx/domain'
 import { useGameSetup, useMe, useSessionStatus } from '@wrx/hooks'
@@ -7,6 +7,7 @@ import type { ThemeTokens } from '@wrx/schemas'
 import { Banner, Button, Spinner, ThemeScope } from '@wrx/ui'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
+import { OutOfGameColumn } from './column/index.ts'
 import { Workspace } from './workspace/index.ts'
 
 // ---- Connection status (PLY-2) ------------------------------------------------------------
@@ -76,21 +77,6 @@ export function NoGameCore() {
         No game has been published yet. This page updates by itself when the admin publishes one.
       </p>
     </section>
-  )
-}
-
-/** Placeholder for the out-of-game column until WP 2.7 (PLY-36). */
-export function OutOfGameColumnPlaceholder() {
-  return (
-    <>
-      <section className="wrx-column__section" aria-label="Game time">
-        <p className="wrx-column__reserved">Game time and turn: not used in this version.</p>
-      </section>
-      <section className="wrx-column__section" aria-label="Announcements">
-        <h2 className="wrx-column__heading">Announcements</h2>
-        <p className="wrx-empty">None yet.</p>
-      </section>
-    </>
   )
 }
 
@@ -197,7 +183,7 @@ export interface ShellProps {
   readonly loggingOut?: boolean
   /** The workspace; default the dockable `Workspace`, without saved layouts. */
   readonly workspace?: ReactNode
-  /** The out-of-game column; default a placeholder until WP 2.7. */
+  /** The out-of-game column; default `OutOfGameColumn` (PLY-36). */
   readonly column?: ReactNode
 }
 
@@ -224,7 +210,7 @@ export function Shell({ backend, onLogout, loggingOut, workspace, column }: Shel
       loggingOut={loggingOut}
       game={game}
       workspace={workspace ?? <Workspace />}
-      column={column ?? <OutOfGameColumnPlaceholder />}
+      column={column ?? <OutOfGameColumn />}
     />
   )
 }

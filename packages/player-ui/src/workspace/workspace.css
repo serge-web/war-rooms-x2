@@ -4,6 +4,9 @@
    the background or surface, never small text in the primary colour. */
 
 .wrx-workspace {
+  /* FlexLayout's splitters and overlays carry z-indexes; keep them inside the workspace, so a
+     dialog portalled to the page (the objectives editor, WP 2.7) covers them. */
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
