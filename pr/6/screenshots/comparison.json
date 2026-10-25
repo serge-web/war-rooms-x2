@@ -34,5 +34,9 @@
   {
     "name": "player-welcome",
     "status": "new"
+  },
+  {
+    "name": "player-workspace",
+    "status": "new"
   }
 ]
