@@ -1,10 +1,9 @@
 // The player shell against the mock (WP 2.4): welcome page, login, the session lifecycle and
 // the empty states.
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
-import { DOMAIN, asMockAdmin, logIn } from './mock.ts'
+import { DOMAIN, asMockAdmin, logIn, roomTabs } from './mock.ts'
 
-const rooms = (page: Page) => page.getByRole('region', { name: 'Your rooms' }).getByRole('listitem')
+const rooms = roomTabs
 
 test('welcome page, login as blue-co with its demo password, rooms, logout (PLY-1, PLY-3, PLY-46, NFR-6)', async ({
   page,

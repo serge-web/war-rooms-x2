@@ -41,7 +41,10 @@ export interface PlayerClientProps {
   readonly demoLogins?: readonly DemoLogin[]
   /** Extra app-bar items on the welcome page. */
   readonly appBarItems?: ReactNode
-  /** The workspace slot (WP 2.5); rendered inside the session's SessionStoreProvider. */
+  /**
+   * The workspace slot; rendered inside the session's SessionStoreProvider. Default a
+   * `Workspace` without saved layouts: the host passes one with its storage (PLY-5, DOC-10).
+   */
   readonly workspace?: ReactNode
   /** The out-of-game column slot (WP 2.7); inside the SessionStoreProvider too. */
   readonly column?: ReactNode

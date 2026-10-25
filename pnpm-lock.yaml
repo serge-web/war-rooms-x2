@@ -351,12 +351,18 @@ importers:
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@wrx/theme':
+        specifier: workspace:*
+        version: link:../theme
       '@wrx/transport':
         specifier: workspace:*
         version: link:../transport
       '@wrx/ui':
         specifier: workspace:*
         version: link:../ui
+      flexlayout-react:
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
     devDependencies:
       '@storybook/react-vite':
         specifier: 10.6.1
@@ -2843,6 +2849,13 @@ packages:
 
   flatted@3.4.4:
     resolution: {integrity: sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q==}
+
+  flexlayout-react@0.11.1:
+    resolution: {integrity: sha512-/pQnd5bWQVZ/HQnV1AQhS/QPROwYYspnjV7XVlw/BIsVg44CZoUOxeFLv8KqgYWo41/mSTwQOqBo+S2RoPLfcQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
 
   focus-trap@7.8.0:
     resolution: {integrity: sha512-/yNdlIkpWbM0ptxno3ONTuf+2g318kh2ez3KSeZN5dZ8YC6AAmgeWz+GasYYiBJPFaYcSAPeu4GfhUaChzIJXA==}
@@ -6111,6 +6124,11 @@ snapshots:
       hookified: 1.15.1
 
   flatted@3.4.4: {}
+
+  flexlayout-react@0.11.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   focus-trap@7.8.0:
     dependencies:

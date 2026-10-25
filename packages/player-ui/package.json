@@ -15,8 +15,10 @@
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
     "@wrx/schemas": "workspace:*",
+    "@wrx/theme": "workspace:*",
     "@wrx/transport": "workspace:*",
-    "@wrx/ui": "workspace:*"
+    "@wrx/ui": "workspace:*",
+    "flexlayout-react": "0.11.1"
   },
   "peerDependencies": {
     "react": "^19.3.1",

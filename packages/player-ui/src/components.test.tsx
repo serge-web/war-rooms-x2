@@ -188,7 +188,7 @@ describe('ShellCore', () => {
 })
 
 describe('Shell over a store', () => {
-  it("lists the role's rooms, and shows an empty state when it has none (PLY-4, PLY-32)", async () => {
+  it("shows the role's rooms in the workspace, and an empty state when it has none (PLY-4, PLY-32)", async () => {
     const h = harness()
     render(
       <StrictMode>
@@ -199,9 +199,11 @@ describe('Shell over a store', () => {
     )
     await act(() => h.store.ready())
     await act(() => flush())
-    expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+    expect(screen.getAllByRole('tab').map((t) => t.getAttribute('aria-label'))).toEqual([
       'blue-hq',
       'negotiation',
+      'Game info',
+      'Online',
     ])
     expect(screen.getByLabelText('Logged in as blue-co, BLUE')).toBeTruthy()
 

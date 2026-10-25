@@ -1,4 +1,4 @@
-// The player shell: a header, the workspace slot (WP 2.5 fills it) and the fixed out-of-game
+// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed out-of-game
 // column on the right (PLY-36, WP 2.7 fills it). Each part has a *Core that takes plain props
 // and a wrapper that reads @wrx/hooks (NFR-18).
 import type { StoreStatus } from '@wrx/domain'
@@ -7,6 +7,7 @@ import type { ThemeTokens } from '@wrx/schemas'
 import { Banner, Button, Spinner, ThemeScope } from '@wrx/ui'
 import { useId } from 'react'
 import type { ReactNode } from 'react'
+import { Workspace } from './workspace/index.ts'
 
 // ---- Connection status (PLY-2) ------------------------------------------------------------
 
@@ -20,7 +21,7 @@ export function ConnectionIndicatorCore({ status }: { readonly status: StoreStat
   )
 }
 
-// ---- Rooms (placeholder workspace until WP 2.5) ------------------------------------------------
+// ---- Rooms (a plain list, the workspace before WP 2.5; kept for hosts that want no layout) ----
 
 export interface RoomSummary {
   readonly id: string
@@ -194,7 +195,7 @@ export interface ShellProps {
   readonly backend: ReactNode
   readonly onLogout: () => void
   readonly loggingOut?: boolean
-  /** The workspace; default the role's room list until WP 2.5. */
+  /** The workspace; default the dockable `Workspace`, without saved layouts. */
   readonly workspace?: ReactNode
   /** The out-of-game column; default a placeholder until WP 2.7. */
   readonly column?: ReactNode
@@ -222,7 +223,7 @@ export function Shell({ backend, onLogout, loggingOut, workspace, column }: Shel
       onLogout={onLogout}
       loggingOut={loggingOut}
       game={game}
-      workspace={workspace ?? <RoomList />}
+      workspace={workspace ?? <Workspace />}
       column={column ?? <OutOfGameColumnPlaceholder />}
     />
   )

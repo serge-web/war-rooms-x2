@@ -2,7 +2,7 @@
 // (`window.wrxMock`), standing in for the admin backend until WP 2.2. Each Playwright test has
 // a fresh browser context, so a fresh mock seeded with the demo (D17, DOC-10).
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 export type AdminOp =
   | { readonly op: 'end-sessions'; readonly jid: string }
@@ -49,4 +49,9 @@ export async function logIn(page: Page, roleId: string, password: string): Promi
   await page.getByLabel('Role id').fill(roleId)
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in' }).click()
+}
+
+/** The tabs in the workspace's docked area, in DOM order (WP 2.5). */
+export function roomTabs(page: Page): Locator {
+  return page.locator('.flexlayout__layout_main').getByRole('tab')
 }

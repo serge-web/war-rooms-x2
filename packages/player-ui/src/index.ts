@@ -1,5 +1,5 @@
-// @wrx/player-ui: the player client (WP 2.4; 2.5 adds the workspace, 2.6 chat, 2.7 the
-// out-of-game column). `*Core` components take plain props; their wrappers read @wrx/hooks
+// @wrx/player-ui: the player client (WP 2.4; 2.5 the workspace, 2.6 chat, 2.7 the out-of-game
+// column). `*Core` components take plain props; their wrappers read @wrx/hooks
 // (NFR-18). Importing this module loads its stylesheet.
 import './player.css'
 
@@ -35,3 +35,4 @@ export { WelcomePage, WelcomePageCore } from './welcome.tsx'
 export type { WelcomePageCoreProps, WelcomePageProps } from './welcome.tsx'
 export { assetUrl, useWelcomeData } from './welcome-data.ts'
 export type { WelcomeData, WelcomeStatus } from './welcome-data.ts'
+export * from './workspace/index.ts'

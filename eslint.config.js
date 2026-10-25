@@ -3,6 +3,32 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 import wrx from './tools/eslint-rules/index.js'
 
+const STANZA = { name: 'stanza', message: 'Import StanzaJS only in packages/transport-xmpp.' }
+const STANZA_HOME = 'packages/transport-xmpp/**'
+const FLEXLAYOUT = {
+  name: 'flexlayout-react',
+  message:
+    'Import FlexLayout only in the workspace module, packages/player-ui/src/workspace (ARC-9).',
+}
+const FLEXLAYOUT_HOME = 'packages/player-ui/src/workspace/**'
+
+/** `no-restricted-imports` configs: each forbids its libraries and their subpaths. */
+function restrictedImports(sets) {
+  return sets.map(({ files, ignores, libraries }) => ({
+    files,
+    ...(ignores === undefined ? {} : { ignores }),
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: libraries.map(({ name, message }) => ({ name, message })),
+          patterns: libraries.map(({ name, message }) => ({ group: [`${name}/*`], message })),
+        },
+      ],
+    },
+  }))
+}
+
 export default tseslint.config(
   {
     ignores: [
@@ -48,22 +74,19 @@ export default tseslint.config(
     plugins: { wrx },
     rules: { 'wrx/no-module-mutable-state': 'error' },
   },
-  {
-    // WP 0.3: StanzaJS stays inside the real transport, so no library type leaks out of it.
-    files: ['**/*.{ts,tsx,js}'],
-    ignores: ['packages/transport-xmpp/**'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [{ name: 'stanza', message: 'Import StanzaJS only in packages/transport-xmpp.' }],
-          patterns: [
-            { group: ['stanza/*'], message: 'Import StanzaJS only in packages/transport-xmpp.' },
-          ],
-        },
-      ],
+  // Library boundaries (one rule config per file set: a later `no-restricted-imports` replaces an
+  // earlier one, so each set lists every library it may not import).
+  // WP 0.3: StanzaJS stays inside the real transport, so no library type leaks out of it.
+  // WP 2.5 (ARC-9): FlexLayout stays inside the workspace module.
+  ...restrictedImports([
+    {
+      files: ['**/*.{ts,tsx,js}'],
+      ignores: [STANZA_HOME, FLEXLAYOUT_HOME],
+      libraries: [STANZA, FLEXLAYOUT],
     },
-  },
+    { files: [STANZA_HOME], libraries: [FLEXLAYOUT] },
+    { files: [FLEXLAYOUT_HOME], libraries: [STANZA] },
+  ]),
   {
     files: ['**/*.test.{ts,tsx}'],
     rules: { '@typescript-eslint/no-non-null-assertion': 'off' },

@@ -2,8 +2,8 @@
 // (PLY-1), routes between the player, admin and multi-client views, and shows the mock's
 // notices (DOC-17).
 import type { MockHost, MockNotice } from '@wrx/mock-host'
-import { AppBarCore, BackendChoiceCore, PlayerClient } from '@wrx/player-ui'
-import type { Connection, DemoLogin } from '@wrx/player-ui'
+import { AppBarCore, BackendChoiceCore, PlayerClient, Workspace } from '@wrx/player-ui'
+import type { Connection, DemoLogin, LayoutStorage } from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
 import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
@@ -26,6 +26,8 @@ export interface AppProps {
     load(): string | undefined
     save(id: BackendId): void
   }
+  /** Where the player's workspace layouts are saved (PLY-5), under this deployment (DOC-10). */
+  readonly layoutStorage?: LayoutStorage
 }
 
 export function App(props: AppProps) {
@@ -101,7 +103,13 @@ function Nav() {
   )
 }
 
-function AppRoutes({ backends, demoLogins, configProblem, backendPreference }: AppProps) {
+function AppRoutes({
+  backends,
+  demoLogins,
+  configProblem,
+  backendPreference,
+  layoutStorage,
+}: AppProps) {
   const route = useRoute()
   const [selected, setSelected] = useState<BackendId>(() => {
     const saved = backendPreference?.load()
@@ -184,6 +192,7 @@ function AppRoutes({ backends, demoLogins, configProblem, backendPreference }: A
           connection={connection}
           backend={entry.info}
           appBarItems={nav}
+          workspace={<Workspace storage={layoutStorage} />}
           demoLogins={selected === 'mock' ? demoLogins : undefined}
           backendChoice={
             <BackendChoiceCore

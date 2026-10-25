@@ -1,6 +1,6 @@
 // Helpers for scenarios that show the app on the mock (WP 2.4, DOC-20).
 import { expect } from '@playwright/test'
-import type { FrameLocator, Page } from '@playwright/test'
+import type { FrameLocator, Locator, Page } from '@playwright/test'
 
 /**
  * Hosts the mock in a leader tab, not a SharedWorker. A SharedWorker's script request never
@@ -23,4 +23,9 @@ export async function hostMockInLeaderTab(page: Page): Promise<void> {
 export async function welcomeLoaded(app: Page | FrameLocator): Promise<void> {
   await expect(app.getByLabel('Backend: MOCK')).toBeVisible()
   await expect(app.getByRole('heading', { name: 'Exercise Northern Gate' })).toBeVisible()
+}
+
+/** The room tabs in the player's workspace, docked area only, in DOM order (WP 2.5). */
+export function roomTabs(app: Page | FrameLocator): Locator {
+  return app.locator('.flexlayout__layout_main').getByRole('tab')
 }

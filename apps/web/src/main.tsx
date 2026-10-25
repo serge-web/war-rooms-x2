@@ -1,5 +1,6 @@
 import { basePathOf, hostNames, mockNamespace } from '@wrx/mock-host'
 import type { MockHost } from '@wrx/mock-host'
+import { webLayoutStorage } from '@wrx/player-ui'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App.tsx'
@@ -22,9 +23,14 @@ declare global {
   }
 }
 
+/** This deployment's browser-wide names (DOC-10). */
+function deploymentNames() {
+  return hostNames(mockNamespace(basePathOf(document.baseURI)))
+}
+
 /** Remembers the chosen backend per deployment (DOC-10), where storage is allowed. */
 function backendPreference(): AppProps['backendPreference'] {
-  const key = hostNames(mockNamespace(basePathOf(document.baseURI))).storageKey('backend')
+  const key = deploymentNames().storageKey('backend')
   return {
     load: () => {
       try {
@@ -41,6 +47,15 @@ function backendPreference(): AppProps['backendPreference'] {
       }
     },
   }
+}
+
+/** Saved workspace layouts (PLY-5), under the deployment's namespace too. */
+function layoutStorage(): AppProps['layoutStorage'] {
+  const names = deploymentNames()
+  return webLayoutStorage(
+    () => localStorage,
+    (key) => names.storageKey(key),
+  )
 }
 
 async function main(): Promise<void> {
@@ -72,6 +87,7 @@ async function main(): Promise<void> {
         demoLogins={demoLogins()}
         configProblem={loaded.ok ? undefined : loaded.error}
         backendPreference={backendPreference()}
+        layoutStorage={layoutStorage()}
       />
     </StrictMode>,
   )

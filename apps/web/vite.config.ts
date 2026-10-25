@@ -34,8 +34,9 @@ export default defineConfig(({ mode }) => {
     build: {
       assetsInlineLimit: 0,
       outDir: server ? 'server-build/dist' : 'dist',
-      // React, Radix, zod and the in-tab mock server; the real transport is its own chunk.
-      chunkSizeWarningLimit: 800,
+      // React, Radix, zod, FlexLayout (WP 2.5) and the in-tab mock server; the real transport is
+      // its own chunk.
+      chunkSizeWarningLimit: 1000,
     },
     preview: { port: server ? 4175 : 4173 },
   }
