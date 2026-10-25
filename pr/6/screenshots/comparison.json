@@ -29,7 +29,7 @@
   },
   {
     "name": "page-background",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-blog",
@@ -37,7 +37,7 @@
   },
   {
     "name": "page-data-dictionary",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-home",
