@@ -8,6 +8,12 @@ export type AdminOp =
   | { readonly op: 'end-sessions'; readonly jid: string }
   | { readonly op: 'delete-user'; readonly jid: string }
   | { readonly op: 'delete-node'; readonly node: string }
+  /**
+   * Creates a whitelist node as a publish does, which announces its deletion. A bare `publish`
+   * to a missing node auto-creates it with the server's defaults instead, and deleting such a
+   * node tells no subscriber (ejabberd's `notify_delete` default).
+   */
+  | { readonly op: 'create-node'; readonly node: string; readonly members: readonly string[] }
   | { readonly op: 'publish'; readonly node: string; readonly payload: string }
 
 export const DOMAIN = 'wrx.mock'
@@ -26,6 +32,22 @@ export async function asMockAdmin(page: Page, ops: readonly AdminOp[]): Promise<
       if (!login.ok) return `admin login: ${login.error.condition}`
       const admin = login.value
       for (const op of ops) {
+        if (op.op === 'create-node') {
+          const created = await admin.pubsub.createNode(op.node, {
+            accessModel: 'whitelist',
+            publishModel: 'publishers',
+            maxItems: 1,
+            notifyRetract: true,
+          })
+          if (!created.ok) return `create-node: ${created.error.condition}`
+          const members = op.members.map((id) => ({
+            jid: `${id}@${domain}`,
+            affiliation: 'member' as const,
+          }))
+          const granted = await admin.pubsub.setAffiliations(op.node, members)
+          if (!granted.ok) return `create-node: ${granted.error.condition}`
+          continue
+        }
         const result =
           op.op === 'end-sessions'
             ? await admin.admin.endUserSessions(op.jid)

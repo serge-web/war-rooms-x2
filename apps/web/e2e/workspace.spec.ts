@@ -110,8 +110,10 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   const errors = await asUmpire(page)
   await drag(page, tab(page, ROOMS.talks), panel(page, ROOMS.blue))
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
-  // What a publish does: the new room's document, and a new design version (§3 rule 8).
+  // What a publish does: the node, the new room's document, and a new design version (§3
+  // rule 8), since PubSub does not announce new nodes.
   await asMockAdmin(page, [
+    { op: 'create-node', node: 'rooms:press', members: ['umpire-1', 'blue-co'] },
     {
       op: 'publish',
       node: 'rooms:press',
@@ -135,8 +137,9 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
     ])
   // The visible tabs did not change.
   await expect(tab(page, ROOMS.red)).toHaveAttribute('aria-selected', 'true')
-  // The room is withdrawn again: its tab closes, the rest stays.
-  await asMockAdmin(page, [{ op: 'delete-node', node: 'rooms:press' }, gameSetup(3)])
+  // The room is withdrawn again: its tab closes, the rest stays. The node's deletion is
+  // announced, so no new design version is needed.
+  await asMockAdmin(page, [{ op: 'delete-node', node: 'rooms:press' }])
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
   expect(errors).toEqual([])
 })
