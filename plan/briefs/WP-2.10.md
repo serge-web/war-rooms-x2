@@ -1,6 +1,6 @@
 # WP 2.10 — Audit and repair; node-name warning
 
-**SRD ids:** ADM-41, ADM-42 · **Depends on:** 2.3 · **Status:** to do · **Security review required**
+**SRD ids:** ADM-41, ADM-42 · **Depends on:** 2.3 · **Status:** done · **Security review required**
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # WP 2.5 — Workspace
 
-**SRD ids:** PLY-4–6, PLY-8, PLY-40–42, ARC-9 · **Depends on:** 0.2, 2.4 · **Status:** to do · **Designated interface WP (workspace module)**
+**SRD ids:** PLY-4–6, PLY-8, PLY-40–42, ARC-9 · **Depends on:** 0.2, 2.4 · **Status:** done · **Designated interface WP (workspace module)**
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # WP 2.9 — Multi-client view, mock controls and seeds
 
-**SRD ids:** PLY-16–22, PLY-34, ADM-30–31 · **Depends on:** 1.5, 2.5 · **Status:** to do
+**SRD ids:** PLY-16–22, PLY-34, ADM-30–31 · **Depends on:** 1.5, 2.5 · **Status:** done
 
 ## Goal
 

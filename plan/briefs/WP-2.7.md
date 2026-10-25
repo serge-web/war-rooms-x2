@@ -1,6 +1,6 @@
 # WP 2.7 — Out-of-game column
 
-**SRD ids:** PLY-15, PLY-25, PLY-35–39, ADM-23–24, ADM-29 · **Depends on:** 2.5, 2.1 · **Status:** to do
+**SRD ids:** PLY-15, PLY-25, PLY-35–39, ADM-23–24, ADM-29 · **Depends on:** 2.5, 2.1 · **Status:** done
 
 ## Goal
 

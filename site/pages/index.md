@@ -31,4 +31,4 @@ Below is the app from this build, running on the mock backend. The <DemoLink>liv
 
 <AppDemo />
 
-The app is being built in Phase 2. Today it has the welcome page and login, with demo accounts on the mock backend, and the admin's design editor at `#/admin` (log in as `admin`). The chat workspace comes next. The [blog](/blog/) follows progress.
+The app has the welcome page and login, the players' chat workspace, the admin's design editor and publishing at `#/admin`, and a multi-client view at `#/multi`. Use the demo logins listed on the welcome page; `admin` plays as the umpire. The [blog](/blog/) follows progress.

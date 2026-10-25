@@ -1,6 +1,6 @@
 # WP 2.6 — Chat room panel
 
-**SRD ids:** PLY-9–14, PLY-33, PLY-43–45, PLY-49, PLY-53 · **Depends on:** 2.5 · **Status:** to do
+**SRD ids:** PLY-9–14, PLY-33, PLY-43–45, PLY-49, PLY-53 · **Depends on:** 2.5 · **Status:** done
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # WP 2.11 — White Force and the admin as umpire
 
-**SRD ids:** §3 rules 4 and 14, D8, D21, ADM-4, PLY-15, PLY-35, SC-5 · **Depends on:** 2.7, 2.10 · **Status:** to do · **Security review required**
+**SRD ids:** §3 rules 4 and 14, D8, D21, ADM-4, PLY-15, PLY-35, SC-5 · **Depends on:** 2.7, 2.10 · **Status:** done · **Security review required**
 
 ## Goal
 
