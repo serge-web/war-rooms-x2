@@ -1,0 +1,693 @@
+/*
+ * The admin backend's styles. Colours and the font come only from the --wrx-* properties
+ * (ui-stack.md), with neutral fallbacks until WP 2.8's packages/theme sets them.
+ */
+
+.wrx-admin {
+  --wrx-admin-gap: 1rem;
+  font-family: var(--wrx-font-family, system-ui, sans-serif);
+  color: var(--wrx-text, #111827);
+  background: var(--wrx-background, #f9fafb);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.45;
+}
+
+.wrx-admin *,
+.wrx-admin *::before,
+.wrx-admin *::after {
+  box-sizing: border-box;
+}
+
+.wrx-admin :focus-visible {
+  outline: 3px solid var(--wrx-focus, #2563eb);
+  outline-offset: 2px;
+}
+
+.wrx-admin h1,
+.wrx-admin h2,
+.wrx-admin h3 {
+  margin: 0 0 0.5rem;
+  line-height: 1.2;
+}
+
+.wrx-admin h1 {
+  font-size: 1.25rem;
+}
+
+.wrx-admin h2 {
+  font-size: 1.375rem;
+}
+
+.wrx-admin h3 {
+  font-size: 1.05rem;
+}
+
+.wrx-admin code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.wrx-admin-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Header ----------------------------------------------------------------------------------- */
+
+.wrx-admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wrx-admin-gap);
+  padding: 0.75rem 1rem;
+  background: var(--wrx-primary, #1d4ed8);
+  color: var(--wrx-background, #ffffff);
+}
+
+.wrx-admin-title {
+  display: flex;
+  flex-direction: column;
+  margin-right: auto;
+}
+
+.wrx-admin-title h1 {
+  margin: 0;
+}
+
+.wrx-admin-subtitle {
+  font-size: 0.875rem;
+}
+
+.wrx-admin-save {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.wrx-admin-toggle {
+  display: inline-flex;
+  border: 1px solid var(--wrx-background, #ffffff);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.wrx-admin-toggle .wrx-admin-button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wrx-background, #ffffff);
+}
+
+.wrx-admin-toggle .wrx-admin-button[aria-pressed='true'] {
+  background: var(--wrx-background, #ffffff);
+  color: var(--wrx-primary, #1d4ed8);
+  font-weight: 600;
+}
+
+/* Menu and main ---------------------------------------------------------------------------- */
+
+.wrx-admin-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.wrx-admin-nav {
+  flex: 0 0 12rem;
+  padding: 1rem 0.5rem;
+  background: var(--wrx-surface, #ffffff);
+  border-right: 1px solid var(--wrx-border, #d1d5db);
+}
+
+.wrx-admin-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrx-admin-nav-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wrx-admin-nav-item:hover {
+  background: var(--wrx-background, #f3f4f6);
+}
+
+.wrx-admin-nav-item[aria-current='page'] {
+  background: var(--wrx-primary, #1d4ed8);
+  color: var(--wrx-background, #ffffff);
+  font-weight: 600;
+}
+
+.wrx-admin-badge {
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--wrx-background, #ffffff);
+}
+
+.wrx-admin-badge-error {
+  background: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-admin-badge-warning {
+  background: var(--wrx-secondary, #92400e);
+}
+
+.wrx-admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: 1rem 1.25rem 3rem;
+  overflow: auto;
+}
+
+.wrx-admin-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wrx-admin-gap);
+}
+
+/* List and form ---------------------------------------------------------------------------- */
+
+.wrx-admin-split {
+  display: grid;
+  grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 52rem) {
+  .wrx-admin-body {
+    flex-direction: column;
+  }
+
+  .wrx-admin-nav {
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--wrx-border, #d1d5db);
+  }
+
+  .wrx-admin-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .wrx-admin-nav-item {
+    width: auto;
+  }
+
+  .wrx-admin-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wrx-admin-split-list,
+.wrx-admin-form {
+  background: var(--wrx-surface, #ffffff);
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.wrx-admin-split-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wrx-admin-gap);
+}
+
+.wrx-admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wrx-admin-gap);
+}
+
+.wrx-admin-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--wrx-border, #d1d5db);
+}
+
+.wrx-admin-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrx-admin-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.wrx-admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrx-admin-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--wrx-surface, #ffffff);
+}
+
+.wrx-admin-list-row.is-selected {
+  border-color: var(--wrx-primary, #1d4ed8);
+  background: var(--wrx-background, #eff6ff);
+}
+
+.wrx-admin-list-row.is-dragging {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+}
+
+.wrx-admin-handle {
+  border: 0;
+  background: transparent;
+  color: var(--wrx-muted, #4b5563);
+  font-size: 1.1rem;
+  padding: 0.25rem 0.4rem;
+  cursor: grab;
+  touch-action: none;
+}
+
+.wrx-admin-list-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wrx-admin-list-name[aria-current='true'] {
+  font-weight: 600;
+}
+
+.wrx-admin-list-moves {
+  display: inline-flex;
+}
+
+.wrx-admin-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  border: 1px solid var(--wrx-border, #d1d5db);
+  flex: none;
+}
+
+.wrx-admin-tag {
+  font-size: 0.75rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 4px;
+  color: var(--wrx-muted, #4b5563);
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+
+.wrx-admin-id {
+  margin: 0;
+  color: var(--wrx-muted, #4b5563);
+}
+
+/* Fields ----------------------------------------------------------------------------------- */
+
+.wrx-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrx-admin-field > label,
+.wrx-admin-label {
+  font-weight: 600;
+}
+
+.wrx-admin-field-check {
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrx-admin-field-check > .wrx-admin-hint,
+.wrx-admin-field-check > .wrx-admin-issues {
+  flex-basis: 100%;
+}
+
+.wrx-admin-input {
+  font: inherit;
+  color: var(--wrx-text, #111827);
+  background: var(--wrx-surface, #ffffff);
+  border: 1px solid var(--wrx-border, #6b7280);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  max-width: 100%;
+}
+
+textarea.wrx-admin-input {
+  width: 100%;
+  resize: vertical;
+}
+
+.wrx-admin-input[aria-invalid='true'] {
+  border-color: var(--wrx-danger, #b91c1c);
+  border-width: 2px;
+}
+
+.wrx-admin-input[readonly] {
+  background: var(--wrx-background, #f3f4f6);
+}
+
+.wrx-admin-input-hex {
+  width: 7.5rem;
+  font-family: ui-monospace, monospace;
+}
+
+.wrx-admin-colour,
+.wrx-admin-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.wrx-admin-colour input[type='color'] {
+  width: 2.75rem;
+  height: 2.25rem;
+  padding: 0.1rem;
+  border: 1px solid var(--wrx-border, #6b7280);
+  border-radius: 6px;
+  background: var(--wrx-surface, #ffffff);
+}
+
+.wrx-admin-hint,
+.wrx-admin-muted {
+  color: var(--wrx-muted, #4b5563);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.wrx-admin-fieldset {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wrx-admin-fieldset legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.wrx-admin-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--wrx-border, #d1d5db);
+}
+
+.wrx-admin-fieldset .wrx-admin-add {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.wrx-admin-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.875rem;
+}
+
+.wrx-admin-issue {
+  margin: 0;
+}
+
+.wrx-admin-issue-error {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-admin-issue-severity {
+  font-weight: 700;
+}
+
+/* Buttons ---------------------------------------------------------------------------------- */
+
+.wrx-admin-button {
+  font: inherit;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--wrx-border, #6b7280);
+  background: var(--wrx-surface, #ffffff);
+  color: var(--wrx-text, #111827);
+  cursor: pointer;
+}
+
+.wrx-admin-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wrx-admin-button-primary {
+  background: var(--wrx-primary, #1d4ed8);
+  border-color: var(--wrx-primary, #1d4ed8);
+  color: var(--wrx-background, #ffffff);
+}
+
+.wrx-admin-button-danger {
+  background: var(--wrx-surface, #ffffff);
+  border-color: var(--wrx-danger, #b91c1c);
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-admin-button-quiet {
+  border-color: transparent;
+  background: transparent;
+  padding: 0.25rem 0.45rem;
+}
+
+/* Notices, tabs, Markdown, dialog ---------------------------------------------------------- */
+
+.wrx-admin-notice {
+  border-left: 4px solid var(--wrx-primary, #1d4ed8);
+  background: var(--wrx-surface, #ffffff);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.wrx-admin-notice-warning {
+  border-left-color: var(--wrx-secondary, #b45309);
+}
+
+.wrx-admin-notice-error {
+  border-left-color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-admin-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--wrx-border, #d1d5db);
+}
+
+.wrx-admin-tab {
+  font: inherit;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+}
+
+.wrx-admin-tab[data-state='active'] {
+  border-bottom-color: var(--wrx-primary, #1d4ed8);
+  font-weight: 600;
+}
+
+.wrx-admin-tab-panel {
+  padding-top: 0.5rem;
+}
+
+.wrx-admin-preview {
+  min-height: 6rem;
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.wrx-admin-markdown > :first-child {
+  margin-top: 0;
+}
+
+.wrx-admin-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+}
+
+.wrx-admin-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(32rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: var(--wrx-surface, #ffffff);
+  color: var(--wrx-text, #111827);
+  border-radius: 10px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wrx-admin-dialog-title {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.wrx-admin-dialog-body p {
+  margin: 0 0 0.5rem;
+}
+
+.wrx-admin-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.wrx-admin-references {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+/* Participants and matrix ------------------------------------------------------------------ */
+
+.wrx-admin-participants {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.wrx-admin-participants th,
+.wrx-admin-participants td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--wrx-border, #e5e7eb);
+}
+
+.wrx-admin-participants tbody th {
+  font-weight: 400;
+}
+
+.wrx-admin-matrix-scroll {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 8px;
+  background: var(--wrx-surface, #ffffff);
+}
+
+.wrx-admin-matrix {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.wrx-admin-matrix caption {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+}
+
+.wrx-admin-matrix th,
+.wrx-admin-matrix td {
+  border: 1px solid var(--wrx-border, #e5e7eb);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.wrx-admin-matrix thead th {
+  background: var(--wrx-background, #f3f4f6);
+  min-width: 7rem;
+}
+
+.wrx-admin-matrix tbody th {
+  white-space: nowrap;
+}
+
+.wrx-admin-access-value {
+  font-weight: 600;
+}
+
+.wrx-admin-access-why {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--wrx-muted, #4b5563);
+}
+
+.wrx-admin-access-write {
+  box-shadow: inset 4px 0 0 var(--wrx-primary, #1d4ed8);
+}
+
+.wrx-admin-access-read {
+  box-shadow: inset 4px 0 0 var(--wrx-secondary, #6b7280);
+}
+
+.wrx-admin-access-none .wrx-admin-access-value {
+  font-weight: 400;
+  color: var(--wrx-muted, #4b5563);
+}
