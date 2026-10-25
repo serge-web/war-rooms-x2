@@ -231,5 +231,7 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 2.1 must create every node before publishing, give objectives nodes room for one item per author, and revoke subscriptions per full JID | Found by 1.2: ejabberd auto-creates a missing node with an open config when the admin publishes to it |
 | 1.4's mock leaves out the raw-stanza contract tests, which run against ejabberd only, and lists every behaviour the contract does not cover | ARC-10; raw stanzas are not part of the 1.1 interface |
 | 1.5's mock controls return promises, and the mock saves to IndexedDB after every change rather than debounced | The server runs in another tab or worker; a debounce lost the last messages when the leader tab closed |
+| 2.1 checks that a room exists by listing rooms before any owner request, and the vault covers every read-only role, not only observers | On ejabberd 26.09, asking for a missing room's config creates the room; per-room read-only entries need voice revoked like observers |
+| `AdminApi` gains `registeredUsers()` before 2.10 (XEP-0133 get-registered-users-list), in transport, mock and the contract suite | 2.10 must find accounts with no role. This changes the 1.1 interface, so it is listed for gate G2 |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 
