@@ -40,6 +40,10 @@
     "status": "changed"
   },
   {
+    "name": "player-chat",
+    "status": "new"
+  },
+  {
     "name": "player-shell",
     "status": "new"
   },
