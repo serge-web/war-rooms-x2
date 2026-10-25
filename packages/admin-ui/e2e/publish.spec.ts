@@ -3,7 +3,7 @@
 // credentials sheet prints alone; a change with warnings that must be ticked; and a reset with
 // typed confirmation.
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 const PASSPHRASE = 'correct horse battery staple'
 
@@ -12,6 +12,11 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Admin sections
 async function open(page: Page, section: string) {
   await nav(page).getByRole('button', { name: section, exact: false }).first().click()
   await expect(page.getByRole('heading', { level: 2, name: section })).toBeVisible()
+}
+
+/** A plan group's disclosure button, e.g. "Access". */
+function groupButton(region: Locator, group: string): Locator {
+  return region.getByRole('region', { name: group }).getByRole('button').first()
 }
 
 async function plan(page: Page) {
@@ -55,15 +60,31 @@ test(
     await expect(page.getByText('Mock server.')).toBeVisible()
     await plan(page)
     const region = page.getByRole('region', { name: 'Publish plan' })
-    for (const group of ['Accounts', 'Rooms', 'Nodes', 'Access', 'Documents']) {
+    for (const group of ['Accounts', 'Rooms', 'Nodes', 'Access', 'Documents', 'Game setup']) {
       await expect(region.getByRole('region', { name: group })).toBeVisible()
+      // Collapsed by default, with a count and a status.
+      await expect(groupButton(region, group)).toHaveAttribute('aria-expanded', 'false')
     }
+    await expect(region.locator('li[data-step]')).toHaveCount(0)
+    await expect(groupButton(region, 'Access')).toHaveText(/Access\s*19 steps\s*To do/)
     await expect(region.getByText(/the game becomes design version 1/)).toBeVisible()
+    // The access steps summarised per kind, expandable from the keyboard.
+    await groupButton(region, 'Access').focus()
+    await page.keyboard.press('Enter')
+    await expect(groupButton(region, 'Access')).toHaveAttribute('aria-expanded', 'true')
+    const nodeGrants = region.getByRole('button', { name: /^Give node access: 15 nodes × roles/ })
+    await expect(nodeGrants).toHaveAttribute('aria-expanded', 'false')
+    await nodeGrants.click()
+    await expect(region.getByText('Give access to node game-state')).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('publish-plan.png'), fullPage: true })
+    await groupButton(region, 'Access').click()
 
     await firstPublish(page)
-    await expect(region.locator('li[data-state="done"]').first()).toBeVisible()
-    await expect(region.locator('li[data-state="pending"], li[data-state="failed"]')).toHaveCount(0)
+    await expect(region.getByRole('status').filter({ hasText: 'All 57 steps done.' })).toBeVisible()
+    await expect(region.locator('section[data-group]:not([data-state="done"])')).toHaveCount(0)
+    await region.getByRole('button', { name: 'Show every step' }).click()
+    await expect(region.locator('li[data-step][data-state="done"]')).toHaveCount(57)
+    await expect(region.locator('li[data-step]:not([data-state="done"])')).toHaveCount(0)
     await expect(page.getByText(/All 3 rooms are members-only/)).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('publish-done.png'), fullPage: true })
 

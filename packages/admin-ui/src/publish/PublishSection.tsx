@@ -1,18 +1,16 @@
-// The Publish section (WP 2.3): server checks (NFR-4), the plan grouped by kind (ADM-10), the
-// online roles it affects and its warnings (ADM-13, ADM-14, ADM-17, ADM-25, ADM-40), the
-// confirmation, progress per step and the result with a re-run (ADM-11), the vault (ADM-37),
+// The Publish section (WP 2.3): server checks (NFR-4), the plan in collapsible groups (ADM-10,
+// PlanSteps.tsx), the online roles it affects and its warnings (ADM-13, ADM-14, ADM-17, ADM-25,
+// ADM-40), the confirmation, progress per step and the result with a re-run (ADM-11), the vault (ADM-37),
 // the credentials sheet (ADM-26), reset (ADM-15) and design import / export (ADM-16).
 //
 // `PublishSectionCore` draws plain props; `PublishSection` wires a `PublishController`.
-import { STEP_GROUPS, needsConfirmation } from '@wrx/admin-ops'
+import { needsConfirmation } from '@wrx/admin-ops'
 import type {
   Credential,
   ExecutionResult,
-  PlanStep,
   PlanWarning,
   PublishPlan,
   ServerCheck,
-  StepGroup,
 } from '@wrx/admin-ops'
 import type { DesignFile, DesignIssue } from '@wrx/schemas'
 import { useId, useRef, useState } from 'react'
@@ -20,30 +18,14 @@ import type { ReactNode } from 'react'
 import { Button, IssueList, Notice, SectionFrame } from '../components/index.ts'
 import type { Draft, DraftStore, DraftValidation } from '../draft/index.ts'
 import { sortedRoles } from '../draft/index.ts'
-import type { PublishConnection, PublishSnapshot, StepProgress } from './controller.ts'
+import type { PublishConnection, PublishSnapshot } from './controller.ts'
 import { describeError } from './controller.ts'
 import { ApplyDialog, VaultDialog } from './dialogs.tsx'
+import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
 import { exportDesign, importDesign } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
-
-const GROUP_LABEL: Readonly<Record<StepGroup, string>> = Object.freeze({
-  accounts: 'Accounts',
-  rooms: 'Rooms',
-  nodes: 'Nodes',
-  access: 'Access',
-  documents: 'Documents',
-  removals: 'Removals',
-})
-
-const STATE_LABEL: Readonly<Record<StepProgress['state'], string>> = Object.freeze({
-  pending: 'To do',
-  running: 'Running',
-  done: 'Done',
-  failed: 'Failed',
-  'not-run': 'Not run',
-})
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
@@ -418,69 +400,6 @@ function OnlineRoles({
           {plural(online.length, 'role')} online will see changed documents live.
         </p>
       )}
-    </div>
-  )
-}
-
-function PlanSteps({
-  plan,
-  progress,
-  online,
-}: {
-  readonly plan: PublishPlan
-  readonly progress: PublishSnapshot['progress']
-  readonly online: readonly string[]
-}) {
-  const byGroup = new Map<StepGroup, PlanStep[]>()
-  for (const step of plan.steps) byGroup.set(step.group, [...(byGroup.get(step.group) ?? []), step])
-  return (
-    <div className="wrx-publish-groups">
-      {STEP_GROUPS.filter((g) => byGroup.has(g)).map((group) => {
-        const steps = byGroup.get(group) ?? []
-        return (
-          <section key={group} className="wrx-admin-group" aria-label={GROUP_LABEL[group]}>
-            <h4 className="wrx-admin-group-title">
-              {GROUP_LABEL[group]} ({steps.length})
-            </h4>
-            <ol className="wrx-publish-steps">
-              {steps.map((step) => {
-                const state = progress.get(step.id) ?? { state: 'pending' as const }
-                const affected = step.risk.roles.filter((id) => online.includes(id))
-                return (
-                  <li key={step.id} data-step={step.id} data-state={state.state}>
-                    <span
-                      className="wrx-publish-state"
-                      aria-label={`Status: ${STATE_LABEL[state.state]}`}
-                    >
-                      {STATE_LABEL[state.state]}
-                    </span>{' '}
-                    <span>{step.summary}</span>
-                    {step.risk.destructive && (
-                      <span className="wrx-admin-tag wrx-publish-danger">Removes</span>
-                    )}
-                    {affected.length > 0 && (
-                      <span className="wrx-admin-tag wrx-publish-online-tag">
-                        Online: {affected.map((id) => roleLabel(plan, id)).join(', ')}
-                      </span>
-                    )}
-                    {step.details.length > 0 && (
-                      <ul className="wrx-publish-details">
-                        {step.details.map((d) => (
-                          <li key={d}>{d}</li>
-                        ))}
-                      </ul>
-                    )}
-                    {state.note !== undefined && <p className="wrx-admin-muted">{state.note}</p>}
-                    {state.error !== undefined && (
-                      <p className="wrx-publish-error">{describeError(state.error)}</p>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
-          </section>
-        )
-      })}
     </div>
   )
 }

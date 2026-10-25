@@ -1,25 +1,23 @@
 /*
  * @wrx/ui styles. Colours, font and focus come only from the --wrx-* custom properties (D24), so
- * a ThemeScope (or WP 2.8's packages/theme) restyles everything without touching this file.
+ * a ThemeScope (from @wrx/theme) restyles everything without touching this file.
  */
 
-/* The default theme for anything outside a ThemeScope, e.g. a dialog portalled to <body>. */
+/*
+ * The default theme for anything outside a ThemeScope, e.g. a dialog portalled to <body>:
+ * `themeProperties(DEFAULT_TOKENS)` from @wrx/theme, which a unit test keeps in step. Inside a
+ * scope, every property is set inline on the scope's own element.
+ */
 :where(:root) {
   --wrx-primary: #1d4ed8;
   --wrx-secondary: #475569;
-  --wrx-background: #f8fafc;
+  --wrx-background: #f9fafb;
   --wrx-surface: #ffffff;
-  --wrx-text: #0f172a;
-  --wrx-font-family:
-    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-}
-
-/* Derived properties, recomputed in every scope from that scope's tokens. */
-:where(:root),
-.wrx-theme {
-  --wrx-border: color-mix(in srgb, var(--wrx-text) 22%, var(--wrx-surface));
-  --wrx-muted: color-mix(in srgb, var(--wrx-text) 68%, var(--wrx-surface));
-  --wrx-focus: var(--wrx-primary);
+  --wrx-text: #111827;
+  --wrx-font-family: 'WRX IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --wrx-border: #b8babe;
+  --wrx-muted: #646973;
+  --wrx-focus: #1d4ed8;
   --wrx-danger: #b91c1c;
 }
 

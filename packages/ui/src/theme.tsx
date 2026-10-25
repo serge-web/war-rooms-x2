@@ -1,7 +1,15 @@
 // ThemeScope (PLY-26, D24): sets the `--wrx-*` custom properties on its own root element only,
-// so one panel's theme cannot leak into another. The five colour tokens and the font come from
-// the theme; `--wrx-border`, `--wrx-muted`, `--wrx-focus` and `--wrx-danger` derive from them in
-// ui.css (`.wrx-theme`) until WP 2.8's `packages/theme` takes over the derivation.
+// so one panel's theme cannot leak into another. It delegates to `@wrx/theme`: inheritance and
+// defaults come from `resolveTheme`, the ten properties (derived border, muted, focus and danger
+// included) from `themeProperties`, and the element from `@wrx/theme/react`'s `ThemeScope`.
+//
+// What this wrapper adds is partial tokens: a scope sets only some tokens and takes the rest
+// from the nearest enclosing `@wrx/ui` scope, or from the default theme at the root.
+import { DEFAULT_TOKENS, fontStack, resolveTheme, themeProperties } from '@wrx/theme'
+import type { ResolvedTokens } from '@wrx/theme'
+import { ThemeScope as ResolvedThemeScope } from '@wrx/theme/react'
+import type { BundledFont, ThemeTokens as SchemaThemeTokens } from '@wrx/schemas'
+import { createContext, useContext, useMemo } from 'react'
 import type { ComponentPropsWithRef, ReactNode } from 'react'
 
 declare module 'react' {
@@ -12,60 +20,56 @@ declare module 'react' {
   }
 }
 
-/** Font families bundled with the client (NFR-7); the same ids as `BUNDLED_FONTS` in schemas. */
-export type FontId = 'sans' | 'serif' | 'mono'
+/** Font families bundled with the client (NFR-7): `BUNDLED_FONTS` in schemas. */
+export type FontId = BundledFont
 
-/** Theme tokens. Structurally the same as `ThemeTokens` in `@wrx/schemas`; unset ones inherit. */
-export interface ThemeTokens {
-  readonly primary?: string
-  readonly secondary?: string
-  readonly background?: string
-  readonly surface?: string
-  readonly text?: string
-  readonly fontFamily?: FontId
-}
+/** Theme tokens, as in `@wrx/schemas`; unset ones inherit. */
+export type ThemeTokens = SchemaThemeTokens
 
 /** The default theme, used when a document sets no token, or there is no game (PLY-27). */
-export const DEFAULT_THEME: Readonly<Required<ThemeTokens>> = Object.freeze({
-  primary: '#1d4ed8',
-  secondary: '#475569',
-  background: '#f8fafc',
-  surface: '#ffffff',
-  text: '#0f172a',
-  fontFamily: 'sans',
-})
+export const DEFAULT_THEME: ResolvedTokens = DEFAULT_TOKENS
 
-/** CSS font stacks for the bundled font ids. WP 2.8 swaps these for the bundled files. */
+/** CSS font stacks for the bundled font ids, from `@wrx/theme`. */
 export const FONT_STACKS: Readonly<Record<FontId, string>> = Object.freeze({
-  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-  serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
-  mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  sans: fontStack('sans'),
+  serif: fontStack('serif'),
+  mono: fontStack('mono'),
 })
 
 /**
- * The custom properties for a set of tokens. With `inherit` (the default) unset tokens are left
- * out, so they inherit from the enclosing scope; without it they fall back to the default theme.
+ * The custom properties for a set of tokens. With `inherit` (the default) only the set tokens
+ * are returned, so the rest inherit from the enclosing scope; without it, every `--wrx-*`
+ * property of the tokens over the default theme.
  */
 export function themeStyle(
   tokens: ThemeTokens | undefined,
   options: { readonly inherit?: boolean } = {},
 ): Record<`--wrx-${string}`, string> {
-  const inherit = options.inherit ?? true
-  const pick = <K extends keyof ThemeTokens>(key: K): ThemeTokens[K] =>
-    tokens?.[key] ?? (inherit ? undefined : DEFAULT_THEME[key])
+  if (options.inherit === false) return { ...themeProperties(resolveTokens(tokens)) }
   const style: Record<`--wrx-${string}`, string> = {}
   const set = (name: `--wrx-${string}`, value: string | undefined) => {
     if (value !== undefined) style[name] = value
   }
-  set('--wrx-primary', pick('primary'))
-  set('--wrx-secondary', pick('secondary'))
-  set('--wrx-background', pick('background'))
-  set('--wrx-surface', pick('surface'))
-  set('--wrx-text', pick('text'))
-  const font = pick('fontFamily')
-  set('--wrx-font-family', font === undefined ? undefined : FONT_STACKS[font])
+  set('--wrx-primary', tokens?.primary)
+  set('--wrx-secondary', tokens?.secondary)
+  set('--wrx-background', tokens?.background)
+  set('--wrx-surface', tokens?.surface)
+  set('--wrx-text', tokens?.text)
+  set(
+    '--wrx-font-family',
+    tokens?.fontFamily === undefined ? undefined : fontStack(tokens.fontFamily),
+  )
   return style
 }
+
+function resolveTokens(tokens: ThemeTokens | undefined): ResolvedTokens {
+  return resolveTheme(tokens === undefined ? undefined : { tokens }).tokens
+}
+
+/** The tokens set by the enclosing scopes, nearest last; undefined outside any scope. */
+const Inherited = createContext<ThemeTokens | undefined>(undefined)
+
+const NO_TOKENS: ThemeTokens = Object.freeze({})
 
 export type ThemeScopeProps = Omit<ComponentPropsWithRef<'div'>, 'style'> & {
   /** The theme's tokens; unset ones inherit (or, at the root, take the default theme). */
@@ -78,7 +82,7 @@ export type ThemeScopeProps = Omit<ComponentPropsWithRef<'div'>, 'style'> & {
   readonly children?: ReactNode
 }
 
-/** Sets the `--wrx-*` properties on its own root element (PLY-26). */
+/** Sets every `--wrx-*` property on its own root element (PLY-26), through `@wrx/theme`. */
 export function ThemeScope({
   tokens,
   root = false,
@@ -86,13 +90,23 @@ export function ThemeScope({
   children,
   ...rest
 }: ThemeScopeProps) {
+  const parent = useContext(Inherited)
+  const own = tokens ?? NO_TOKENS
+  const merged = useMemo(
+    () => (root || parent === undefined ? own : { ...parent, ...own }),
+    [root, parent, own],
+  )
+  const resolved = useMemo(() => resolveTokens(merged), [merged])
   return (
-    <div
-      {...rest}
-      className={['wrx-theme', className].filter(Boolean).join(' ')}
-      style={themeStyle(tokens, { inherit: !root })}
-    >
-      {children}
-    </div>
+    <Inherited.Provider value={merged}>
+      <ResolvedThemeScope
+        {...rest}
+        tokens={resolved}
+        applyBase={false}
+        className={['wrx-theme', className].filter(Boolean).join(' ')}
+      >
+        {children}
+      </ResolvedThemeScope>
+    </Inherited.Provider>
   )
 }
