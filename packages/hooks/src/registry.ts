@@ -15,6 +15,12 @@ export interface PlayerPanelProps {
    * Typed `unknown` at the registry boundary; a panel narrows it with its own schema.
    */
   readonly config: unknown
+  /**
+   * This role's effective access to the room (§3 rule 4), from `effectiveAccess` via `useMe()`:
+   * `read` for observers and read-only participants, whose composer is disabled (PLY-12). The
+   * server enforces it too (ADM-37); this is for the UI only.
+   */
+  readonly access: 'write' | 'read'
 }
 
 /** Props of the type-specific part of the admin's room editor. */

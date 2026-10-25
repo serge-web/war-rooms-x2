@@ -9,6 +9,8 @@ export type AdminOp =
   | { readonly op: 'delete-user'; readonly jid: string }
   | { readonly op: 'delete-node'; readonly node: string }
   | { readonly op: 'publish'; readonly node: string; readonly payload: string }
+  /** Joins a room as the admin and posts each text as a chat message, in order. */
+  | { readonly op: 'post'; readonly room: string; readonly texts: readonly string[] }
 
 export const DOMAIN = 'wrx.mock'
 
@@ -26,6 +28,18 @@ export async function asMockAdmin(page: Page, ops: readonly AdminOp[]): Promise<
       if (!login.ok) return `admin login: ${login.error.condition}`
       const admin = login.value
       for (const op of ops) {
+        if (op.op === 'post') {
+          const jid = `${op.room}@${admin.services.muc}`
+          const joined = await admin.muc.join(jid, 'admin')
+          if (!joined.ok) return `join ${op.room}: ${joined.error.condition}`
+          for (const text of op.texts) {
+            const body = JSON.stringify({ type: 'chat', schemaVersion: 1, content: { text } })
+            const sent = await admin.muc.send(jid, body)
+            if (!sent.ok) return `post: ${sent.error.condition}`
+          }
+          await admin.muc.leave(jid)
+          continue
+        }
         const result =
           op.op === 'end-sessions'
             ? await admin.admin.endUserSessions(op.jid)

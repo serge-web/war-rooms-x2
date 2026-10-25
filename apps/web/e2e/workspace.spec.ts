@@ -79,9 +79,11 @@ test('umpire-1 sees every room in the three-column default, panels in the strip 
     .locator('.flexlayout__layout_main .flexlayout__tabset')
     .evaluateAll((all) => all.map((e) => e.getBoundingClientRect().width))
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThan(2)
-  // Each room panel is in its room's theme scope (PLY-24); chat arrives with WP 2.6.
+  // Each room panel is in its room's theme scope (PLY-24), showing the chat panel (WP 2.6).
   await expect(panel(page, ROOMS.blue)).toHaveAttribute('data-wrx-theme', '')
-  await expect(panel(page, ROOMS.blue)).toContainText('Chat room')
+  await expect(
+    panel(page, ROOMS.blue).getByRole('region', { name: `Messages in ${ROOMS.blue}` }),
+  ).toBeVisible()
   await tab(page, 'Game info').click()
   await expect(page.getByRole('region', { name: 'Game briefing' })).toContainText('09:00')
   await tab(page, 'Online').click()
@@ -191,7 +193,11 @@ test('a popped-out tab docks back when its window closes', async ({ page }) => {
     .getByRole('button', { name: 'Popout selected tab' })
     .click()
   const popout = await popup
-  await expect(popout.getByRole('region', { name: ROOMS.talks })).toBeVisible()
+  await expect(popout.getByRole('region', { name: ROOMS.talks, exact: true })).toBeVisible()
+  // The room's chat panel works in the popout window too.
+  await expect(popout.getByRole('region', { name: `Messages in ${ROOMS.talks}` })).toContainText(
+    'Blue proposes a ceasefire',
+  )
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue], [ROOMS.red]])
   await popout.close({ runBeforeUnload: true })
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])

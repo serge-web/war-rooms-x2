@@ -34,8 +34,24 @@ describe('rooms: history and live messages (ARC-4, PLY-9, PLY-10, PLY-49)', () =
     expect(ids(h)).toEqual(archive.slice(15).map((m) => m.stanzaId))
     expect(h.store.roomView('blue-hq')).toMatchObject({
       status: 'ready',
-      data: { status: 'joined', canPost: true, hasOlder: true, loadingOlder: false },
+      data: {
+        status: 'joined',
+        canPost: true,
+        hasOlder: true,
+        loadingOlder: false,
+        historyLoaded: true,
+      },
     })
+  })
+
+  it('says when the first history query has finished, even for an empty room (PLY-11)', async () => {
+    const h = harness({ pageSize: 10 })
+    await h.store.ready()
+    const release = h.store.acquireRoom('blue-hq')
+    expect(h.store.roomView('blue-hq').data?.historyLoaded).toBe(false)
+    await flush()
+    expect(h.store.roomView('blue-hq').data).toMatchObject({ messages: [], historyLoaded: true })
+    release()
   })
 
   it('pages backwards with RSM ids until complete', async () => {

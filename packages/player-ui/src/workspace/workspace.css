@@ -86,8 +86,10 @@
 
 /* ---- Panels ---- */
 
+/* A definite height, so a room type's panel (the chat panel's list) can fill and scroll inside. */
 .wrx-room-panel {
-  min-height: 100%;
+  height: 100%;
+  overflow: auto;
   box-sizing: border-box;
 }
 

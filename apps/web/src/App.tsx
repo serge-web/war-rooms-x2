@@ -2,7 +2,17 @@
 // (PLY-1), routes between the player, admin and multi-client views, and shows the mock's
 // notices (DOC-17).
 import type { MockHost, MockNotice } from '@wrx/mock-host'
-import { AppBarCore, BackendChoiceCore, PlayerClient, Workspace } from '@wrx/player-ui'
+import { defaultRoomTypes, withSlots } from '@wrx/domain'
+import type { AdminEditor, PlayerPanel, ReactRoomTypeRegistry } from '@wrx/hooks'
+import {
+  AppBarCore,
+  BackendChoiceCore,
+  ChatPanel,
+  ChatUnreadBadge,
+  PlayerClient,
+  UnreadProvider,
+  Workspace,
+} from '@wrx/player-ui'
 import type { Connection, DemoLogin, LayoutStorage } from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
 import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
@@ -14,6 +24,11 @@ import { ROUTE_HREFS, useRoute } from './router.ts'
 import { AdminRoute } from './AdminRoute.tsx'
 import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
+
+/** The room types with their player panels: chat (WP 2.6). Frozen, so shared safely (ARC-2). */
+const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
+  chat: { playerComponent: ChatPanel },
+})
 
 export interface AppProps {
   readonly backends: Backends
@@ -192,7 +207,12 @@ function AppRoutes({
           connection={connection}
           backend={entry.info}
           appBarItems={nav}
-          workspace={<Workspace storage={layoutStorage} />}
+          workspace={
+            // Unread counts per room, for the room tabs (PLY-11).
+            <UnreadProvider>
+              <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
+            </UnreadProvider>
+          }
           demoLogins={selected === 'mock' ? demoLogins : undefined}
           backendChoice={
             <BackendChoiceCore
