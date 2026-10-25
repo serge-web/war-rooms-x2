@@ -80,6 +80,7 @@ describe('layout (ADM-27, ADM-28)', () => {
       'Rooms',
       'Themes',
       'Access matrix',
+      'Publish',
     ])
     expect(within(nav).getByRole('button', { name: 'Game' }).getAttribute('aria-current')).toBe(
       'page',

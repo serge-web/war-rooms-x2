@@ -18,3 +18,5 @@ export type {
 } from './ops.ts'
 export { MIN_PASSPHRASE_CHARS, ObserverVault, VAULT_KDF, VAULT_STORAGE_KEY } from './vault.ts'
 export type { VaultOptions } from './vault.ts'
+// WP 2.3: publish planning and execution over these primitives.
+export * from './publish/index.ts'
