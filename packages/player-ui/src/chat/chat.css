@@ -5,6 +5,8 @@
  */
 
 .wrx-chat {
+  /* Narrow tabs (several tabsets, multi-client panes) adapt to the panel's width, not the screen. */
+  container: wrx-chat / inline-size;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -225,7 +227,9 @@
 }
 
 .wrx-composer__input {
-  flex: 1 1 auto;
+  /* A zero basis: with field-sizing the content (even the placeholder) would otherwise set the
+     width, and in a narrow tab the field shrank to a letter wide beside the Send button. */
+  flex: 1 1 0;
   min-width: 0;
   /* Grows with its text (PLY-44); composer.tsx measures instead where this is unsupported. */
   field-sizing: content;
@@ -286,4 +290,23 @@
 .wrx-composer__error {
   color: var(--wrx-danger);
   font-weight: 600;
+}
+
+/* ---- Narrow panels ---- */
+
+@container wrx-chat (max-width: 18rem) {
+  /* The field takes the full width, with Send below it. */
+  .wrx-composer__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wrx-composer__input {
+    flex: none;
+    width: 100%;
+  }
+
+  .wrx-composer__row > .wrx-button {
+    width: 100%;
+  }
 }

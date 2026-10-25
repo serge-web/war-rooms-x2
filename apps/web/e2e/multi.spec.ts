@@ -83,6 +83,8 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
     await tabsIn(pane(page, n)).filter({ hasText: talks }).click()
   }
   const box = pane(page, 1).getByRole('textbox', { name: `Message ${talks}`, exact: true })
+  // In a narrow pane the field keeps a usable width, with Send below it rather than squeezing it.
+  expect((await box.boundingBox())?.width ?? 0).toBeGreaterThan(150)
   await box.fill('Blue proposes a ceasefire at 10:00.')
   await box.press('Enter')
   for (const n of [2, 3]) {
