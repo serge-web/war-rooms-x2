@@ -58,6 +58,14 @@ test('admin publish plan', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByRole('button', { name: /Check the server and plan|Plan again/ }).click()
   const plan = page.getByRole('region', { name: 'Publish plan' })
   await expect(plan).toBeVisible()
+  // The demo seed's vault (ADM-37) must keep Blue Observer read-only in the new room: unlock it
+  // with the demo passphrase the dialog shows (NFR-6); unlocking plans again.
+  await page.getByRole('button', { name: 'Unlock the vault' }).click()
+  const vault = page.getByRole('alertdialog', { name: 'Unlock the vault' })
+  await vault.getByLabel('Passphrase', { exact: true }).fill('demo-observer-vault')
+  await vault.getByRole('button', { name: 'Unlock' }).click()
+  await expect(page.getByText('Vault unlocked.')).toBeVisible({ timeout: 20_000 })
+  await expect(plan.getByRole('button', { name: /^Publish \d+ changes?…$/ })).toBeEnabled()
   // The groups collapsed, with Access open to show its summarised batches.
   const access = plan.getByRole('region', { name: 'Access' }).getByRole('button').first()
   await access.click()

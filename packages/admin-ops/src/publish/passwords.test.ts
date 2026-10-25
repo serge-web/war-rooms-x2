@@ -64,15 +64,15 @@ describe('CredentialsBook (ADM-26)', () => {
 })
 
 describe('publish marker stores', () => {
-  it('memory: write, read, clear', () => {
+  it('memory: write, read, clear', async () => {
     const store = memoryMarkerStore()
-    store.write(newMarker(3, new Date('2026-10-25T00:00:00Z')))
-    expect(store.read()?.designVersion).toBe(3)
-    store.clear()
-    expect(store.read()).toBeUndefined()
+    await store.write(newMarker(3, new Date('2026-10-25T00:00:00Z')))
+    expect((await store.read())?.designVersion).toBe(3)
+    await store.clear()
+    expect(await store.read()).toBeUndefined()
   })
 
-  it('web storage: survives as text; garbage counts as a marker of unknown version; errors are swallowed', () => {
+  it('web storage: survives as text; garbage counts as a marker of unknown version; errors are swallowed', async () => {
     const data = new Map<string, string>()
     const storage = {
       getItem: (k: string) => data.get(k) ?? null,
@@ -80,10 +80,10 @@ describe('publish marker stores', () => {
       removeItem: (k: string) => void data.delete(k),
     }
     const store = storageMarkerStore(storage, 'k')
-    store.write(newMarker(4, new Date()))
-    expect(storageMarkerStore(storage, 'k').read()?.designVersion).toBe(4)
+    await store.write(newMarker(4, new Date()))
+    expect((await storageMarkerStore(storage, 'k').read())?.designVersion).toBe(4)
     data.set('k', 'garbage')
-    expect(store.read()?.designVersion).toBe(1)
+    expect((await store.read())?.designVersion).toBe(1)
     expect(parseMarker('{"format":"other"}').designVersion).toBe(1)
     const broken = storageMarkerStore(
       {
@@ -99,10 +99,8 @@ describe('publish marker stores', () => {
       },
       'k',
     )
-    expect(broken.read()).toBeUndefined()
-    expect(() => {
-      broken.write(newMarker(1, new Date()))
-      broken.clear()
-    }).not.toThrow()
+    expect(await broken.read()).toBeUndefined()
+    expect((await broken.write(newMarker(1, new Date()))).ok).toBe(true)
+    await expect(broken.clear()).resolves.toBeUndefined()
   })
 })

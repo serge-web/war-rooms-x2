@@ -158,11 +158,23 @@ export function ApplyDialog({
   )
 }
 
+/** The demo vault's passphrase, labelled as a demo secret like the demo passwords (NFR-6). */
+export function DemoPassphrase({ passphrase }: { readonly passphrase: string }) {
+  return (
+    <p className="wrx-credentials-demo">
+      DEMO vault: the mock’s demo game opens it with <code>{passphrase}</code>. Known, not secret;
+      for the mock server only.
+    </p>
+  )
+}
+
 export interface VaultDialogProps {
   readonly mode: 'create' | 'unlock'
   readonly busy: boolean
   /** Resolves with an error to show, or undefined on success (the dialog closes). */
   readonly onSubmit: (passphrase: string) => Promise<string | undefined>
+  /** The mock demo seed's passphrase, shown labelled as a DEMO passphrase when unlocking (NFR-6). */
+  readonly demoPassphrase?: string
 }
 
 /**
@@ -170,7 +182,7 @@ export interface VaultDialogProps {
  * be recovered; unlocking asks once. The passphrase lives only in this form's state and is
  * cleared on close.
  */
-export function VaultDialog({ mode, busy, onSubmit }: VaultDialogProps) {
+export function VaultDialog({ mode, busy, onSubmit, demoPassphrase }: VaultDialogProps) {
   const [open, setOpen] = useState(false)
   const [passphrase, setPassphrase] = useState('')
   const [again, setAgain] = useState('')
@@ -216,6 +228,9 @@ export function VaultDialog({ mode, busy, onSubmit }: VaultDialogProps) {
             </p>
           ) : (
             <p>The vault passphrase decrypts the read-only roles’ passwords in this browser.</p>
+          )}
+          {mode === 'unlock' && demoPassphrase !== undefined && (
+            <DemoPassphrase passphrase={demoPassphrase} />
           )}
         </div>
       </AlertDialog.Description>

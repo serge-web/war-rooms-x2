@@ -7,7 +7,8 @@
 // - the §3 nodes: `game-setup` and the game theme's assets open, everything else whitelist with
 //   the admin as owner and publisher; objectives readable by their force and published by the
 //   umpire force's roles, with the design's text as the admin's own item (§3 rule 14);
-// - optional message history, archived for MAM.
+// - optional message history, archived for MAM;
+// - optional private storage of the admin account (the demo seed's observer vault).
 // Umpire-force roles reach every room through effective access (D8, §3 rule 4).
 import { effectiveAccess } from '@wrx/domain'
 import {
@@ -52,6 +53,11 @@ export interface DesignSeed {
     readonly roles?: Readonly<Record<string, string>>
   }
   readonly history?: readonly SeedMessage[]
+  /**
+   * XEP-0049 private storage of the admin account, by key: e.g. the demo observer vault's
+   * ciphertext (ADM-37), as the admin tooling stores it.
+   */
+  readonly adminPrivate?: Readonly<Record<string, string>>
 }
 
 export const DEFAULT_SEED_DOMAIN = 'wrx.mock'
@@ -268,7 +274,11 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
       accounts,
       rooms,
       nodes,
-      privateStorage: [],
+      privateStorage: Object.entries(seed.adminPrivate ?? {}).map(([key, value]) => ({
+        jid: admin,
+        key,
+        value,
+      })),
       lastStanzaId: history.at(-1)?.message.stanzaId ?? '0',
     },
   }

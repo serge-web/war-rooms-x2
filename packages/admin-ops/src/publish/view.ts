@@ -95,6 +95,6 @@ export async function readServerView(
     nodes,
     online: onlineRoles,
     vault: vault === undefined ? { exists: exists.value } : { exists: true, roles: vault.roles() },
-    marker: options.marker?.read(),
+    marker: await options.marker?.read(),
   })
 }

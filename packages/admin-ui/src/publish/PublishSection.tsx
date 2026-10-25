@@ -20,7 +20,7 @@ import type { Draft, DraftStore, DraftValidation } from '../draft/index.ts'
 import { sortedRoles } from '../draft/index.ts'
 import type { PublishConnection, PublishSnapshot } from './controller.ts'
 import { describeError } from './controller.ts'
-import { ApplyDialog, VaultDialog } from './dialogs.tsx'
+import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
 import { exportDesign, importDesign } from './transfer.ts'
@@ -35,6 +35,8 @@ export interface PublishSectionProps {
   /** From `usePublish`, held by the admin app so passwords and the vault outlive the section. */
   readonly publish: ReturnType<typeof usePublish>
   readonly kind: PublishConnection['kind'] | undefined
+  /** The mock demo seed's vault passphrase, shown as a DEMO passphrase (NFR-6). */
+  readonly demoVaultPassphrase?: string
   readonly store: DraftStore
   readonly draft: Draft
   readonly validation: DraftValidation
@@ -44,14 +46,25 @@ export interface PublishSectionProps {
   readonly print?: () => void
 }
 
-export function PublishSection({ publish, kind, store, download, ...rest }: PublishSectionProps) {
+export function PublishSection({
+  publish,
+  kind,
+  demoVaultPassphrase,
+  store,
+  download,
+  ...rest
+}: PublishSectionProps) {
   const { snapshot, controller } = publish
   const save = download ?? browserDownload
   const notConnected = () => Promise.resolve('Not connected to a server.')
   return (
     <PublishSectionCore
       {...rest}
-      connection={kind === undefined || controller === undefined ? undefined : { kind }}
+      connection={
+        kind === undefined || controller === undefined
+          ? undefined
+          : { kind, ...(demoVaultPassphrase === undefined ? {} : { demoVaultPassphrase }) }
+      }
       snapshot={snapshot}
       onPlan={() => void controller?.plan()}
       onPlanReset={() => void controller?.planReset()}
@@ -88,7 +101,8 @@ function browserDownload(name: string, text: string): void {
 
 export interface PublishSectionCoreProps {
   /** Undefined when the admin UI has no server connection (e.g. the editor on its own). */
-  readonly connection: { readonly kind: 'mock' | 'xmpp' } | undefined
+  readonly connection:
+    { readonly kind: 'mock' | 'xmpp'; readonly demoVaultPassphrase?: string } | undefined
   readonly draft: Draft
   readonly validation: DraftValidation
   readonly snapshot: PublishSnapshot
@@ -136,6 +150,9 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
             <Notice title="Mock server.">
               New roles get known demo passwords (demo-&lt;login id&gt;), which are not secret. A
               real server gets random passwords.
+              {connection.demoVaultPassphrase !== undefined && (
+                <DemoPassphrase passphrase={connection.demoVaultPassphrase} />
+              )}
             </Notice>
           )}
           {!validation.publishable && (
@@ -193,6 +210,7 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
 }
 
 function VaultStatus({
+  connection,
   snapshot,
   onCreateVault,
   onUnlockVault,
@@ -210,8 +228,18 @@ function VaultStatus({
       </span>
     )
   }
-  if (snapshot.vault === 'locked')
-    return <VaultDialog mode="unlock" busy={busy} onSubmit={onUnlockVault} />
+  if (snapshot.vault === 'locked') {
+    return (
+      <VaultDialog
+        mode="unlock"
+        busy={busy}
+        onSubmit={onUnlockVault}
+        {...(connection?.demoVaultPassphrase === undefined
+          ? {}
+          : { demoPassphrase: connection.demoVaultPassphrase })}
+      />
+    )
+  }
   if (snapshot.vault === 'none' && need === 'create') {
     return <VaultDialog mode="create" busy={busy} onSubmit={onCreateVault} />
   }

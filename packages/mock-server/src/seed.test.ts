@@ -4,7 +4,7 @@ import { nodeName } from '@wrx/schemas'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { sampleDesign } from '../../schemas/src/fixtures.ts'
-import { demoSeed, demoState } from './demo.ts'
+import { DEMO_VAULT_PASSPHRASE, demoSeed, demoState } from './demo.ts'
 import { demoPassword, stateFromDesign } from './seed.ts'
 import { MockServer } from './server.ts'
 import { MockTransport } from './transport.ts'
@@ -40,6 +40,34 @@ describe('stateFromDesign', () => {
       ['red-co@d.mock', 'demo-red-co', false, true],
       ['umpire-1@d.mock', 'demo-umpire-1', false, true],
     ])
+  })
+
+  it('stores the admin’s private storage only when the seed gives it', async () => {
+    const plain = unwrap(stateFromDesign({ design: sampleDesign(), domain: 'd.mock' }))
+    expect(plain.privateStorage).toEqual([])
+    const state = unwrap(
+      stateFromDesign({
+        design: sampleDesign(),
+        domain: 'd.mock',
+        adminPrivate: { 'wrx-observer-vault': 'ciphertext' },
+      }),
+    )
+    expect(state.privateStorage).toEqual([
+      { jid: 'admin@d.mock', key: 'wrx-observer-vault', value: 'ciphertext' },
+    ])
+    // Readable by the admin only, through XEP-0049 as the tooling reads it.
+    const transport = new MockTransport(new MockServer({ seed: state }))
+    const as = async (id: string) =>
+      unwrap(
+        await transport.connect({
+          endpoint: { websocketUrl: '', domain: 'd.mock' },
+          credentials: { kind: 'password', username: id, password: demoPassword(id) },
+        }),
+      )
+    const admin = await as('admin')
+    expect(unwrap(await admin.admin.getPrivate('wrx-observer-vault'))).toBe('ciphertext')
+    const blue = await as('blue-co')
+    expect(unwrap(await blue.admin.getPrivate('wrx-observer-vault'))).toBeUndefined()
   })
 
   it('makes every room NFR-3, with umpires everywhere and observers stored as visitors', () => {
@@ -184,5 +212,21 @@ describe('the demo seed', () => {
     server.reset()
     expect(server.exportState()).toEqual(demoState())
     expect(demoSeed().history?.length).toBeGreaterThan(0)
+  })
+
+  it('starts with the admin’s observer vault stored, ciphertext only (ADM-37)', () => {
+    const { state } = demo()
+    expect(state.privateStorage.map((p) => [p.jid, p.key])).toEqual([
+      [`admin@${state.domain}`, 'wrx-observer-vault'],
+    ])
+    const stored = state.privateStorage[0]?.value ?? ''
+    expect(JSON.parse(stored)).toMatchObject({
+      format: 'wrx1-observer-vault',
+      kdf: { name: 'PBKDF2', iterations: 100_000 },
+      cipher: { name: 'AES-GCM' },
+    })
+    // No password or passphrase in the clear: @wrx/admin-ops's demo-vault test decrypts it.
+    expect(stored).not.toContain('demo-')
+    expect(stored).not.toContain(DEMO_VAULT_PASSPHRASE)
   })
 })

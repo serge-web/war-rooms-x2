@@ -8,7 +8,7 @@ import { userEvent } from '@testing-library/user-event'
 import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
-import { MockServer, MockTransport } from '@wrx/mock-server'
+import { DEMO_VAULT_PASSPHRASE, MockServer, MockTransport, demoState } from '@wrx/mock-server'
 import { sampleDesign } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -368,6 +368,84 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     expect(login.ok).toBe(false)
     // The next publish is a new design version.
     expect(store.getSnapshot().draft.design.game.designVersion).toBe(2)
+  })
+})
+
+describe('on the mock’s demo seed, which starts published with its vault', () => {
+  async function demoSetup(kind: 'mock' | 'xmpp') {
+    const state = demoState()
+    const transport = new MockTransport(new MockServer({ seed: state }))
+    const demoEndpoint = { websocketUrl: 'mock://demo', domain: state.domain }
+    const session = await transport.connect({
+      endpoint: demoEndpoint,
+      credentials: { kind: 'password', username: 'admin', password: 'demo-admin' },
+    })
+    if (!session.ok) throw new Error('admin login')
+    // A draft saved before the seed was published here: no role recorded as published.
+    const store = createDraftStore({
+      persistence: memoryDraftPersistence(),
+      initial: () => draftFromDesign(sampleDesign()),
+    })
+    render(
+      createElement(AdminApp, {
+        store,
+        registry: withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {}),
+        initialSection: 'publish',
+        publish: {
+          ops: new AdminOps({
+            session: session.value,
+            login: { transport, endpoint: demoEndpoint },
+          }),
+          kind,
+          marker: memoryMarkerStore(),
+          ...(kind === 'mock' ? { demoVaultPassphrase: DEMO_VAULT_PASSPHRASE } : {}),
+        },
+      }),
+    )
+    return { user: userEvent.setup(), store }
+  }
+
+  it('plans nothing, records the server’s roles as published with demo passwords, and unlocks with the demo passphrase', async () => {
+    const { user, store } = await demoSetup('mock')
+    expect(screen.getAllByText(DEMO_VAULT_PASSPHRASE).length).toBeGreaterThan(0)
+    expect(screen.getByText('No role has been published yet.')).toBeTruthy()
+    await planAndWait(user, 'Check the server and plan')
+    expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
+    expect([...store.getSnapshot().draft.meta.publishedRoleIds].sort()).toEqual(
+      sampleDesign()
+        .roles.map((r) => r.id)
+        .sort(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Show the credentials sheet' }))
+    const sheet = screen.getByRole('table', { name: 'Role credentials' })
+    const row = within(sheet).getByRole('row', { name: /Blue Observer/ })
+    expect(row.textContent).toContain('demo-blue-observer')
+    expect(row.textContent).toContain('demo')
+
+    await user.click(screen.getByRole('button', { name: 'Unlock the vault' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Unlock the vault' })
+    expect(within(dialog).getByText(/DEMO vault/).textContent).toContain(DEMO_VAULT_PASSPHRASE)
+    await user.type(within(dialog).getByLabelText('Passphrase'), DEMO_VAULT_PASSPHRASE)
+    await user.click(within(dialog).getByRole('button', { name: 'Unlock' }))
+    await waitFor(
+      () => {
+        expect(screen.getByText(/Vault unlocked\./)).toBeTruthy()
+      },
+      { timeout: 10_000 },
+    )
+  })
+
+  it('on a real server, shows no demo passphrase and issues no demo passwords', async () => {
+    const { user } = await demoSetup('xmpp')
+    expect(screen.queryByText(/DEMO vault/)).toBeNull()
+    await planAndWait(user, 'Check the server and plan')
+    await user.click(screen.getByRole('button', { name: 'Show the credentials sheet' }))
+    const sheet = screen.getByRole('table', { name: 'Role credentials' })
+    expect(within(sheet).getByRole('row', { name: /Blue Observer/ }).textContent).toContain(
+      'Not known here',
+    )
+    await user.click(screen.getByRole('button', { name: 'Unlock the vault' }))
+    expect(screen.queryByText(/DEMO vault/)).toBeNull()
   })
 })
 

@@ -10,6 +10,9 @@ import { newMarker } from './marker.ts'
 import type { MarkerStore } from './marker.ts'
 import type { PlanStep, PublishPlan } from './plan.ts'
 
+/** The step id a failure to set the publish marker is reported under; no step has run. */
+export const MARKER_STEP = 'publish-marker'
+
 export type StepState = 'pending' | 'running' | 'done' | 'failed' | 'not-run'
 
 export interface StepEvent {
@@ -67,8 +70,11 @@ export async function executePlan(
   }
   if (plan.steps.length === 0) return { ok: true, done, notRun: [], passwordsSet, notes }
 
-  if (plan.kind === 'publish' && plan.designVersion !== undefined) {
-    options.marker?.write(newMarker(plan.designVersion, now()))
+  if (plan.kind === 'publish' && plan.designVersion !== undefined && options.marker !== undefined) {
+    // Fail closed: without the marker another admin browser could trust documents this publish
+    // leaves behind half-done.
+    const marked = await options.marker.write(newMarker(plan.designVersion, now()))
+    if (!marked.ok) return failAt(-1, MARKER_STEP, marked.error)
   }
 
   for (const [index, step] of plan.steps.entries()) {
@@ -90,7 +96,7 @@ export async function executePlan(
     })
   }
 
-  options.marker?.clear()
+  await options.marker?.clear()
   return { ok: true, done, notRun: [], passwordsSet, notes }
 }
 

@@ -132,6 +132,23 @@ export function markPublished(draft: Draft): Draft {
   return { ...draft, meta: { ...draft.meta, publishedRoleIds: [...ids] } }
 }
 
+/**
+ * Records that these of the draft's roles exist on the server (e.g. the server's plan shows
+ * them), so their login ids are fixed (ADM-5). Ids of no current role, and ids already recorded,
+ * are ignored; the same draft is returned when nothing changes.
+ */
+export function markRolesPublished(draft: Draft, roleIds: readonly string[]): Draft {
+  const known = new Set(roleIds)
+  const added = draft.design.roles
+    .map((r) => r.id)
+    .filter((id) => known.has(id) && !draft.meta.publishedRoleIds.includes(id))
+  if (added.length === 0) return draft
+  return {
+    ...draft,
+    meta: { ...draft.meta, publishedRoleIds: [...draft.meta.publishedRoleIds, ...added] },
+  }
+}
+
 export function isRolePublished(draft: Draft, roleId: string): boolean {
   return draft.meta.publishedRoleIds.includes(roleId)
 }
