@@ -4,9 +4,7 @@
 // the toolbar has the database controls (PLY-21). Presets are kept per backend under this
 // deployment's namespace (DOC-10).
 import { basePathOf, hostNames, mockNamespace } from '@wrx/mock-host'
-import { demoPassword } from '@wrx/mock-server'
 import { AppBarCore, MockControlsCore, MultiClientView, webPresetStorage } from '@wrx/player-ui'
-import type { DemoLogin } from '@wrx/player-ui'
 import { useMemo } from 'react'
 import { AdminRoute } from '../AdminRoute.tsx'
 import type { RouteProps } from './types.ts'
@@ -18,22 +16,13 @@ export function MultiClientApp(props: RouteProps) {
     const names = mockHost?.names ?? hostNames(mockNamespace(basePathOf(document.baseURI)))
     return webPresetStorage(() => localStorage, names.storageKey(`multi-presets-${backendId}`))
   }, [mockHost, backendId])
-  // On the mock, the admin's game view is a quick login too (ADM-28–31).
-  const logins = useMemo<readonly DemoLogin[] | undefined>(
-    () =>
-      demoLogins === undefined
-        ? undefined
-        : [
-            ...demoLogins,
-            { roleId: 'admin', label: 'Admin (game view)', password: demoPassword('admin') },
-          ],
-    [demoLogins],
-  )
   return (
     <MultiClientView
       connection={connection}
       backend={backend}
-      demoLogins={logins}
+      // On the mock, the demo logins end with the admin's, which opens its game view as the
+      // umpire (ADM-28–31, SC-5); the admin backend is its own pane kind.
+      demoLogins={demoLogins}
       workspace={workspace}
       presets={presets}
       initialCount={3}

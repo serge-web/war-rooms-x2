@@ -155,7 +155,7 @@ test('hostile message text stays plain text in a real browser (PLY-14)', async (
   const sender = await context.newPage()
   const reader = await context.newPage()
   const errors = await open(sender, 'blue-co')
-  await open(reader, 'umpire-1')
+  await open(reader, 'admin')
   const hostile = [
     '<img src=x onerror="window.wrxPwned=1">',
     '<script>window.wrxPwned=2</script>',

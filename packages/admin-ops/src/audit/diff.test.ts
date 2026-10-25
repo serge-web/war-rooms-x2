@@ -2,7 +2,7 @@
 // a fully published server is clean, and each kind of drift is one item with the right
 // severity and repair.
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, jid, publishedView, withNode } from '../publish/fixtures.ts'
 import type { ServerView } from '../publish/view.ts'
@@ -11,7 +11,7 @@ import type { AuditInput, VoiceReading } from './diff.ts'
 import { findings, isClean } from './types.ts'
 import type { AuditItem, AuditReport } from './types.ts'
 
-const design = sampleDesign()
+const design = sampleDesignWithWhiteCell()
 const ROLES = design.roles.map((r) => jid(r.id))
 
 /** Every voice check answered as the design wants. */
@@ -51,13 +51,20 @@ describe('a server that matches the design', () => {
       'writers-unchecked',
     ])
     expect(report.vault).toBe('unlocked')
-    expect(report.voiceChecked).toBe(1)
+    // Blue's observer in Blue HQ, and the White observer in every room.
+    expect(report.voiceChecked).toBe(4)
   })
 
   it('reads the observer’s stored role, and writers only when the vault has their password', () => {
-    expect(voiceChecks(design, view).checks).toEqual([
-      { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor' },
-    ])
+    expect(voiceChecks(design, view).checks).toEqual(
+      expect.arrayContaining([
+        { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor' },
+        { roleId: 'white-observer', roomId: 'blue-hq', expect: 'visitor' },
+        { roleId: 'white-observer', roomId: 'red-hq', expect: 'visitor' },
+        { roleId: 'white-observer', roomId: 'negotiation', expect: 'visitor' },
+      ]),
+    )
+    expect(voiceChecks(design, view).checks).toHaveLength(4)
     const withWriter = { ...view, vault: { exists: true, roles: ['blue-observer', 'blue-co'] } }
     expect(voiceChecks(design, withWriter).checks).toContainEqual({
       roleId: 'blue-co',
@@ -134,6 +141,22 @@ describe('drift', () => {
       expected: 'none',
       found: 'member',
       severity: 'critical',
+    })
+  })
+
+  it('F5: a White Force observer left as an objectives publisher is a node-access item', () => {
+    // What a publish before the fix left on the server.
+    const drifted = withNode(view, 'objectives:red', (n) => ({
+      ...n,
+      affiliations: n.affiliations.map((a) =>
+        a.jid === jid('white-observer') ? { ...a, affiliation: 'publisher' as const } : a,
+      ),
+    }))
+    expect(item(audit(drifted), 'node-access:objectives:red:white-observer')).toMatchObject({
+      expected: 'member',
+      found: 'publisher',
+      severity: 'critical',
+      repair: [{ type: 'node-access', changes: [{ roleId: 'white-observer', access: 'read' }] }],
     })
   })
 

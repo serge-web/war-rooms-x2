@@ -7,7 +7,7 @@ import type { DesignFile } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { sampleDesign } from '../../schemas/src/fixtures.ts'
+import { sampleDesign, sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
 import { AdminApp } from './AdminApp.tsx'
 import type { AdminAppProps, AdminSection } from './AdminApp.tsx'
 import {
@@ -228,10 +228,15 @@ describe('forces (ADM-4, ADM-23)', () => {
     await user.selectOptions(screen.getByLabelText('Icon'), '')
     expect(force(store, 'blue')).not.toHaveProperty('iconAssetId')
 
-    await user.click(screen.getByLabelText('Umpire force'))
+    // Exactly one force carries the umpire flag (ADM-4): setting it on Blue clears it on White.
+    await user.click(screen.getByLabelText('Umpire flag (White Force)'))
     expect(force(store, 'blue')?.isUmpire).toBe(true)
-    expect(main().textContent).toContain('2 forces are umpire forces; at most one is expected')
-    expect(main().textContent).toContain('2 umpire forces; at most one is expected (ADM-4)')
+    expect(force(store, 'white')?.isUmpire).toBe(false)
+    await user.click(screen.getByLabelText('Umpire flag (White Force)'))
+    expect(force(store, 'blue')?.isUmpire).toBe(false)
+    expect(main().textContent).toContain(
+      'no force carries the umpire flag; exactly one, the White Force, is expected (ADM-4)',
+    )
   })
 
   it('writes objectives with a preview', async () => {
@@ -447,12 +452,8 @@ describe('reordering (ADM-8)', () => {
     expect(document.body.textContent).toContain('Blue moved to position 2 of 3.')
     await user.keyboard(' ')
     expect(document.body.textContent).toContain('Blue dropped in position 2 of 3.')
-    expect(design().forces.map((f) => `${f.id}:${f.order}`)).toEqual([
-      'red:0',
-      'blue:1',
-      'umpire:2',
-    ])
-    expect(names(screen.getByRole('list', { name: 'Forces' }))).toEqual(['Red', 'Blue', 'Umpire'])
+    expect(design().forces.map((f) => `${f.id}:${f.order}`)).toEqual(['red:0', 'blue:1', 'white:2'])
+    expect(names(screen.getByRole('list', { name: 'Forces' }))).toEqual(['Red', 'Blue', 'White'])
   })
 
   it('cancels a keyboard move with Escape', async () => {
@@ -498,46 +499,63 @@ describe('access matrix (ADM-9)', () => {
   }
 
   it('shows write, read and none with the precedence rules', () => {
-    setup({ section: 'access' })
+    setup({ section: 'access', design: sampleDesignWithWhiteCell() })
     const table = screen.getByRole('table', { name: /Effective access/ })
     // A force entry.
     expect(access(table, 'Blue HQ', 'Blue CO')).toBe('write')
     expect(access(table, 'Blue HQ', 'Red CO')).toBe('none')
     // An observer is read-only, even where its force writes.
     expect(access(table, 'Blue HQ', 'Blue Observer')).toBe('read')
-    // An umpire writes everywhere, with no entry.
+    // A White Force role writes everywhere, with no entry; its observer, with no rooms
+    // assigned, reads everywhere.
     for (const roomName of ['Blue HQ', 'Red HQ', 'Blue–Red negotiation']) {
-      expect(access(table, roomName, 'Lead Umpire')).toBe('write')
+      expect(access(table, roomName, 'White Cell')).toBe('write')
+      expect(access(table, roomName, 'White Observer')).toBe('read')
     }
     // Role entries.
     expect(access(table, 'Blue–Red negotiation', 'Red CO')).toBe('write')
     expect(access(table, 'Blue–Red negotiation', 'Blue Observer')).toBe('none')
     // Headers group roles by force.
-    expect(within(table).getByRole('columnheader', { name: 'Umpire' }).getAttribute('scope')).toBe(
+    expect(within(table).getByRole('columnheader', { name: 'White' }).getAttribute('scope')).toBe(
       'colgroup',
     )
-    expect(table.textContent).toContain('(umpire)')
+    expect(table.textContent).toContain('(White Force)')
+    expect(table.textContent).toContain('(White observer, no rooms assigned: reads all)')
   })
 
-  it('caps an umpire observer at read, and follows edits live', async () => {
+  it('limits a White observer to its assigned rooms, read only, and follows edits live (F5)', async () => {
     const base = sampleDesign()
     const { user } = setup({
       section: 'access',
       design: {
         ...base,
-        roles: base.roles.map((r) => (r.id === 'umpire-1' ? { ...r, isObserver: true } : r)),
+        rooms: base.rooms.map((r) =>
+          r.id === 'negotiation'
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: 'white-observer', access: 'write' as const },
+                ],
+              }
+            : r,
+        ),
       },
     })
     let table = screen.getByRole('table', { name: /Effective access/ })
-    expect(access(table, 'Red HQ', 'Lead Umpire')).toBe('read')
-    expect(table.textContent).toContain('(umpire, observer)')
+    expect(access(table, 'Blue–Red negotiation', 'White Observer')).toBe('read')
+    expect(access(table, 'Red HQ', 'White Observer')).toBe('none')
+    expect(table.textContent).toContain('(role entry, observer)')
+    expect(table.textContent).toContain('(White observer, not assigned here)')
 
+    // No longer an observer: a White Force role writes everywhere.
     await user.click(screen.getByRole('button', { name: 'Roles' }))
-    await user.click(screen.getByRole('button', { name: 'Lead Umpire Observer' }))
+    await user.click(screen.getByRole('button', { name: 'White Observer Observer' }))
     await user.click(screen.getByLabelText('Observer'))
     await user.click(screen.getByRole('button', { name: 'Access matrix' }))
     table = screen.getByRole('table', { name: /Effective access/ })
-    expect(access(table, 'Red HQ', 'Lead Umpire')).toBe('write')
+    expect(access(table, 'Red HQ', 'White Observer')).toBe('write')
+    expect(access(table, 'Blue–Red negotiation', 'White Observer')).toBe('write')
   })
 
   it('lists entries that grant nothing, and every design check', () => {

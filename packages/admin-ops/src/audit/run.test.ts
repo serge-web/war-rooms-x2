@@ -1,7 +1,7 @@
 // Unit tests of reading the audit and repairing it, against FakeSession (the `rig` of the AdminOps
 // tests): what is read, that reading changes nothing, the stored role read through the role's
 // own login, and repairs: order, deduplication, confirmation, failures, and the re-audit.
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import { err, ok } from '@wrx/transport'
 import type { AffiliationEntry, MucAffiliation } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
@@ -15,7 +15,7 @@ const jid = (id: string) => `${id}@${DOMAIN}`
 
 /** A design with only Blue: one writer, the observer, and Blue HQ. */
 function blueOnly() {
-  const base = sampleDesign()
+  const base = sampleDesignWithWhiteCell()
   return {
     ...base,
     forces: base.forces.filter((f) => f.id === 'blue'),
@@ -204,7 +204,7 @@ describe('repair', () => {
     expect(result.skipped).toEqual([{ itemId: 'stray-access:ghost', reason: 'not confirmed' }])
     expect(ops(r.log)).not.toContain('admin.admin.deleteUser')
     // And the audit itself marks such an item destructive.
-    const design = sampleDesign()
+    const design = sampleDesignWithWhiteCell()
     const view = publishedView(design)
     const stray = {
       ...view,
@@ -230,7 +230,7 @@ describe('repair', () => {
   })
 
   it('an account-missing repair never resets an account that exists (security review F3)', async () => {
-    const design = sampleDesign()
+    const design = sampleDesignWithWhiteCell()
     const view = publishedView(design, {
       registered: [
         jid('admin'),
@@ -257,7 +257,7 @@ describe('repair', () => {
   it('a failed repair does not stop the others', async () => {
     const r = await rig()
     r.admin.stub('pubsub', 'getNodeConfig', () => Promise.resolve(err('forbidden')))
-    const base = sampleDesign()
+    const base = sampleDesignWithWhiteCell()
     const report = diffAudit(base, {
       view: {
         domain: DOMAIN,

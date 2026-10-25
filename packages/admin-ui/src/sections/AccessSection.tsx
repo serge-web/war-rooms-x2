@@ -10,7 +10,9 @@ import type { DraftValidation } from '../draft/index.ts'
 const REASON_LABEL: Readonly<Record<AccessReason, string>> = Object.freeze({
   'force-entry': 'force entry',
   'role-entry': 'role entry',
-  umpire: 'umpire',
+  'white-force': 'White Force',
+  'white-observer-all': 'White observer, no rooms assigned: reads all',
+  'white-observer-unassigned': 'White observer, not assigned here',
   observer: 'observer',
 })
 
@@ -129,7 +131,9 @@ export function AccessSectionCore({ matrix, design, validation }: AccessSectionC
       intro={
         <p className="wrx-admin-hint">
           Who can use each room once published. Precedence, weakest first: a force entry, a role
-          entry, umpire-force membership (write everywhere), observer status (read only, always).
+          entry, White Force membership (write everywhere), observer status (read only, always). A
+          White Force observer sees only the rooms that name it in a role entry, or every room when
+          none does. You, the umpire, write in every room.
         </p>
       }
     >

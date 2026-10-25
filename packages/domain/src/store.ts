@@ -73,9 +73,16 @@ export interface Identity {
 export interface Me {
   readonly identity: Identity
   readonly role: Role | undefined
+  /** The role's force; for the admin, the umpire, the White Force (glossary, D8). */
   readonly force: Force | undefined
+  /** In the White Force (the force with the umpire flag): true for the admin too. */
   readonly isUmpire: boolean
   readonly isObserver: boolean
+  /**
+   * May edit every force's objectives: the admin and White Force roles that are not observers
+   * (PLY-35, §3 rule 14). White Force observers read them only.
+   */
+  readonly canEditObjectives: boolean
   /**
    * The rooms this role can see, in display order, from effective access (PLY-4). The admin,
    * owner of every room, sees every room with write access.
@@ -83,7 +90,10 @@ export interface Me {
   readonly rooms: readonly { readonly room: Room; readonly access: 'write' | 'read' }[]
 }
 
-/** Display data for a message author, resolved live from role and force documents (§3 rule 6). */
+/**
+ * Display data for a message author, resolved live from role and force documents (§3 rule 6).
+ * The admin is listed under ADMIN_AUTHOR_ID as the umpire, in the White Force.
+ */
 export interface Author {
   readonly roleId: string
   readonly name: string
@@ -140,6 +150,8 @@ export interface Occupant {
   readonly nick: string
   readonly jid: string | undefined
   readonly roleId: string | undefined
+  /** The server's `admin` account, the umpire, from the occupant JID (§3 rule 3). */
+  readonly isAdmin: boolean
   readonly role: MucRole
   readonly affiliation: MucAffiliation
   readonly self: boolean
@@ -218,7 +230,7 @@ export interface SessionStore {
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
-  /** Umpire-force roles and the admin only (PLY-35, §3 rule 14). */
+  /** The admin and White Force roles that are not observers only (PLY-35, §3 rule 14). */
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
@@ -848,7 +860,13 @@ class Store implements SessionStore {
     const rooms = this.collection('room')
     const roleId = this.identity.roleId
     const role = roleId === undefined ? undefined : this.docOf('role', roleId)
-    const force = role === undefined ? undefined : this.docOf('force', role.forceId)
+    const forces = this.collection('force')
+    // The admin is the umpire, a member of the White Force (glossary, D8).
+    const force = this.identity.isAdmin
+      ? whiteForceOf(forces)
+      : role === undefined
+        ? undefined
+        : this.docOf('force', role.forceId)
     const me = this.memo('me-value', [matrix, rooms, role, force], (): Me => {
       const byId = new Map(rooms.map((r) => [r.id, r]))
       const visible = this.identity.isAdmin
@@ -863,8 +881,9 @@ class Store implements SessionStore {
         identity: this.identity,
         role,
         force,
-        isUmpire: force?.isUmpire === true,
+        isUmpire: this.identity.isAdmin || force?.isUmpire === true,
         isObserver: role?.isObserver === true,
+        canEditObjectives: canEditObjectives(this.identity.isAdmin, force, role),
         rooms: Object.freeze(visible),
       })
     })
@@ -887,6 +906,16 @@ class Store implements SessionStore {
           colour: force?.colour,
         })
       }
+      // The admin is the umpire, in the White Force. Set last: `admin` is a reserved id, so a
+      // role document claiming it cannot take the umpire's label.
+      const white = whiteForceOf(forces)
+      authors.set(ADMIN_AUTHOR_ID, {
+        roleId: ADMIN_AUTHOR_ID,
+        name: UMPIRE_NAME,
+        forceId: white?.id ?? '',
+        forceName: white?.name,
+        colour: white?.colour,
+      })
       return authors
     })
     return this.memo('authors', [map, this.currentStatus], () => this.collectionStatus(map))
@@ -1109,6 +1138,7 @@ class Store implements SessionStore {
       nick: event.nick,
       jid: sender.jid,
       roleId: sender.roleId,
+      isAdmin: sender.isAdmin,
       role: event.role,
       affiliation: event.affiliation,
       self: event.self,
@@ -1322,8 +1352,11 @@ class Store implements SessionStore {
 
   async publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
-    if (!this.identity.isAdmin && !this.me().data.isUmpire) {
-      return domainErr('not-permitted', 'only umpires and the admin edit objectives (PLY-35)')
+    if (!this.me().data.canEditObjectives) {
+      return domainErr(
+        'not-permitted',
+        'only the umpire and White Force roles that are not observers edit objectives (PLY-35)',
+      )
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
@@ -1335,7 +1368,7 @@ class Store implements SessionStore {
     })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
     // One item per author: ejabberd refuses to let a publisher overwrite another's item, so the
-    // admin and each umpire keep their own, and readers take the newest (§3 rule 14).
+    // admin and each White Force editor keep their own, and readers take the newest (§3 rule 14).
     const author = localpart(this.session.jid) ?? DOCUMENT_ITEM_ID
     return this.publish(node, author, parsed.value, 'Publishing objectives')
   }
@@ -1467,4 +1500,28 @@ function emptyLoading<T>(): Snapshot<readonly T[]> {
 
 function endedError(reason: SessionEndReason): DomainError {
   return { code: 'session-ended', message: `the session ended (${reason})` }
+}
+
+/** How the admin's messages are labelled: the umpire, in the White Force (SC-5). */
+export const UMPIRE_NAME = 'Umpire'
+
+/** The admin's key in `authors()`: the reserved account name, never a role id. */
+export const ADMIN_AUTHOR_ID = 'admin'
+
+/**
+ * The White Force: the force with the umpire flag (glossary). The editor allows exactly one; if
+ * a live game has several, the first in display order.
+ */
+export function whiteForceOf(forces: readonly Force[]): Force | undefined {
+  return [...forces].filter((f) => f.isUmpire).sort(byOrderThenId)[0]
+}
+
+/** PLY-35, §3 rule 14: the admin, and White Force roles that are not observers. */
+export function canEditObjectives(
+  isAdmin: boolean,
+  force: Force | undefined,
+  role: Role | undefined,
+): boolean {
+  if (isAdmin) return true
+  return role !== undefined && force?.isUmpire === true && !role.isObserver
 }

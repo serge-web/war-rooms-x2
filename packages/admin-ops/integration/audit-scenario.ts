@@ -2,7 +2,7 @@
 // ejabberd (ejabberd-audit/audit.ejabberd.test.ts), through the real planner, executor, audit
 // and repair:
 //
-// 1. publish `sampleDesign()` on a clean server; the audit finds nothing;
+// 1. publish `sampleDesignWithWhiteCell()` on a clean server; the audit finds nothing;
 // 2. inject drift with ordinary admin and moderator operations on the test game, each a step the
 //    tooling could have missed (R14): Red HQ unmoderated; Blue CO granted Red's objectives,
 //    subscribed, then its affiliation removed without its subscription (R-A); Blue Observer given
@@ -12,7 +12,7 @@
 //    the vault login for the observer;
 // 4. repairing everything (destructive items confirmed) leaves a clean re-audit, and the effects
 //    hold for players; repairing again changes nothing (idempotent).
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -66,7 +66,7 @@ function errorOf(
 
 export function defineAuditIntegration(backend: AuditBackend): void {
   describe(`audit and repair (${backend.name})`, () => {
-    const design = sampleDesign()
+    const design = sampleDesignWithWhiteCell()
     const book = new CredentialsBook('random')
     const run = Math.random().toString(36).slice(2, 8)
     const passphrase = `audit passphrase ${run}`
@@ -251,6 +251,16 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         })
       })
 
+      it('finds the White observer voiced by the unmoderated Red HQ (§3 rule 4, F5)', () => {
+        // Unmoderated, the room gives every member voice, so the White observer, which reads
+        // every room, could post there.
+        expect(item('voice:white-observer:red-hq')).toMatchObject({
+          kind: 'voice',
+          severity: 'critical',
+          found: 'participant: can post',
+        })
+      })
+
       it('finds the extra account', () => {
         expect(item(`account-unknown:${STRAY}`)).toMatchObject({ destructive: true })
       })
@@ -274,6 +284,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           'node-config',
           'room-config',
           'subscription',
+          'voice',
           'voice',
         ])
       })

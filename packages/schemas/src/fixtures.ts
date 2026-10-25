@@ -16,7 +16,10 @@ export function pixelAsset(id: string): Asset {
   }
 }
 
-/** A small valid design: Blue, Red and Umpire, three rooms, one observer. */
+/**
+ * A small valid design: Blue, Red and White (the umpire flag: the admin is its umpire), three
+ * rooms, a Blue observer and a White observer with no assigned rooms, so it reads every room.
+ */
 export function sampleDesign(): DesignFile {
   return {
     format: 'wrx1-design',
@@ -36,8 +39,8 @@ export function sampleDesign(): DesignFile {
       { schemaVersion: 1, id: 'red', name: 'Red', colour: '#b91c1c', isUmpire: false, order: 1 },
       {
         schemaVersion: 1,
-        id: 'umpire',
-        name: 'Umpire',
+        id: 'white',
+        name: 'White',
         colour: '#4b5563',
         isUmpire: true,
         order: 2,
@@ -70,10 +73,10 @@ export function sampleDesign(): DesignFile {
       },
       {
         schemaVersion: 1,
-        id: 'umpire-1',
-        name: 'Lead Umpire',
-        forceId: 'umpire',
-        isObserver: false,
+        id: 'white-observer',
+        name: 'White Observer',
+        forceId: 'white',
+        isObserver: true,
         order: 0,
       },
     ],
@@ -124,5 +127,27 @@ export function sampleDesign(): DesignFile {
       },
     ],
     assets: [pixelAsset('game-logo')],
+  }
+}
+
+/**
+ * The sample design plus a White Force role that is not an observer ("White Cell"), which
+ * writes in every room and edits objectives beside the admin (§3 rules 4 and 14).
+ */
+export function sampleDesignWithWhiteCell(): DesignFile {
+  const design = sampleDesign()
+  return {
+    ...design,
+    roles: [
+      ...design.roles,
+      {
+        schemaVersion: 1,
+        id: 'white-cell',
+        name: 'White Cell',
+        forceId: 'white',
+        isObserver: false,
+        order: 1,
+      },
+    ],
   }
 }

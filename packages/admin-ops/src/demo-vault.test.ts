@@ -22,7 +22,12 @@ import { targetState } from './target.ts'
 import { ObserverVault, VAULT_KDF, VAULT_STORAGE_KEY } from './vault.ts'
 
 const design = designFileSchema.parse(demoSeed().design)
-const readOnly = targetState(design).readOnlyRoles
+const target = targetState(design)
+const readOnly = target.readOnlyRoles
+/** Role and room pairs where a role is read-only: the audit reads each one's stored role. */
+const readOnlyPairs = target.rooms.flatMap((r) =>
+  [...r.access.values()].filter((a) => a === 'read'),
+)
 
 /** A new envelope for the demo seed, as `DEMO_VAULT_ENVELOPE` should hold it. */
 async function freshEnvelope(): Promise<string | undefined> {
@@ -111,7 +116,7 @@ describe('the demo seed’s observer vault', () => {
     const { report } = audited.value
     expect(findings(report).map((i) => `${i.id} [${i.found}]`)).toEqual([])
     expect(report.vault).toBe('unlocked')
-    expect(report.voiceChecked).toBe(readOnly.length)
+    expect(report.voiceChecked).toBe(readOnlyPairs.length)
     theOps().useVault(undefined)
     vault.value.lock()
   })

@@ -98,7 +98,7 @@ function fakeTransport() {
   return { transport, logins }
 }
 
-const DEMO = ['blue-co', 'red-co', 'umpire-1'].map((roleId) => ({
+const DEMO = ['blue-co', 'red-co', 'white-1'].map((roleId) => ({
   roleId,
   label: roleId,
   password: `demo-${roleId}`,
@@ -162,7 +162,7 @@ describe('the multi-client view (PLY-16–18)', () => {
     const { presets, logins } = await mountView()
     fireEvent.click(screen.getByRole('radio', { name: '2' }))
     await quick(1, 'red-co')
-    await quick(2, 'umpire-1')
+    await quick(2, 'white-1')
     fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'Umpire demo' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save preset' }))
     expect(presets.load()).toEqual([
@@ -172,7 +172,7 @@ describe('the multi-client view (PLY-16–18)', () => {
         arrangement: 'row',
         panes: [
           { kind: 'player', roleId: 'red-co' },
-          { kind: 'player', roleId: 'umpire-1' },
+          { kind: 'player', roleId: 'white-1' },
         ],
       },
     ])
@@ -185,7 +185,7 @@ describe('the multi-client view (PLY-16–18)', () => {
     await act(() => flush(10))
     expect(panes()).toHaveLength(2)
     expect(within(pane(1)).getByLabelText('Logged in as red-co, RED')).toBeTruthy()
-    expect(within(pane(2)).getByLabelText('Logged in as umpire-1, UMPIRE')).toBeTruthy()
+    expect(within(pane(2)).getByLabelText('Logged in as white-1, WHITE')).toBeTruthy()
     expect(logins.slice(before).map((l) => l.credentials)).toContainEqual({
       kind: 'password',
       username: 'red-co',
@@ -283,12 +283,19 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
     expect(call?.args[0]).toBe('announcements')
   })
 
-  it('shows an umpire every room', async () => {
+  it('shows a White Force role every room, and its observer read only with no editing', async () => {
     const h = harness({ roleId: 'admin' })
     await h.store.ready()
     await flush()
-    const preview = previewAsRole(h.store, 'umpire-1')
-    expect(preview.me().data.isUmpire).toBe(true)
+    const observer = previewAsRole(h.store, 'white-observer').me().data
+    expect(observer).toMatchObject({ isUmpire: true, isObserver: true, canEditObjectives: false })
+    expect(observer.rooms.map((r) => [r.room.id, r.access])).toEqual([
+      ['blue-hq', 'read'],
+      ['red-hq', 'read'],
+      ['negotiation', 'read'],
+    ])
+    const preview = previewAsRole(h.store, 'white-1')
+    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: true })
     expect(preview.me().data.rooms.map((r) => r.room.id)).toEqual([
       'blue-hq',
       'red-hq',

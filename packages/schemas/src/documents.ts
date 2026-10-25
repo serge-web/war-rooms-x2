@@ -39,7 +39,11 @@ export const forceSchema = z
     name: nameSchema,
     colour: hexColourSchema.describe('Colour for message authors; not a theme token (§3 rule 13)'),
     iconAssetId: slugSchema.optional().describe('Id of an `assets:<id>` node'),
-    isUmpire: z.boolean().describe('Umpire-force roles are members of every room (D8)'),
+    isUmpire: z
+      .boolean()
+      .describe(
+        'The umpire flag: this is the White Force, which the admin plays in as umpire; exactly one force has it (ADM-4, D8)',
+      ),
     order: orderSchema,
     theme: themeSchema.optional().describe('Styles the force panel only (D19)'),
   })
@@ -78,7 +82,9 @@ export const roomSchema = z
         (entries) => new Set(entries.map((p) => `${p.kind}:${p.id}`)).size === entries.length,
         'each force or role may appear only once',
       )
-      .describe('Mixed force and role entries; umpire-force roles are added implicitly'),
+      .describe(
+        'Mixed force and role entries; White Force roles are added implicitly, and a role entry assigns a White Force observer the room (§3 rule 4)',
+      ),
     config: z
       .record(z.string(), z.unknown())
       .describe('Type-specific config, validated by the room type (ARC-5)'),
@@ -97,7 +103,7 @@ export const objectivesSchema = z
       "When this version was written. The node holds one item per author, because a publisher cannot overwrite another publisher's item; readers take the newest (§3 rule 14)",
     ),
   })
-  .describe("A force's objectives; confidential to that force, umpires and admin")
+  .describe("A force's objectives; confidential to that force, the White Force and the admin")
 
 export const ASSET_MIME_TYPES = Object.freeze(['image/png', 'image/webp', 'image/svg+xml'] as const)
 

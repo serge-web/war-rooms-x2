@@ -57,11 +57,11 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
 
   await quickLogIn(pane(page, 1), 'Blue CO (Blue)')
   await quickLogIn(pane(page, 2), 'Red CO (Red)')
-  await quickLogIn(pane(page, 3), 'Lead Umpire (Umpire)')
+  await quickLogIn(pane(page, 3), 'Umpire (White, admin)')
   // Each pane's header: role, force colour and backend (PLY-18).
   await expect(pane(page, 1).getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await expect(pane(page, 2).getByLabel('Logged in as Red CO, Red')).toBeVisible()
-  await expect(pane(page, 3).getByLabel('Logged in as Lead Umpire, Umpire')).toBeVisible()
+  await expect(pane(page, 3).getByLabel('Logged in as Umpire, White')).toBeVisible()
   await expect(pane(page, 2).locator('.wrx-shell__swatch')).toHaveCSS(
     'background-color',
     'rgb(185, 28, 28)',
@@ -72,7 +72,7 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
   await expect(tabsIn(pane(page, 2))).toHaveText(['Red HQ', 'Blue–Red negotiation'])
   await expect(tabsIn(pane(page, 3))).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
 
-  // The umpire's change reaches Red's pane live.
+  // The umpire's change (the admin login, SC-5) reaches Red's pane live.
   await editObjectives(page, pane(page, 3), 'Red', '1. Delay Blue until noon.')
   await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue until noon.')
   await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
@@ -118,8 +118,8 @@ test('a named preset saves and restores the pane count and logins (PLY-19)', asy
   await page.getByRole('radio', { name: '2' }).check()
   await expect(page.getByRole('region', { name: /^Pane \d$/ })).toHaveCount(2)
   await quickLogIn(pane(page, 1), 'Red CO (Red)')
-  await quickLogIn(pane(page, 2), 'Admin (game view)')
-  await expect(pane(page, 2).getByLabel('Logged in as Admin')).toBeVisible()
+  await quickLogIn(pane(page, 2), 'Umpire (White, admin)')
+  await expect(pane(page, 2).getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByLabel('Preset name').fill('Red and admin')
   await page.getByRole('button', { name: 'Save preset' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Saved preset' })).toBeVisible()
@@ -130,7 +130,7 @@ test('a named preset saves and restores the pane count and logins (PLY-19)', asy
   await page.getByRole('button', { name: 'Restore' }).click()
   await expect(page.getByRole('region', { name: /^Pane \d$/ })).toHaveCount(2)
   await expect(pane(page, 1).getByLabel('Logged in as Red CO, Red')).toBeVisible()
-  await expect(pane(page, 2).getByLabel('Logged in as Admin')).toBeVisible()
+  await expect(pane(page, 2).getByLabel('Logged in as Umpire, White')).toBeVisible()
 
   await page.getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByLabel('Saved presets')).toHaveCount(0)
@@ -180,7 +180,7 @@ test('export the mock database with its history, and import it back (PLY-21, PLY
   expect(exported).toContain('Orders for the crossing are out.')
   await expect(mockStatus(page).filter({ hasText: 'Exported as' })).toBeVisible()
 
-  await quickLogIn(pane(page, 1), 'Lead Umpire (Umpire)')
+  await quickLogIn(pane(page, 1), 'Umpire (White, admin)')
   await editObjectives(page, pane(page, 1), 'Red', '1. Something new.')
   await quickLogIn(pane(page, 2), 'Red CO (Red)')
   await expect(forcePanel(pane(page, 2))).toContainText('Something new.')
@@ -226,10 +226,10 @@ test('the admin previews the game as a role, and back (ADM-30, ADM-31)', async (
   await expect(forcePanel(page).getByRole('button', { name: /Edit/ })).toHaveCount(0)
   // Posting stays the admin's own, and says so.
   const notice = page.getByRole('status').filter({ hasText: 'Viewing as Red CO' })
-  await expect(notice).toContainText('sent from the admin account')
-  await expect(page.getByLabel('Logged in as Admin')).toBeVisible()
+  await expect(notice).toContainText('sent from your admin login and shown as from the Umpire')
+  await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
 
-  await page.getByLabel('View as').selectOption({ label: 'Admin' })
+  await page.getByLabel('View as').selectOption({ label: 'Umpire (you)' })
   await expect(tabs).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
   await expect(notice).toHaveCount(0)
 })

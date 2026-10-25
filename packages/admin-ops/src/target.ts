@@ -21,11 +21,11 @@ export const OBJECTIVES_ADMIN_ITEM_ID = 'admin'
 
 /**
  * §3 rule 14: an objectives node keeps one item per author, so `max_items` must hold the admin's
- * item plus one per umpire-force role. At least 10, as the mock's seed, so adding an umpire
- * during play does not push out an item before the node is reconfigured.
+ * item plus one per White Force role that may edit (not an observer). At least 10, as the mock's
+ * seed, so adding an editor during play does not push out an item before the node is reconfigured.
  */
-export function objectivesMaxItems(umpireRoles: number): number {
-  return Math.max(10, umpireRoles + 1)
+export function objectivesMaxItems(editors: number): number {
+  return Math.max(10, editors + 1)
 }
 
 /**
@@ -108,8 +108,12 @@ export function targetState(design: DesignFile): TargetState {
     return { roomId: room.id, config: gameRoomConfig(room.name), access }
   })
 
-  const umpireForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const umpires = design.roles.filter((r) => umpireForces.has(r.forceId)).map((r) => r.id)
+  // White Force roles (the umpire-flag force) read every force's objectives; those that are not
+  // observers also publish them (§3 rule 14, D21). Observers never publish (review F5).
+  const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
+  const white = design.roles.filter((r) => whiteForces.has(r.forceId))
+  const editors = white.filter((r) => !r.isObserver).map((r) => r.id)
+  const whiteObservers = white.filter((r) => r.isObserver).map((r) => r.id)
   const publicAssets = new Set(publicAssetIds(design.game))
   const whitelist1 = gameNodeConfig('whitelist', 1)
 
@@ -153,14 +157,16 @@ export function targetState(design: DesignFile): TargetState {
       documents: [doc(room)],
     })),
     ...design.forces.map((force) => {
-      // §3 rule 14, D21: the force's roles read; umpire-force roles publish (and so read).
+      // §3 rule 14, D21: the force's roles and White Force observers read; White Force roles
+      // that are not observers publish (and so read). The admin owns the node.
       const access = new Map<string, 'publish' | 'read'>()
       for (const role of design.roles) if (role.forceId === force.id) access.set(role.id, 'read')
-      for (const umpire of umpires) access.set(umpire, 'publish')
+      for (const id of whiteObservers) access.set(id, 'read')
+      for (const id of editors) access.set(id, 'publish')
       const objectives = design.objectives.find((o) => o.forceId === force.id)
       return {
         node: nodeName.objectives(force.id),
-        config: gameNodeConfig('whitelist', objectivesMaxItems(umpires.length)),
+        config: gameNodeConfig('whitelist', objectivesMaxItems(editors.length)),
         access,
         documents: objectives === undefined ? [] : [doc(objectives, OBJECTIVES_ADMIN_ITEM_ID)],
       }

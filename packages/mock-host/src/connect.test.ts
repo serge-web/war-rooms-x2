@@ -107,7 +107,7 @@ describe('connectMockTransport, leader tab (D17, ARC-7, R7)', () => {
     const leader = await tab(browser)
     const two = await tab(browser)
     const three = await tab(browser)
-    const umpire = await player(leader.host, 'umpire-1')
+    const umpire = await player(leader.host, 'white-observer')
     const blue = await player(two.host, 'blue-co')
     const red = await player(three.host, 'red-co')
     await blue.send('Before the leader closes.')

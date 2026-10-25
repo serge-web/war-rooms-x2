@@ -83,7 +83,10 @@ export interface NewDraftOptions {
   readonly now?: Date
 }
 
-/** An empty design: a game and nothing else. */
+/** The White Force a new design starts with: the umpire flag, which the admin plays in (ADM-4). */
+export const WHITE_FORCE_ID = 'white'
+
+/** An empty design: a game and the White Force, nothing else. */
 export function createDraft(options: NewDraftOptions = {}): Draft {
   const now = options.now ?? new Date()
   return {
@@ -100,7 +103,16 @@ export function createDraft(options: NewDraftOptions = {}): Draft {
         theme: { tokens: {} },
         roomTypeDefaults: {},
       },
-      forces: [],
+      forces: [
+        {
+          schemaVersion: 1,
+          id: WHITE_FORCE_ID,
+          name: 'White',
+          colour: DEFAULT_FORCE_COLOUR,
+          isUmpire: true,
+          order: 0,
+        },
+      ],
       roles: [],
       rooms: [],
       objectives: [],
@@ -174,9 +186,14 @@ export function addForce(draft: Draft, name: string): Added {
   return { draft: withDesign(draft, { forces: [...draft.design.forces, force] }), id }
 }
 
+/** Changes a force. Setting the umpire flag clears it on every other force (ADM-4: exactly one). */
 export function updateForce(draft: Draft, id: string, patch: ForcePatch): Draft {
+  const forces =
+    patch.isUmpire === true
+      ? draft.design.forces.map((f) => (f.id !== id && f.isUmpire ? { ...f, isUmpire: false } : f))
+      : draft.design.forces
   return withDesign(draft, {
-    forces: replaceById(draft.design.forces, id, (force) => {
+    forces: replaceById(forces, id, (force) => {
       const { iconAssetId, ...rest } = patch
       const next: Force = { ...force, ...rest }
       if (iconAssetId === null) delete next.iconAssetId

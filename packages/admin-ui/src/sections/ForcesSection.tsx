@@ -97,7 +97,7 @@ export function ForceMark({ force }: { readonly force: Force }) {
   return (
     <>
       <span className="wrx-admin-swatch" style={{ background: force.colour }} aria-hidden="true" />
-      {force.isUmpire && <span className="wrx-admin-tag">Umpire</span>}
+      {force.isUmpire && <span className="wrx-admin-tag">Umpire flag</span>}
     </>
   )
 }
@@ -189,8 +189,8 @@ function ForceForm({
         }}
       />
       <CheckboxField
-        label="Umpire force"
-        hint="Umpire-force roles can read and write in every room."
+        label="Umpire flag (White Force)"
+        hint="You play as this force's umpire. Its roles write in every room; its observers read only the rooms that name them, or every room. Exactly one force has this flag: setting it here clears it elsewhere."
         checked={force.isUmpire}
         issues={
           force.isUmpire && umpireCount > 1
@@ -198,7 +198,7 @@ function ForceForm({
                 {
                   severity: 'warning',
                   path: `${at}.isUmpire`,
-                  message: `${umpireCount} forces are umpire forces; at most one is expected`,
+                  message: `${umpireCount} forces carry the umpire flag; exactly one is expected`,
                 },
               ]
             : []
@@ -209,7 +209,7 @@ function ForceForm({
       />
       <MarkdownEditor
         label="Objectives"
-        hint={`Markdown. Only ${force.name}'s roles, the umpire force and the admin can read them.`}
+        hint={`Markdown. Only ${force.name}'s roles, the White Force and you can read them; you and White Force roles that are not observers can edit them in play.`}
         value={objectivesOf(design, force.id)?.markdown ?? ''}
         maxLength={LIMITS.objectivesChars}
         issues={objectivesIndex === -1 ? [] : validation.at(`objectives[${objectivesIndex}]`)}

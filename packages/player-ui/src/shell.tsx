@@ -1,6 +1,7 @@
 // The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed
 // out-of-game column on the right (PLY-36, WP 2.7). Each part has a *Core that takes plain props
 // and a wrapper that reads @wrx/hooks (NFR-18).
+import { UMPIRE_NAME } from '@wrx/domain'
 import type { StoreStatus } from '@wrx/domain'
 import { useGameSetup, useMe, useSessionStatus } from '@wrx/hooks'
 import type { ThemeTokens } from '@wrx/schemas'
@@ -83,7 +84,7 @@ export function NoGameCore() {
 // ---- The shell ----------------------------------------------------------------------------------
 
 export interface ShellRole {
-  /** Role name, or "Admin". */
+  /** Role name, or "Umpire" for the admin. */
   readonly name: string
   readonly forceName?: string | undefined
   readonly forceColour?: string | undefined
@@ -199,7 +200,7 @@ export interface ShellProps {
   readonly title?: ReactNode
   readonly headerItems?: ReactNode
   readonly notice?: ReactNode
-  /** Who the header names; default the session's role, or "Admin". */
+  /** Who the header names; default the session's role, or "Umpire" for the admin. */
   readonly role?: ShellRole
 }
 
@@ -224,7 +225,8 @@ export function Shell({
     (me.role !== undefined
       ? { name: me.role.name, forceName: me.force?.name, forceColour: me.force?.colour }
       : me.identity.isAdmin
-        ? { name: 'Admin' }
+        ? // The admin is the umpire, in the White Force (glossary, SC-5).
+          { name: UMPIRE_NAME, forceName: me.force?.name, forceColour: me.force?.colour }
         : undefined)
   return (
     <ShellCore

@@ -81,11 +81,23 @@ describe('checkDesign', () => {
     ])
   })
 
-  it('warns about more than one umpire force (ADM-4)', () => {
+  it('warns unless exactly one force carries the umpire flag (ADM-4)', () => {
     const design = sampleDesign()
     design.forces[1] = { ...design.forces[1]!, isUmpire: true }
     expect(messages(design)).toEqual([
-      'warning forces: 2 umpire forces; at most one is expected (ADM-4)',
+      'warning forces: 2 forces carry the umpire flag; exactly one is expected (ADM-4)',
+    ])
+    design.forces = design.forces.map((f) => ({ ...f, isUmpire: false }))
+    expect(messages(design)).toEqual([
+      'warning forces: no force carries the umpire flag; exactly one, the White Force, is expected (ADM-4)',
+    ])
+  })
+
+  it('warns about a role named like the umpire, which the admin plays as (SC-5)', () => {
+    const design = sampleDesign()
+    design.roles[0] = { ...design.roles[0]!, name: ' umpire ' }
+    expect(messages(design)).toEqual([
+      'warning roles[0].name: a role named "Umpire" looks like the admin, who plays as the umpire',
     ])
   })
 
@@ -93,7 +105,10 @@ describe('checkDesign', () => {
     const design = sampleDesign()
     design.forces = design.forces.map((f) => ({ ...f, isUmpire: false }))
     design.rooms[0] = { ...design.rooms[0]!, participants: [] }
-    expect(messages(design)).toEqual(['warning rooms[0].participants: room has no participants'])
+    expect(messages(design)).toEqual([
+      'warning forces: no force carries the umpire flag; exactly one, the White Force, is expected (ADM-4)',
+      'warning rooms[0].participants: room has no participants',
+    ])
   })
 
   it('finds objectives for unknown or repeated forces', () => {

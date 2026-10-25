@@ -27,8 +27,8 @@ const DEMO_HISTORY: readonly SeedMessage[] = Object.freeze([
   },
   {
     room: 'blue-hq',
-    author: 'umpire-1',
-    body: chat('Umpire here: the exercise clock starts at 09:00.'),
+    author: 'admin',
+    body: chat('The exercise clock starts at 09:00.'),
     at: at('08:45:00'),
   },
   {
@@ -45,7 +45,7 @@ const DEMO_HISTORY: readonly SeedMessage[] = Object.freeze([
   },
   {
     room: 'red-hq',
-    author: 'umpire-1',
+    author: 'admin',
     body: chat('Red, confirm your opening positions by 08:55.'),
     at: at('08:47:00'),
   },
@@ -75,7 +75,7 @@ const VAULT_KEY = 'wrx-observer-vault'
 
 /**
  * The demo vault as the admin tooling stores it in the admin's private storage: the demo design's
- * read-only roles (`blue-observer`) with their demo passwords, AES-GCM under a PBKDF2 key from
+ * read-only roles (`blue-observer`, `white-observer`) with their demo passwords, AES-GCM under a PBKDF2 key from
  * DEMO_VAULT_PASSPHRASE (the vault's minimum 100,000 iterations, so it opens quickly). Fixed, so
  * the seed is the same on every start. Made by `node packages/admin-ops/scripts/demo-vault.ts`;
  * packages/admin-ops/src/demo-vault.test.ts checks it still matches the demo design.
@@ -87,11 +87,11 @@ const DEMO_VAULT_ENVELOPE = JSON.stringify({
     name: 'PBKDF2',
     hash: 'SHA-256',
     iterations: 100000,
-    salt: 'NPeSEceJrCHVWjjikLKptg==',
+    salt: 'HvpDJ4guQyehB6VNmiU1CQ==',
   },
-  cipher: { name: 'AES-GCM', iv: 'xDgbhxwFWj8s58gV' },
+  cipher: { name: 'AES-GCM', iv: 'ULiC8yDlQ3DtgV0L' },
   ciphertext:
-    'B3MN5b2zZP6mAXIpMjsGWcNNv9li9Wzc7zSQun/OgJ6ZqE8LXCgLH9AyCVuJHvP3cnNlf/2WQt+gGHLSUxZzLx2DNps=',
+    'xCp+3aHfzTLK1TIxqKWxk7Bl31vo6mwMt+IBvLPHVA2/0R/kLBUi5TQLmF9uEDkmdbgeOhbNhpT4BWm8jjz2pOpA9gOVK2z/tc3yz7g2wNR/a1lKvhR/xrbwzldoPDqe5Sh+kKKTR/EtGhg=',
 })
 
 /** The demo seed: the sample design, its history and its demo passwords. */

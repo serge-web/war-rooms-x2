@@ -3,6 +3,7 @@
 // PLY-45) and the composer (PLY-44, PLY-12, PLY-33). ChatPanel wires it to the pane's store: it
 // joins the room, pages MAM history back on scroll (PLY-49), sends, and marks the room read while
 // the panel is on screen (PLY-11). The workspace wraps it in the room's theme (PLY-24).
+import { ADMIN_AUTHOR_ID, UMPIRE_NAME } from '@wrx/domain'
 import type { Author, DomainError, RoomView, TimelineEntry } from '@wrx/domain'
 import { useAuthors, useOccupants, useRoomMessages, useSessionStore } from '@wrx/hooks'
 import type { PlayerPanelProps } from '@wrx/hooks'
@@ -214,8 +215,6 @@ function roomProblem(
 
 // ---- Wired ------------------------------------------------------------------------------------
 
-const ADMIN_NAME = 'Admin'
-
 /** The display form of the store's messages, resolved against the live role documents. */
 function useChatMessages(entries: readonly TimelineEntry[] | undefined): readonly ChatMessage[] {
   const authors = useAuthors().data
@@ -232,12 +231,18 @@ function toChatMessage(
   self: boolean,
 ): ChatMessage {
   const { sender } = entry
-  const author = sender.roleId === undefined ? undefined : authors.get(sender.roleId)
+  // The admin is the umpire, labelled in the White Force's colour (SC-5); identity comes from
+  // the occupant JID only (§3 rule 3), so no role can post as the umpire.
+  const author = sender.isAdmin
+    ? authors.get(ADMIN_AUTHOR_ID)
+    : sender.roleId === undefined
+      ? undefined
+      : authors.get(sender.roleId)
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     senderKey: sender.isAdmin ? 'admin' : (sender.roleId ?? `nick:${sender.nick}`),
-    senderName: sender.isAdmin ? ADMIN_NAME : (author?.name ?? sender.nick),
+    senderName: sender.isAdmin ? UMPIRE_NAME : (author?.name ?? sender.nick),
     forceName: author?.forceName,
     colour: author?.colour,
     self,

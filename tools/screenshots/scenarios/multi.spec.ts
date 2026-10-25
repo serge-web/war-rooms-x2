@@ -1,5 +1,5 @@
 // The multi-client view on the mock (WP 2.9, DOC-20): the SC-7 demo with Blue, Red and the
-// umpire in three panes, and the admin's game view previewing a role (ADM-30). Nothing is posted,
+// umpire (the admin login) in three panes, and the admin's game view previewing a role (ADM-30). Nothing is posted,
 // so every run renders the same.
 import { expect, test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
@@ -14,7 +14,7 @@ test('multi-client view, three panes', { tag: '@screenshot' }, async ({ page }) 
   for (const [n, label, header] of [
     [1, 'Blue CO (Blue)', 'Blue CO, Blue'],
     [2, 'Red CO (Red)', 'Red CO, Red'],
-    [3, 'Lead Umpire (Umpire)', 'Lead Umpire, Umpire'],
+    [3, 'Umpire (White, admin)', 'Umpire, White'],
   ] as const) {
     const pane = page.getByRole('region', { name: `Pane ${n}`, exact: true })
     await pane.getByRole('button', { name: `Log in as ${label}`, exact: true }).click()

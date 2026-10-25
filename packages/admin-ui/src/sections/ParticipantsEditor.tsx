@@ -1,5 +1,5 @@
 // A room's participants (ADM-6, §3 rule 4): mixed force and role entries, each with read or
-// write access. Umpire-force roles and observers follow their own rules, shown in the matrix.
+// write access. White Force roles and observers follow their own rules, shown in the matrix.
 import { byOrderThenId } from '@wrx/domain'
 import type { DesignFile, DesignIssue, Participant, Room } from '@wrx/schemas'
 import { useId, useState } from 'react'
@@ -55,8 +55,9 @@ export function ParticipantsEditor({
     <fieldset className="wrx-admin-fieldset" aria-describedby={`${id}-rules`}>
       <legend>Participants</legend>
       <p className="wrx-admin-hint" id={`${id}-rules`}>
-        A role entry overrides its force&rsquo;s entry. Umpire-force roles can always read and
-        write; observers can only ever read.
+        A role entry overrides its force&rsquo;s entry. White Force roles can always read and write;
+        observers can only ever read. A role entry for a White Force observer assigns it this room:
+        it then sees only its assigned rooms.
       </p>
       {room.participants.length === 0 ? (
         <p className="wrx-admin-muted">No participants yet.</p>

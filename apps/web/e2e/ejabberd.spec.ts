@@ -26,7 +26,7 @@ test('logs in to ejabberd from the real-server build, and out again (PLY-1, PLY-
     { timeout: 20_000 },
   )
   await logIn(page, 'admin', adminPassword)
-  await expect(page.getByLabel('Logged in as Admin')).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByLabel(/^Logged in as Umpire/)).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('heading', { name: 'No game yet' })).toBeVisible()
   await expect(page.getByLabel('Backend: Reference ejabberd')).toBeVisible()
   await page.getByRole('button', { name: 'Log out' }).click()

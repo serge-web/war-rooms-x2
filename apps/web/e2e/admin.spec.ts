@@ -2,7 +2,7 @@
 // vault stored in the admin's private storage (ADM-37). The admin logs in at #/admin, finds
 // nothing to publish and every role on the credentials sheet with its demo password, unlocks the
 // vault with the demo passphrase shown as such (NFR-6), and the audit (WP 2.10) is clean with
-// the observer's voice read through the vault.
+// the observers' voice read through the vault.
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { logIn } from './mock.ts'
@@ -41,6 +41,9 @@ test('the seeded game is published; the demo passphrase opens the vault; the aud
   await expect(sheet.getByRole('row', { name: /Blue Observer/ })).toContainText(
     'demo-blue-observer',
   )
+  await expect(sheet.getByRole('row', { name: /White Observer/ })).toContainText(
+    'demo-white-observer',
+  )
 
   await open(page, 'Audit')
   await page.getByRole('button', { name: 'Run the audit' }).click()
@@ -55,5 +58,6 @@ test('the seeded game is published; the demo passphrase opens the vault; the aud
   await expect(page.getByText('No differences: the server matches the design.')).toBeVisible({
     timeout: 30_000,
   })
-  await expect(page.getByText(/Voice checked through 1 role login/)).toBeVisible()
+  // Blue's observer in Blue HQ, and the White observer in each of the three rooms.
+  await expect(page.getByText(/Voice checked through 4 role logins/)).toBeVisible()
 })

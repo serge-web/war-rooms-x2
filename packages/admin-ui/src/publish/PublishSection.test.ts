@@ -146,7 +146,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
     expect(stepItems()).toEqual([])
-    expect(groupButton('Access').textContent).toBe('▸Access19 stepsTo do')
+    expect(groupButton('Access').textContent).toBe('▸Access20 stepsTo do')
     expect(groupButton('Nodes').textContent).toContain('Create nodes: 17 nodes')
     // Repeated access steps read as one line each kind, expandable to every step.
     await user.click(groupButton('Access'))
@@ -156,14 +156,15 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
       name: /^Give node access: 15 nodes × roles \(54 grants\)/,
     })
     expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
-    expect(stepItems().map((li) => li.dataset.step)).toEqual(['read-only-grant:blue-observer'])
+    // The two observers' read-only steps read as one line too.
+    expect(stepItems()).toEqual([])
     await user.click(nodeGrants)
-    expect(stepItems()).toHaveLength(16)
+    expect(stepItems()).toHaveLength(15)
     expect(access.textContent).toContain('Blue CO: read')
     await user.click(groupButton('Access'))
     expect(stepItems()).toEqual([])
     await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
-    expect(stepItems()).toHaveLength(57)
+    expect(stepItems()).toHaveLength(58)
     await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
     expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
@@ -180,10 +181,10 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const groups = within(planRegion()).getAllByRole('region')
     expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
     expect(groupButton('Access').textContent).toContain('Done')
-    expect(within(planRegion()).getByText(/^All 57 steps done\.$/)).toBeTruthy()
+    expect(within(planRegion()).getByText(/^All 58 steps done\.$/)).toBeTruthy()
     await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     const steps = stepItems()
-    expect(steps).toHaveLength(57)
+    expect(steps).toHaveLength(58)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
@@ -313,7 +314,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     expect(groupButton('Accounts').textContent).toContain('Done')
     expect(groupButton('Nodes').textContent).toContain('Not run')
     expect(
-      within(planRegion()).getByText(/^Stopped at a failure: 5 of 57 steps done\.$/),
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 58 steps done\.$/),
     ).toBeTruthy()
     const failed = stepItems().filter((li) => li.dataset.state === 'failed')
     expect(failed.map((li) => li.dataset.step)).toEqual(['room:red-hq'])

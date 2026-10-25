@@ -5,7 +5,7 @@
 // that role's rooms (from the same effective access the role gets, §3 rule 4), its saved layout
 // key, its force theme and its force's objectives. The admin can read every document, so nothing
 // the role sees is missing.
-import { roomsForRole } from '@wrx/domain'
+import { canEditObjectives, roomsForRole } from '@wrx/domain'
 import type { Identity, Me, SessionStore, Snapshot } from '@wrx/domain'
 
 /** A view of an admin store as `roleId` sees it. Holds its memo in the closure, per preview. */
@@ -33,6 +33,8 @@ export function previewAsRole(store: SessionStore, roleId: string): SessionStore
       force,
       isUmpire: force?.isUmpire === true,
       isObserver: role?.isObserver === true,
+      // What the role itself may do, so a White observer's preview offers no editing.
+      canEditObjectives: canEditObjectives(false, force, role),
       rooms: Object.freeze(rooms),
     })
     const value: Snapshot<Me> = Object.freeze({ ...base, data })

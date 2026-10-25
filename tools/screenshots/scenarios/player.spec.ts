@@ -1,5 +1,6 @@
 // The player client on the mock (WP 2.4, 2.5, 2.6, DOC-20): the welcome page with the demo game, the
-// shell after logging in as Blue CO with its demo password (NFR-6), and the umpire's workspace.
+// shell after logging in as Blue CO with its demo password (NFR-6), and the umpire's workspace
+// (the admin login, in the White Force).
 import { expect, test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
 import { hostMockInLeaderTab, roomTabs, welcomeLoaded } from './mock-app.ts'
@@ -32,11 +33,12 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('umpire-1')
-  await page.getByLabel('Password', { exact: true }).fill('demo-umpire-1')
+  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // PLY-40: one column per room; the game info panel opened from the strip (PLY-8).
   await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByRole('tab', { name: 'Game info', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Game briefing' })).toContainText('09:00')
   await page.mouse.move(0, 0)

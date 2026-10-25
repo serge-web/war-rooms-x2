@@ -10,14 +10,24 @@ export type AccessReason =
   | 'force-entry'
   /** A `role` participant entry for the role itself; it overrides the force entry. */
   | 'role-entry'
-  /** The role belongs to an umpire force, a member of every room with write access (D8). */
-  | 'umpire'
+  /** A White Force role that is not an observer: write access to every room (D8, PLY-15). */
+  | 'white-force'
+  /** A White Force observer with no assigned rooms: read access to every room (rule 4). */
+  | 'white-observer-all'
+  /**
+   * A White Force observer with assigned rooms elsewhere: it sees only those, so not this room
+   * (rule 4). The one reason that comes with `none`.
+   */
+  | 'white-observer-unassigned'
   /** The role is an observer, so read-only in all its rooms (rule 5). */
   | 'observer'
 
 export interface AccessCell {
   readonly access: Access
-  /** Every rule that applied, in the order applied. Empty when access is `none`. */
+  /**
+   * Every rule that applied, in the order applied. Empty when access is `none`, except
+   * `white-observer-unassigned`, which explains why a White Force observer cannot see a room.
+   */
   readonly reasons: readonly AccessReason[]
 }
 
@@ -52,10 +62,16 @@ const NONE: AccessCell = Object.freeze({ access: 'none', reasons: Object.freeze(
  * 1. A force entry gives its access to every role of that force.
  * 2. A role entry replaces the force entry's access for that role, so one member of a writing
  *    force can be made read-only in one room (rule 5's per-entry read access), or the reverse.
- * 3. Umpire-force roles have write access to every room, whatever the entries say (D8, PLY-15).
- * 4. Observers are capped at read in every room they can see, umpire or not (rule 5, D8).
+ * 3. White Force (umpire-flag force) roles that are not observers have write access to every
+ *    room, whatever the entries say (D8, PLY-15).
+ * 4. Observers are capped at read in every room they can see (rule 5, D8). A White Force
+ *    observer is "assigned" the rooms whose participant list names it in a role entry; with
+ *    assigned rooms it reads only those, with none it reads every room (rule 4, review F5). A
+ *    force entry naming the White Force is not an assignment, and grants its observers nothing
+ *    beyond that rule.
  *
- * Roles whose force is unknown still get role entries and the observer cap, but not umpire
+ * The admin, the umpire, is not a role and is not in the matrix: it writes in every room.
+ * Roles whose force is unknown still get role entries and the observer cap, but not White Force
  * access. Rooms with an unknown type are included: whether a type is supported is not access.
  */
 export function effectiveAccess(input: AccessInput): AccessMatrix {
@@ -67,6 +83,15 @@ export function effectiveAccess(input: AccessInput): AccessMatrix {
   const roleIds = new Set(roles.map((r) => r.id))
   const problems: AccessProblem[] = []
   const cells = new Map<string, ReadonlyMap<string, AccessCell>>()
+
+  // White Force observers named in a role entry of some room: those rooms are their assignment.
+  const namedInRoleEntry = new Set<string>()
+  for (const room of rooms) {
+    for (const entry of room.participants) {
+      if (entry.kind === 'role' && roleIds.has(entry.id)) namedInRoleEntry.add(entry.id)
+    }
+  }
+  const isWhite = (role: Role) => forces.get(role.forceId)?.isUmpire === true
 
   for (const room of rooms) {
     const forceAccess = new Map<string, 'write' | 'read'>()
@@ -84,6 +109,10 @@ export function effectiveAccess(input: AccessInput): AccessMatrix {
 
     const row = new Map<string, AccessCell>()
     for (const role of roles) {
+      if (role.isObserver && isWhite(role)) {
+        row.set(role.id, whiteObserverCell(roleAccess.get(role.id), namedInRoleEntry.has(role.id)))
+        continue
+      }
       let access: Access = 'none'
       const reasons: AccessReason[] = []
       const viaForce = forceAccess.get(role.forceId)
@@ -96,9 +125,9 @@ export function effectiveAccess(input: AccessInput): AccessMatrix {
         access = viaRole
         reasons.push('role-entry')
       }
-      if (forces.get(role.forceId)?.isUmpire === true) {
+      if (isWhite(role)) {
         access = 'write'
-        reasons.push('umpire')
+        reasons.push('white-force')
       }
       if (role.isObserver && access === 'write') {
         access = 'read'
@@ -115,6 +144,23 @@ export function effectiveAccess(input: AccessInput): AccessMatrix {
     cells,
     problems,
   })
+}
+
+const WHITE_OBSERVER_ALL: AccessCell = Object.freeze({
+  access: 'read',
+  reasons: Object.freeze(['white-observer-all'] as const),
+})
+const WHITE_OBSERVER_UNASSIGNED: AccessCell = Object.freeze({
+  access: 'none',
+  reasons: Object.freeze(['white-observer-unassigned'] as const),
+})
+
+/** A White Force observer's cell: its role entry here, if it has assigned rooms (rule 4). */
+function whiteObserverCell(entry: 'write' | 'read' | undefined, assigned: boolean): AccessCell {
+  if (!assigned) return WHITE_OBSERVER_ALL
+  if (entry === undefined) return WHITE_OBSERVER_UNASSIGNED
+  const reasons: AccessReason[] = entry === 'write' ? ['role-entry', 'observer'] : ['role-entry']
+  return Object.freeze({ access: 'read', reasons: Object.freeze(reasons) })
 }
 
 /** One cell; `none` for an unknown room or role. */

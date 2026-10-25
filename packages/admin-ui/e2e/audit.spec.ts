@@ -48,20 +48,22 @@ test('audits the published game, finds an unmoderated room and repairs it', asyn
 
   await page.getByRole('button', { name: 'Dev: unmoderate the first room (audit drift)' }).click()
   await page.getByRole('button', { name: 'Audit again' }).click()
-  // An unmoderated room gives everyone voice, so the observer can post there too: both show.
-  await expect(report.getByText('2 differences: 2 critical.')).toBeVisible({ timeout: 20_000 })
-  const critical = report.getByRole('region', { name: 'Critical (2)' })
+  // An unmoderated room gives everyone voice, so both observers (Blue's, and the White observer,
+  // which reads every room) can post there too: all three show.
+  await expect(report.getByText('3 differences: 3 critical.')).toBeVisible({ timeout: 20_000 })
+  const critical = report.getByRole('region', { name: 'Critical (3)' })
   await expect(critical.getByText(/^Room settings: /)).toBeVisible()
   await expect(critical.getByText('moderated: false')).toBeVisible()
   await expect(critical.getByText(/^Voice: .* \(blue-observer\)$/)).toBeVisible()
-  await expect(critical.getByText('participant: can post')).toBeVisible()
+  await expect(critical.getByText(/^Voice: .* \(white-observer\)$/)).toBeVisible()
+  await expect(critical.getByText('participant: can post')).toHaveCount(2)
   await page.screenshot({ path: testInfo.outputPath('audit-drift.png'), fullPage: true })
 
-  await report.getByRole('button', { name: 'Repair all (2)…' }).click()
+  await report.getByRole('button', { name: 'Repair all (3)…' }).click()
   const dialog = page.getByRole('alertdialog', { name: 'Repair these differences?' })
   await dialog.getByRole('button', { name: 'Repair', exact: true }).click()
   await expect(
-    page.getByText('Repaired 2 differences. Audited again: the server matches the design.'),
+    page.getByText('Repaired 3 differences. Audited again: the server matches the design.'),
   ).toBeVisible({ timeout: 20_000 })
   await expect(report.getByText('No differences: the server matches the design.')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('audit-repaired.png'), fullPage: true })

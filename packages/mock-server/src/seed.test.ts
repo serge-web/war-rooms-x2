@@ -3,7 +3,7 @@
 import { nodeName } from '@wrx/schemas'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
-import { sampleDesign } from '../../schemas/src/fixtures.ts'
+import { sampleDesign, sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
 import { DEMO_VAULT_PASSPHRASE, demoSeed, demoState } from './demo.ts'
 import { demoPassword, stateFromDesign } from './seed.ts'
 import { MockServer } from './server.ts'
@@ -38,7 +38,7 @@ describe('stateFromDesign', () => {
       ['blue-co@d.mock', 'demo-blue-co', false, true],
       ['blue-observer@d.mock', 'demo-blue-observer', false, true],
       ['red-co@d.mock', 'demo-red-co', false, true],
-      ['umpire-1@d.mock', 'demo-umpire-1', false, true],
+      ['white-observer@d.mock', 'demo-white-observer', false, true],
     ])
   })
 
@@ -70,7 +70,7 @@ describe('stateFromDesign', () => {
     expect(unwrap(await blue.admin.getPrivate('wrx-observer-vault'))).toBeUndefined()
   })
 
-  it('makes every room NFR-3, with umpires everywhere and observers stored as visitors', () => {
+  it('makes every room NFR-3, with the White observer everywhere and observers stored as visitors', () => {
     const state = unwrap(stateFromDesign({ design: sampleDesign(), domain: 'd.mock' }))
     const blueHq = state.rooms.find((r) => r.jid === 'blue-hq@conference.d.mock')
     expect(blueHq?.config).toMatchObject({
@@ -84,16 +84,20 @@ describe('stateFromDesign', () => {
       'admin@d.mock',
       'blue-co@d.mock',
       'blue-observer@d.mock',
-      'umpire-1@d.mock',
+      'white-observer@d.mock',
     ])
-    expect(blueHq?.storedRoles).toEqual([{ jid: 'blue-observer@d.mock', role: 'visitor' }])
+    expect(blueHq?.storedRoles).toEqual([
+      { jid: 'blue-observer@d.mock', role: 'visitor' },
+      { jid: 'white-observer@d.mock', role: 'visitor' },
+    ])
     const negotiation = state.rooms.find((r) => r.jid.startsWith('negotiation@'))
     expect(negotiation?.affiliations.map((a) => a.jid).sort()).toEqual([
       'admin@d.mock',
       'blue-co@d.mock',
       'red-co@d.mock',
-      'umpire-1@d.mock',
+      'white-observer@d.mock',
     ])
+    expect(negotiation?.storedRoles).toEqual([{ jid: 'white-observer@d.mock', role: 'visitor' }])
   })
 
   it('creates the §3 nodes: open game-setup and theme asset, whitelist for the rest', () => {
@@ -112,10 +116,22 @@ describe('stateFromDesign', () => {
     const objectives = state.nodes.find((n) => n.name === nodeName.objectives('blue'))
     expect(objectives?.affiliations).toEqual([
       { jid: 'admin@d.mock', affiliation: 'owner' },
-      { jid: 'umpire-1@d.mock', affiliation: 'publisher' },
       { jid: 'blue-co@d.mock', affiliation: 'member' },
       { jid: 'blue-observer@d.mock', affiliation: 'member' },
+      // The White observer reads every force's objectives, and never publishes (F5).
+      { jid: 'white-observer@d.mock', affiliation: 'member' },
     ])
+    const withCell = unwrap(
+      stateFromDesign({ design: sampleDesignWithWhiteCell(), domain: 'd.mock' }),
+    )
+    expect(withCell.nodes.find((n) => n.name === nodeName.objectives('red'))?.affiliations).toEqual(
+      [
+        { jid: 'admin@d.mock', affiliation: 'owner' },
+        { jid: 'white-cell@d.mock', affiliation: 'publisher' },
+        { jid: 'red-co@d.mock', affiliation: 'member' },
+        { jid: 'white-observer@d.mock', affiliation: 'member' },
+      ],
+    )
     // §3 rule 14: one item per author; the design's text is the admin's.
     expect(objectives?.items.map((i) => i.id)).toEqual(['admin'])
     expect(state.nodes.find((n) => n.name === 'game-state')?.items).toEqual([])
@@ -129,7 +145,7 @@ describe('stateFromDesign', () => {
         design: sampleDesign(),
         history: [
           { room: 'blue-hq', author: 'blue-co', body: '{"n":2}', at: '2026-10-24T08:00:01.000Z' },
-          { room: 'blue-hq', author: 'umpire-1', body: '{"n":1}', at: '2026-10-24T08:00:00.000Z' },
+          { room: 'blue-hq', author: 'admin', body: '{"n":1}', at: '2026-10-24T08:00:00.000Z' },
           { room: 'blue-hq', author: 'admin', body: '{"n":3}', at: '2026-10-24T08:00:01.000Z' },
         ],
       }),
@@ -174,7 +190,7 @@ describe('the demo seed', () => {
     const joined = unwrap(await observer.muc.join(room('blue-hq'), 'blue-observer'))
     expect(joined.role).toBe('visitor')
     const page = unwrap(await observer.mam.queryRoom(room('blue-hq'), { max: 10 }))
-    expect(page.messages.map((m) => m.nick)).toEqual(['blue-co', 'umpire-1', 'blue-co'])
+    expect(page.messages.map((m) => m.nick)).toEqual(['blue-co', 'admin', 'blue-co'])
     expect(page.complete).toBe(true)
     const post = await observer.muc.send(room('blue-hq'), '{"text":"hi"}')
     expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
@@ -190,14 +206,29 @@ describe('the demo seed', () => {
     expect(forces.ok ? undefined : forces.error.condition).toBe('not-allowed')
   })
 
-  it('lets umpires publish objectives under their own item, beside the admin’s', async () => {
+  it('lets the White observer read every force’s objectives but not publish them (F5)', async () => {
     const { login } = demo()
-    const umpire = await login('umpire-1')
+    const observer = await login('white-observer')
     const node = nodeName.objectives('red')
-    unwrap(await umpire.pubsub.publish(node, 'umpire-1', '{"markdown":"new"}'))
-    const ids = unwrap(await umpire.pubsub.getItems(node)).map((i) => i.id)
-    expect(ids.sort()).toEqual(['admin', 'umpire-1'])
-    const overwrite = await umpire.pubsub.publish(node, 'admin', '{}')
+    expect(unwrap(await observer.pubsub.getItems(node)).map((i) => i.id)).toEqual(['admin'])
+    const post = await observer.pubsub.publish(node, 'white-observer', '{"markdown":"new"}')
+    expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
+  })
+
+  it('lets a White Force writer publish objectives under its own item, beside the admin’s', async () => {
+    const state = unwrap(stateFromDesign({ design: sampleDesignWithWhiteCell() }))
+    const transport = new MockTransport(new MockServer({ seed: state }))
+    const cell = unwrap(
+      await transport.connect({
+        endpoint: { websocketUrl: '', domain: state.domain },
+        credentials: { kind: 'password', username: 'white-cell', password: 'demo-white-cell' },
+      }),
+    )
+    const node = nodeName.objectives('red')
+    unwrap(await cell.pubsub.publish(node, 'white-cell', '{"markdown":"new"}'))
+    const ids = unwrap(await cell.pubsub.getItems(node)).map((i) => i.id)
+    expect(ids.sort()).toEqual(['admin', 'white-cell'])
+    const overwrite = await cell.pubsub.publish(node, 'admin', '{}')
     expect(overwrite.ok ? undefined : overwrite.error.condition).toBe('forbidden')
   })
 

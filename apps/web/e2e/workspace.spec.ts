@@ -45,7 +45,7 @@ async function asUmpire(page: Page): Promise<string[]> {
   page.on('pageerror', (e) => errors.push(e.message))
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
-  await logIn(page, 'umpire-1', 'demo-umpire-1')
+  await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   return errors
 }
@@ -69,7 +69,7 @@ function gameSetup(designVersion: number) {
   } as const
 }
 
-test('umpire-1 sees every room in the three-column default, panels in the strip (PLY-4, PLY-8, PLY-40)', async ({
+test('the umpire, the admin login, sees every room in the three-column default, panels in the strip (PLY-4, PLY-8, PLY-40)', async ({
   page,
 }) => {
   const errors = await asUmpire(page)
@@ -87,7 +87,7 @@ test('umpire-1 sees every room in the three-column default, panels in the strip 
   await tab(page, 'Game info').click()
   await expect(page.getByRole('region', { name: 'Game briefing' })).toContainText('09:00')
   await tab(page, 'Online').click()
-  await expect(page.getByRole('region', { name: 'Online' })).toContainText('Lead Umpire')
+  await expect(page.getByRole('region', { name: 'Online' })).toContainText('Umpire')
   expect(errors).toEqual([])
 })
 
@@ -96,7 +96,7 @@ test('a dragged tab stays where it was put after a reload (PLY-5, D6)', async ({
   await drag(page, tab(page, ROOMS.red), panel(page, ROOMS.blue))
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.red], [ROOMS.talks]])
   await page.reload()
-  await logIn(page, 'umpire-1', 'demo-umpire-1')
+  await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.red], [ROOMS.talks]])
   // Another role in the same browser has its own layout.
@@ -115,7 +115,7 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   // What a publish does: the node, the new room's document, and a new design version (§3
   // rule 8), since PubSub does not announce new nodes.
   await asMockAdmin(page, [
-    { op: 'create-node', node: 'rooms:press', members: ['umpire-1', 'blue-co'] },
+    { op: 'create-node', node: 'rooms:press', members: ['blue-co'] },
     {
       op: 'publish',
       node: 'rooms:press',
@@ -153,7 +153,7 @@ test('Reset layout restores the three-column default (PLY-42)', async ({ page })
   await page.getByRole('button', { name: 'Reset layout' }).click()
   await expect.poll(() => columns(page)).toEqual(DEFAULT)
   await page.reload()
-  await logIn(page, 'umpire-1', 'demo-umpire-1')
+  await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   await expect.poll(() => columns(page)).toEqual(DEFAULT)
   expect(errors).toEqual([])

@@ -1,7 +1,7 @@
 // The out-of-game column on the mock (WP 2.7, DOC-20): a player's column with the admin's
-// announcements and the force's objectives, and the umpire editing another force's objectives
-// with the preview. Announcements are published before login with fixed times, so none is
-// highlighted as new and every run renders the same.
+// announcements and the force's objectives, and the umpire (the admin login) editing another
+// force's objectives with the preview. Announcements are published before login with fixed
+// times, so none is highlighted as new and every run renders the same.
 import { expect, test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
 import { demoLogIn, hostMockInLeaderTab, publishAsMockAdmin, welcomeLoaded } from './mock-app.ts'
@@ -36,7 +36,7 @@ test('umpire editing objectives', { tag: '@screenshot' }, async ({ page }) => {
   await page.goto('./app/')
   await welcomeLoaded(page)
   await publishAsMockAdmin(page, ANNOUNCEMENTS)
-  await demoLogIn(page, 'umpire-1')
+  await demoLogIn(page, 'admin')
   const panel = page.getByRole('region', { name: 'Force panel' })
   await panel.getByLabel('Show objectives for').selectOption({ label: 'Red' })
   await expect(panel.getByRole('region', { name: 'Red objectives' })).toContainText('Delay Blue')

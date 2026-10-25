@@ -223,20 +223,21 @@ describe('the Audit section in the admin app, on a mock server', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Unlock' }))
     await waitFor(
       () => {
-        expect(screen.getByText(/Voice checked through 1 role login/)).toBeTruthy()
+        expect(screen.getByText(/Voice checked through 4 role logins/)).toBeTruthy()
       },
       { timeout: 20_000 },
     )
     const report = screen.getByRole('region', { name: 'Audit report' })
-    expect(within(report).getByText('1 difference: 1 critical.')).toBeTruthy()
-    await user.click(within(report).getByRole('button', { name: 'Repair all (1)…' }))
+    // Unmoderated, Red HQ also gives the White observer (every room, read only) voice.
+    expect(within(report).getByText('2 differences: 2 critical.')).toBeTruthy()
+    await user.click(within(report).getByRole('button', { name: 'Repair all (2)…' }))
     const confirm = screen.getByRole('alertdialog', { name: 'Repair these differences?' })
     await user.click(within(confirm).getByRole('button', { name: 'Repair' }))
     await waitFor(
       () => {
         expect(
           screen.getByText(
-            /Repaired 1 difference\. Audited again: the server matches the design\./,
+            /Repaired 2 differences\. Audited again: the server matches the design\./,
           ),
         ).toBeTruthy()
       },

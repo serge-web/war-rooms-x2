@@ -1,7 +1,7 @@
 // The workspace's panels: a room panel (the room type's player component, or a placeholder for a
 // type with none), and the non-room panels game info and online (PLY-8). Each has a *Core
 // over plain props (NFR-18).
-import { roomConfig } from '@wrx/domain'
+import { ADMIN_AUTHOR_ID, roomConfig } from '@wrx/domain'
 import type { Author, Occupant } from '@wrx/domain'
 import { useAuthors, useGameSetup, useMe } from '@wrx/hooks'
 import type { ReactRoomTypeRegistry } from '@wrx/hooks'
@@ -167,13 +167,18 @@ export function onlineRoles(
 ): readonly OnlineRole[] {
   const byId = new Map<string, OnlineRole>()
   for (const occupant of occupants) {
-    const id = occupant.roleId ?? occupant.nick
+    // The admin is the umpire, in the White Force (SC-5); known by its JID, not its nick.
+    const id = occupant.isAdmin ? ADMIN_AUTHOR_ID : (occupant.roleId ?? occupant.nick)
     const known = byId.get(id)
     if (known !== undefined) {
       if (occupant.self && !known.self) byId.set(id, { ...known, self: true })
       continue
     }
-    const author = occupant.roleId === undefined ? undefined : authors.get(occupant.roleId)
+    const author = occupant.isAdmin
+      ? authors.get(ADMIN_AUTHOR_ID)
+      : occupant.roleId === undefined
+        ? undefined
+        : authors.get(occupant.roleId)
     byId.set(id, {
       id,
       name: author?.name ?? occupant.nick,

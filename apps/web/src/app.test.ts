@@ -148,13 +148,15 @@ describe('backends (PLY-20)', () => {
 })
 
 describe('demo logins (NFR-6)', () => {
-  it('lists every demo role with its demo password, by force', () => {
+  it('lists every demo role with its demo password, by force, then the admin as umpire', () => {
     expect(demoLogins().map((l) => [l.roleId, l.password])).toEqual([
       ['blue-co', 'demo-blue-co'],
       ['blue-observer', 'demo-blue-observer'],
       ['red-co', 'demo-red-co'],
-      ['umpire-1', 'demo-umpire-1'],
+      ['white-observer', 'demo-white-observer'],
+      ['admin', 'demo-admin'],
     ])
+    expect(demoLogins().at(-1)?.label).toBe('Umpire (White, admin)')
     expect(demoLogins()[0]?.label).toBe('Blue CO (Blue)')
   })
 })

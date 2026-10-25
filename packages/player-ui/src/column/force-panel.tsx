@@ -1,7 +1,9 @@
 // The force panel at the bottom of the out-of-game column (PLY-25, PLY-35): in the role's force
-// theme, the force logo, the role name and the force's objectives in Markdown. Umpire-force
-// roles and the admin may choose any force and edit its objectives with a preview; the edit is
-// published through the store, one item per author, and readers show the newest (§3 rule 14).
+// theme, the force logo, the role name and the force's objectives in Markdown. White Force roles
+// and the admin (the umpire) may choose any force; the admin and White Force roles that are not
+// observers may also edit its objectives with a preview. The edit is published through the
+// store, one item per author, and readers show the newest (§3 rule 14).
+import { UMPIRE_NAME } from '@wrx/domain'
 import type { DomainResult } from '@wrx/domain'
 import { useForces, useMe, useObjectives, useSessionStore } from '@wrx/hooks'
 import { LIMITS } from '@wrx/schemas'
@@ -129,9 +131,9 @@ export interface ForceOption {
 }
 
 export interface ForcePanelCoreProps {
-  /** The logged-in role's name, or "Admin". */
+  /** The logged-in role's name, or "Umpire" for the admin. */
   readonly roleName: string
-  /** The role's force; undefined for the admin. */
+  /** The role's force; the White Force for the admin. */
   readonly forceName?: string | undefined
   /** The force logo, if the theme has one. */
   readonly logo?: ReactNode
@@ -141,14 +143,14 @@ export interface ForcePanelCoreProps {
   readonly objectives: string | undefined
   readonly loading?: boolean
   readonly problem?: string | undefined
-  /** Umpires and the admin: choose whose objectives to show (PLY-35). */
+  /** The White Force and the admin: choose whose objectives to show (PLY-35). */
   readonly forceChoice?:
     | {
         readonly forces: readonly ForceOption[]
         readonly onSelect: (forceId: string) => void
       }
     | undefined
-  /** Umpires and the admin: opens the editor for the shown force (PLY-35). */
+  /** The admin and White Force non-observers: opens the editor for the shown force (PLY-35). */
   readonly onEdit?: (() => void) | undefined
 }
 
@@ -244,21 +246,23 @@ export function ForcePanel() {
   const store = useSessionStore()
   const me = useMe().data
   const forces = useForces().data
-  const canEdit = me.isUmpire || me.identity.isAdmin
+  // White Force observers read every force's objectives; only editors edit (PLY-35, F5).
+  const canChoose = me.isUmpire || me.identity.isAdmin
+  const canEdit = me.canEditObjectives
   const ownForce = me.force
   const [chosen, setChosen] = useState<string | undefined>(undefined)
   const [editing, setEditing] = useState(false)
 
-  // Whose objectives: the role's own force; umpires and the admin may pick another (PLY-35).
+  // Whose objectives: the role's own force; the White Force may pick another (PLY-35).
   const shownId =
-    canEdit && chosen !== undefined && forces.some((f) => f.id === chosen)
+    canChoose && chosen !== undefined && forces.some((f) => f.id === chosen)
       ? chosen
-      : (ownForce?.id ?? (canEdit ? forces[0]?.id : undefined))
+      : (ownForce?.id ?? (canChoose ? forces[0]?.id : undefined))
   const shown =
     forces.find((f) => f.id === shownId) ?? (shownId === ownForce?.id ? ownForce : undefined)
   const objectives = useObjectivesOf(shownId)
 
-  const roleName = me.role?.name ?? (me.identity.isAdmin ? 'Admin' : '')
+  const roleName = me.role?.name ?? (me.identity.isAdmin ? UMPIRE_NAME : '')
   const option = shown === undefined ? undefined : { id: shown.id, name: shown.name }
   const core = (
     <ForcePanelCore
@@ -274,7 +278,7 @@ export function ForcePanel() {
       loading={objectives.loading}
       problem={objectives.problem}
       forceChoice={
-        canEdit
+        canChoose
           ? {
               forces: forces.map((f) => ({ id: f.id, name: f.name })),
               onSelect: setChosen,

@@ -1,7 +1,7 @@
 // Unit tests of the publish planner over hand-built server views: what each kind of change plans,
 // the order of steps, idempotency, warnings, the vault, and the design version.
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, emptyView, jid, publishedView, withNode } from './fixtures.ts'
 import {
@@ -22,18 +22,19 @@ const step = (plan: PublishPlan, id: string): PlanStep => {
 const index = (plan: PublishPlan, id: string) => ids(plan).indexOf(step(plan, id).id)
 
 function edit(change: (d: DesignFile) => DesignFile): DesignFile {
-  return change(sampleDesign())
+  return change(sampleDesignWithWhiteCell())
 }
 
 describe('first publish onto an empty server', () => {
-  const plan = planPublish(sampleDesign(), emptyView())
+  const plan = planPublish(sampleDesignWithWhiteCell(), emptyView())
 
   it('creates every account, room and node, grants access and publishes every document', () => {
     expect(plan.steps.filter((s) => s.group === 'accounts').map((s) => s.action)).toEqual([
       { type: 'create-account', roleId: 'blue-co', readOnly: false },
       { type: 'create-account', roleId: 'blue-observer', readOnly: true },
       { type: 'create-account', roleId: 'red-co', readOnly: false },
-      { type: 'create-account', roleId: 'umpire-1', readOnly: false },
+      { type: 'create-account', roleId: 'white-observer', readOnly: true },
+      { type: 'create-account', roleId: 'white-cell', readOnly: false },
     ])
     expect(ids(plan)).toEqual(
       expect.arrayContaining(['room:blue-hq', 'node:game-setup', 'grant-room:blue-hq']),
@@ -80,10 +81,11 @@ describe('first publish onto an empty server', () => {
     }
   })
 
-  it('gives umpires publish on objectives and leaves open nodes without affiliations', () => {
+  it('gives White Force writers publish on objectives, its observers read, and leaves open nodes without affiliations', () => {
     const objectives = step(plan, 'grant-node:objectives:red').action
     const changes = objectives.type === 'node-access' ? objectives.changes : []
-    expect(changes).toContainEqual({ roleId: 'umpire-1', access: 'publish' })
+    expect(changes).toContainEqual({ roleId: 'white-cell', access: 'publish' })
+    expect(changes).toContainEqual({ roleId: 'white-observer', access: 'read' })
     expect(changes).toContainEqual({ roleId: 'red-co', access: 'read' })
     expect(ids(plan)).not.toContain('grant-node:game-setup')
     expect(ids(plan)).not.toContain('grant-node:assets:game-logo')
@@ -92,7 +94,10 @@ describe('first publish onto an empty server', () => {
 
 describe('idempotency (ADM-10)', () => {
   it('plans nothing for a server that already matches', () => {
-    const plan = planPublish(sampleDesign(), publishedView(sampleDesign()))
+    const plan = planPublish(
+      sampleDesignWithWhiteCell(),
+      publishedView(sampleDesignWithWhiteCell()),
+    )
     expect(plan.steps).toEqual([])
     expect(plan.designVersion).toBeUndefined()
     expect(plan.vault).toBe('none')
@@ -100,47 +105,47 @@ describe('idempotency (ADM-10)', () => {
   })
 
   it('compares documents by content, not key order', () => {
-    const view = withNode(publishedView(sampleDesign()), 'forces:blue', (n) => ({
+    const view = withNode(publishedView(sampleDesignWithWhiteCell()), 'forces:blue', (n) => ({
       ...n,
       items: [
         {
           id: 'current',
-          payload: JSON.stringify({ ...sampleDesign().forces[0] }),
+          payload: JSON.stringify({ ...sampleDesignWithWhiteCell().forces[0] }),
           publisher: undefined,
         },
       ],
     }))
     const reordered = withNode(view, 'forces:blue', (n) => {
-      const doc = sampleDesign().forces[0]!
+      const doc = sampleDesignWithWhiteCell().forces[0]!
       const shuffled = Object.fromEntries(Object.entries(doc).reverse())
       return {
         ...n,
         items: [{ id: 'current', payload: JSON.stringify(shuffled), publisher: undefined }],
       }
     })
-    expect(planPublish(sampleDesign(), reordered).steps).toEqual([])
+    expect(planPublish(sampleDesignWithWhiteCell(), reordered).steps).toEqual([])
   })
 
   it('ignores a draft designVersion that differs from the published one', () => {
     const design = edit((d) => ({ ...d, game: { ...d.game, designVersion: 7 } }))
-    expect(planPublish(design, publishedView(sampleDesign())).steps).toEqual([])
+    expect(planPublish(design, publishedView(sampleDesignWithWhiteCell())).steps).toEqual([])
   })
 
-  it('does not touch umpires’ objectives items or announcements', () => {
+  it('does not touch White Force editors’ objectives items or announcements', () => {
     const view = withNode(
-      withNode(publishedView(sampleDesign()), 'objectives:blue', (n) => ({
+      withNode(publishedView(sampleDesignWithWhiteCell()), 'objectives:blue', (n) => ({
         ...n,
-        items: [...n.items, { id: 'umpire-1', payload: '{"x":1}', publisher: jid('umpire-1') }],
+        items: [...n.items, { id: 'white-cell', payload: '{"x":1}', publisher: jid('white-cell') }],
       })),
       'announcements',
       (n) => ({ ...n, items: [{ id: 'a1', payload: '{}', publisher: jid('admin') }] }),
     )
-    expect(planPublish(sampleDesign(), view).steps).toEqual([])
+    expect(planPublish(sampleDesignWithWhiteCell(), view).steps).toEqual([])
   })
 })
 
 describe('changes', () => {
-  const published = publishedView(sampleDesign())
+  const published = publishedView(sampleDesignWithWhiteCell())
 
   it('a rename changes the room config and documents only, and bumps the version', () => {
     const design = edit((d) => ({
@@ -347,11 +352,11 @@ describe('changes', () => {
   })
 
   it('a role known only from a stray affiliation is deleted', () => {
-    const view = withNode(publishedView(sampleDesign()), 'announcements', (n) => ({
+    const view = withNode(publishedView(sampleDesignWithWhiteCell()), 'announcements', (n) => ({
       ...n,
       affiliations: [...n.affiliations, { jid: jid('ghost'), affiliation: 'member' }],
     }))
-    expect(ids(planPublish(sampleDesign(), view))).toEqual([
+    expect(ids(planPublish(sampleDesignWithWhiteCell(), view))).toEqual([
       'delete-role:ghost',
       'doc:game-setup:current',
     ])
@@ -379,7 +384,7 @@ describe('accounts against the registered list (security review F3)', () => {
 
   it('plans no create, and no reset, for an account that exists but nothing else shows', () => {
     const design = withRole('blue-xo', false)
-    const view = publishedView(sampleDesign())
+    const view = publishedView(sampleDesignWithWhiteCell())
     const plan = planPublish(design, { ...view, registered: [...view.registered, jid('blue-xo')] })
     expect(ids(plan)).not.toContain('account:blue-xo')
     expect(plan.steps.filter((s) => s.action.type === 'reset-password')).toEqual([])
@@ -399,7 +404,7 @@ describe('accounts against the registered list (security review F3)', () => {
 
   it('resets an existing read-only account only as its own destructive, confirmed step', () => {
     const design = withRole('blue-watch', true)
-    const view = publishedView(sampleDesign())
+    const view = publishedView(sampleDesignWithWhiteCell())
     const plan = planPublish(design, {
       ...view,
       registered: [...view.registered, jid('blue-watch')],
@@ -414,8 +419,8 @@ describe('accounts against the registered list (security review F3)', () => {
   })
 
   it('creates an account the documents know but the server does not list', () => {
-    const view = publishedView(sampleDesign())
-    const plan = planPublish(sampleDesign(), {
+    const view = publishedView(sampleDesignWithWhiteCell())
+    const plan = planPublish(sampleDesignWithWhiteCell(), {
       ...view,
       registered: view.registered.filter((j) => j !== jid('red-co')),
     })
@@ -425,21 +430,25 @@ describe('accounts against the registered list (security review F3)', () => {
 
 describe('a publish that did not finish (the marker)', () => {
   it('owes the marker’s version even when nothing else is left, and publishes it once', () => {
-    const view = publishedView(sampleDesign(), {
+    const view = publishedView(sampleDesignWithWhiteCell(), {
       marker: { format: 'wrx1-publish-pending', designVersion: 2, startedAt: '' },
     })
-    const plan = planPublish(sampleDesign(), view)
-    // The observer's voice is re-checked too (documents may lag): see the next test.
-    expect(ids(plan)).toEqual(['read-only-revoke:blue-observer', 'doc:game-setup:current'])
+    const plan = planPublish(sampleDesignWithWhiteCell(), view)
+    // The observers' voice is re-checked too (documents may lag): see the next test.
+    expect(ids(plan)).toEqual([
+      'read-only-revoke:blue-observer',
+      'read-only-revoke:white-observer',
+      'doc:game-setup:current',
+    ])
     expect(plan.designVersion).toBe(2)
   })
 
   it('re-checks read-only members and writers in the vault, since documents may lag', () => {
-    const view = publishedView(sampleDesign(), {
+    const view = publishedView(sampleDesignWithWhiteCell(), {
       marker: { format: 'wrx1-publish-pending', designVersion: 2, startedAt: '' },
       vault: { exists: true, roles: ['blue-observer', 'red-co'] },
     })
-    const plan = planPublish(sampleDesign(), view)
+    const plan = planPublish(sampleDesignWithWhiteCell(), view)
     expect(step(plan, 'read-only-revoke:blue-observer').action).toMatchObject({
       roomIds: ['blue-hq'],
     })
@@ -449,16 +458,16 @@ describe('a publish that did not finish (the marker)', () => {
   })
 
   it('ignores a marker the published version has passed', () => {
-    const view = publishedView(sampleDesign(), {
+    const view = publishedView(sampleDesignWithWhiteCell(), {
       marker: { format: 'wrx1-publish-pending', designVersion: 1, startedAt: '' },
     })
-    expect(planPublish(sampleDesign(), view).steps).toEqual([])
+    expect(planPublish(sampleDesignWithWhiteCell(), view).steps).toEqual([])
   })
 })
 
 describe('reading the published design', () => {
   it('ignores documents that do not parse (NFR-5)', () => {
-    const view = withNode(publishedView(sampleDesign()), 'roles:red-co', (n) => ({
+    const view = withNode(publishedView(sampleDesignWithWhiteCell()), 'roles:red-co', (n) => ({
       ...n,
       items: [{ id: 'current', payload: '{not json', publisher: undefined }],
     }))
@@ -468,7 +477,7 @@ describe('reading the published design', () => {
 
 describe('reset (ADM-15)', () => {
   it('deletes every role, room and node, with game-setup last', () => {
-    const plan = planReset(publishedView(sampleDesign()), {
+    const plan = planReset(publishedView(sampleDesignWithWhiteCell()), {
       messageCounts: new Map([
         ['blue-hq', 1],
         ['red-hq', 0],
@@ -476,7 +485,7 @@ describe('reset (ADM-15)', () => {
       ]),
     })
     expect(plan.kind).toBe('reset')
-    expect(plan.steps.filter((s) => s.action.type === 'delete-role')).toHaveLength(4)
+    expect(plan.steps.filter((s) => s.action.type === 'delete-role')).toHaveLength(5)
     expect(plan.steps.filter((s) => s.action.type === 'destroy-room')).toHaveLength(3)
     expect(ids(plan).at(-1)).toBe('delete-node:game-setup')
     expect(plan.steps.every((s) => s.risk.destructive)).toBe(true)

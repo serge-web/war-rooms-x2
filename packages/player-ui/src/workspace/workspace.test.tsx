@@ -37,7 +37,7 @@ const KEY = (role: string) => layoutKey({ server: 'wrx.test', role, designVersio
 
 async function mount(
   props: WorkspaceProps = {},
-  { roleId = 'umpire-1', panes = 1 }: { roleId?: string; panes?: number } = {},
+  { roleId = 'white-1', panes = 1 }: { roleId?: string; panes?: number } = {},
 ): Promise<Harness & { rerender: (p: WorkspaceProps) => void; unmount: () => void }> {
   const h = harness({ roleId })
   const ui = (p: WorkspaceProps): ReactNode => (
@@ -161,7 +161,7 @@ describe('Workspace', () => {
     fireEvent.keyDown(tab('blue-hq'), { key: 'ArrowRight', altKey: true, shiftKey: true })
     await act(() => flush())
     expect(columns()).toEqual([['red-hq', 'blue-hq'], ['negotiation']])
-    const saved = storage.entries.get(KEY('umpire-1'))
+    const saved = storage.entries.get(KEY('white-1'))
     expect(saved).toBeDefined()
     expect(saved).not.toContain('wrx-')
     first.unmount()
@@ -179,12 +179,12 @@ describe('Workspace', () => {
       h.publish('game-setup', game(2))
     })
     await act(() => flush())
-    const v2 = layoutKey({ server: 'wrx.test', role: 'umpire-1', designVersion: 2 })
-    expect(storage.entries.get(v2)).toBe(storage.entries.get(KEY('umpire-1')))
+    const v2 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 2 })
+    expect(storage.entries.get(v2)).toBe(storage.entries.get(KEY('white-1')))
     expect(columns()).toEqual([['blue-hq', 'red-hq'], ['negotiation']])
 
     // Version 3 has a saved layout of its own: it replaces the one on screen.
-    const v3 = layoutKey({ server: 'wrx.test', role: 'umpire-1', designVersion: 3 })
+    const v3 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 3 })
     storage.save(
       v3,
       JSON.stringify({
@@ -220,7 +220,7 @@ describe('Workspace', () => {
         ],
       },
     })
-    const storage: LayoutStorage = memoryLayoutStorage([[KEY('umpire-1'), saved]])
+    const storage: LayoutStorage = memoryLayoutStorage([[KEY('white-1'), saved]])
     await mount({ storage })
     expect(columns()).toEqual([
       ['negotiation', 'Online'],
@@ -239,7 +239,7 @@ describe('Workspace', () => {
     await act(() => flush())
     expect(columns()).toEqual([['blue-hq'], ['red-hq'], ['negotiation']])
     expect(screen.getByRole('status').textContent).toBe('Layout reset.')
-    const saved = storage.entries.get(KEY('umpire-1')) ?? ''
+    const saved = storage.entries.get(KEY('white-1')) ?? ''
     expect(JSON.parse(saved)).toMatchObject({ layout: { children: [{}, {}, {}] } })
   })
 

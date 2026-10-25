@@ -1,18 +1,19 @@
 // The publish scenario (WP 2.3), run against the mock (src/publish/mock.publish.test.ts) and
 // against ejabberd (ejabberd/publish.ejabberd.test.ts). Through the real planner and executor:
 //
-// 1. publish `sampleDesign()` on a clean server; check the effects as players (C01 style);
+// 1. publish `sampleDesignWithWhiteCell()` on a clean server; check the effects as players
+//    (C01 style);
 // 2. publishing it again plans nothing (ADM-10);
 // 3. with players online, publish a change: Blue CO moves to Red (R-D), Red CO is deleted
 //    (R-E), the negotiation room is destroyed with its count confirmed (R-F), a joint room is
-//    added (Blue Observer read-only there, R-B), and the Lead Umpire becomes an observer (write
-//    to read in every room). Check the plan's order and warnings, then the effects;
+//    added (Blue Observer read-only there, R-B), and the White Cell becomes an observer (write
+//    to read in every room, and from publisher to reader of objectives, F5). Check the plan's order and warnings, then the effects;
 // 4. a publish that fails part-way stops, reports what ran, and a re-run completes it with the
 //    same design version (ADM-11, §3 rule 8);
 // 5. a per-role password reset keeps the vault in step (ADM-26);
 // 6. reset removes everything (ADM-15).
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -70,7 +71,7 @@ function errorOf(
 
 /** The changed design of step 3. */
 export function publishChangedDesign(): DesignFile {
-  const base = sampleDesign()
+  const base = sampleDesignWithWhiteCell()
   return {
     ...base,
     roles: base.roles
@@ -78,7 +79,7 @@ export function publishChangedDesign(): DesignFile {
       .map((r) =>
         r.id === 'blue-co'
           ? { ...r, forceId: 'red', order: 0 }
-          : r.id === 'umpire-1'
+          : r.id === 'white-cell'
             ? { ...r, isObserver: true }
             : r,
       ),
@@ -213,7 +214,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         login: { transport: backend.transport, endpoint: backend.endpoint },
       })
       // Leftovers from the admin-ops scenario on the same server use these ids too.
-      for (const design of [sampleDesign(), opsChangedDesign(), thirdDesign()]) {
+      for (const design of [sampleDesignWithWhiteCell(), opsChangedDesign(), thirdDesign()]) {
         for (const role of design.roles)
           await theOps().deleteRole(role.id, { rooms: [], nodes: [] })
       }
@@ -234,10 +235,10 @@ export function definePublishIntegration(backend: PublishBackend): void {
       await admin?.disconnect()
     }, 300_000)
 
-    describe('1. first publish of sampleDesign()', () => {
+    describe('1. first publish of sampleDesignWithWhiteCell()', () => {
       let first: PublishPlan | undefined
       beforeAll(async () => {
-        first = await plan(sampleDesign())
+        first = await plan(sampleDesignWithWhiteCell())
         const result = await apply(first)
         if (!result.ok) throw new Error(`first publish: ${result.failed?.error.message}`)
         await closeAll()
@@ -260,15 +261,16 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(first?.steps.map((s) => s.id)).toContain('doc:objectives:blue:admin')
       })
 
-      it('every password is random and only the observer’s is in the vault (NFR-6, ADM-37)', () => {
+      it('every password is random and only the observers’ are in the vault (NFR-6, ADM-37)', () => {
         expect(book.list().map((c) => c.roleId)).toEqual([
           'blue-co',
           'blue-observer',
           'red-co',
-          'umpire-1',
+          'white-cell',
+          'white-observer',
         ])
         for (const c of book.list()) expect(c.password).toMatch(/^[a-z2-9]{4}(-[a-z2-9]{4}){3}$/)
-        expect(vault?.roles()).toEqual(['blue-observer'])
+        expect(vault?.roles()).toEqual(['blue-observer', 'white-observer'])
       })
 
       it('rooms have the NFR-3 defaults; writers post, the observer cannot, outsiders cannot join', async () => {
@@ -285,7 +287,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
           role: 'participant',
           posted: 'ok',
         })
-        expect(await postResult('umpire-1', 'red-hq')).toMatchObject({
+        expect(await postResult('white-cell', 'red-hq')).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
@@ -303,7 +305,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('publishing the same design again plans nothing (ADM-10)', async () => {
-        const again = await plan(sampleDesign())
+        const again = await plan(sampleDesignWithWhiteCell())
         expect(again.steps).toEqual([])
         expect(again.designVersion).toBeUndefined()
       })
@@ -347,7 +349,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
           messageCount: posted,
         })
         const resync = warnings.filter((w) => w.kind === 'resync').map((w) => w.id)
-        expect(resync).toEqual(expect.arrayContaining(['blue-co', 'umpire-1']))
+        expect(resync).toEqual(expect.arrayContaining(['blue-co', 'white-cell']))
       })
 
       it('orders grants before revokes, read-only before documents, removals after, version last', () => {
@@ -360,7 +362,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(at('grant-room:red-hq')).toBeLessThan(at('revoke-room:blue-hq'))
         expect(at('grant-node:objectives:red')).toBeLessThan(at('revoke-node:objectives:blue'))
         expect(at('read-only-grant:blue-observer')).toBeLessThan(at('doc:rooms:joint:current'))
-        expect(at('read-only-revoke:umpire-1')).toBeLessThan(at('doc:roles:umpire-1:current'))
+        expect(at('read-only-revoke:white-cell')).toBeLessThan(at('doc:roles:white-cell:current'))
         expect(at('room:joint')).toBeLessThan(at('read-only-grant:blue-observer'))
         expect(at('doc:rooms:joint:current')).toBeLessThan(at('delete-role:red-co'))
         expect(at('delete-role:red-co')).toBeLessThan(at('destroy-room:negotiation'))
@@ -396,10 +398,16 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the new observer is read-only everywhere; the old one is read-only in the new room (R-B)', async () => {
-        await expectReadOnly('umpire-1', 'blue-hq')
-        await expectReadOnly('umpire-1', 'joint')
+        await expectReadOnly('white-cell', 'blue-hq')
+        await expectReadOnly('white-cell', 'joint')
         await expectReadOnly('blue-observer', 'joint')
-        expect(vault?.roles()).toEqual(['blue-observer', 'umpire-1'])
+        expect(vault?.roles()).toEqual(['blue-observer', 'white-cell', 'white-observer'])
+        // F5: as an observer, White Cell keeps reading objectives but no longer publishes them.
+        const cell = await login('white-cell')
+        expect(must(await cell.pubsub.getItems('objectives:blue'), 'still reads')).toHaveLength(1)
+        expect(
+          errorOf(await cell.pubsub.publish('objectives:blue', 'white-cell', '{}'))?.condition,
+        ).toBe('forbidden')
         await sleep(QUIET_MS / 4)
       })
 

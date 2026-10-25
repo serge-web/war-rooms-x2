@@ -1,13 +1,13 @@
 // The admin-ops integration scenario, run against the mock (src/mock.integration.test.ts) and
-// against ejabberd (ejabberd/admin-ops.ejabberd.test.ts). It provisions `sampleDesign()` on a
-// clean server through AdminOps, checks each rule by its effect as C01 does (logging in as the
+// against ejabberd (ejabberd/admin-ops.ejabberd.test.ts). It provisions
+// `sampleDesignWithWhiteCell()` on a clean server through AdminOps, checks each rule by its effect as C01 does (logging in as the
 // players and trying), then provisions a changed design and checks again.
 //
 // The changed design: Blue CO moves to Red (R-D), Red CO is deleted (R-E), the negotiation room
 // is destroyed (R-F), a new joint room makes the observer read-only there (R-B), and a new role
 // gets a per-room read-only entry (§3 rule 5).
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { sampleDesign } from '../../schemas/src/fixtures.ts'
+import { sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
 import type { DesignFile } from '@wrx/schemas'
 import type {
   Endpoint,
@@ -77,7 +77,7 @@ function record<E>(subscribe: (listener: (event: E) => void) => Unsubscribe): {
 
 /** The second design: what changes is listed at the top of this file. */
 export function changedDesign(): DesignFile {
-  const base = sampleDesign()
+  const base = sampleDesignWithWhiteCell()
   return {
     ...base,
     game: { ...base.game, designVersion: 2 },
@@ -126,7 +126,7 @@ export function changedDesign(): DesignFile {
 
 export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
   describe(`admin-ops integration (${backend.name})`, () => {
-    const first = sampleDesign()
+    const first = sampleDesignWithWhiteCell()
     const second = changedDesign()
     const run = Math.random().toString(36).slice(2, 8)
     const passwords = new Map<string, string>()
@@ -218,7 +218,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
       await admin?.disconnect()
     }, 300_000)
 
-    describe('first provision of sampleDesign()', () => {
+    describe('first provision of sampleDesignWithWhiteCell()', () => {
       beforeAll(async () => {
         await provision(theOps(), first, undefined, passwordOf)
         await closeAll()
@@ -264,7 +264,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           role: 'participant',
           posted: 'ok',
         })
-        expect(await postResult('umpire-1', 'red-hq')).toMatchObject({
+        expect(await postResult('white-cell', 'red-hq')).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
@@ -272,20 +272,29 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(outsider.joined?.condition).toBe('registration-required')
       })
 
-      it('documents are readable by their readers only, and objectives take an umpire item (§3 rule 14)', async () => {
+      it('documents are readable by their readers only, and objectives take a White Force item (§3 rule 14)', async () => {
         const blue = await login('blue-co')
         const red = await login('red-co')
-        const umpire = await login('umpire-1')
+        const cell = await login('white-cell')
         expect(must(await blue.pubsub.getItems('objectives:blue'), 'blue reads').length).toBe(1)
         expect(errorOf(await red.pubsub.getItems('objectives:blue'))?.condition).toBe('not-allowed')
         must(
-          await umpire.pubsub.publish('objectives:blue', 'umpire-1', JSON.stringify({ x: 1 })),
-          'umpire publishes its own item',
+          await cell.pubsub.publish('objectives:blue', 'white-cell', JSON.stringify({ x: 1 })),
+          'White Cell publishes its own item',
         )
         expect(must(await blue.pubsub.getItems('objectives:blue'), 'two items').length).toBe(2)
         expect(errorOf(await blue.pubsub.publish('objectives:blue', 'x', '{}'))?.condition).toBe(
           'forbidden',
         )
+        // F5: a White Force observer reads every force's objectives and publishes none.
+        const observer = await login('white-observer')
+        expect(
+          must(await observer.pubsub.getItems('objectives:red'), 'observer reads').length,
+        ).toBe(1)
+        expect(
+          errorOf(await observer.pubsub.publish('objectives:red', 'white-observer', '{}'))
+            ?.condition,
+        ).toBe('forbidden')
         expect(must(await red.pubsub.getItems('rooms:blue-hq'), 'room doc').length).toBe(1)
       })
 
@@ -437,7 +446,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
 
       it('the observer is read-only in the new room, and still in its old one (R-B)', async () => {
         await expectReadOnly('blue-observer', 'joint', 'blue-co')
-        await expectReadOnly('blue-observer', 'blue-hq', 'umpire-1')
+        await expectReadOnly('blue-observer', 'blue-hq', 'white-cell')
       })
 
       it('a per-room read entry is read-only too (§3 rule 5)', async () => {
@@ -453,7 +462,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         mustOps(await theOps().setPassword('blue-observer', fresh), 'reset')
         passwords.set('blue-observer', fresh)
         mustOps(await theOps().makeReadOnly('blue-observer', ['blue-hq', 'joint']), 're-apply')
-        await expectReadOnly('blue-observer', 'joint', 'umpire-1')
+        await expectReadOnly('blue-observer', 'joint', 'white-cell')
       })
 
       it('the vault refuses a wrong passphrase cleanly and opens with the right one', async () => {
@@ -463,7 +472,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           await ObserverVault.unlock(theOps().session.admin, passphrase),
           'unlock',
         )
-        expect(right.roles()).toEqual(['blue-observer', 'red-liaison'])
+        expect(right.roles()).toEqual(['blue-observer', 'red-liaison', 'white-observer'])
         const stored = must(await theOps().session.admin.getPrivate(VAULT_STORAGE_KEY), 'stored')
         expect(stored).not.toContain(passwordOf('blue-observer'))
       })
@@ -475,7 +484,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           .slice(before)
           .filter((e) => e.state === 'done' && e.step !== 'publish')
         expect(changes).toEqual([])
-        await expectReadOnly('blue-observer', 'blue-hq', 'umpire-1')
+        await expectReadOnly('blue-observer', 'blue-hq', 'white-cell')
       })
     })
   })

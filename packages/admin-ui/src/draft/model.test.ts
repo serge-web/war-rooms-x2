@@ -95,7 +95,7 @@ describe('validateDraft', () => {
     expect(result.issues).toContainEqual({
       severity: 'warning',
       path: 'forces',
-      message: '3 umpire forces; at most one is expected (ADM-4)',
+      message: '3 forces carry the umpire flag; exactly one is expected (ADM-4)',
     })
     expect(result.at('rooms[3]')).toEqual([
       { severity: 'error', path: 'rooms[3].participants[0]', message: 'unknown role "ghost"' },
@@ -277,7 +277,7 @@ describe('createDraftStore', () => {
       store.commit(addForce(store.getSnapshot().draft, 'Blue').draft)
       expect([...storage.items.keys()]).toEqual(['wrx1-mock:/demo/:admin-draft'])
       const again = createBrowserDraftStore('wrx1-mock:/demo/:admin-draft')
-      expect(again.getSnapshot().draft.design.forces.map((f) => f.id)).toEqual(['blue'])
+      expect(again.getSnapshot().draft.design.forces.map((f) => f.id)).toEqual(['white', 'blue'])
     } finally {
       vi.unstubAllGlobals()
     }
@@ -289,7 +289,7 @@ describe('createDraftStore', () => {
     store.commit(addForce(store.getSnapshot().draft, 'Blue').draft)
     store.reset()
     expect(persistence.load()).toBeUndefined()
-    expect(store.getSnapshot().draft.design.forces).toEqual([])
+    expect(store.getSnapshot().draft.design.forces.map((f) => f.id)).toEqual(['white'])
     const given = draftFromDesign(sampleDesign())
     store.reset(given)
     expect(store.getSnapshot().draft).toBe(given)

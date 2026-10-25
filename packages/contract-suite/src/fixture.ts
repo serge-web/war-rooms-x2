@@ -1,5 +1,6 @@
-// The test game the suite provisions for each run, after spike SPIKE-BRIEF §4: two forces and an
-// umpire force, one observer, three rooms and the game's PubSub nodes. Every name carries a
+// The test game the suite provisions for each run, after spike SPIKE-BRIEF §4: two forces and the
+// White Force (umpire flag) with a writer and an observer, a Blue observer, three rooms and the
+// game's PubSub nodes. Every name carries a
 // per-run tag, so runs never meet each other's state and a failed run leaves nothing that a later
 // run reads. Provisioning itself goes through the admin API under test (spike S4).
 import type { NodeConfig, RoomConfig, Session } from '@wrx/transport'
@@ -41,7 +42,10 @@ export interface Fixture {
     readonly blueCo: string
     readonly blueObs: string
     readonly redCo: string
+    /** A White Force role that is not an observer: publishes every force's objectives. */
     readonly umpire: string
+    /** A White Force observer: reads every force's objectives, publishes none (F5). */
+    readonly whiteObs: string
   }
   /** Room localparts; `Ctx.room()` gives the JID. */
   readonly rooms: {
@@ -72,6 +76,7 @@ export function makeFixture(domain: string): Fixture {
       blueObs: `${tag}-blue-obs`,
       redCo: `${tag}-red-co`,
       umpire: `${tag}-umpire-1`,
+      whiteObs: `${tag}-white-obs`,
     },
     rooms: {
       blueHq: `${tag}-blue-hq`,
@@ -95,8 +100,8 @@ export const bare = (fx: Fixture, user: string): string => `${user}@${fx.domain}
 
 /** Who belongs where, from the fixture's point of view. */
 export function plan(fx: Fixture) {
-  const { blueCo, blueObs, redCo, umpire } = fx.users
-  const everyRole = [blueCo, blueObs, redCo, umpire]
+  const { blueCo, blueObs, redCo, umpire, whiteObs } = fx.users
+  const everyRole = [blueCo, blueObs, redCo, umpire, whiteObs]
   return {
     rooms: [
       { room: fx.rooms.blueHq, members: [blueCo, blueObs, umpire] },
@@ -113,13 +118,13 @@ export function plan(fx: Fixture) {
       {
         node: fx.nodes.objectivesBlue,
         config: WHITELIST_NODE,
-        readers: [blueCo, blueObs],
+        readers: [blueCo, blueObs, whiteObs],
         publishers: [umpire],
       },
       {
         node: fx.nodes.objectivesRed,
         config: WHITELIST_NODE,
-        readers: [redCo],
+        readers: [redCo, whiteObs],
         publishers: [umpire],
       },
     ],

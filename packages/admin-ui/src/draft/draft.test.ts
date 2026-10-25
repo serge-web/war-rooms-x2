@@ -33,6 +33,7 @@ import {
   updateGame,
   updateRole,
   updateRoom,
+  WHITE_FORCE_ID,
 } from './draft.ts'
 import type { Draft } from './draft.ts'
 import { validateDraft } from './validate.ts'
@@ -66,11 +67,21 @@ function orders(design: DesignFile) {
 }
 
 describe('createDraft', () => {
-  it('starts an empty, valid design', () => {
+  it('starts a valid design with the White Force only (ADM-4)', () => {
     const draft = createDraft({ name: 'Exercise', now: NOW })
     expect(draft.design.game.name).toBe('Exercise')
     expect(draft.design.exportedAt).toBe(NOW.toISOString())
-    expect(draft.design.forces).toEqual([])
+    expect(draft.design.forces).toEqual([
+      {
+        schemaVersion: 1,
+        id: WHITE_FORCE_ID,
+        name: 'White',
+        colour: DEFAULT_FORCE_COLOUR,
+        isUmpire: true,
+        order: 0,
+      },
+    ])
+    expect(draft.design.roles).toEqual([])
     expect(draft.meta).toEqual({
       retiredIds: { forces: [], roles: [], rooms: [] },
       publishedRoleIds: [],
@@ -133,12 +144,12 @@ describe('generated ids (§3 rule 1)', () => {
   it('makes slugs from names', () => {
     const { draft, id } = addForce(createDraft(), 'Blue Force — Écosse')
     expect(id).toBe('blue-force-ecosse')
-    expect(draft.design.forces[0]).toMatchObject({
+    expect(draft.design.forces[1]).toMatchObject({
       id,
       name: 'Blue Force — Écosse',
       colour: DEFAULT_FORCE_COLOUR,
       isUmpire: false,
-      order: 0,
+      order: 1,
     })
   })
 
@@ -230,6 +241,17 @@ describe('forces', () => {
     expect(draft.design.forces[0]).not.toHaveProperty('iconAssetId')
   })
 
+  it('keeps exactly one umpire flag: setting it clears it elsewhere (ADM-4)', () => {
+    const draft = updateForce(sample(), 'red', { isUmpire: true })
+    expect(draft.design.forces.filter((f) => f.isUmpire).map((f) => f.id)).toEqual(['red'])
+    // Clearing it leaves none, which validation warns about.
+    const none = updateForce(draft, 'red', { isUmpire: false })
+    expect(none.design.forces.some((f) => f.isUmpire)).toBe(false)
+    expect(validateDraft(none.design).issues).toContainEqual(
+      expect.objectContaining({ severity: 'warning', path: 'forces' }),
+    )
+  })
+
   it('refuses to delete a force that has roles', () => {
     const result = deleteForce(sample(), 'blue')
     expect(result).toEqual({
@@ -243,7 +265,7 @@ describe('forces', () => {
   it('deletes a force with its objectives and participant entries', () => {
     let draft = deleteRole(sample(), 'red-co')
     draft = ok(deleteForce(draft, 'red'))
-    expect(draft.design.forces.map((f) => f.id)).toEqual(['blue', 'umpire'])
+    expect(draft.design.forces.map((f) => f.id)).toEqual(['blue', 'white'])
     expect(draft.design.forces.map((f) => f.order)).toEqual([0, 1])
     expect(objectivesOf(draft.design, 'red')).toBeUndefined()
     expect(draft.design.rooms.find((r) => r.id === 'red-hq')?.participants).toEqual([])
@@ -252,12 +274,12 @@ describe('forces', () => {
   })
 
   it('reorders and keeps orders 0…n-1 (§3 rule 7)', () => {
-    let draft = moveForce(sample(), 'umpire', 0)
-    expect(orders(draft.design).forces).toEqual(['umpire:0', 'blue:1', 'red:2'])
-    draft = moveForce(draft, 'umpire', 99)
-    expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'umpire:2'])
+    let draft = moveForce(sample(), 'white', 0)
+    expect(orders(draft.design).forces).toEqual(['white:0', 'blue:1', 'red:2'])
+    draft = moveForce(draft, 'white', 99)
+    expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'white:2'])
     draft = moveForce(draft, 'blue', -5)
-    expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'umpire:2'])
+    expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'white:2'])
     expect(moveForce(draft, 'ghost', 0).design.forces).toEqual(draft.design.forces)
   })
 
@@ -267,7 +289,7 @@ describe('forces', () => {
       'red-co',
       'blue-co',
       'blue-observer',
-      'umpire-1',
+      'white-observer',
     ])
     expect(draft.design.roles.map((r) => r.id)).toEqual(sortedRoles(draft.design).map((r) => r.id))
   })
@@ -283,8 +305,8 @@ describe('objectives (ADM-23)', () => {
       updatedAt: NOW.toISOString(),
     })
     expect(draft.design.objectives.filter((o) => o.forceId === 'blue')).toHaveLength(1)
-    const umpire = setObjectives(draft, 'umpire', 'Watch')
-    expect(objectivesOf(umpire.design, 'umpire')?.markdown).toBe('Watch')
+    const white = setObjectives(draft, 'white', 'Watch')
+    expect(objectivesOf(white.design, 'white')?.markdown).toBe('Watch')
   })
 })
 
@@ -305,7 +327,7 @@ describe('roles', () => {
       'blue/blue-observer:1',
       'blue/blue-logistics:2',
       'red/red-co:0',
-      'umpire/umpire-1:0',
+      'white/white-observer:0',
     ])
   })
 
@@ -326,7 +348,7 @@ describe('roles', () => {
       'blue/blue-observer:0',
       'red/blue-co:0',
       'red/red-co:1',
-      'umpire/umpire-1:0',
+      'white/white-observer:0',
     ])
     // Its room entries still name it.
     expect(draft.design.rooms.find((r) => r.id === 'negotiation')?.participants).toContainEqual({
@@ -496,8 +518,8 @@ describe('normalise', () => {
     }
     const tidy = normalise(messy)
     expect(orders(tidy)).toEqual({
-      forces: ['umpire:0', 'blue:1', 'red:2'],
-      roles: ['umpire/umpire-1:0', 'blue/blue-co:0', 'blue/blue-observer:1', 'red/red-co:0'],
+      forces: ['white:0', 'blue:1', 'red:2'],
+      roles: ['white/white-observer:0', 'blue/blue-co:0', 'blue/blue-observer:1', 'red/red-co:0'],
       rooms: ['blue-hq:0', 'negotiation:1', 'red-hq:2'],
     })
   })

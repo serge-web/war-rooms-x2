@@ -69,7 +69,7 @@ describe('hooks under StrictMode (ARC-3)', () => {
       { wrapper: strictWrapper(h.store) },
     )
     expect(result.current.game.data?.name).toBe('Exercise Northern Gate')
-    expect(result.current.forces.data.map((f) => f.id)).toEqual(['blue', 'red', 'umpire'])
+    expect(result.current.forces.data.map((f) => f.id)).toEqual(['blue', 'red', 'white'])
     expect(result.current.roles.status).toBe('ready')
     expect(result.current.rooms.data).toHaveLength(3)
     expect(result.current.me.data.rooms.map((r) => r.room.id)).toEqual(['blue-hq', 'negotiation'])
@@ -169,7 +169,7 @@ describe('hooks under StrictMode (ARC-3)', () => {
   it('computes effective access live, and for a design being edited (ADM-9)', async () => {
     const h = await ready()
     const { result } = renderHook(() => useEffectiveAccess(), { wrapper: strictWrapper(h.store) })
-    expect(result.current.data.cells.get('red-hq')?.get('umpire-1')?.access).toBe('write')
+    expect(result.current.data.cells.get('red-hq')?.get('white-1')?.access).toBe('write')
     const design = {
       forces: [force('blue')],
       roles: [role('blue-co', 'blue')],

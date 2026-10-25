@@ -43,18 +43,22 @@ test(
     await page.goto('./?seed=empty')
     await expect(page.getByRole('heading', { level: 1, name: 'New exercise' })).toBeVisible()
 
+    // A new design starts with the White Force, which carries the umpire flag (ADM-4).
     await open(page, 'Forces')
+    await expect(page.getByRole('list', { name: 'Forces' }).getByRole('listitem')).toHaveCount(1)
+    await expect(page.getByLabel('Umpire flag (White Force)')).toBeChecked()
     await addForce(page, 'Blue')
     await page.getByLabel('Colour', { exact: true }).fill('#1d4ed8')
-    await addForce(page, 'Umpire')
-    await page.getByLabel('Umpire force').check()
+    await expect(page.getByLabel('Umpire flag (White Force)')).not.toBeChecked()
     await expect(page.getByRole('list', { name: 'Forces' }).getByRole('listitem')).toHaveCount(2)
 
     await open(page, 'Roles')
     await addRole(page, 'Blue CO', 'Blue')
     await addRole(page, 'Blue Watcher', 'Blue')
     await page.getByLabel('Observer').check()
-    await addRole(page, 'Chief Umpire', 'Umpire')
+    await addRole(page, 'White Cell', 'White')
+    await addRole(page, 'Mediator', 'White')
+    await page.getByLabel('Observer').check()
     await expect(
       page.getByRole('list', { name: 'Roles in Blue' }).getByRole('listitem'),
     ).toHaveCount(2)
@@ -72,15 +76,17 @@ test(
     const table = page.getByRole('table', { name: /Effective access/ })
     expect(await access(table, 'Blue HQ', 'Blue CO')).toBe('write')
     expect(await access(table, 'Blue HQ', 'Blue Watcher')).toBe('read')
-    expect(await access(table, 'Blue HQ', 'Chief Umpire')).toBe('write')
+    expect(await access(table, 'Blue HQ', 'White Cell')).toBe('write')
+    // A White Force observer with no assigned rooms reads every room (§3 rule 4).
+    expect(await access(table, 'Blue HQ', 'Mediator')).toBe('read')
     await expect(page.getByText('No problems: the design can be published.')).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('access-matrix.png'), fullPage: true })
 
     // The ids were generated from the names, and the draft is kept across a reload.
     await page.reload()
     await open(page, 'Roles')
-    await page.getByRole('button', { name: 'Chief Umpire', exact: true }).click()
-    await expect(page.getByLabel('Login id')).toHaveValue('chief-umpire')
+    await page.getByRole('button', { name: 'White Cell', exact: true }).click()
+    await expect(page.getByLabel('Login id')).toHaveValue('white-cell')
     const stored = await page.evaluate(() => Object.keys(localStorage))
     expect(stored).toEqual(['wrx1-mock:/:admin-draft'])
   },
@@ -90,7 +96,7 @@ test('reorders forces with the keyboard', { tag: '@screenshot' }, async ({ page 
   await page.goto('./')
   await open(page, 'Forces')
   const list = page.getByRole('list', { name: 'Forces' })
-  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Blue', 'Red', 'Umpire'])
+  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Blue', 'Red', 'White'])
   // Wait for each step to register before the next key, as a keyboard user would: dnd-kit
   // measures the list between steps, and CI runners can be slower than the keys. The pick-up
   // shows as the handle being pressed; its announcement is replaced at once by a "moved" one.
@@ -105,7 +111,7 @@ test('reorders forces with the keyboard', { tag: '@screenshot' }, async ({ page 
   await announced('Blue moved to position 3 of 3.')
   await page.screenshot({ path: testInfo.outputPath('reorder-keyboard.png') })
   await page.keyboard.press('Space')
-  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'Umpire', 'Blue'])
+  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'White', 'Blue'])
   await expect(page.getByText('Blue dropped in position 3 of 3.')).toBeAttached()
 
   // Escape cancels.
@@ -117,7 +123,7 @@ test('reorders forces with the keyboard', { tag: '@screenshot' }, async ({ page 
   await announced('Red moved to position 2 of 3.')
   await page.keyboard.press('Escape')
   await announced('Moving Red cancelled.')
-  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'Umpire', 'Blue'])
+  await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'White', 'Blue'])
 })
 
 test('reorders rooms by dragging', async ({ page }) => {

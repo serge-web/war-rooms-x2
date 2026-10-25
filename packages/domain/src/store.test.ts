@@ -14,12 +14,13 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(h.store.forces().status).toBe('loading')
     expect(await h.store.ready()).toEqual({ state: 'ready' })
     expect(h.store.gameSetup().data?.name).toBe('Exercise Northern Gate')
-    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'red', 'umpire'])
+    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'red', 'white'])
     expect(h.store.roles().data.map((r) => r.id)).toEqual([
       'blue-co',
       'red-co',
-      'umpire-1',
+      'white-1',
       'blue-observer',
+      'white-observer',
     ])
     expect(h.store.rooms().data.map((r) => r.id)).toEqual(['blue-hq', 'red-hq', 'negotiation'])
     expect(h.store.forces().status).toBe('ready')
@@ -34,8 +35,8 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(h.store.objectives('red').status).toBe('loading')
   })
 
-  it("reads every force's objectives as an umpire or the admin (PLY-35)", async () => {
-    for (const roleId of ['umpire-1', 'admin']) {
+  it("reads every force's objectives in the White Force, observers too, and as the admin (PLY-35)", async () => {
+    for (const roleId of ['white-1', 'white-observer', 'admin']) {
       const h = harness({ roleId })
       await h.store.ready()
       expect(h.store.objectives('red').data?.markdown).toBe('Delay Blue.')
@@ -62,7 +63,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     docs.set('rooms:odd', [{ schemaVersion: 2, id: 'odd' }])
     const h = harness({ docs })
     await h.store.ready()
-    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'umpire'])
+    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'white'])
     expect(h.store.roles().data.map((r) => r.id)).not.toContain('eve')
     expect(h.store.rooms().data.map((r) => r.id)).not.toContain('odd')
     expect(h.warnings.filter((w) => w === 'Ignoring an invalid item')).toHaveLength(4)
@@ -270,7 +271,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     await h.store.ready()
     const matrix = h.store.access().data
     expect(accessOf(matrix, 'blue-hq', 'blue-observer')).toBe('read')
-    expect(accessOf(matrix, 'red-hq', 'umpire-1')).toBe('write')
+    expect(accessOf(matrix, 'red-hq', 'white-1')).toBe('write')
     const me = h.store.me().data
     expect(me).toMatchObject({ isObserver: true, isUmpire: false })
     expect(me.rooms.map((r) => [r.room.id, r.access])).toEqual([['blue-hq', 'read']])
@@ -282,6 +283,30 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
       ['red-hq', 'write'],
       ['negotiation', 'write'],
     ])
+  })
+
+  it('makes the admin the umpire, in the White Force (glossary, D8, SC-5)', async () => {
+    const admin = harness({ roleId: 'admin' })
+    await admin.store.ready()
+    const me = admin.store.me().data
+    expect(me).toMatchObject({ role: undefined, isUmpire: true, canEditObjectives: true })
+    expect(me.force?.id).toBe('white')
+    expect(me.identity.isAdmin).toBe(true)
+  })
+
+  it('reads every room as a White Force observer with no assigned rooms (§3 rule 4)', async () => {
+    const h = harness({ roleId: 'white-observer' })
+    await h.store.ready()
+    const me = h.store.me().data
+    expect(me).toMatchObject({ isObserver: true, isUmpire: true, canEditObjectives: false })
+    expect(me.rooms.map((r) => [r.room.id, r.access])).toEqual([
+      ['blue-hq', 'read'],
+      ['red-hq', 'read'],
+      ['negotiation', 'read'],
+    ])
+    const white = harness({ roleId: 'white-1' })
+    await white.store.ready()
+    expect(white.store.me().data.canEditObjectives).toBe(true)
   })
 })
 
@@ -383,12 +408,12 @@ describe('session store: connection (PLY-2, PLY-50)', () => {
 
 describe('session store: operations', () => {
   it('publishes objectives as an umpire (PLY-35)', async () => {
-    const h = harness({ roleId: 'umpire-1' })
+    const h = harness({ roleId: 'white-1' })
     await h.store.ready()
     expect(await h.store.publishObjectives('red', '1. Hold the line.')).toEqual(ok(undefined))
     const call = h.session.calls.find((c) => c.op === 'publish')
     // Each author has its own item: a publisher cannot overwrite another's (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'umpire-1'])
+    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'white-1'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
       schemaVersion: 1,
       forceId: 'red',
@@ -407,7 +432,7 @@ describe('session store: operations', () => {
     h.session.emitItems({
       node: 'objectives:blue',
       items: [
-        item('umpire-1', 'Umpire edit', '2026-10-24T11:00:00.000Z'),
+        item('white-1', 'Umpire edit', '2026-10-24T11:00:00.000Z'),
         item('admin', 'Admin original', '2026-10-24T10:00:00+00:00'),
       ],
       retracted: [],
@@ -424,13 +449,20 @@ describe('session store: operations', () => {
     expect(h.store.objectives('blue').data?.markdown).toBe('Admin revision')
   })
 
-  it('refuses objectives from a player, and invalid ones', async () => {
+  it('refuses objectives from a player, a White Force observer, and invalid ones', async () => {
     const h = harness()
     await h.store.ready()
     expect(await h.store.publishObjectives('blue', 'x')).toMatchObject({
       ok: false,
       error: { code: 'not-permitted' },
     })
+    const observer = harness({ roleId: 'white-observer' })
+    await observer.store.ready()
+    expect(await observer.store.publishObjectives('blue', 'x')).toMatchObject({
+      ok: false,
+      error: { code: 'not-permitted' },
+    })
+    expect(observer.session.calls.some((c) => c.op === 'publish')).toBe(false)
     const admin = harness({ roleId: 'admin' })
     await admin.store.ready()
     expect((await admin.store.publishObjectives('Bad Id', 'x')).ok).toBe(false)

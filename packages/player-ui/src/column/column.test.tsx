@@ -160,7 +160,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
       h.publish(
         nodeName.objectives('blue'),
         objectives('blue', 'Hold the bridge.', '2026-10-25T09:00:00.000Z'),
-        'umpire-1',
+        'white-1',
       )
     })
     await act(() => flush())
@@ -169,15 +169,15 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     )
   })
 
-  it('lets an umpire choose any force and publish its objectives with a preview', async () => {
-    const h = await mount('umpire-1')
+  it('lets a White Force role choose any force and publish its objectives with a preview', async () => {
+    const h = await mount('white-1')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
     expect(
       within(choice)
         .getAllByRole('option')
         .map((o) => o.textContent),
-    ).toEqual(['BLUE', 'RED', 'UMPIRE'])
+    ).toEqual(['BLUE', 'RED', 'WHITE'])
     fireEvent.change(choice, { target: { value: 'red' } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
@@ -196,7 +196,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     await act(() => flush())
     const call = h.session.calls.find((c) => c.op === 'publish')
     // One item per author (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'umpire-1'])
+    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'white-1'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
       forceId: 'red',
       markdown: '1. Delay **Blue** until noon.',
@@ -205,7 +205,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
   })
 
   it('keeps the editor open with the reason when publishing fails', async () => {
-    const h = await mount('umpire-1')
+    const h = await mount('white-1')
     h.session.stub('pubsub', 'publish', () => Promise.resolve(err('timeout')))
     fireEvent.click(within(forcePanel()).getByRole('button', { name: /^Edit .* objectives$/ }))
     const dialog = screen.getByRole('dialog')
@@ -216,13 +216,31 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     )
   })
 
-  it('lets the admin in the game view choose a force too, with no force of its own', async () => {
+  it('shows the admin as the umpire in the White Force, choosing and editing any force (SC-5)', async () => {
     await mount('admin')
     const panel = forcePanel()
-    expect(within(panel).getByRole('heading', { name: 'Admin' })).toBeTruthy()
-    expect(within(panel).getByRole('combobox', { name: 'Show objectives for' })).toBeTruthy()
+    expect(within(panel).getByRole('heading', { name: 'Umpire' })).toBeTruthy()
+    expect(panel.dataset.force).toBe('white')
+    const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
+    fireEvent.change(choice, { target: { value: 'blue' } })
+    await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'BLUE objectives' }).textContent).toContain(
       'Secure the crossing.',
     )
+    expect(within(panel).getByRole('button', { name: 'Edit BLUE objectives' })).toBeTruthy()
+  })
+
+  it('lets a White Force observer read any force’s objectives but not edit them (PLY-35, F5)', async () => {
+    const h = await mount('white-observer')
+    const panel = forcePanel()
+    const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
+    fireEvent.change(choice, { target: { value: 'red' } })
+    await act(() => flush())
+    expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
+      'Delay Blue.',
+    )
+    expect(within(panel).queryByRole('button', { name: /Edit/ })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(h.session.calls.some((c) => c.op === 'publish')).toBe(false)
   })
 })

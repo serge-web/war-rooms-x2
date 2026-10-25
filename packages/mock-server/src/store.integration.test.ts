@@ -40,7 +40,7 @@ async function demo() {
       }),
     )
   const admin = await login('admin')
-  const umpire = createSessionStore({ session: await login('umpire-1'), logger: silent })
+  const umpire = createSessionStore({ session: await login('white-observer'), logger: silent })
   await umpire.ready()
   const game = unwrap(await admin.pubsub.getItems('game-setup'))[0]
   if (game === undefined) throw new Error('no game-setup')
@@ -56,7 +56,7 @@ const silent = { debug: () => undefined, warn: () => undefined }
 const roomIds = (store: SessionStore) => store.me().data.rooms.map((r) => r.room.id)
 
 describe('a room node deleted mid-session (PLY-6)', () => {
-  it('leaves the umpire’s rooms at once when the node was created as a publish creates it', async () => {
+  it('leaves the White observer’s rooms at once when the node was created as a publish creates it', async () => {
     const { state, admin, umpire, bumpDesign } = await demo()
     expect(roomIds(umpire)).not.toContain('press')
     // As the publish does: create and configure the node, grant access, publish, bump.
@@ -70,7 +70,7 @@ describe('a room node deleted mid-session (PLY-6)', () => {
     )
     unwrap(
       await admin.pubsub.setAffiliations('rooms:press', [
-        { jid: `umpire-1@${state.domain}`, affiliation: 'member' },
+        { jid: `white-observer@${state.domain}`, affiliation: 'member' },
       ]),
     )
     unwrap(await admin.pubsub.publish('rooms:press', 'current', JSON.stringify(PRESS)))

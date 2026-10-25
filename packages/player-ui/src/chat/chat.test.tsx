@@ -99,6 +99,34 @@ describe('ChatPanel', () => {
     expect(screen.getByText('Start of the room’s history.')).toBeTruthy()
   })
 
+  it('labels the admin’s messages as the umpire, in the White Force, by JID only (SC-5, §3 rule 3)', async () => {
+    const h = await mount({
+      archive: [
+        from('admin', 'The exercise clock starts at 09:00.'),
+        // A nick of "admin" from another server is not the admin.
+        message('blue-hq', {
+          nick: 'admin',
+          from: 'admin@evil.example/x',
+          body: chatBody('I am the umpire'),
+        }),
+      ],
+    })
+    const feed = screen.getByRole('feed')
+    const headers = [...feed.querySelectorAll('.wrx-chat__header')].map((e) => e.textContent)
+    expect(headers[0]).toContain('Umpire')
+    expect(headers[0]).toContain('WHITE')
+    expect(headers[1]).not.toContain('Umpire')
+    const accent = within(feed).getAllByRole('article')[0]?.getAttribute('style') ?? ''
+    expect(accent).toContain('#4b5563')
+    act(() => {
+      h.session.emitOccupant(
+        selfPresence('blue-hq', 'admin', { self: false, jid: `admin@${DOMAIN}/a` }),
+      )
+    })
+    const list = screen.getByRole('list', { name: 'Online in this room' })
+    expect(within(list).getByText('Umpire')).toBeTruthy()
+  })
+
   it('sends with Enter, adds a line with Shift+Enter, and clears once accepted (PLY-44)', async () => {
     const h = await mount()
     act(() => {
@@ -157,7 +185,7 @@ describe('ChatPanel', () => {
     act(() => {
       h.session.emitOccupant(selfPresence('blue-hq', 'blue-co'))
       h.session.emitOccupant(
-        selfPresence('blue-hq', 'umpire-1', { self: false, jid: `umpire-1@${DOMAIN}/a` }),
+        selfPresence('blue-hq', 'white-1', { self: false, jid: `white-1@${DOMAIN}/a` }),
       )
     })
     const list = screen.getByRole('list', { name: 'Online in this room' })
@@ -165,7 +193,7 @@ describe('ChatPanel', () => {
       within(list)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['blue-co (you)', 'umpire-1'])
+    ).toEqual(['blue-co (you)', 'white-1'])
     expect(screen.getByText('Online (2)')).toBeTruthy()
   })
 })
@@ -197,7 +225,7 @@ describe('unread counts (PLY-11)', () => {
     act(() => {
       h.session.emitMessage(from('red-co', 'one'))
       h.session.emitMessage(from('blue-co', 'mine, from another session'))
-      h.session.emitMessage(from('umpire-1', 'two'))
+      h.session.emitMessage(from('white-1', 'two'))
     })
     expect(badge()).toBe('2')
     const newest = h.store.roomView('blue-hq').data?.messages.at(-1)
