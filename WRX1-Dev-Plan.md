@@ -69,6 +69,7 @@ There are 28 work packages. Each is sized for one to three Claude Code PRs, and 
 | 2.8 | Themes: runtime theming and inheritance, assets and SVG sanitising, theme editor | D19, PLY-24, 26, ADM-18–22 | 1.6, 2.2 |
 | 2.9 | Multi-client view, mock user controls, seed scenarios, admin preview-as-role | PLY-16–22, 34, ADM-30–31 | 1.5, 2.5 |
 | 2.10 | Audit and repair; node-name warning | ADM-41–42 | 2.3 |
+| 2.11 | White Force and the admin as umpire; White observers' room visibility | §3 rules 4, 14; D8, D21, ADM-4, PLY-15, PLY-35 | 2.7, 2.10 |
 | **Phase 3 — Acceptance** |  |  |  |
 | 3.1 | Playwright scenarios SC-1 to SC-9 on mock and ejabberd | NFR-17, §12 | Phase 2 |
 | 3.2 | Performance and scale (NFR-11, NFR-12), accessibility audit (NFR-14) | NFR-11–14 | Phase 2 |
@@ -111,6 +112,7 @@ flowchart TB
         wp22["2.2 Design editor"]
         wp23["2.3 Publish and provisioning"]
         wp210["2.10 Audit and repair"]
+        wp211["2.11 White Force and admin umpire"]
         wp24["2.4 Player shell"]
         wp25["2.5 Workspace"]
         wp26["2.6 Chat panel"]
@@ -138,6 +140,7 @@ flowchart TB
     wp13 & wp16 & wp01 --> wp21
     wp16 --> wp22
     wp21 & wp22 --> wp23 --> wp210
+    wp210 & wp27 --> wp211
     wp16 --> wp24
     wp02 & wp24 --> wp25 --> wp26
     wp25 & wp21 --> wp27
@@ -234,6 +237,7 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 2.1 checks that a room exists by listing rooms before any owner request, and the vault covers every read-only role, not only observers | On ejabberd 26.09, asking for a missing room's config creates the room; per-room read-only entries need voice revoked like observers |
 | `AdminApi` gains `registeredUsers()` before 2.10 (XEP-0133 get-registered-users-list), in transport, mock and the contract suite | 2.10 must find accounts with no role. This changes the 1.1 interface, so it is listed for gate G2 |
 | 1.3's private storage holds all keys in one element; a contract test now covers two keys | Found by 2.3: StanzaJS resolved every key's element to the last one defined, so only one key worked per session |
+| 2.11 added at gate G2: the umpire force becomes the White Force, the admin login is the umpire, and White observers are read only, seeing assigned rooms or all rooms | Product-owner clarification of security review finding F5 (an umpire-force observer could edit objectives) |
 | The default web build is mock only; `build:server` makes the real-server build, which loads the XMPP transport lazily | Found by 2.4: previews and the site must hold no real-server code (DOC-12), and StanzaJS's own text trips the bundle scan |
 | `@wrx/ui`'s `ThemeScope` delegates to `@wrx/theme`'s: it keeps partial tokens that inherit from the enclosing scope, and takes the default theme, fonts and derived colours from `@wrx/theme`, as does `ui.css`'s page default | 2.4 and 2.8 were built in parallel, each with its own `ThemeScope` and defaults |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
