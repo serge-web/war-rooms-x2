@@ -1,5 +1,5 @@
-// The multi-client view and the mock's controls (WP 2.9): the SC-7 demo with three panes and a
-// second window on one shared, offline mock (PLY-16–18, PLY-22); a named preset saved and
+// The multi-client view and the mock's controls (WP 2.9): the SC-7 demo with three panes, a
+// message crossing them, and a second window on one shared, offline mock (PLY-16–18, PLY-22); a named preset saved and
 // restored (PLY-19); two panes of one role kept apart (PLY-17); a 2x2 grid; the admin backend in
 // a pane; reset, export and import of the mock database with its history (PLY-21, PLY-34); and
 // the admin's preview as a role (ADM-30, ADM-31).
@@ -74,6 +74,20 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
   await editObjectives(page, pane(page, 3), 'Red', '1. Delay Blue until noon.')
   await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue until noon.')
   await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
+
+  // A message Blue sends in the shared room arrives in Red's and the umpire's panes (SC-7).
+  const talks = 'Blue–Red negotiation'
+  for (const n of [1, 2, 3]) {
+    await tabsIn(pane(page, n)).filter({ hasText: talks }).click()
+  }
+  const box = pane(page, 1).getByRole('textbox', { name: `Message ${talks}`, exact: true })
+  await box.fill('Blue proposes a ceasefire at 10:00.')
+  await box.press('Enter')
+  for (const n of [2, 3]) {
+    await expect(
+      pane(page, n).getByRole('region', { name: `Messages in ${talks}`, exact: true }),
+    ).toContainText('Blue proposes a ceasefire at 10:00.')
+  }
 
   // The second window, as a fourth role, shares the game (PLY-22).
   await logIn(second, 'blue-observer', 'demo-blue-observer')
