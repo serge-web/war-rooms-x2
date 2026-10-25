@@ -10,7 +10,8 @@
 //   ToastProvider   holds toasts for everything inside it; useToast().show({ title, tone })
 //   Banner          inline status (role=status) or warning/danger (role=alert) message
 //   MarkdownView    sanitised Markdown (marked + DOMPurify, raw HTML escaped, no images)
-//   ThemeScope      sets --wrx-* on its own root element (PLY-26); `root` for the outermost
+//   ThemeScope      sets --wrx-* on its own root element (PLY-26) through @wrx/theme, with
+//                   partial tokens inherited from the enclosing scope; `root` for the outermost
 //   Spinner         loading indicator in a live region
 //
 // Storybook (`pnpm storybook:build`) has a story for each.

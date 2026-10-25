@@ -483,6 +483,12 @@ importers:
       '@radix-ui/react-toast':
         specifier: 1.2.24
         version: 1.2.24(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@wrx/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@wrx/theme':
+        specifier: workspace:*
+        version: link:../theme
       dompurify:
         specifier: 3.4.16
         version: 3.4.16

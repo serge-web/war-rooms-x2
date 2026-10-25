@@ -16,6 +16,8 @@
   "dependencies": {
     "@radix-ui/react-dialog": "1.2.0",
     "@radix-ui/react-toast": "1.2.24",
+    "@wrx/schemas": "workspace:*",
+    "@wrx/theme": "workspace:*",
     "dompurify": "3.4.16",
     "marked": "18.1.0"
   },

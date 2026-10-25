@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { DEFAULT_TOKENS, WRX_PROPERTIES, themeProperties } from '@wrx/theme'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Banner } from './banner.tsx'
@@ -157,25 +161,54 @@ describe('Banner and Spinner', () => {
 })
 
 describe('ThemeScope', () => {
-  it('sets the tokens as --wrx-* on its own root only (PLY-26)', () => {
+  it('sets every --wrx-* property on its own root only, through @wrx/theme (PLY-26)', () => {
     render(
       <ThemeScope tokens={{ primary: '#ff0000', fontFamily: 'serif' }} data-testid="scope">
         <span data-testid="child">x</span>
       </ThemeScope>,
     )
     const scope = screen.getByTestId('scope')
-    expect(scope.style.getPropertyValue('--wrx-primary')).toBe('#ff0000')
-    expect(scope.style.getPropertyValue('--wrx-font-family')).toContain('Georgia')
-    expect(scope.style.getPropertyValue('--wrx-surface')).toBe('')
+    const expected = themeProperties({ ...DEFAULT_TOKENS, primary: '#ff0000', fontFamily: 'serif' })
+    for (const name of WRX_PROPERTIES) {
+      expect(scope.style.getPropertyValue(name)).toBe(expected[name])
+    }
+    expect(scope.style.getPropertyValue('--wrx-font-family')).toContain('Plex Serif')
+    expect(scope.className).toBe('wrx-theme')
     expect(screen.getByTestId('child').style.getPropertyValue('--wrx-primary')).toBe('')
   })
 
-  it('fills unset tokens from the default theme at the root', () => {
-    expect(themeStyle({ text: '#111111' }, { inherit: false })).toMatchObject({
-      '--wrx-text': '#111111',
-      '--wrx-primary': DEFAULT_THEME.primary,
-      '--wrx-surface': DEFAULT_THEME.surface,
-    })
+  it('takes unset tokens from the enclosing scope, and from the default theme at the root', () => {
+    render(
+      <ThemeScope root tokens={{ text: '#222222' }} data-testid="outer">
+        <ThemeScope tokens={{ primary: '#ff0000' }} data-testid="inner">
+          <ThemeScope root data-testid="reset" />
+        </ThemeScope>
+      </ThemeScope>,
+    )
+    const prop = (id: string, name: string) => screen.getByTestId(id).style.getPropertyValue(name)
+    expect(prop('outer', '--wrx-text')).toBe('#222222')
+    expect(prop('outer', '--wrx-primary')).toBe(DEFAULT_THEME.primary)
+    expect(prop('inner', '--wrx-text')).toBe('#222222')
+    expect(prop('inner', '--wrx-primary')).toBe('#ff0000')
+    expect(prop('reset', '--wrx-text')).toBe(DEFAULT_THEME.text)
+    expect(prop('reset', '--wrx-primary')).toBe(DEFAULT_THEME.primary)
+  })
+
+  it('themeStyle: only the set tokens when inheriting, all ten over the default otherwise', () => {
+    expect(themeStyle({ text: '#111111' }, { inherit: false })).toEqual(
+      themeProperties({ ...DEFAULT_TOKENS, text: '#111111' }),
+    )
+    expect(themeStyle({ primary: '#ff0000' })).toEqual({ '--wrx-primary': '#ff0000' })
     expect(themeStyle(undefined)).toEqual({})
+  })
+
+  it("ui.css's :root defaults are @wrx/theme's default theme", () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'ui.css'), 'utf8')
+    const block = /:where\(:root\) \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    const declared: Record<string, string> = {}
+    for (const m of block.matchAll(/(--wrx-[a-z-]+):\s*([^;]+);/g)) {
+      declared[m[1] ?? ''] = (m[2] ?? '').trim()
+    }
+    expect(declared).toEqual({ ...themeProperties(DEFAULT_TOKENS) })
   })
 })
