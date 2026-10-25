@@ -8,7 +8,13 @@ import { demoSeed } from '@wrx/mock-server'
 import { designFileSchema } from '@wrx/schemas'
 import { StrictMode, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { AdminApp, createBrowserDraftStore, createDraft, draftFromDesign } from '../src/index.ts'
+import {
+  AdminApp,
+  ThemeEditor,
+  createBrowserDraftStore,
+  createDraft,
+  draftFromDesign,
+} from '../src/index.ts'
 import type { Draft } from '../src/index.ts'
 
 function seedDraft(): Draft {
@@ -48,6 +54,7 @@ function Dev() {
       <AdminApp
         store={store}
         registry={registry}
+        themes={ThemeEditor}
         onSwitchToGame={() => {
           setView('game')
         }}

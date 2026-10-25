@@ -77,6 +77,10 @@ jobs:
         run: pnpm e2e:admin-ui
         env:
           CI: 'true'
+      - name: Theme SVG sanitiser and bundled fonts in Chromium (WP 2.8, §3 rule 12, NFR-7)
+        run: pnpm e2e:theme
+        env:
+          CI: 'true'
       - name: Site end to end, offline, under a nested base path (DOC-6, DOC-11, DOC-15)
         run: pnpm --filter @wrx/site e2e
         env:

@@ -17,6 +17,7 @@
     "e2e": "pnpm --filter @wrx/web e2e",
     "e2e:mock-host": "pnpm --filter @wrx/mock-host e2e",
     "e2e:admin-ui": "pnpm --filter @wrx/admin-ui e2e",
+    "e2e:theme": "pnpm --filter @wrx/theme e2e",
     "dictionary": "pnpm --filter @wrx/schemas dictionary",
     "check:dictionary": "pnpm --filter @wrx/schemas dictionary --check",
     "check:mermaid": "node tools/check-mermaid.ts",
