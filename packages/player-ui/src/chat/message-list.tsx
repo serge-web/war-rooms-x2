@@ -74,6 +74,11 @@ export function MessageListCore({
     useFlushSync: false,
   })
 
+  // While pinned to the newest, the bottom is followed below; the virtualiser's own correction for
+  // rows measured shorter than estimated would move the view up and read as the reader leaving.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
+    !atBottom.current && item.start < (instance.scrollOffset ?? 0)
+
   const canAutoLoad = hasOlder && !loadingOlder && !loading && olderError === undefined
 
   // The last scroll position seen, to tell the reader scrolling up from rows growing under them.

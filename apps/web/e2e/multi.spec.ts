@@ -39,6 +39,8 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
   context,
   page,
 }) => {
+  // Three sessions, a second window and a round of chat: longer than the default on a busy runner.
+  test.setTimeout(60_000)
   await page.setViewportSize({ width: 1800, height: 900 })
   await openMulti(page)
   const second = await context.newPage()
