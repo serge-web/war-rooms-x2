@@ -5,7 +5,8 @@ For the tech-lead review of WP 2.1, 2.3 and 2.10 before the Phase 2 PR merges. N
 ## WP 2.1, admin operations (`packages/admin-ops`)
 
 - **Vault scope.** The vault holds the password of every read-only role, observers and roles with a per-room read-only entry, because each needs its voice revoked through its own login.
-- **Failing closed.** If revoking voice or the rejoin check fails, the role's membership of that room is removed (`rolledBack`). An observer can lose read access rather than keep voice.
+- **Failing closed.** Making a role read-only first takes its membership away in every target room where it is a member, before the vault check and the role's login. Then, room by room, membership and voice revocation run back to back. If revoking voice or the rejoin check fails, the role's membership of that room is removed (`rolledBack`), and the other rooms are still handled. Every failure is reported (`failures`). An observer can lose read access rather than keep voice. Fixed after the G2 review (F1): before, a refused login, a missing vault password or a failure in an earlier room left a writer voiced.
+  - Cost: a read-only role that is already a member (a re-check, or an audit repair) has its online sessions ejected from those rooms (status 321) and has to rejoin.
 - **Grant-to-revoke window.** The role session is opened and the admin joins before membership is granted, so the window is one join plus one `setRole` round trip. Another online session of the same observer that joins inside that window gets voice. The role's presence briefly shows in the room.
 - **Read to write without a vault password** uses an affiliation round trip (none, then member), which ejects that role's online sessions with 321.
 - **The `from` hint is required for read-to-write;** without it a stored visitor role stays. The 2.10 audit must catch a missing hint.
@@ -48,3 +49,9 @@ For the tech-lead review of WP 2.1, 2.3 and 2.10 before the Phase 2 PR merges. N
 - **`transport-xmpp`:** XEP-0049 private storage worked for only one key per session, because StanzaJS resolves every element defined on the same path to the last one. Every key is now in one JSON object inside one element.
   - It reads, then updates, then writes, so two sessions writing at the same moment can lose an update. The vault re-reads before writing.
   - A new contract test (two keys kept apart) fails on the old code and passes on ejabberd and the mock.
+
+## G2 security review resolutions
+
+The G2 review's findings (internal), and what was done about each. Regression tests are named in each entry; each failed before its fix.
+
+- **F1 (high), a write-to-read conversion failed open. Fixed.** `readOnlyIn` takes the role's membership away in every target room where it is a member before the vault check and the login, then grants and revokes voice room by room. It carries on after a room fails, and reports every failure (`AdminOpsError.failures`, plus a `failed` progress event each). `applyRoomAccess` likewise runs every change and reports every failure. The 2.10 repair order (room config before voice) is unchanged. Tests: `ops.test.ts` "R-B: write to read fails closed"; the integration scenario "a writer made read-only fails closed when the vault has no password for it" runs on the mock and ejabberd. Remaining: if taking the membership away is itself refused, the role keeps it; that failure is reported, and the audit catches it.

@@ -301,6 +301,29 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(published).toBeGreaterThan(created)
       })
 
+      it('a writer made read-only fails closed when the vault has no password for it (F1)', async () => {
+        // Blue CO is a voiced member of Blue HQ. The vault has no password for it, so its voice
+        // cannot be revoked: its membership is taken away instead, before anything else.
+        const result = await theOps().makeReadOnly('blue-co', ['blue-hq'])
+        expect(result).toMatchObject({
+          ok: false,
+          error: { code: 'no-password', rolledBack: true },
+        })
+        const locked = await postResult('blue-co', 'blue-hq')
+        expect(locked.joined?.condition).toBe('registration-required')
+        await closeAll()
+        // Put it back as the design has it: a writer.
+        mustOps(
+          await theOps().applyRoomAccess('blue-hq', [{ roleId: 'blue-co', access: 'write' }]),
+          'restore writer',
+        )
+        expect(await postResult('blue-co', 'blue-hq')).toMatchObject({
+          role: 'participant',
+          posted: 'ok',
+        })
+        await closeAll()
+      })
+
       it('provisioning again changes nothing', async () => {
         expect(mustOps(await theOps().ensureRoom('blue-hq', { name: 'Blue HQ' }), 'room')).toBe(
           'unchanged',

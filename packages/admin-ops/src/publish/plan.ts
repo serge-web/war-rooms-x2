@@ -522,6 +522,11 @@ export function planPublish(
           ? `Give ${roleName(roleId)} read-only access to ${names}`
           : `Make ${roleName(roleId)} read-only in ${names}`,
       details: [
+        ...(phase === 'revoke'
+          ? [
+              'Its membership is taken away first, so it cannot post if a later step fails; its online sessions leave these rooms',
+            ]
+          : []),
         'Membership and voice revocation run back to back, through the role’s own login (ADM-37)',
       ],
       risk: { destructive: phase === 'revoke', roles: [roleId] },
