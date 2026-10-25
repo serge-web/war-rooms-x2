@@ -2,7 +2,7 @@
 // (WP 2.2) and the multi-client view (WP 2.9) take these props through their seams.
 import type { SessionStore } from '@wrx/domain'
 import type { MockHost } from '@wrx/mock-host'
-import type { BackendInfo, Connection } from '@wrx/player-ui'
+import type { BackendInfo, Connection, DemoLogin } from '@wrx/player-ui'
 import type { ReactNode } from 'react'
 import type { BackendId, Backends } from '../backends.ts'
 
@@ -18,6 +18,12 @@ export interface RouteProps {
   readonly mockHost: MockHost | undefined
   /** The app bar's navigation links, for views that draw their own bar. */
   readonly nav: ReactNode
+  /** The player's workspace (PLY-5): the same element serves the player route and each pane. */
+  readonly workspace: ReactNode
+  /** The backend choice (PLY-20), for views that offer it. */
+  readonly backendChoice: ReactNode
+  /** Mock only: the demo logins (NFR-6). */
+  readonly demoLogins: readonly DemoLogin[] | undefined
 }
 
 /** The admin backend's props: the route's, plus the logged-in admin session (ADM-1). */

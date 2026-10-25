@@ -2,6 +2,28 @@
 import { expect } from '@playwright/test'
 import type { FrameLocator, Locator, Page } from '@playwright/test'
 
+type Outcome<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: { readonly condition: string } }
+
+declare global {
+  interface Window {
+    /** The app's mock host (apps/web main.tsx); only what these scenarios use. */
+    wrxMock?: {
+      connect(options: {
+        endpoint: { websocketUrl: string; domain: string }
+        credentials: { kind: 'password'; username: string; password: string }
+        resource: string
+      }): Promise<
+        Outcome<{
+          pubsub: { publish(node: string, id: string, payload: string): Promise<Outcome<unknown>> }
+          disconnect(): Promise<void>
+        }>
+      >
+    }
+  }
+}
+
 /**
  * Hosts the mock in a leader tab, not a SharedWorker. A SharedWorker's script request never
  * reports as finished to the page, so `shoot()` would wait for network idle forever. The mock
@@ -26,6 +48,45 @@ export async function welcomeLoaded(app: Page | FrameLocator): Promise<void> {
 }
 
 /** The room tabs in the player's workspace, docked area only, in DOM order (WP 2.5). */
-export function roomTabs(app: Page | FrameLocator): Locator {
+export function roomTabs(app: Page | FrameLocator | Locator): Locator {
   return app.locator('.flexlayout__layout_main').getByRole('tab')
+}
+
+/** Logs in on the app's welcome page with a demo login (NFR-6). */
+export async function demoLogIn(app: Page | FrameLocator, roleId: string): Promise<void> {
+  await app.getByLabel('Role id').fill(roleId)
+  await app.getByLabel('Password', { exact: true }).fill(`demo-${roleId}`)
+  await app.getByRole('button', { name: 'Log in', exact: true }).click()
+}
+
+/**
+ * Publishes PubSub items as the mock's admin, through the page's mock host, with fixed contents
+ * so the images repeat (DOC-20). Call once the app has loaded.
+ */
+export async function publishAsMockAdmin(
+  page: Page,
+  items: readonly { readonly node: string; readonly id: string; readonly payload: unknown }[],
+): Promise<void> {
+  await page.waitForFunction(() => window.wrxMock !== undefined)
+  const failed = await page.evaluate(async (items) => {
+    const host = window.wrxMock
+    if (host === undefined) return 'no mock host'
+    const login = await host.connect({
+      endpoint: { websocketUrl: '', domain: 'wrx.mock' },
+      credentials: { kind: 'password', username: 'admin', password: 'demo-admin' },
+      resource: 'shots-admin',
+    })
+    if (!login.ok) return login.error.condition
+    for (const item of items) {
+      const done = await login.value.pubsub.publish(
+        item.node,
+        item.id,
+        JSON.stringify(item.payload),
+      )
+      if (!done.ok) return `${item.node}: ${done.error.condition}`
+    }
+    await login.value.disconnect()
+    return undefined
+  }, items)
+  expect(failed).toBeUndefined()
 }

@@ -168,6 +168,30 @@ function AppRoutes({
     )
   }
 
+  // Shared by the player route and each multi-client pane: one element, one workspace per place
+  // it is rendered (D15).
+  // One element for the player route and every multi-client pane; each renders it under its
+  // own session, so unread counts per room (PLY-11) stay per pane.
+  const workspace = (
+    <UnreadProvider>
+      <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
+    </UnreadProvider>
+  )
+  const backendChoice = (
+    <BackendChoiceCore
+      options={backends.entries.map((e) => ({
+        id: e.id,
+        backend: e.info,
+        description: e.description,
+      }))}
+      selected={selected}
+      onSelect={(id) => {
+        if (!backends.has(id)) return
+        setSelected(id)
+        backendPreference?.save(id)
+      }}
+    />
+  )
   const routeProps: RouteProps = {
     connection,
     backend: entry.info,
@@ -175,6 +199,9 @@ function AppRoutes({
     backends,
     mockHost: loaded.mock,
     nav,
+    workspace,
+    backendChoice,
+    demoLogins: selected === 'mock' ? demoLogins : undefined,
   }
 
   let page: ReactNode
@@ -183,7 +210,7 @@ function AppRoutes({
       page = <AdminRoute key={selected} {...routeProps} />
       break
     case 'multi':
-      page = <MultiClientApp {...routeProps} />
+      page = <MultiClientApp key={selected} {...routeProps} />
       break
     case 'not-found':
       page = (
@@ -207,28 +234,9 @@ function AppRoutes({
           connection={connection}
           backend={entry.info}
           appBarItems={nav}
-          workspace={
-            // Unread counts per room, for the room tabs (PLY-11).
-            <UnreadProvider>
-              <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
-            </UnreadProvider>
-          }
-          demoLogins={selected === 'mock' ? demoLogins : undefined}
-          backendChoice={
-            <BackendChoiceCore
-              options={backends.entries.map((e) => ({
-                id: e.id,
-                backend: e.info,
-                description: e.description,
-              }))}
-              selected={selected}
-              onSelect={(id) => {
-                if (!backends.has(id)) return
-                setSelected(id)
-                backendPreference?.save(id)
-              }}
-            />
-          }
+          workspace={workspace}
+          demoLogins={routeProps.demoLogins}
+          backendChoice={backendChoice}
         />
       )
       break
