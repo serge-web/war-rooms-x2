@@ -46,6 +46,26 @@ describe('runtime config (NFR-9)', () => {
     })
   })
 
+  it('refuses plaintext ws: except to this machine (security review F13)', () => {
+    const at = (websocketUrl: string, base = BASE) =>
+      parseConfig({ server: { websocketUrl, domain: 'wrx.example' } }, base)
+    const refused = at('ws://xmpp.wrx.example/ws')
+    expect(refused.ok).toBe(false)
+    expect(refused.ok ? '' : refused.error).toMatch(/wss:.*localhost/)
+    // A path on a plain-http page off this machine is ws: too.
+    expect(at('/ws', 'http://wrx.example/').ok).toBe(false)
+    for (const local of [
+      'ws://localhost:5280/ws',
+      'ws://127.0.0.1:9/xmpp-websocket',
+      'ws://[::1]:5280/ws',
+      'ws://app.localhost/ws',
+    ]) {
+      expect(at(local).ok, local).toBe(true)
+    }
+    expect(at('/ws', 'http://localhost:8080/').ok).toBe(true)
+    expect(at('wss://xmpp.wrx.example/ws').ok).toBe(true)
+  })
+
   it('treats a missing or unreachable file as no config (NFR-8)', async () => {
     const missing = await loadConfig(() => Promise.resolve(new Response('', { status: 404 })), BASE)
     expect(missing).toEqual({ ok: true, config: NO_CONFIG })

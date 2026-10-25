@@ -53,6 +53,21 @@ export function websocketUrl(value: string, baseUri: string): string | undefined
   return url.href
 }
 
+/**
+ * Whether a host is this machine: `localhost` (and `*.localhost`), 127.0.0.0/8 or `[::1]`.
+ * Only there is plaintext `ws:` accepted (security review F13): elsewhere messages, objectives
+ * and the session would cross the network in clear, though SCRAM protects the password.
+ */
+export function isLoopbackHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === '[::1]' ||
+    /^127(\.\d{1,3}){3}$/.test(host)
+  )
+}
+
 const DOMAIN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i
 
 /** Checks a parsed `config.json`; nothing in it is trusted until it passes. */
@@ -77,6 +92,13 @@ export function parseConfig(json: unknown, baseUri: string): ConfigResult {
   const url = websocketUrl(rawUrl, baseUri)
   if (url === undefined) {
     return { ok: false, error: 'server.websocketUrl must be a ws:, wss: or same-origin URL' }
+  }
+  const { protocol, hostname } = new URL(url)
+  if (protocol === 'ws:' && !isLoopbackHost(hostname)) {
+    return {
+      ok: false,
+      error: `server.websocketUrl must use wss: (TLS); plain ws: is allowed only to localhost or 127.0.0.1, not ${hostname}`,
+    }
   }
   return {
     ok: true,
