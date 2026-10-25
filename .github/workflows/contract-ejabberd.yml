@@ -47,6 +47,12 @@ jobs:
           WRX_XMPP_WS: wss://localhost:35443/ws
         run: pnpm --filter @wrx/transport-xmpp test:bundle
 
+      - name: Player client logs in to ejabberd from the real-server build (WP 2.4)
+        env:
+          CI: 'true'
+          WRX_XMPP_WS: wss://localhost:35443/ws
+        run: pnpm --filter @wrx/web exec playwright test --project=ejabberd
+
       - name: Server log on failure
         if: failure()
         run: docker compose -f deploy/ejabberd/compose.yaml logs --tail 300

@@ -1,10 +1,12 @@
-// UI scenarios (DOC-20). Until the mock (WP 1.4) has seeds, the app shell is the only UI.
-import { expect, test } from '@playwright/test'
+// UI scenarios (DOC-20): the app as first opened, on the mock. player.spec.ts has the player.
+import { test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
+import { hostMockInLeaderTab, welcomeLoaded } from './mock-app.ts'
 
 test('app shell on the mock backend', { tag: '@screenshot' }, async ({ page }) => {
   await freezeClock(page)
+  await hostMockInLeaderTab(page)
   await page.goto('./app/')
-  await expect(page.getByLabel('Backend: MOCK')).toBeVisible()
+  await welcomeLoaded(page)
   await shoot(page, 'app-shell')
 })
