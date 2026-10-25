@@ -1,12 +1,23 @@
 {
   "version": 1,
   "shots": {
-    "app-shell": "70fde772fd501e4bafef69fb8d74efda5f71acf25b512008180cb48f72b251b7",
+    "admin-design-editor": "69b537257a1b46d0489bd9ad236b5f4b28c1edca285d6e10948785ec5296beee",
+    "admin-preview-as-role": "d719f71967d9b3730db9b4d61a442cd1b5f98c634baa25798ca2ab0dec67dd55",
+    "admin-publish-plan": "f555ff3680e66a4510009c49d727a803513f3bd62224300e67bee968e198ed23",
+    "admin-theme-editor": "439bff2dc507a75d77f92e84c60af2eb1702b75402e35b643f746e957da1fd9f",
+    "app-shell": "e40c6ca1aa6777b6d9d2e19a3f07d61b90a18ae836f0218cb93a0b7c9aa502b3",
+    "multi-client-view": "0e145d3e508d5d93b4ef41bb1f1b4637fd72dd6070b70ef78bf7327c7eff7a1d",
     "page-architecture": "5aa09f875d271e77e58eb26bfd8d7362001f38d50777ceb2646f150ead516175",
-    "page-background": "4f59478445dd91c4d2c65897daae64c311513341a2bebe5bfb803133e194f3af",
-    "page-blog": "e4785a1435676c7086d1e300fffdfb7f1bbf765f388863aec4330c8fcd4557a2",
-    "page-data-dictionary": "a0bee9904da82f178d4892e043a6eb63395429d81cb2a39da910a0a04210f951",
-    "page-home": "629eff9b32036429d4d4c9a24002f82093fb24ad73570d1f729e32745b9e6903",
-    "page-technical": "88afc57ecea9bd97e0177f33915564d147a18e6aef810e8c7039ed44f3984ae5"
+    "page-background": "be227c42d9737a9054dfcaaf1f7b0a2f79216541d4b456f494427dbbb8929e44",
+    "page-blog": "733575784b67fd19f5c0d30834e5f48e733f1d3e70cb2069452f690450858199",
+    "page-data-dictionary": "e28ae0c33be6604a98050aaa45040b0655c50b4550889aa52766d081ebd1f2c4",
+    "page-home": "7a7698827add2e1cf56af75616a3bacb9a2bcf25b042818ea334563af2859496",
+    "page-technical": "136953769f65b14da7a7a5eb246366290e333d66ae510309dcf88d53eeef5793",
+    "player-chat": "9e957910d118eac295d22ead62a1fc624ae23df6ee976e7b630ef9e71bdc254a",
+    "player-column": "f533c9baaf584e938d4d8124a7656be21bbd68c59e9ad383ffba6850ce21dace",
+    "player-objectives-editor": "d8e6d188904120c7d324ac65bfe6891183ae15456db6185f2ee9e79b8c1a29b2",
+    "player-shell": "9e957910d118eac295d22ead62a1fc624ae23df6ee976e7b630ef9e71bdc254a",
+    "player-welcome": "e40c6ca1aa6777b6d9d2e19a3f07d61b90a18ae836f0218cb93a0b7c9aa502b3",
+    "player-workspace": "d7e17a415deba5f391891253feb15051038f9394b461feac1d7b7c2e3fb4d0b0"
   }
 }
