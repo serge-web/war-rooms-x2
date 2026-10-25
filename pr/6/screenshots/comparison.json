@@ -1,5 +1,17 @@
 [
   {
+    "name": "admin-design-editor",
+    "status": "new"
+  },
+  {
+    "name": "admin-publish-plan",
+    "status": "new"
+  },
+  {
+    "name": "admin-theme-editor",
+    "status": "new"
+  },
+  {
     "name": "app-shell",
     "status": "changed"
   },
