@@ -80,6 +80,14 @@ There are 28 work packages. Each is sized for one to three Claude Code PRs, and 
 
 Documentation is not a separate phase. Each PR carries its own pages and diagrams (DOC-18), and a blog post closes each phase (DOC-5).
 
+## Future tasks
+
+Raised during the build, not yet given a work package.
+
+| Id | Task | SRD ids | Raised |
+| --- | --- | --- | --- |
+| FT-1 | **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
+
 ## The README plan chart
 
 The README opens with a Mermaid flowchart of the work packages and their dependencies, coloured by status: grey for to do, amber for active, green for done. WP 0.5 copies the chart below to the top of `README.md`; from then on it is the live plan.

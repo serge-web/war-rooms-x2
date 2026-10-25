@@ -376,6 +376,8 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 | Multiple wargames per server | Entity ids are slugs; a namespace prefix can be added |
 | Per-person accounts within a role | Role = account in v1; resource or nickname could identify individuals later |
 
+**Backlog:** the out-of-game column becomes a specially styled workspace tab when the client is narrow (Dev Plan FT-1; would relax PLY-36's permanently visible column).
+
 **Backlog:** umpire combined view — one merged, filterable timeline of all rooms, each message labelled with its room, with reply into the source room. Needs no new XMPP mechanism; it reads the rooms umpires already join.
 
 ## 9. Risks, critical analysis and open issues
