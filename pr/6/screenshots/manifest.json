@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "shots": {
+    "app-shell": "70fde772fd501e4bafef69fb8d74efda5f71acf25b512008180cb48f72b251b7",
+    "page-architecture": "5aa09f875d271e77e58eb26bfd8d7362001f38d50777ceb2646f150ead516175",
+    "page-background": "4f59478445dd91c4d2c65897daae64c311513341a2bebe5bfb803133e194f3af",
+    "page-blog": "e4785a1435676c7086d1e300fffdfb7f1bbf765f388863aec4330c8fcd4557a2",
+    "page-data-dictionary": "a0bee9904da82f178d4892e043a6eb63395429d81cb2a39da910a0a04210f951",
+    "page-home": "629eff9b32036429d4d4c9a24002f82093fb24ad73570d1f729e32745b9e6903",
+    "page-technical": "88afc57ecea9bd97e0177f33915564d147a18e6aef810e8c7039ed44f3984ae5"
+  }
+}
