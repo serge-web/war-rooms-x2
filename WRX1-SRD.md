@@ -83,7 +83,7 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 1. Entity ids SHALL be stable, URL-safe slugs generated at creation and never reused; display names are separate fields.
 2. Each PubSub document SHALL carry `schemaVersion` and be validated at runtime on read (ARC-6).
 3. Sender identity SHALL come from the MUC occupant JID (the stanza `from`, mapped to the real JID via members-only, non-anonymous rooms), never from the message body.
-4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and all umpire-force roles.
+4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and all umpire-force roles. Precedence, weakest to strongest: a force entry, then a role entry for a role in that force (which overrides it), then umpire-force membership (write access to every room), then observer status (read only, always). An entry naming an unknown force or role grants nothing.
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
 6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents, kept live by subscription.
 7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
@@ -666,5 +666,6 @@ Changes made later on Oct 24, 2026, from the Phase 0 checks (WP 0.1–0.3):
 
 Changes from Phase 1 (WP 1.2 and 1.3):
 
+- §3 rule 4: access precedence stated (force entry, role entry, umpire, observer), as built in WP 1.6 and confirmed by Doc at gate G1.
 - §3 rule 14: objectives are kept as one item per author, with `updatedAt`, and readers show the newest. ejabberd refuses to let one publisher overwrite another's item, so umpires could not otherwise edit objectives the admin wrote (D21, PLY-35).
 
