@@ -39,3 +39,11 @@ Every lane styles with these names, so 2.8 can theme everything without touching
 ```
 
 The first five map to the theme tokens (§3 rule 10). The rest derive from them in `packages/theme`. A themed panel sets the properties on its own root element only, so one panel's theme cannot leak into another (PLY-26).
+
+**Colour pairs.** The contrast check (ADM-20, `@wrx/theme` `CONTRAST_PAIRS`) assumes these pairings, so every lane follows them:
+
+- Body text uses `--wrx-text` on `--wrx-background` or `--wrx-surface`.
+- Text on a `--wrx-primary` fill uses `--wrx-background`.
+- `--wrx-primary` is never used for small body text, because it is checked only at 3:1 (non-text contrast).
+- `--wrx-muted`, `--wrx-focus` and `--wrx-danger` are derived to pass AA against both the page and panels.
+

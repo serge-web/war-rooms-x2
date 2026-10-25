@@ -1,6 +1,6 @@
 # WP 2.8 — Themes
 
-**SRD ids:** D19, PLY-24, PLY-26, ADM-18–22 · **Depends on:** 1.6, 2.2 · **Status:** to do
+**SRD ids:** D19, PLY-24, PLY-26, ADM-18–22 · **Depends on:** 1.6, 2.2 · **Status:** done
 
 ## Goal
 
