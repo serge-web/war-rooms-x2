@@ -1,39 +1,51 @@
-:root {
-  --wrx-primary: #1d4ed8;
-  --wrx-background: #f8fafc;
-  --wrx-surface: #ffffff;
-  --wrx-text: #0f172a;
-  font-family: system-ui, sans-serif;
-  color: var(--wrx-text);
-  background: var(--wrx-background);
-}
-
+html,
 body {
   margin: 0;
 }
 
-.shell-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+body {
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  font-family: var(--wrx-font-family);
+}
+
+.wrx-app {
+  min-height: 100vh;
+  background: var(--wrx-background);
+}
+
+.wrx-app__problem {
   padding: 0.5rem 1rem;
-  background: var(--wrx-primary);
-  color: #ffffff;
 }
 
-.shell-header h1 {
-  margin: 0;
-  font-size: 1.125rem;
-}
-
-.backend-badge {
-  padding: 0.125rem 0.5rem;
-  border: 1px solid currentColor;
-  border-radius: 0.25rem;
-  font-family: ui-monospace, monospace;
+.wrx-nav {
+  display: flex;
+  gap: 0.75rem;
   font-size: 0.875rem;
 }
 
-.shell-main {
-  padding: 1rem;
+.wrx-nav a {
+  color: inherit;
+}
+
+.wrx-nav a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.wrx-placeholder-page {
+  min-height: 100vh;
+}
+
+.wrx-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.wrx-placeholder h2 {
+  margin: 0;
 }

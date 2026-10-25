@@ -42,9 +42,9 @@ export default tseslint.config(
     },
   },
   {
-    // ARC-2 applies to shipped code, not tests, scripts or tools.
+    // ARC-2 applies to shipped code, not tests, Storybook stories, scripts or tools.
     files: ['packages/*/src/**/*.{ts,tsx}', 'apps/*/src/**/*.{ts,tsx}'],
-    ignores: ['**/*.test.{ts,tsx}', '**/fixtures.ts'],
+    ignores: ['**/*.test.{ts,tsx}', '**/*.stories.tsx', '**/fixtures.ts'],
     plugins: { wrx },
     rules: { 'wrx/no-module-mutable-state': 'error' },
   },

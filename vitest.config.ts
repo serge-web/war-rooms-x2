@@ -2,7 +2,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['packages/*/src/**/*.test.ts', 'apps/*/src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
+    include: [
+      'packages/*/src/**/*.test.{ts,tsx}',
+      'apps/*/src/**/*.test.{ts,tsx}',
+      'tools/**/*.test.ts',
+    ],
     // The contract suite runs against the mock in this run (WP 1.4, NFR-16), and its tests are
     // tagged. The names are CONTRACT_TAGS from @wrx/contract-suite; mock.contract.test.ts checks
     // that they match.

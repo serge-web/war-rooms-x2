@@ -63,6 +63,10 @@ jobs:
       - run: pnpm e2e
         env:
           CI: 'true'
+      - name: Real-server build has no external references (NFR-7, DOC-11)
+        run: node tools/check-bundle.ts apps/web/server-build/dist
+      - name: Storybook builds (NFR-18)
+        run: pnpm storybook:build
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
