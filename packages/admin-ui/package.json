@@ -22,6 +22,7 @@
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
     "@wrx/schemas": "workspace:*",
+    "@wrx/theme": "workspace:*",
     "dompurify": "3.4.16",
     "marked": "18.1.0",
     "zod": "^4.6.7"

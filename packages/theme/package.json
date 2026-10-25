@@ -1,0 +1,38 @@
+{
+  "name": "@wrx/theme",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Runtime theming (WP 2.8): token inheritance, the --wrx-* custom properties, WCAG 2.2 AA contrast checks, asset checks and SVG sanitising, the bundled fonts, and scoped React theme parts (D19, PLY-24, PLY-26, ADM-18–22, NFR-7).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react/index.ts",
+    "./fonts.css": "./src/fonts.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@wrx/domain": "workspace:*",
+    "@wrx/hooks": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "dompurify": "3.4.16"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "happy-dom": "20.14.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.5"
+  }
+}
