@@ -1,6 +1,6 @@
 # WP 2.3 — Publish and provisioning
 
-**SRD ids:** ADM-10–17, ADM-25–26, NFR-4, NFR-6 · **Depends on:** 2.1, 2.2 · **Status:** to do · **Security review required**
+**SRD ids:** ADM-10–17, ADM-25–26, NFR-4, NFR-6 · **Depends on:** 2.1, 2.2 · **Status:** done · **Security review required**
 
 ## Goal
 

@@ -233,5 +233,8 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 1.5's mock controls return promises, and the mock saves to IndexedDB after every change rather than debounced | The server runs in another tab or worker; a debounce lost the last messages when the leader tab closed |
 | 2.1 checks that a room exists by listing rooms before any owner request, and the vault covers every read-only role, not only observers | On ejabberd 26.09, asking for a missing room's config creates the room; per-room read-only entries need voice revoked like observers |
 | `AdminApi` gains `registeredUsers()` before 2.10 (XEP-0133 get-registered-users-list), in transport, mock and the contract suite | 2.10 must find accounts with no role. This changes the 1.1 interface, so it is listed for gate G2 |
+| 1.3's private storage holds all keys in one element; a contract test now covers two keys | Found by 2.3: StanzaJS resolved every key's element to the last one defined, so only one key worked per session |
+| The default web build is mock only; `build:server` makes the real-server build, which loads the XMPP transport lazily | Found by 2.4: previews and the site must hold no real-server code (DOC-12), and StanzaJS's own text trips the bundle scan |
+| `@wrx/ui` and `@wrx/theme` each have a `ThemeScope`; wave C uses `@wrx/theme`'s scopes, and `@wrx/ui`'s will delegate to it | 2.4 and 2.8 were built in parallel |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 

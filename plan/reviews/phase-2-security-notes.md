@@ -24,3 +24,27 @@ For the tech-lead review of WP 2.1, 2.3 and 2.10 before the Phase 2 PR merges. N
   - node names must parse;
   - destructive account operations refuse while a stored vault is locked.
 - **ejabberd quirk:** `getRoomConfig` on a missing room creates the room, so existence is checked by listing rooms first. The mock answers `item-not-found` instead, a known divergence with no contract test yet.
+
+## WP 2.3, publish and provisioning (`packages/admin-ops/src/publish`, `packages/admin-ui/src/publish`)
+
+- **Passwords:**
+  - `CredentialsBook` is never persisted, and throws if anything serialises it. Passwords stay in JS memory for the admin's session.
+  - Disposal locks the vault and clears the book when the connection or store changes, or `AdminApp` unmounts.
+  - Generated passwords are 16 characters from an unambiguous alphabet, about 79 bits, using WebCrypto with rejection sampling.
+- **Demo passwords** are issued only when the connection is `kind: 'mock'`. `apps/web` sets it from `backendId === 'mock'` (`apps/web/src/seams/AdminApp.tsx`); check that a real server can never reach that path.
+- **The vault passphrase** lives only in the dialog's state. Iterations are the 600k default unless a test sets them.
+- **The publish marker** is in localStorage, keyed by server. It holds only `{designVersion, startedAt}`, and an unreadable value makes the planner re-check rather than skip.
+- **Password resets:**
+  - the planner can schedule a reset when a role becomes read-only and the vault lacks its password, behind a confirmation tick (current sessions stay logged in, PLY-31);
+  - an account that already exists has its password set silently, with a note on the step.
+- **Destructive scope:**
+  - MUC rooms not in the draft are destroyed (D11: one game per server), always behind a message count and a tick;
+  - roles inferred from stray affiliations are deleted;
+  - anonymous subscriptions on open nodes are deliberately ignored.
+- **Import** is schema-checked, refuses passwords, and is capped at 20 MB.
+
+## Fixed during integration
+
+- **`transport-xmpp`:** XEP-0049 private storage worked for only one key per session, because StanzaJS resolves every element defined on the same path to the last one. Every key is now in one JSON object inside one element.
+  - It reads, then updates, then writes, so two sessions writing at the same moment can lose an update. The vault re-reads before writing.
+  - A new contract test (two keys kept apart) fails on the old code and passes on ejabberd and the mock.

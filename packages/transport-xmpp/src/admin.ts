@@ -12,9 +12,12 @@ import { Refusal } from './refusal.ts'
 const NS_ADMIN = 'http://jabber.org/protocol/admin'
 const NS_PRIVATE = 'urn:wrx:private:0'
 
-/** One private-storage value: element `<value xmlns='urn:wrx:private:0:KEY'>` holding text. */
+/**
+ * All of WRX1's private-storage values, as one JSON object of key → text inside
+ * `<store xmlns='urn:wrx:private:0'>`. One element, because StanzaJS resolves every element
+ * defined on the same path to the last one defined, so per-key elements cannot coexist.
+ */
 interface PrivateValue {
-  readonly key: string
   readonly value?: string
 }
 
@@ -28,8 +31,7 @@ declare module 'stanza/protocol' {
 const KEY_PATTERN = /^[a-z0-9][a-z0-9.-]{0,63}$/
 
 export class XmppAdmin implements AdminApi {
-  /** Private-storage keys whose element is registered with this session's StanzaJS registry. */
-  private readonly definedKeys = new Set<string>()
+  private storeDefined = false
 
   constructor(private readonly core: Core) {}
 
@@ -119,43 +121,60 @@ export class XmppAdmin implements AdminApi {
     })
   }
 
-  private defineKey(key: string): void {
+  private checkKey(key: string): void {
     if (!KEY_PATTERN.test(key)) {
       throw new Refusal({ condition: 'bad-request', text: `private key ${key} is not allowed` })
     }
-    if (this.definedKeys.has(key)) return
-    // XEP-0049 §2: storage is keyed by the child element's namespace, so each key gets its own.
+    if (this.storeDefined) return
     this.core.client.stanzas.define({
-      element: 'value',
-      namespace: `${NS_PRIVATE}:${key}`,
-      type: key,
-      typeField: 'key',
-      aliases: [{ path: 'iq.privateStorage.wrxPrivate', impliedType: true }],
+      element: 'store',
+      namespace: NS_PRIVATE,
+      path: 'iq.privateStorage.wrxPrivate',
       fields: { value: JXT.text() },
     })
-    this.definedKeys.add(key)
+    this.storeDefined = true
+  }
+
+  /** XEP-0049 §3: the stored object; empty if nothing is stored yet. */
+  private async readStore(): Promise<Record<string, string>> {
+    const result = await sendIq(this.core.client, {
+      type: 'get',
+      privateStorage: { wrxPrivate: {} },
+    })
+    const text = result.privateStorage?.wrxPrivate?.value
+    if (text === undefined || text === '') return {}
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      throw new Refusal({ condition: 'invalid-response', text: 'private storage is not JSON' })
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Refusal({ condition: 'invalid-response', text: 'private storage is not an object' })
+    }
+    const values: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string') values[key] = value
+    }
+    return values
   }
 
   getPrivate(key: string): Outcome<string | undefined> {
     return this.core.run(async () => {
-      this.defineKey(key)
-      const result = await sendIq(this.core.client, {
-        type: 'get',
-        privateStorage: { wrxPrivate: { key } },
-      })
-      // The reply holds the one element asked for (§3.2); StanzaJS does not fill in `key` when
-      // reading it back. Never stored, it comes back empty.
-      const value = result.privateStorage?.wrxPrivate?.value
+      this.checkKey(key)
+      const value = (await this.readStore())[key]
       return value === undefined || value === '' ? undefined : value
     })
   }
 
+  /** Read, update, write: another session writing in between can lose an update. */
   setPrivate(key: string, value: string): Outcome<void> {
     return this.core.run(async () => {
-      this.defineKey(key)
+      this.checkKey(key)
+      const values = { ...(await this.readStore()), [key]: value }
       await sendIq(this.core.client, {
         type: 'set',
-        privateStorage: { wrxPrivate: { key, value } },
+        privateStorage: { wrxPrivate: { value: JSON.stringify(values) } },
       })
     })
   }

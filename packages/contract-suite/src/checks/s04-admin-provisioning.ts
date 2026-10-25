@@ -160,5 +160,20 @@ export function s04(ctx: Ctx): void {
       must(await admin.admin.setPrivate(key, json(null)), 'overwrite')
       expect(must(await admin.admin.getPrivate(key), 'read again')).toBe('null')
     })
+
+    // Several keys in one session: the vault and the publish marker live side by side.
+    it('private storage keeps several keys apart', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const first = `contract-a-${fx.tag}`
+      const second = `contract-b-${fx.tag}`
+      must(await admin.admin.setPrivate(first, 'one'), 'write first')
+      must(await admin.admin.setPrivate(second, 'two'), 'write second')
+      expect(must(await admin.admin.getPrivate(first), 'read first')).toBe('one')
+      expect(must(await admin.admin.getPrivate(second), 'read second')).toBe('two')
+      must(await admin.admin.setPrivate(first, 'uno'), 'overwrite first')
+      expect(must(await admin.admin.getPrivate(second), 'second unchanged')).toBe('two')
+      expect(must(await admin.admin.getPrivate(first), 'first updated')).toBe('uno')
+    })
   })
 }

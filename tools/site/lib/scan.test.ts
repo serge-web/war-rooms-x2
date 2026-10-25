@@ -79,6 +79,9 @@ describe('bundle rules (NFR-1, DOC-12)', () => {
   it('flags secrets', () => {
     expect(bundleIds('password:"hunter22"')).toEqual(['password-literal'])
     expect(bundleIds("const apiKey = 'abcd1234efgh'")).toEqual(['password-literal'])
+    expect(bundleIds('{password:`hunter22`}')).toEqual(['password-literal'])
+    // Autocomplete values are not passwords.
+    expect(bundleIds('autoComplete:e===`create`?`new-password`:`current-password`')).toEqual([])
     expect(bundleIds(`t="ghp_${'a'.repeat(36)}"`)).toEqual(['token'])
     expect(bundleIds('-----BEGIN RSA PRIVATE KEY-----')).toEqual(['private-key'])
     expect(bundleIds('fetch("https://bob:pa55@host.example/")')).toEqual(['url-credentials'])
