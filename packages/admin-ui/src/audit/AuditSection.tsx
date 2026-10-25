@@ -89,9 +89,11 @@ export interface AuditSectionProps {
   /** From `useAudit`, held by the admin app so a report outlives the section. */
   readonly audit: ReturnType<typeof useAudit>
   readonly design: DesignFile
+  /** The mock demo seed's vault passphrase, shown as a DEMO passphrase (NFR-6). */
+  readonly demoVaultPassphrase?: string
 }
 
-export function AuditSection({ audit, design }: AuditSectionProps) {
+export function AuditSection({ audit, design, demoVaultPassphrase }: AuditSectionProps) {
   const { snapshot, controller } = audit
   const notConnected = () => Promise.resolve('Not connected to a server.')
   return (
@@ -103,12 +105,15 @@ export function AuditSection({ audit, design }: AuditSectionProps) {
       onUnlockVault={(p) => controller?.unlockVault(p) ?? notConnected()}
       onRepair={(ids, confirmed) => void controller?.repair(ids, confirmed)}
       onDismiss={() => controller?.dismiss()}
+      {...(demoVaultPassphrase === undefined ? {} : { demoVaultPassphrase })}
     />
   )
 }
 
 export interface AuditSectionCoreProps {
   readonly connected: boolean
+  /** The mock demo seed's vault passphrase, shown as a DEMO passphrase (NFR-6). */
+  readonly demoVaultPassphrase?: string
   /** The design being edited, to say when it changed since the audit. */
   readonly design: DesignFile
   readonly snapshot: AuditSnapshot
@@ -164,6 +169,9 @@ export function AuditSectionCore(props: AuditSectionCoreProps) {
                 report={report}
                 busy={busy !== undefined}
                 onUnlock={props.onUnlockVault}
+                {...(props.demoVaultPassphrase === undefined
+                  ? {}
+                  : { demoPassphrase: props.demoVaultPassphrase })}
               />
               {snapshot.result !== undefined && (
                 <RepairSummary result={snapshot.result} before={snapshot.before} after={report} />
@@ -202,17 +210,24 @@ function VaultNotice({
   report,
   busy,
   onUnlock,
+  demoPassphrase,
 }: {
   readonly report: AuditReport
   readonly busy: boolean
   readonly onUnlock: (passphrase: string) => Promise<string | undefined>
+  readonly demoPassphrase?: string
 }) {
   if (report.vault === 'locked') {
     return (
       <Notice tone="warning" title="Unlock the vault to check observer voice.">
         No admin command shows whether a read-only role is still read-only, so the audit logs in as
         each one with its password from the vault and reads the role the room gives it.{' '}
-        <VaultDialog mode="unlock" busy={busy} onSubmit={onUnlock} />
+        <VaultDialog
+          mode="unlock"
+          busy={busy}
+          onSubmit={onUnlock}
+          {...(demoPassphrase === undefined ? {} : { demoPassphrase })}
+        />
       </Notice>
     )
   }

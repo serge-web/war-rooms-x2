@@ -40,3 +40,8 @@ One framework-free module, `packages/admin-ops`, through which every admin chang
 ## Notes
 
 This is security-critical. A tech lead reviews it before the Phase 2 PR merges. Nothing from this WP goes on the public site (DOC-2).
+
+**Later changes.**
+
+- The publish marker moved from browser storage to the admin's XEP-0049 private storage (`privateMarkerStore`, key `wrx-publish-marker`), so a second admin browser sees an unfinished publish and re-checks read-only members (G2 review F2). A marker an earlier version left in browser storage moves there on the first read. A publish whose marker cannot be set does not start.
+- The mock's demo seed starts published with a vault: the demo design's read-only roles with their demo passwords, encrypted under the DEMO passphrase `demo-observer-vault` (`DEMO_VAULT_PASSPHRASE` in `@wrx/mock-server`; known, not secret, NFR-6). Only the mock-only build shows it; the real-server build leaves it out. `packages/admin-ops/src/demo-vault.test.ts` prints a new envelope when the demo design's read-only roles change.

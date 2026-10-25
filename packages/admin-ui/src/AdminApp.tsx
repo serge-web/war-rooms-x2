@@ -99,6 +99,9 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
         <PublishSection
           publish={publishing}
           kind={publish?.kind}
+          {...(publish?.demoVaultPassphrase === undefined
+            ? {}
+            : { demoVaultPassphrase: publish.demoVaultPassphrase })}
           store={store}
           draft={snapshot.draft}
           validation={validation}
@@ -106,7 +109,15 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
           {...(print === undefined ? {} : { print })}
         />
       }
-      auditPanel={<AuditSection audit={auditing} design={snapshot.draft.design} />}
+      auditPanel={
+        <AuditSection
+          audit={auditing}
+          design={snapshot.draft.design}
+          {...(publish?.demoVaultPassphrase === undefined
+            ? {}
+            : { demoVaultPassphrase: publish.demoVaultPassphrase })}
+        />
+      }
       {...rest}
     />
   )

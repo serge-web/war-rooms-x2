@@ -5,7 +5,9 @@ import {
   CredentialsBook,
   ObserverVault,
   checkServer,
+  demoRolePassword,
   executePlan,
+  knownRoles,
   preparePublish,
   prepareReset,
   targetState,
@@ -21,17 +23,22 @@ import type {
   StepState,
 } from '@wrx/admin-ops'
 import type { Draft } from '../draft/index.ts'
-import { markPublished } from '../draft/index.ts'
+import { markPublished, markRolesPublished } from '../draft/index.ts'
 
 /** How the admin UI reaches the server; the host builds it after the admin logs in. */
 export interface PublishConnection {
   readonly ops: AdminOps
   /** `mock` issues the known demo passwords, labelled as such (NFR-6); `xmpp` random ones. */
   readonly kind: 'mock' | 'xmpp'
-  /** Where the publish marker is kept; the host keys it by server (see `storageMarkerStore`). */
+  /** Where the publish marker is kept: the admin's private storage (`privateMarkerStore`). */
   readonly marker?: MarkerStore
   /** PBKDF2 iterations for a new vault. Default: the vault's own default. */
   readonly vaultIterations?: number
+  /**
+   * The mock demo seed's vault passphrase, shown next to the unlock form as a DEMO passphrase
+   * (NFR-6). Only for `mock`; the host leaves it out of a real-server build.
+   */
+  readonly demoVaultPassphrase?: string
 }
 
 export type VaultState = 'unknown' | 'none' | 'locked' | 'unlocked'
@@ -109,6 +116,25 @@ export class PublishController {
     this.book.subscribe(() => {
       this.set({ credentials: this.book.list() })
     })
+    this.knowDemoPasswords(this.getDraft().meta.publishedRoleIds)
+  }
+
+  /**
+   * On the mock every role's password is its known demo password (NFR-6): the tooling issues no
+   * other there, and the demo seed starts with them. So the sheet shows them for published roles
+   * without a reset. Nothing on a real server.
+   */
+  private knowDemoPasswords(roleIds: readonly string[]): void {
+    if (this.connection.kind !== 'mock') return
+    for (const roleId of roleIds) {
+      if (this.book.get(roleId) !== undefined) continue
+      this.book.restore({
+        roleId,
+        password: demoRolePassword(roleId),
+        demo: true,
+        issuedAt: this.now(),
+      })
+    }
   }
 
   readonly getSnapshot = (): PublishSnapshot => this.snapshot
@@ -160,6 +186,14 @@ export class PublishController {
     }
     const checks = kind === 'publish' ? await checkServer(ops, prepared.value.view) : []
     const { view, plan } = prepared.value
+    let planned = draft
+    if (kind === 'publish') {
+      // Roles the server already has are published, whichever browser published them (or the
+      // mock's demo seed): their login ids are fixed (ADM-5) and the sheet lists them.
+      planned = markRolesPublished(draft, knownRoles(view))
+      if (planned !== draft) this.commit(planned)
+      this.knowDemoPasswords(planned.meta.publishedRoleIds)
+    }
     this.set({
       busy: undefined,
       plan,
@@ -169,7 +203,7 @@ export class PublishController {
       remaining: undefined,
       online: view.online,
       vault: !view.vault.exists ? 'none' : this.vault?.unlocked === true ? 'unlocked' : 'locked',
-      plannedFrom: draft,
+      plannedFrom: planned,
     })
   }
 
