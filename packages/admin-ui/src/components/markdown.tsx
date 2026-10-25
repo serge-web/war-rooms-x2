@@ -1,18 +1,14 @@
-// Markdown for the briefing and objectives (ui-stack.md): `marked`, then DOMPurify on every
-// rendered string, so the preview shows what players will see without running anything.
+// Markdown for the briefing and objectives (ui-stack.md). The preview uses the players' own
+// renderer and sanitiser (`@wrx/ui`), so it shows exactly what players will see, and raw HTML,
+// remote images and forms in a draft never reach the admin page either (security review F8).
 import * as Tabs from '@radix-ui/react-tabs'
-import DOMPurify from 'dompurify'
-import { Marked } from 'marked'
+import { renderMarkdown } from '@wrx/ui'
 import { useId, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import type { DesignIssue } from '@wrx/schemas'
 import { IssueList } from './controls.tsx'
 
-/** Markdown as sanitised HTML. A new `Marked` per call keeps no shared, mutable parser. */
-export function renderMarkdown(markdown: string): string {
-  const html = new Marked({ gfm: true, breaks: false }).parse(markdown, { async: false })
-  return DOMPurify.sanitize(html)
-}
+export { renderMarkdown }
 
 export function MarkdownView({
   markdown,

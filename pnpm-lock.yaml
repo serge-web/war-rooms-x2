@@ -175,12 +175,9 @@ importers:
       '@wrx/theme':
         specifier: workspace:*
         version: link:../theme
-      dompurify:
-        specifier: 3.4.16
-        version: 3.4.16
-      marked:
-        specifier: 18.1.0
-        version: 18.1.0
+      '@wrx/ui':
+        specifier: workspace:*
+        version: link:../ui
       zod:
         specifier: ^4.6.7
         version: 4.6.7
