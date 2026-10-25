@@ -137,6 +137,7 @@ const OPS = {
   'pubsub.getSubscriptions': [z.tuple([s]), z.array(subscriptionEntry)],
   'pubsub.setSubscriptions': [z.tuple([s, z.array(subscriptionEntry)]), none],
   'admin.onlineUsers': [z.tuple([]), z.array(s)],
+  'admin.registeredUsers': [z.tuple([]), z.array(s)],
   'admin.addUser': [z.tuple([s, s]), none],
   'admin.deleteUser': [z.tuple([s]), none],
   'admin.changePassword': [z.tuple([s, s]), none],

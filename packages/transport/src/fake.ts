@@ -215,6 +215,7 @@ export class FakeSession implements Session {
 
   readonly admin: AdminApi = {
     onlineUsers: () => this.call('admin', 'onlineUsers', [], []),
+    registeredUsers: () => this.call('admin', 'registeredUsers', [], []),
     addUser: (jid, password) => this.call('admin', 'addUser', [jid, password], undefined),
     deleteUser: (jid) => this.call('admin', 'deleteUser', [jid], undefined),
     changePassword: (jid, password) =>

@@ -6,6 +6,7 @@ export { AdminOps } from './ops.ts'
 export type {
   AdminOpsOptions,
   Ensured,
+  JoinRoleReading,
   NodeAccessChange,
   NodeSnapshot,
   RoleAccessPlan,
@@ -20,3 +21,5 @@ export { MIN_PASSPHRASE_CHARS, ObserverVault, VAULT_KDF, VAULT_STORAGE_KEY } fro
 export type { VaultOptions } from './vault.ts'
 // WP 2.3: publish planning and execution over these primitives.
 export * from './publish/index.ts'
+// WP 2.10: audit the server against the design, and repair what differs.
+export * from './audit/index.ts'

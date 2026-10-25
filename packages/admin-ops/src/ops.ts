@@ -26,6 +26,7 @@ import type {
   AffiliationEntry,
   Endpoint,
   MucAffiliation,
+  MucRole,
   NodeConfig,
   Outcome,
   PubsubAffiliationEntry,
@@ -95,6 +96,11 @@ export interface RoleScope {
   /** Node names to clear. Default: every node on the service. */
   readonly nodes?: readonly string[]
 }
+
+/** One room's answer to the role's own join (`readJoinRoles`): the role it got, or the refusal. */
+export type JoinRoleReading =
+  | { readonly roomId: string; readonly role: MucRole; readonly error?: undefined }
+  | { readonly roomId: string; readonly role?: undefined; readonly error: TransportError }
 
 export interface RoomSnapshot {
   readonly roomId: string
@@ -421,6 +427,40 @@ export class AdminOps {
       if (!room.ok) return Promise.resolve(room)
     }
     return this.readOnlyIn(op, roleId, roomIds)
+  }
+
+  /**
+   * The MUC role each room gives this role on joining, read through the role's own login with
+   * its vault password (WP 2.10 audit). No admin command shows a stored role (WP 0.1, R13), so
+   * this is the only way to see whether a read-only role really is a visitor. It changes nothing:
+   * the role's session joins each room, notes its role and leaves, and is always closed. Its
+   * presence shows briefly in each room. A room it cannot join is reported with the refusal.
+   */
+  async readJoinRoles(
+    roleId: string,
+    roomIds: readonly string[],
+  ): OpsOutcome<readonly JoinRoleReading[]> {
+    const op = 'readJoinRoles'
+    const role = this.checkRole(op, roleId)
+    if (!role.ok) return role
+    for (const roomId of roomIds) {
+      const room = this.checkRoom(op, roomId)
+      if (!room.ok) return room
+    }
+    return this.asRole(op, roleId, async (session) => {
+      const readings: JoinRoleReading[] = []
+      for (const roomId of roomIds) {
+        const room = this.roomJid(roomId)
+        const joined = await session.muc.join(room, roleId)
+        if (!joined.ok) {
+          readings.push({ roomId, error: joined.error })
+          continue
+        }
+        readings.push({ roomId, role: joined.value.role })
+        await session.muc.leave(room)
+      }
+      return opsOk(readings)
+    })
   }
 
   private async readOnlyIn(

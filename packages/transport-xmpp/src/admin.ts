@@ -71,14 +71,33 @@ export class XmppAdmin implements AdminApi {
     return result
   }
 
+  /** §4.18. The list may hold full or bare JIDs; the interface reports accounts. */
+  private async listOnline(): Promise<string[]> {
+    const result = await this.command('get-online-users-list', [
+      { name: 'max_items', value: '1000' },
+    ])
+    const jids = listField(result.form, this.core.adapter.onlineUsersField)
+    return [...new Set(jids.map((j) => JID.toBare(j)))]
+  }
+
   onlineUsers(): Outcome<readonly string[]> {
+    return this.core.run(() => this.listOnline())
+  }
+
+  registeredUsers(): Outcome<readonly string[]> {
     return this.core.run(async () => {
-      // §4.18. The list may hold full or bare JIDs; the interface reports accounts.
-      const result = await this.command('get-online-users-list', [
-        { name: 'max_items', value: '1000' },
+      // §4.17 ("none" is the form's no-limit option). ejabberd completes at once with every
+      // account (the adapter records how).
+      const result = await this.command('get-registered-users-list', [
+        { name: 'max_items', value: 'none' },
       ])
-      const jids = listField(result.form, this.core.adapter.onlineUsersField)
-      return [...new Set(jids.map((j) => JID.toBare(j)))]
+      const jids = listField(result.form, this.core.adapter.registeredUsersField)
+      const bare = [...new Set(jids.map((j) => JID.toBare(j)))]
+      // Online SASL ANONYMOUS sessions are not accounts, though a server may list them.
+      const anonymous = (jid: string) => this.core.adapter.isAnonymousAccount(jid)
+      if (!bare.some(anonymous)) return bare
+      const online = new Set(await this.listOnline())
+      return bare.filter((j) => !(anonymous(j) && online.has(j)))
     })
   }
 

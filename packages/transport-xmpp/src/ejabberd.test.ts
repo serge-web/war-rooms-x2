@@ -71,6 +71,33 @@ describe('ejabberd adapter: stream errors, ad-hoc fields, timestamps', () => {
     ).toEqual([{ name: 'accountjids', value: ['b@localhost'] }])
     expect(ejabberd.onlineUsersField).toBe('onlineuserjids')
     expect(ejabberd.onlineUsersCountField).toBe('onlineusersnum')
+    expect(ejabberd.registeredUsersField).toBe('registereduserjids')
+  })
+
+  it('takes ejabberd’s anonymous localparts (long decimal numbers) for sessions', () => {
+    expect(ejabberd.isAnonymousAccount('1080128588868944608416002@localhost')).toBe(true)
+    expect(ejabberd.isAnonymousAccount('290422220885955458115906@localhost')).toBe(true)
+    expect(ejabberd.isAnonymousAccount('blue-co@localhost')).toBe(false)
+    expect(ejabberd.isAnonymousAccount('007@localhost')).toBe(false)
+  })
+
+  it('reads the registered-users list ejabberd sends, admin listed twice (WP 2.10 probe)', () => {
+    const stanza = parse(
+      `<iq xmlns='jabber:client' type='result' from='localhost' id='r'>` +
+        `<command xmlns='http://jabber.org/protocol/commands' status='completed' ` +
+        `node='http://jabber.org/protocol/admin#get-registered-users-list'>` +
+        `<x type='form' xmlns='jabber:x:data'>` +
+        `<field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/admin</value></field>` +
+        `<field var='registereduserjids' type='jid-multi' label='The list of all users'>` +
+        `<value>admin@localhost</value><value>probe-a@localhost</value>` +
+        `<value>admin@localhost</value></field></x></command></iq>`,
+    )
+    const form = (stanza as { command?: { form?: Parameters<typeof listField>[0] } }).command?.form
+    expect(listField(form, ejabberd.registeredUsersField)).toEqual([
+      'admin@localhost',
+      'probe-a@localhost',
+      'admin@localhost',
+    ])
   })
 
   it('treats delete-user item-not-found as an account already gone (R-E)', () => {

@@ -54,6 +54,33 @@ export function s04(ctx: Ctx): void {
       expect(online.every((j) => !j.includes('/'))).toBe(true)
     })
 
+    // §4.17 get-registered-users-list (field name is the server's: ejabberd `registereduserjids`,
+    // which lists the admin twice, and online anonymous sessions too). Every account once, online
+    // or not, as bare JIDs; not a deleted account, nor a SASL ANONYMOUS session (D20). The audit
+    // finds accounts with no role from it (ADM-41).
+    it('lists every registered account once as bare JIDs, not a deleted one or a session', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const user = account()
+      try {
+        must(await admin.admin.addUser(ctx.jid(user), 'pw'), 'add-user')
+        const anon = await ctx.anonymous()
+        const listed = must(await admin.admin.registeredUsers(), 'registered users')
+        for (const jid of [ctx.jid(user), ctx.jid(fx.users.blueObs), ctx.jid('admin')]) {
+          expect(listed).toContain(jid)
+        }
+        expect(listed).not.toContain(anon.jid.split('/')[0])
+        expect(listed.every((j) => !j.includes('/'))).toBe(true)
+        expect(new Set(listed).size).toBe(listed.length)
+      } finally {
+        await admin.admin.deleteUser(ctx.jid(user))
+      }
+      const after = must(await admin.admin.registeredUsers(), 'registered users after delete')
+      expect(after).not.toContain(ctx.jid(user))
+      const player = await ctx.login(fx.users.blueCo)
+      expect(errorOf(await player.admin.registeredUsers())?.condition).toBe('forbidden')
+    })
+
     // §4.6 end-user-session ends every session of the account (D22: a role may have several).
     it('end-user-session ends every session of the account with session-ended', async () => {
       const admin = ctx.admin()

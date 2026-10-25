@@ -9,8 +9,10 @@
     "integration",
     "ejabberd",
     "ejabberd-publish",
+    "ejabberd-audit",
     "scripts",
     "vitest.ejabberd.config.ts",
-    "vitest.publish.ejabberd.config.ts"
+    "vitest.publish.ejabberd.config.ts",
+    "vitest.audit.ejabberd.config.ts"
   ]
 }

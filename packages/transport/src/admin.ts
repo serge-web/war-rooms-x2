@@ -5,6 +5,12 @@ import type { Outcome } from './errors.ts'
 export interface AdminApi {
   /** Bare JIDs of accounts currently online (XEP-0133 §4.18). */
   onlineUsers(): Outcome<readonly string[]>
+  /**
+   * Bare JIDs of every registered account on the domain, the admin's included, each once
+   * (XEP-0133 §4.17 get-registered-users-list). The audit uses it to find accounts with no role
+   * (ADM-41).
+   */
+  registeredUsers(): Outcome<readonly string[]>
   /** §4.1. Fails `conflict` if the account exists. */
   addUser(jid: string, password: string): Outcome<void>
   /** §4.2. A missing account is success: it is already gone (ADM-39, R-E). */

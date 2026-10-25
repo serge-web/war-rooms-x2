@@ -18,6 +18,8 @@ import type { ThemesSlot } from './sections/ThemesSection.tsx'
 import type { PublishConnection } from './publish/controller.ts'
 import { PublishSection } from './publish/PublishSection.tsx'
 import { usePublish } from './publish/usePublish.ts'
+import { AuditSection } from './audit/AuditSection.tsx'
+import { useAudit } from './audit/useAudit.ts'
 import { useDraft, useDraftValidation } from './useDraft.ts'
 import './admin.css'
 
@@ -29,6 +31,7 @@ export const ADMIN_SECTIONS = Object.freeze([
   'themes',
   'access',
   'publish',
+  'audit',
 ] as const)
 export type AdminSection = (typeof ADMIN_SECTIONS)[number]
 
@@ -40,6 +43,7 @@ const SECTION_LABEL: Readonly<Record<AdminSection, string>> = Object.freeze({
   themes: 'Themes',
   access: 'Access matrix',
   publish: 'Publish',
+  audit: 'Audit',
 })
 
 /** The issue paths that belong to each section, for the menu's counts. */
@@ -51,6 +55,7 @@ const SECTION_PATHS: Readonly<Record<AdminSection, readonly string[]>> = Object.
   themes: ['assets'],
   access: [],
   publish: [],
+  audit: [],
 })
 
 export interface AdminAppProps {
@@ -80,6 +85,7 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
   const validation = useDraftValidation(snapshot.draft, registry)
   const matrix = useDesignAccess(snapshot.draft.design)
   const publishing = usePublish(publish, store)
+  const auditing = useAudit(publish, publishing.controller, store)
   return (
     <AdminAppCore
       draft={snapshot.draft}
@@ -100,6 +106,7 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
           {...(print === undefined ? {} : { print })}
         />
       }
+      auditPanel={<AuditSection audit={auditing} design={snapshot.draft.design} />}
       {...rest}
     />
   )
@@ -117,6 +124,8 @@ export interface AdminAppCoreProps extends Omit<
   readonly saveError?: string | undefined
   /** The Publish section, drawn by the host (it holds the server connection). */
   readonly publishPanel?: ReactNode
+  /** The Audit section (WP 2.10), drawn by the host like Publish. */
+  readonly auditPanel?: ReactNode
 }
 
 export function AdminAppCore({
@@ -132,6 +141,7 @@ export function AdminAppCore({
   initialSection = 'game',
   now,
   publishPanel,
+  auditPanel,
 }: AdminAppCoreProps) {
   const [section, setSection] = useState<AdminSection>(initialSection)
   const props = { draft, validation, onChange }
@@ -199,6 +209,7 @@ export function AdminAppCore({
             <AccessSectionCore matrix={matrix} design={draft.design} validation={validation} />
           )}
           {section === 'publish' && publishPanel}
+          {section === 'audit' && auditPanel}
         </main>
       </div>
     </div>
