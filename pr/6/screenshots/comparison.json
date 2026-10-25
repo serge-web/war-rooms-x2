@@ -4,6 +4,10 @@
     "status": "new"
   },
   {
+    "name": "admin-preview-as-role",
+    "status": "new"
+  },
+  {
     "name": "admin-publish-plan",
     "status": "new"
   },
@@ -14,6 +18,10 @@
   {
     "name": "app-shell",
     "status": "changed"
+  },
+  {
+    "name": "multi-client-view",
+    "status": "new"
   },
   {
     "name": "page-architecture",
@@ -41,6 +49,14 @@
   },
   {
     "name": "player-chat",
+    "status": "new"
+  },
+  {
+    "name": "player-column",
+    "status": "new"
+  },
+  {
+    "name": "player-objectives-editor",
     "status": "new"
   },
   {

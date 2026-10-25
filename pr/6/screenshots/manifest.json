@@ -2,18 +2,22 @@
   "version": 1,
   "shots": {
     "admin-design-editor": "19e6c689cf3828c84a9d0285340fd4692dfa856a1b1a69eed6b23ad7e24d95ba",
+    "admin-preview-as-role": "68ab9dfc64c322becbb86fd01c545b64b5734e3cd7859c59e4cf16c9e8ff24ec",
     "admin-publish-plan": "3fd09d0fe07ef36781b7ed42c36435cad6f624dc2008bbf9b0a4d56f5f9143d9",
     "admin-theme-editor": "439bff2dc507a75d77f92e84c60af2eb1702b75402e35b643f746e957da1fd9f",
     "app-shell": "5ff89cbf784153bf8315745e1493ce45ebd32769c4f12855a283eeccbc2656c6",
+    "multi-client-view": "bf4c58b750a19b730f74c0a61ef662589d75f0686a4a5b4eb09663a42fbf0ff4",
     "page-architecture": "5aa09f875d271e77e58eb26bfd8d7362001f38d50777ceb2646f150ead516175",
     "page-background": "4f59478445dd91c4d2c65897daae64c311513341a2bebe5bfb803133e194f3af",
     "page-blog": "e4785a1435676c7086d1e300fffdfb7f1bbf765f388863aec4330c8fcd4557a2",
     "page-data-dictionary": "a0bee9904da82f178d4892e043a6eb63395429d81cb2a39da910a0a04210f951",
     "page-home": "54072753cfe042bdad5bd7e6687569c49885fe78939b3f433a9ab31cb46f09e9",
     "page-technical": "136953769f65b14da7a7a5eb246366290e333d66ae510309dcf88d53eeef5793",
-    "player-chat": "3b878af32f386ec1a7c082353921feaf1753f8c7dde812571a4df3fccd55ac47",
-    "player-shell": "3b878af32f386ec1a7c082353921feaf1753f8c7dde812571a4df3fccd55ac47",
+    "player-chat": "c0fc4ec6497459c0968bcdcafc581603b0ee08c2761dbff5569583ce161431b1",
+    "player-column": "32855f93646326ecc5d796ec396b33fa7f5dfa537b312abb54c1568001c2a8dd",
+    "player-objectives-editor": "b68509a3f715503479ec60c038143d090d09168a3404db2f53c3fc42e4f7c997",
+    "player-shell": "c0fc4ec6497459c0968bcdcafc581603b0ee08c2761dbff5569583ce161431b1",
     "player-welcome": "5ff89cbf784153bf8315745e1493ce45ebd32769c4f12855a283eeccbc2656c6",
-    "player-workspace": "7ec9a13edb0e1df31336d144cf2977fdae9f424dd820b9200596c90426b91317"
+    "player-workspace": "b5438f7cacc9675c2d303dbf997ce6c7ee16b201c0f6e7a2d72f65c1a0abd4d0"
   }
 }
