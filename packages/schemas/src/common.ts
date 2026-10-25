@@ -1,3 +1,4 @@
+import './jitless.ts'
 import { z } from 'zod'
 
 /** Size limits shared by the client, the mock and the admin tools (SRD §3 rule 12, PLY-53, R15). */

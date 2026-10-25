@@ -1,3 +1,5 @@
+// First, before any module builds a zod schema: no eval under the CSP (security review F7).
+import '@wrx/schemas/jitless'
 import { basePathOf, hostNames, mockNamespace } from '@wrx/mock-host'
 import type { MockHost } from '@wrx/mock-host'
 import { webLayoutStorage } from '@wrx/player-ui'

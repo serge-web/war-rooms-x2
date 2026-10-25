@@ -18,6 +18,60 @@ function markedXmppAutolink(): Plugin {
   }
 }
 
+/**
+ * The Content-Security-Policy of a build (security review F7), as a `<meta>` tag in the built
+ * index.html; deploy/README.md gives the same policy as a header, with the parts a meta tag
+ * cannot carry. Scripts, workers, styles, fonts and images come only from the build itself:
+ * no inline script and no eval. Inline styles stay allowed: React style attributes,
+ * FlexLayout's layout and the styles a popout copies from its opener use them. Images also
+ * take `data:`/`blob:` (theme assets are shown as `data:` URLs, §3 rule 12).
+ *
+ * `connect-src`: the mock build talks to nothing but its own origin (config.json, the mock's
+ * SharedWorker). The server build reads its endpoint from config.json at run time, so the host
+ * is not known when building: it allows any `wss:` host, and plain `ws:` only to this machine,
+ * as config.ts does (F13). An operator who knows the host narrows it with the header.
+ *
+ * Only in `vite build`: the dev server needs an inline React refresh preamble and its own
+ * WebSocket.
+ */
+export function contentSecurityPolicy(server: boolean): string {
+  const connect = server
+    ? "'self' wss: ws://localhost:* ws://127.0.0.1:* ws://*.localhost:*"
+    : "'self'"
+  return [
+    "default-src 'self'",
+    "script-src 'self'",
+    "worker-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    `connect-src ${connect}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'none'",
+  ].join('; ')
+}
+
+function cspMeta(server: boolean): Plugin {
+  return {
+    name: 'wrx-csp-meta',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler: () => [
+        {
+          tag: 'meta',
+          attrs: {
+            'http-equiv': 'Content-Security-Policy',
+            content: contentSecurityPolicy(server),
+          },
+          injectTo: 'head-prepend',
+        },
+      ],
+    },
+  }
+}
+
 // Two builds of one app:
 // - `vite build` (default): mock only. Previews, the demo, snapshots and the site use it, so it
 //   reads no config.json and carries no real transport or endpoint (DOC-12).
@@ -26,7 +80,7 @@ function markedXmppAutolink(): Plugin {
 export default defineConfig(({ mode }) => {
   const server = mode === 'server'
   return {
-    plugins: [react(), markedXmppAutolink()],
+    plugins: [react(), markedXmppAutolink(), cspMeta(server)],
     // Relative asset URLs, so one build runs under any base path: PR previews, the demo and
     // snapshots on GitHub Pages, or a customer's static host (DOC-11, NFR-8).
     base: './',

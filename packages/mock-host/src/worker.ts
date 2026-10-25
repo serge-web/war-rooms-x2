@@ -1,5 +1,7 @@
 // The SharedWorker entry (D17): bundled by Vite from env.ts's `new SharedWorker(new URL(...))`.
 // Everything the worker holds lives inside serveSharedWorker's closure, not in this module.
+// First, before any module builds a zod schema: no eval under a CSP header (F7).
+import '@wrx/schemas/jitless'
 import { portChannel } from './env.ts'
 import type { Locks } from './env.ts'
 import { IndexedDbStore, UnavailableStore } from './store.ts'

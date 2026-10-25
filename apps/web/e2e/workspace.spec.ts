@@ -196,7 +196,15 @@ test('a popped-out tab docks back when its window closes', async ({ page }) => {
     .getByRole('button', { name: 'Popout selected tab' })
     .click()
   const popout = await popup
+  // popout.html has its own Content-Security-Policy (F7): nothing the workspace puts in it may
+  // be refused.
+  popout.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`popout: ${m.text()}`)
+  })
   await expect(popout.getByRole('region', { name: ROOMS.talks, exact: true })).toBeVisible()
+  expect(
+    await popout.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content'),
+  ).toContain("script-src 'none'")
   // The room's chat panel works in the popout window too.
   await expect(popout.getByRole('region', { name: `Messages in ${ROOMS.talks}` })).toContainText(
     'Blue proposes a ceasefire',
