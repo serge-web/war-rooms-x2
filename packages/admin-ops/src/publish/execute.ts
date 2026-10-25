@@ -115,17 +115,12 @@ async function runStep(
       const created = await ops.createAccount(action.roleId, password, {
         readOnly: action.readOnly,
       })
-      if (created.ok) {
-        passwordsSet.push(action.roleId)
-        return opsOk(undefined)
-      }
-      if (created.error.code !== 'exists') return created
-      // A partial earlier publish created it; its password is set again so this one is known
-      // (and the vault holds it for a read-only role).
-      const reset = await ops.setPassword(action.roleId, password, { readOnly: action.readOnly })
-      if (!reset.ok) return reset
+      // An existing account fails `exists`: its password is never reset as a side effect (F3).
+      // The planner creates only accounts the server does not list, so it was made since then;
+      // planning again shows it.
+      if (!created.ok) return created
       passwordsSet.push(action.roleId)
-      return opsOk('the account already existed; its password was set to the new one')
+      return opsOk(undefined)
     }
     case 'reset-password': {
       const reset = await ops.setPassword(action.roleId, passwordFor(action.roleId), {

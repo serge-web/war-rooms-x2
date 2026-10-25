@@ -433,13 +433,18 @@ export function definePublishIntegration(backend: PublishBackend): void {
       it('the re-run plans what is left, with the same version', () => {
         expect(rerun?.designVersion).toBe(3)
         expect(rerun?.steps.map((s) => s.id)).toContain('account:red-obs')
+        // The account the first run made exists: it is neither created again nor reset (F3).
+        expect(rerun?.steps.map((s) => s.id)).not.toContain('account:red-xo')
+        expect(rerun?.warnings).toContainEqual(
+          expect.objectContaining({ kind: 'account-exists', roleId: 'red-xo' }),
+        )
         expect(rerun?.steps.at(-1)?.id).toBe('doc:game-setup:current')
       })
 
       it('running it completes the publish; then nothing is left', async () => {
         const done = await apply(rerun ?? (await plan(thirdDesign())))
         expect(done.ok).toBe(true)
-        expect(done.notes.get('account:red-xo')).toMatch(/already existed/)
+        expect(done.passwordsSet).not.toContain('red-xo')
         expect(await gameVersion()).toBe(3)
         expect((await plan(thirdDesign())).steps).toEqual([])
         expect(await postResult('red-xo', 'red-hq')).toMatchObject({ posted: 'ok' })

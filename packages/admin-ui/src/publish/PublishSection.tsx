@@ -284,6 +284,8 @@ function warningText(w: PlanWarning): string {
       return w.message
     case 'password-reset':
       return `${w.name} gets a new password: the vault must hold it to make the role read-only. Its players need the new password at their next login.`
+    case 'account-exists':
+      return `The account of ${w.name} (${w.roleId}) already exists, so it is not created and its password is not changed. If its players do not have the password, reset it from the credentials sheet.`
     case 'objectives-kept':
       return `The objectives of force ${w.forceId} were removed from the draft, but the published text stays: no operation retracts it.`
   }

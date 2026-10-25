@@ -33,6 +33,11 @@ export interface ServerView {
   readonly vault: VaultView
   /** Set while a publish has started and not finished (marker.ts). */
   readonly marker: PublishMarker | undefined
+  /**
+   * The server's registered accounts (XEP-0133 registered users), bare JIDs as listed, so the
+   * planner creates only accounts that do not exist and never resets one by accident (F3).
+   */
+  readonly registered: readonly string[]
 }
 
 /** The role id of a bare or full JID on this domain, if it names a role account. */
@@ -80,6 +85,14 @@ export async function readServerView(
       cause: online.error,
     })
   }
+  const registered = await ops.session.admin.registeredUsers()
+  if (!registered.ok) {
+    return opsErr('refused', 'listing registered users failed', {
+      op: 'readServerView',
+      step: 'registered users',
+      cause: registered.error,
+    })
+  }
   const domain = domainpart(ops.session.jid)
   const exists = await ObserverVault.exists(ops.session.admin)
   if (!exists.ok) return exists
@@ -96,5 +109,6 @@ export async function readServerView(
     online: onlineRoles,
     vault: vault === undefined ? { exists: exists.value } : { exists: true, roles: vault.roles() },
     marker: await options.marker?.read(),
+    registered: registered.value,
   })
 }

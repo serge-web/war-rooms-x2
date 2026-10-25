@@ -121,6 +121,12 @@ export type PlanWarning =
     }
   /** ADM-26, ADM-37: the vault has no password for a role that becomes read-only. */
   | { readonly kind: 'password-reset'; readonly roleId: string; readonly name: string }
+  /**
+   * The role's account exists although nothing else on the server shows the role (an earlier
+   * publish that stopped, or an account made outside the tooling). It is not created and its
+   * password is not changed; reset it from the credentials sheet if its players need one (F3).
+   */
+  | { readonly kind: 'account-exists'; readonly roleId: string; readonly name: string }
   /** No AdminOps operation retracts an item, so removed objectives text stays published. */
   | { readonly kind: 'objectives-kept'; readonly forceId: string }
 
@@ -372,6 +378,11 @@ export function planPublish(
   const serverRooms = new Map(view.rooms.map((r) => [r.roomId, r]))
   const serverNodes = new Map(view.nodes.map((n) => [n.node, n]))
   const known = new Set(knownRoles(view))
+  const registered = new Set(
+    view.registered
+      .map((j) => roleIdOf(j, view.domain))
+      .filter((id): id is string => id !== undefined),
+  )
   const targetRoles = new Set(target.roles)
   const readOnlyRoles = new Set(target.readOnlyRoles)
 
@@ -386,9 +397,17 @@ export function planPublish(
   let vaultUsed = false
 
   // ---- accounts ------------------------------------------------------------------------------
+  // Only an account the server does not list is created. An existing one keeps its password: a
+  // reset is its own destructive, confirmed step (below, or the credentials sheet), never a side
+  // effect of a create (F3).
   const created = new Set<string>()
   for (const roleId of target.roles) {
-    if (known.has(roleId)) continue
+    if (registered.has(roleId)) {
+      if (!known.has(roleId)) {
+        warnings.push({ kind: 'account-exists', roleId, name: roleName(roleId) })
+      }
+      continue
+    }
     const readOnly = readOnlyRoles.has(roleId)
     if (readOnly || view.vault.exists) vaultUsed = true
     created.add(roleId)

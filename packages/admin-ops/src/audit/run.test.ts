@@ -6,6 +6,7 @@ import { err, ok } from '@wrx/transport'
 import type { AffiliationEntry, MucAffiliation } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, MUC, ops, rig } from '../fixtures.ts'
+import { publishedView } from '../publish/fixtures.ts'
 import type { Rig } from '../fixtures.ts'
 import { diffAudit, repairAndAudit, repairItems, runAudit } from './index.ts'
 import type { AuditItem, AuditProgress } from './index.ts'
@@ -185,6 +186,31 @@ describe('repair', () => {
     expect(ops(r.log)).toContain('admin.admin.deleteUser')
   })
 
+  it('an account-missing repair never resets an account that exists (security review F3)', async () => {
+    const design = sampleDesign()
+    const view = publishedView(design, {
+      registered: [
+        jid('admin'),
+        ...design.roles.map((r) => jid(r.id)).filter((j) => j !== jid('blue-co')),
+      ],
+    })
+    const report = diffAudit(design, {
+      view,
+      registered: view.registered,
+      voice: [],
+      messageCounts: new Map(),
+    })
+    const item = report.items.find((i) => i.id === 'account-missing:blue-co')
+    if (item === undefined) throw new Error('no account-missing item')
+    const r = await rig()
+    // The account exists after all (made since the audit, or hidden from the listing).
+    r.admin.stub('admin', 'addUser', () => Promise.resolve(err('conflict', 'exists')))
+    const result = await repairItems(r.ops, [item], { passwordFor, confirmed: new Set() })
+    expect(result.failed).toMatchObject([{ itemId: item.id, error: { code: 'exists' } }])
+    expect(ops(r.log)).not.toContain('admin.admin.changePassword')
+    expect(result.passwordsSet).toEqual([])
+  })
+
   it('a failed repair does not stop the others', async () => {
     const r = await rig()
     r.admin.stub('pubsub', 'getNodeConfig', () => Promise.resolve(err('forbidden')))
@@ -197,6 +223,7 @@ describe('repair', () => {
         online: [],
         vault: { exists: false },
         marker: undefined,
+        registered: [],
       },
       registered: [],
       voice: [],
