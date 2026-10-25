@@ -5,10 +5,12 @@
 //   with every role that has access as a member, and read-only roles (observers, `read`
 //   entries) stored as visitors, the state the vault route leaves behind (ADM-37);
 // - the §3 nodes: `game-setup` and the game theme's assets open, everything else whitelist with
-//   the admin as owner and publisher; objectives readable by their force and published by the
-//   umpire force's roles, with the design's text as the admin's own item (§3 rule 14);
-// - optional message history, archived for MAM.
-// Umpire-force roles reach every room through effective access (D8, §3 rule 4).
+//   the admin as owner and publisher; objectives readable by their force and the White Force's
+//   observers, and published by the White Force's other roles, with the design's text as the
+//   admin's own item (§3 rule 14);
+// - optional message history, archived for MAM;
+// - optional private storage of the admin account (the demo seed's observer vault).
+// White Force roles reach rooms through effective access (D8, §3 rule 4).
 import { effectiveAccess } from '@wrx/domain'
 import {
   SINGLETON_NODES,
@@ -52,6 +54,11 @@ export interface DesignSeed {
     readonly roles?: Readonly<Record<string, string>>
   }
   readonly history?: readonly SeedMessage[]
+  /**
+   * XEP-0049 private storage of the admin account, by key: e.g. the demo observer vault's
+   * ciphertext (ADM-37), as the admin tooling stores it.
+   */
+  readonly adminPrivate?: Readonly<Record<string, string>>
 }
 
 export const DEFAULT_SEED_DOMAIN = 'wrx.mock'
@@ -181,8 +188,12 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     })
   }
 
-  const umpireForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const umpires = design.roles.filter((r) => umpireForces.has(r.forceId)).map((r) => jidOf(r.id))
+  // The White Force (umpire flag): its roles read every force's objectives, and those that are
+  // not observers publish them (§3 rule 14). Observers never publish (review F5).
+  const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
+  const white = design.roles.filter((r) => whiteForces.has(r.forceId))
+  const editors = white.filter((r) => !r.isObserver).map((r) => jidOf(r.id))
+  const whiteObservers = white.filter((r) => r.isObserver).map((r) => jidOf(r.id))
   const publicAssets = new Set(publicAssetIds(design.game))
 
   addNode(
@@ -230,14 +241,17 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
   for (const force of design.forces) {
-    // §3 rule 14: one item per author, so room for the admin and every umpire.
-    const readers = design.roles.filter((r) => r.forceId === force.id).map((r) => jidOf(r.id))
+    // §3 rule 14: one item per author, so room for the admin and every White Force editor.
+    const readers = [
+      ...design.roles.filter((r) => r.forceId === force.id).map((r) => jidOf(r.id)),
+      ...whiteObservers,
+    ]
     const objectives = design.objectives.find((o) => o.forceId === force.id)
     addNode(
       nodeName.objectives(force.id),
-      gameNode('whitelist', Math.max(10, umpires.length + 1)),
-      readers,
-      umpires,
+      gameNode('whitelist', Math.max(10, editors.length + 1)),
+      [...new Set(readers)],
+      editors,
       objectives === undefined ? [] : [{ id: 'admin', doc: objectives }],
     )
   }
@@ -268,7 +282,11 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
       accounts,
       rooms,
       nodes,
-      privateStorage: [],
+      privateStorage: Object.entries(seed.adminPrivate ?? {}).map(([key, value]) => ({
+        jid: admin,
+        key,
+        value,
+      })),
       lastStanzaId: history.at(-1)?.message.stanzaId ?? '0',
     },
   }

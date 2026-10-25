@@ -8,15 +8,15 @@ function base(): AccessInput {
     forces: [
       force('blue', { order: 0 }),
       force('red', { order: 1 }),
-      force('umpire', { order: 2, isUmpire: true }),
+      force('white', { order: 2, isUmpire: true }),
     ],
     roles: [
       role('blue-co', 'blue'),
       role('blue-2ic', 'blue', { order: 1 }),
       role('blue-observer', 'blue', { isObserver: true, order: 2 }),
       role('red-co', 'red'),
-      role('umpire-1', 'umpire'),
-      role('umpire-observer', 'umpire', { isObserver: true, order: 1 }),
+      role('white-1', 'white'),
+      role('white-observer', 'white', { isObserver: true, order: 1 }),
     ],
     rooms: [],
   }
@@ -70,23 +70,27 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
     expect(accessOf(m, 'blue-log', 'blue-2ic')).toBe('read')
   })
 
-  it('adds umpire-force roles to every room with write access (D8, PLY-15)', () => {
+  it('adds White Force roles that are not observers to every room with write access (D8, PLY-15)', () => {
     const m = matrixFor([
       room('empty', []),
       room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
-      room('umpires-read', [{ kind: 'role', id: 'umpire-1', access: 'read' }]),
+      room('white-read', [{ kind: 'role', id: 'white-1', access: 'read' }]),
     ])
-    for (const roomId of ['empty', 'red-hq', 'umpires-read']) {
-      expect(accessOf(m, roomId, 'umpire-1')).toBe('write')
+    for (const roomId of ['empty', 'red-hq', 'white-read']) {
+      expect(accessOf(m, roomId, 'white-1')).toBe('write')
     }
-    expect(m.cells.get('empty')?.get('umpire-1')?.reasons).toEqual(['umpire'])
+    expect(m.cells.get('empty')?.get('white-1')?.reasons).toEqual(['white-force'])
+    expect(m.cells.get('white-read')?.get('white-1')?.reasons).toEqual([
+      'role-entry',
+      'white-force',
+    ])
     expect(participantsOf(m, 'empty')).toEqual([
-      { roleId: 'umpire-1', access: 'write' },
-      { roleId: 'umpire-observer', access: 'read' },
+      { roleId: 'white-1', access: 'write' },
+      { roleId: 'white-observer', access: 'read' },
     ])
   })
 
-  it('caps observers at read, in every room, umpire or not (rule 5)', () => {
+  it('caps observers at read, in every room, White Force or not (rule 5)', () => {
     const m = matrixFor([
       room('blue-hq', [{ kind: 'force', id: 'blue', access: 'write' }]),
       room('obs', [{ kind: 'role', id: 'blue-observer', access: 'write' }]),
@@ -95,12 +99,60 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
     expect(accessOf(m, 'blue-hq', 'blue-observer')).toBe('read')
     expect(accessOf(m, 'obs', 'blue-observer')).toBe('read')
     expect(accessOf(m, 'red-hq', 'blue-observer')).toBe('none')
-    expect(accessOf(m, 'red-hq', 'umpire-observer')).toBe('read')
-    expect(m.cells.get('red-hq')?.get('umpire-observer')?.reasons).toEqual(['umpire', 'observer'])
+    expect(accessOf(m, 'red-hq', 'white-observer')).toBe('read')
+    expect(m.cells.get('red-hq')?.get('white-observer')?.reasons).toEqual(['white-observer-all'])
     expect(m.cells.get('blue-hq')?.get('blue-observer')?.reasons).toEqual([
       'force-entry',
       'observer',
     ])
+  })
+
+  it('gives a White Force observer with no assigned rooms read access to every room (rule 4, F5)', () => {
+    const m = matrixFor([
+      room('empty', []),
+      room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
+      // A force entry naming White is not an assignment, and does not give its observer write.
+      room('white-hq', [{ kind: 'force', id: 'white', access: 'write' }]),
+    ])
+    expect(roomsForRole(m, 'white-observer')).toEqual([
+      { roomId: 'empty', access: 'read' },
+      { roomId: 'red-hq', access: 'read' },
+      { roomId: 'white-hq', access: 'read' },
+    ])
+    for (const roomId of m.roomIds) {
+      expect(m.cells.get(roomId)?.get('white-observer')?.reasons).toEqual(['white-observer-all'])
+    }
+  })
+
+  it('limits a White Force observer with assigned rooms to those rooms, read only (rule 4, F5)', () => {
+    const m = matrixFor([
+      room('blue-hq', [
+        { kind: 'force', id: 'blue', access: 'write' },
+        { kind: 'role', id: 'white-observer', access: 'write' },
+      ]),
+      room('talks', [{ kind: 'role', id: 'white-observer', access: 'read' }]),
+      room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
+      room('white-hq', [{ kind: 'force', id: 'white', access: 'write' }]),
+    ])
+    expect(roomsForRole(m, 'white-observer')).toEqual([
+      { roomId: 'blue-hq', access: 'read' },
+      { roomId: 'talks', access: 'read' },
+    ])
+    expect(m.cells.get('blue-hq')?.get('white-observer')?.reasons).toEqual([
+      'role-entry',
+      'observer',
+    ])
+    expect(m.cells.get('talks')?.get('white-observer')?.reasons).toEqual(['role-entry'])
+    // Unassigned rooms, including one whose force entry names White, are not visible; the
+    // matrix still explains why.
+    for (const roomId of ['red-hq', 'white-hq']) {
+      expect(m.cells.get(roomId)?.get('white-observer')).toEqual({
+        access: 'none',
+        reasons: ['white-observer-unassigned'],
+      })
+    }
+    // Other White Force roles keep write everywhere; the observer's assignment is its own.
+    for (const roomId of m.roomIds) expect(accessOf(m, roomId, 'white-1')).toBe('write')
   })
 
   it('reports entries that name unknown forces or roles, and grants nothing for them', () => {
@@ -114,10 +166,10 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
       { roomId: 'x', message: 'unknown force "green"' },
       { roomId: 'x', message: 'unknown role "ghost"' },
     ])
-    expect(participantsOf(m, 'x').map((p) => p.roleId)).toEqual(['umpire-1', 'umpire-observer'])
+    expect(participantsOf(m, 'x').map((p) => p.roleId)).toEqual(['white-1', 'white-observer'])
   })
 
-  it('handles roles of an unknown force: role entries only, never umpire', () => {
+  it('handles roles of an unknown force: role entries only, never White Force access', () => {
     const input = base()
     const m = effectiveAccess({
       ...input,
@@ -144,8 +196,8 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
       'blue-2ic',
       'blue-observer',
       'red-co',
-      'umpire-1',
-      'umpire-observer',
+      'white-1',
+      'white-observer',
     ])
   })
 
@@ -166,7 +218,7 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
       { roomId: 'blue-hq', access: 'write' },
       { roomId: 'talks', access: 'read' },
     ])
-    expect(roomsForRole(m, 'umpire-1').map((r) => r.roomId)).toEqual(['blue-hq', 'red-hq', 'talks'])
+    expect(roomsForRole(m, 'white-1').map((r) => r.roomId)).toEqual(['blue-hq', 'red-hq', 'talks'])
     expect(roomsForRole(m, 'nobody')).toEqual([])
   })
 

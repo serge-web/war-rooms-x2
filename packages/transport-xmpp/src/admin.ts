@@ -10,26 +10,46 @@ import type { FieldValue } from './forms.ts'
 import { Refusal } from './refusal.ts'
 
 const NS_ADMIN = 'http://jabber.org/protocol/admin'
+/** The legacy store: every key in one JSON object (read only, for values written before F14). */
 const NS_PRIVATE = 'urn:wrx:private:0'
+/** Each key's own element: `<store xmlns='urn:wrx:private:1:<key>' v='1'>value</store>`. */
+const NS_PRIVATE_KEY = 'urn:wrx:private:1:'
 
-/** One private-storage value: element `<value xmlns='urn:wrx:private:0:KEY'>` holding text. */
+/**
+ * Private-storage values (XEP-0049). Each key has its own element, in its own namespace, so the
+ * server replaces only that element on a write: two admin sessions writing different keys at
+ * once (the vault and the publish marker, from two tabs) cannot lose each other's update, which
+ * a read-modify-write of one shared object could (security review F14). Each element is defined
+ * on its own path (`iq.privateStorage.<pathOf(key)>`): StanzaJS resolves every element defined
+ * on the same path to the last one defined, which is what broke the first per-key attempt.
+ *
+ * `v='1'` marks a stored value, so an empty text is a cleared key and a missing mark is a key
+ * never written this way, read from the legacy store instead.
+ */
 interface PrivateValue {
-  readonly key: string
   readonly value?: string
+  readonly v?: string
 }
 
 declare module 'stanza/protocol' {
   interface PrivateStorage {
     wrxPrivate?: PrivateValue
+    [key: `wrx_${string}`]: PrivateValue | undefined
   }
+}
+
+/** A JXT path segment for a key: no dots, one per key. */
+function pathOf(key: string): `wrx_${string}` {
+  const hex = Array.from(new TextEncoder().encode(key), (b) => b.toString(16).padStart(2, '0'))
+  return `wrx_${hex.join('')}`
 }
 
 /** Keys become part of an XML namespace, so they are kept to a safe alphabet. */
 const KEY_PATTERN = /^[a-z0-9][a-z0-9.-]{0,63}$/
 
 export class XmppAdmin implements AdminApi {
-  /** Private-storage keys whose element is registered with this session's StanzaJS registry. */
-  private readonly definedKeys = new Set<string>()
+  private storeDefined = false
+  private readonly keysDefined = new Set<string>()
 
   constructor(private readonly core: Core) {}
 
@@ -69,14 +89,33 @@ export class XmppAdmin implements AdminApi {
     return result
   }
 
+  /** §4.18. The list may hold full or bare JIDs; the interface reports accounts. */
+  private async listOnline(): Promise<string[]> {
+    const result = await this.command('get-online-users-list', [
+      { name: 'max_items', value: '1000' },
+    ])
+    const jids = listField(result.form, this.core.adapter.onlineUsersField)
+    return [...new Set(jids.map((j) => JID.toBare(j)))]
+  }
+
   onlineUsers(): Outcome<readonly string[]> {
+    return this.core.run(() => this.listOnline())
+  }
+
+  registeredUsers(): Outcome<readonly string[]> {
     return this.core.run(async () => {
-      // §4.18. The list may hold full or bare JIDs; the interface reports accounts.
-      const result = await this.command('get-online-users-list', [
-        { name: 'max_items', value: '1000' },
+      // §4.17 ("none" is the form's no-limit option). ejabberd completes at once with every
+      // account (the adapter records how).
+      const result = await this.command('get-registered-users-list', [
+        { name: 'max_items', value: 'none' },
       ])
-      const jids = listField(result.form, this.core.adapter.onlineUsersField)
-      return [...new Set(jids.map((j) => JID.toBare(j)))]
+      const jids = listField(result.form, this.core.adapter.registeredUsersField)
+      const bare = [...new Set(jids.map((j) => JID.toBare(j)))]
+      // Online SASL ANONYMOUS sessions are not accounts, though a server may list them.
+      const anonymous = (jid: string) => this.core.adapter.isAnonymousAccount(jid)
+      if (!bare.some(anonymous)) return bare
+      const online = new Set(await this.listOnline())
+      return bare.filter((j) => !(anonymous(j) && online.has(j)))
     })
   }
 
@@ -119,43 +158,74 @@ export class XmppAdmin implements AdminApi {
     })
   }
 
-  private defineKey(key: string): void {
+  private checkKey(key: string): void {
     if (!KEY_PATTERN.test(key)) {
       throw new Refusal({ condition: 'bad-request', text: `private key ${key} is not allowed` })
     }
-    if (this.definedKeys.has(key)) return
-    // XEP-0049 §2: storage is keyed by the child element's namespace, so each key gets its own.
+    if (!this.keysDefined.has(key)) {
+      this.core.client.stanzas.define({
+        element: 'store',
+        namespace: `${NS_PRIVATE_KEY}${key}`,
+        path: `iq.privateStorage.${pathOf(key)}`,
+        fields: { value: JXT.text(), v: JXT.attribute('v') },
+      })
+      this.keysDefined.add(key)
+    }
+    if (this.storeDefined) return
     this.core.client.stanzas.define({
-      element: 'value',
-      namespace: `${NS_PRIVATE}:${key}`,
-      type: key,
-      typeField: 'key',
-      aliases: [{ path: 'iq.privateStorage.wrxPrivate', impliedType: true }],
+      element: 'store',
+      namespace: NS_PRIVATE,
+      path: 'iq.privateStorage.wrxPrivate',
       fields: { value: JXT.text() },
     })
-    this.definedKeys.add(key)
+    this.storeDefined = true
+  }
+
+  /** XEP-0049 §3: the legacy stored object; empty if nothing is stored there. */
+  private async readStore(): Promise<Record<string, string>> {
+    const result = await sendIq(this.core.client, {
+      type: 'get',
+      privateStorage: { wrxPrivate: {} },
+    })
+    const text = result.privateStorage?.wrxPrivate?.value
+    if (text === undefined || text === '') return {}
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      throw new Refusal({ condition: 'invalid-response', text: 'private storage is not JSON' })
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Refusal({ condition: 'invalid-response', text: 'private storage is not an object' })
+    }
+    const values: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === 'string') values[key] = value
+    }
+    return values
   }
 
   getPrivate(key: string): Outcome<string | undefined> {
     return this.core.run(async () => {
-      this.defineKey(key)
+      this.checkKey(key)
+      const path = pathOf(key)
       const result = await sendIq(this.core.client, {
         type: 'get',
-        privateStorage: { wrxPrivate: { key } },
+        privateStorage: { [path]: {} },
       })
-      // The reply holds the one element asked for (§3.2); StanzaJS does not fill in `key` when
-      // reading it back. Never stored, it comes back empty.
-      const value = result.privateStorage?.wrxPrivate?.value
+      const own = result.privateStorage?.[path]
+      const value = own?.v === '1' ? own.value : (await this.readStore())[key]
       return value === undefined || value === '' ? undefined : value
     })
   }
 
+  /** One element for this key alone: the server replaces it and leaves every other key. */
   setPrivate(key: string, value: string): Outcome<void> {
     return this.core.run(async () => {
-      this.defineKey(key)
+      this.checkKey(key)
       await sendIq(this.core.client, {
         type: 'set',
-        privateStorage: { wrxPrivate: { key, value } },
+        privateStorage: { [pathOf(key)]: { v: '1', value } },
       })
     })
   }

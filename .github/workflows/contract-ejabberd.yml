@@ -36,6 +36,39 @@ jobs:
       - name: Contract suite (S00–S13, R1, errors, ordering)
         run: pnpm test:contract
 
+      - name: Admin operations on ejabberd (WP 2.1)
+        run: pnpm test:admin-ops:ejabberd
+
+      - name: Publish and provisioning on ejabberd (WP 2.3)
+        run: pnpm test:publish:ejabberd
+
+      # Its own server (compose project and port), so nothing the runs above leave behind, such as
+      # an account, shows up as drift.
+      - name: Start a separate ejabberd for the audit (WP 2.10)
+        env:
+          COMPOSE_PROJECT_NAME: wrx-audit
+          WRX_XMPP_PORT: '35444'
+        run: pnpm stack:up
+
+      - name: Audit and repair on ejabberd (WP 2.10)
+        env:
+          WRX_XMPP_WS: wss://localhost:35444/ws
+        run: pnpm test:audit:ejabberd
+
+      - name: Audit server log on failure
+        if: failure()
+        env:
+          COMPOSE_PROJECT_NAME: wrx-audit
+          WRX_XMPP_PORT: '35444'
+        run: docker compose -f deploy/ejabberd/compose.yaml logs --tail 300
+
+      - name: Stop the audit stack
+        if: always()
+        env:
+          COMPOSE_PROJECT_NAME: wrx-audit
+          WRX_XMPP_PORT: '35444'
+        run: pnpm stack:down
+
       - name: Install Chromium for the bundle check
         run: pnpm --filter @wrx/transport-xmpp exec playwright install --with-deps chromium
 
@@ -43,6 +76,12 @@ jobs:
         env:
           WRX_XMPP_WS: wss://localhost:35443/ws
         run: pnpm --filter @wrx/transport-xmpp test:bundle
+
+      - name: Player client logs in to ejabberd from the real-server build (WP 2.4)
+        env:
+          CI: 'true'
+          WRX_XMPP_WS: wss://localhost:35443/ws
+        run: pnpm --filter @wrx/web exec playwright test --project=ejabberd
 
       - name: Server log on failure
         if: failure()

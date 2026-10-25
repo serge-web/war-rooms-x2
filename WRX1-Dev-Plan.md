@@ -69,6 +69,7 @@ There are 28 work packages. Each is sized for one to three Claude Code PRs, and 
 | 2.8 | Themes: runtime theming and inheritance, assets and SVG sanitising, theme editor | D19, PLY-24, 26, ADM-18–22 | 1.6, 2.2 |
 | 2.9 | Multi-client view, mock user controls, seed scenarios, admin preview-as-role | PLY-16–22, 34, ADM-30–31 | 1.5, 2.5 |
 | 2.10 | Audit and repair; node-name warning | ADM-41–42 | 2.3 |
+| 2.11 | White Force and the admin as umpire; White observers' room visibility | §3 rules 4, 14; D8, D21, ADM-4, PLY-15, PLY-35 | 2.7, 2.10 |
 | **Phase 3 — Acceptance** |  |  |  |
 | 3.1 | Playwright scenarios SC-1 to SC-9 on mock and ejabberd | NFR-17, §12 | Phase 2 |
 | 3.2 | Performance and scale (NFR-11, NFR-12), accessibility audit (NFR-14) | NFR-11–14 | Phase 2 |
@@ -78,6 +79,14 @@ There are 28 work packages. Each is sized for one to three Claude Code PRs, and 
 **Traceability.** Every live SRD requirement id is assigned to at least one WP above, except four that apply to every PR: ARC-15 (team's choice), DOC-4 and DOC-18 (working model item 5) and DOC-5 (blog posts). CI checks this on every PR (`pnpm check:trace`), so a requirement added to the SRD without a WP fails the build.
 
 Documentation is not a separate phase. Each PR carries its own pages and diagrams (DOC-18), and a blog post closes each phase (DOC-5).
+
+## Future tasks
+
+Raised during the build, not yet given a work package.
+
+| Id | Task | SRD ids | Raised |
+| --- | --- | --- | --- |
+| FT-1 | **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 
 ## The README plan chart
 
@@ -111,6 +120,7 @@ flowchart TB
         wp22["2.2 Design editor"]
         wp23["2.3 Publish and provisioning"]
         wp210["2.10 Audit and repair"]
+        wp211["2.11 White Force and admin umpire"]
         wp24["2.4 Player shell"]
         wp25["2.5 Workspace"]
         wp26["2.6 Chat panel"]
@@ -138,6 +148,7 @@ flowchart TB
     wp13 & wp16 & wp01 --> wp21
     wp16 --> wp22
     wp21 & wp22 --> wp23 --> wp210
+    wp210 & wp27 --> wp211
     wp16 --> wp24
     wp02 & wp24 --> wp25 --> wp26
     wp25 & wp21 --> wp27
@@ -231,5 +242,11 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 2.1 must create every node before publishing, give objectives nodes room for one item per author, and revoke subscriptions per full JID | Found by 1.2: ejabberd auto-creates a missing node with an open config when the admin publishes to it |
 | 1.4's mock leaves out the raw-stanza contract tests, which run against ejabberd only, and lists every behaviour the contract does not cover | ARC-10; raw stanzas are not part of the 1.1 interface |
 | 1.5's mock controls return promises, and the mock saves to IndexedDB after every change rather than debounced | The server runs in another tab or worker; a debounce lost the last messages when the leader tab closed |
+| 2.1 checks that a room exists by listing rooms before any owner request, and the vault covers every read-only role, not only observers | On ejabberd 26.09, asking for a missing room's config creates the room; per-room read-only entries need voice revoked like observers |
+| `AdminApi` gains `registeredUsers()` before 2.10 (XEP-0133 get-registered-users-list), in transport, mock and the contract suite | 2.10 must find accounts with no role. This changes the 1.1 interface, so it is listed for gate G2 |
+| 1.3's private storage holds all keys in one element; a contract test now covers two keys | Found by 2.3: StanzaJS resolved every key's element to the last one defined, so only one key worked per session |
+| 2.11 added at gate G2: the umpire force becomes the White Force, the admin login is the umpire, and White observers are read only, seeing assigned rooms or all rooms | Product-owner clarification of security review finding F5 (an umpire-force observer could edit objectives) |
+| The default web build is mock only; `build:server` makes the real-server build, which loads the XMPP transport lazily | Found by 2.4: previews and the site must hold no real-server code (DOC-12), and StanzaJS's own text trips the bundle scan |
+| `@wrx/ui`'s `ThemeScope` delegates to `@wrx/theme`'s: it keeps partial tokens that inherit from the enclosing scope, and takes the default theme, fonts and derived colours from `@wrx/theme`, as does `ui.css`'s page default | 2.4 and 2.8 were built in parallel, each with its own `ThemeScope` and defaults |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 

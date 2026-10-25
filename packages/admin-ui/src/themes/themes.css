@@ -1,0 +1,220 @@
+/*
+ * The theme editor (WP 2.8). The controls use the admin's own look; each preview pane sits in a
+ * ThemeScope and is styled only by the --wrx-* properties that scope sets (PLY-26).
+ */
+
+.wrx-theme-editor {
+  display: grid;
+  grid-template-columns: minmax(18rem, 26rem) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .wrx-theme-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wrx-theme-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wrx-theme-fieldset {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem 0.75rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wrx-theme-fieldset legend {
+  font-weight: 600;
+  padding: 0 0.25rem;
+}
+
+.wrx-theme-token {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.wrx-theme-token > .wrx-admin-field {
+  flex: 1;
+}
+
+.wrx-theme-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrx-theme-image-frame {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 1px dashed var(--wrx-border, #d1d5db);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.wrx-theme-image-frame img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.wrx-theme-contrast h3 {
+  font-size: 1rem;
+}
+
+.wrx-theme-contrast-list {
+  margin: 0.25rem 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.wrx-theme-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+/* Preview ---------------------------------------------------------------------------------- */
+
+.wrx-theme-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.wrx-theme-preview-pane {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.wrx-theme-preview-pane figcaption {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.wrx-theme-preview-editing {
+  font-weight: 400;
+}
+
+.wrx-theme-preview-scope {
+  border: 1px solid var(--wrx-border);
+  border-radius: 6px;
+  overflow: hidden;
+  min-height: 16rem;
+  line-height: 1.45;
+}
+
+.wrx-theme-preview-scope p {
+  margin: 0 0 0.5rem;
+}
+
+.wrx-preview-welcome {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wrx-preview-logo {
+  max-width: 8rem;
+  max-height: 4rem;
+  object-fit: contain;
+  align-self: flex-start;
+}
+
+.wrx-preview-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  object-fit: contain;
+}
+
+.wrx-preview-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.wrx-preview-heading {
+  font-weight: 700;
+}
+
+.wrx-preview-muted {
+  color: var(--wrx-muted);
+}
+
+.wrx-preview-card {
+  background: var(--wrx-surface);
+  color: var(--wrx-text);
+  border: 1px solid var(--wrx-border);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+}
+
+.wrx-preview-login {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.wrx-preview-field {
+  flex: 1;
+  min-width: 6rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 4px;
+  background: var(--wrx-surface);
+  color: var(--wrx-muted);
+}
+
+.wrx-preview-button {
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  background: var(--wrx-primary);
+  color: var(--wrx-background);
+  font-weight: 700;
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 2px;
+}
+
+.wrx-preview-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 16rem;
+}
+
+.wrx-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--wrx-primary);
+  color: var(--wrx-background);
+  font-weight: 700;
+  border-bottom: 3px solid var(--wrx-secondary);
+}
+
+/* The real chat panel needs a definite height to lay out its virtualised list. */
+.wrx-preview-chat {
+  height: 20rem;
+}
+
+.wrx-preview-body {
+  padding: 0.75rem;
+  flex: 1;
+}

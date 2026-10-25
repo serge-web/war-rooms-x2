@@ -1,0 +1,28 @@
+{
+  "name": "@wrx/admin-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Admin operations (WP 2.1): every admin change to the server, applying rules R-A to R-F, with the encrypted observer-password vault (ADM-35 to ADM-40).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test:ejabberd": "node scripts/run-ejabberd.ts",
+    "test:publish:ejabberd": "node scripts/run-publish-ejabberd.ts",
+    "test:audit:ejabberd": "node scripts/run-audit-ejabberd.ts"
+  },
+  "dependencies": {
+    "@wrx/domain": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@wrx/mock-server": "workspace:*",
+    "@wrx/transport-xmpp": "workspace:*",
+    "vitest": "^5.0.5"
+  }
+}

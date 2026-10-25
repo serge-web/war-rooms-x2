@@ -64,7 +64,7 @@ export function chatBody(text: string): string {
   return JSON.stringify({ type: 'chat', schemaVersion: 1, content: { text } })
 }
 
-/** Blue (CO and observer), Red (CO), Umpire; three rooms. */
+/** Blue (CO and observer), Red (CO), White (a non-observer and an observer); three rooms. */
 export function sampleDocuments(): Map<string, unknown[]> {
   const docs = new Map<string, unknown[]>()
   docs.set('game-setup', [game()])
@@ -72,13 +72,14 @@ export function sampleDocuments(): Map<string, unknown[]> {
   const forces = [
     force('blue', { order: 0 }),
     force('red', { order: 1, colour: '#b91c1c' }),
-    force('umpire', { order: 2, isUmpire: true, colour: '#4b5563' }),
+    force('white', { order: 2, isUmpire: true, colour: '#4b5563' }),
   ]
   const roles = [
     role('blue-co', 'blue'),
     role('blue-observer', 'blue', { isObserver: true, order: 1 }),
     role('red-co', 'red'),
-    role('umpire-1', 'umpire'),
+    role('white-1', 'white'),
+    role('white-observer', 'white', { isObserver: true, order: 1 }),
   ]
   const rooms = [
     room('blue-hq', [{ kind: 'force', id: 'blue', access: 'write' }]),

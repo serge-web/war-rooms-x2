@@ -1,0 +1,146 @@
+/* The dockable workspace (WP 2.5). FlexLayout's chrome takes its colours and font from the
+   --wrx-* properties through its --flexlayout-* tokens, which it resolves on .flexlayout__layout
+   from inherited values (layout-library.md, PLY-26). Colour pairs follow ui-stack.md: text on
+   the background or surface, never small text in the primary colour. */
+
+.wrx-workspace {
+  /* FlexLayout's splitters and overlays carry z-indexes; keep them inside the workspace, so a
+     dialog portalled to the page (the objectives editor, WP 2.7) covers them. */
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 100%;
+  min-height: 24rem;
+
+  --flexlayout-font-family: var(--wrx-font-family);
+  --flexlayout-font-size: 0.9375rem;
+  --flexlayout-color-text: var(--wrx-text);
+  --flexlayout-color-background: var(--wrx-background);
+  --flexlayout-color-base: var(--wrx-background);
+  --flexlayout-color-tabset-background: var(--wrx-surface);
+  --flexlayout-color-tab-content: var(--wrx-background);
+  --flexlayout-color-tab-selected: var(--wrx-text);
+  --flexlayout-color-tab-selected-background: var(--wrx-background);
+  --flexlayout-color-tab-unselected: var(--wrx-muted);
+  --flexlayout-color-tabset-divider-line: var(--wrx-border);
+  --flexlayout-color-border-background: var(--wrx-surface);
+  --flexlayout-color-border-tab-content: var(--wrx-background);
+  --flexlayout-color-border-tab-selected: var(--wrx-text);
+  --flexlayout-color-border-tab-selected-background: var(--wrx-background);
+  --flexlayout-color-border-tab-unselected: var(--wrx-muted);
+  --flexlayout-color-border-tab-unselected-background: var(--wrx-surface);
+  --flexlayout-color-border-divider-line: var(--wrx-border);
+  --flexlayout-color-splitter: var(--wrx-border);
+  --flexlayout-color-splitter-hover: var(--wrx-muted);
+  --flexlayout-color-splitter-drag: var(--wrx-focus);
+  --flexlayout-color-focus: var(--wrx-focus);
+  --flexlayout-color-icon: var(--wrx-muted);
+  --flexlayout-color-drag-rect-border: var(--wrx-focus);
+  --flexlayout-splitter-size: 6px;
+}
+
+.wrx-workspace__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.wrx-workspace__hint {
+  color: var(--wrx-muted);
+  font-size: 0.875rem;
+}
+
+/* FlexLayout's root is absolutely positioned; this box gives it its size. */
+.wrx-workspace__layout {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--wrx-border);
+  border-radius: 0.375rem;
+  overflow: hidden;
+}
+
+.wrx-workspace__empty {
+  padding: 1rem;
+}
+
+/* ---- Tab labels and the unread badge (PLY-11) ---- */
+
+.wrx-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.wrx-unread {
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 0.625rem;
+  background: var(--wrx-primary);
+  color: var(--wrx-background);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* ---- Panels ---- */
+
+/* A definite height, so a room type's panel (the chat panel's list) can fill and scroll inside. */
+.wrx-room-panel {
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.wrx-room-placeholder,
+.wrx-panel {
+  padding: 1rem;
+}
+
+.wrx-room-placeholder__name,
+.wrx-panel__heading {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.wrx-room-placeholder__type,
+.wrx-panel__lead {
+  margin: 0 0 0.75rem;
+  color: var(--wrx-muted);
+}
+
+.wrx-online {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wrx-online__role {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrx-online__swatch {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 50%;
+}
+
+.wrx-online__name {
+  font-weight: 600;
+}
+
+.wrx-online__force,
+.wrx-online__self {
+  color: var(--wrx-muted);
+  font-size: 0.875rem;
+}

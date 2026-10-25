@@ -16,10 +16,10 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-de
 
 | Term | Meaning |
 | --- | --- |
-| Admin | The XMPP server's `admin` account; also the sole game designer and controller |
+| Admin | The XMPP server's `admin` account: the sole game designer and controller, and in play the umpire, a member of the White Force |
 | Force | A side in the game; a PubSub document plus its roles' room and node affiliations |
 | Role | A player position; one XMPP user account |
-| Umpire force | A force whose roles are members of every room |
+| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4) |
 | Observer | A role that can read, but not post in, its rooms |
 | Room | A channel; an XMPP MUC room plus a PubSub config document |
 | Room type | A plug-in kind of room (v1: `chat` only) |
@@ -37,7 +37,7 @@ Twenty-four decisions frame v1; each has a consequence the requirements below de
 | D5 | One XMPP account per role | Several people may log in to one role; they are indistinguishable to the server |
 | D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device; must survive room changes |
 | D7 | No turn model in v1 | No phase-dependent permissions, so D2 covers all v1 rules |
-| D8 | Umpire force (all rooms) and observers (read-only) | Umpire = MUC member of every room; observer = MUC `visitor` in moderated rooms, enforced by ejabberd's stored role (ADM-37) |
+| D8 | White Force (all rooms) and observers (read-only) | The admin is the umpire, in the White Force; White Force roles that are not observers are MUC members of every room; an observer is a MUC `visitor` in moderated rooms, enforced by ejabberd's stored role (ADM-37) |
 | D9 | Participants per room by force or role, mixed | Force entries expand to roles at provisioning; re-sync on change |
 | D10 | Provisioning over XMPP only, with the admin's own credentials | Spike result: ejabberd needs no REST; all provisioning is XMPP using the admin's own session credentials (§10 outcome) |
 | D11 | One wargame per server | No namespacing of nodes, rooms or users |
@@ -55,7 +55,7 @@ Twenty-four decisions frame v1; each has a consequence the requirements below de
 
 **D20 — Themed welcome page before login, via anonymous read-only access.** Consequence: SASL ANONYMOUS is enabled, and anonymous sessions may read only `game-setup` and the game theme's assets. Those must hold nothing sensitive, and every other node must use a non-open access model. The mock emulates anonymous login; spike check S10 verifies the server.
 
-**D21 — Objectives are written by the admin per force; the force reads them, and umpires may read and edit every force's objectives during play.** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, umpires and admin; publish by admin and umpire-force roles (publisher affiliation). Whitelists re-sync when roles move force.
+**D21 — Objectives are written by the admin per force; the force reads them, and the White Force may read every force's objectives and, except its observers, edit them during play.** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, the White Force's roles and the admin; publish by the admin and White Force roles that are not observers (publisher affiliation). Whitelists re-sync when roles move force.
 
 **D22 — Several people may log in to the same role at once, silently.** Consequence: multiple sessions of one account must join rooms under the same nickname (spike check S11), and each keeps its own browser layout.
 
@@ -83,7 +83,7 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 1. Entity ids SHALL be stable, URL-safe slugs generated at creation and never reused; display names are separate fields.
 2. Each PubSub document SHALL carry `schemaVersion` and be validated at runtime on read (ARC-6).
 3. Sender identity SHALL come from the MUC occupant JID (the stanza `from`, mapped to the real JID via members-only, non-anonymous rooms), never from the message body.
-4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and all umpire-force roles.
+4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and the White Force's roles. Precedence, weakest to strongest: a force entry, then a role entry for a role in that force (which overrides it), then White Force membership (write access to every room), then observer status (read only, always). A White Force observer is read only; it sees only the rooms whose participant list names it in a role entry, or every room when none does. The admin, as umpire, writes in every room. An entry naming an unknown force or role grants nothing.
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
 6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents, kept live by subscription.
 7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
@@ -106,7 +106,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
 13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest; whitelist read for that force's roles, umpire-force roles and admin, and publish by admin and umpire-force roles.
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
 15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements node SHALL be readable by every role and publishable only by the admin (PLY-37).
 
 ## 4. Functional requirements — admin backend
@@ -121,7 +121,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 **Game design**
 
 - ADM-3 The admin SHALL edit game properties: name, description, theme colour.
-- ADM-4 The admin SHALL create, edit, reorder and delete forces: name, colour, icon, umpire flag. At most one force SHOULD be the umpire force.
+- ADM-4 The admin SHALL create, edit, reorder and delete forces: name, colour, icon, umpire flag. Exactly one force SHALL carry the umpire flag: the White Force, which the admin belongs to as umpire; the editor names it White by default.
 - ADM-5 The admin SHALL create, edit, reorder and delete roles within a force: display name, login id, password, observer flag; and move a role between forces.
 - ADM-6 The admin SHALL create, edit, reorder and delete rooms: name, room type (v1: chat), participants as mixed force/role entries each with read or write access (§3 rule 4).
 - ADM-7 Room-type-specific settings SHALL be edited through the editor supplied by that type's registry entry (ARC-5).
@@ -171,7 +171,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-35 Every admin operation SHALL go through a single admin-operations module that applies rules ADM-36–40 (the spike's `AdminOps`, rules R-A to R-F).
 - ADM-36 Revoking a role's read access to a node SHALL remove both its whitelist affiliation and its subscriptions (R-A).
-- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Because S13 failed (§10), voice SHALL be revoked by the admin tooling logging in as the observer, using an encrypted observer-password vault: encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only. If the passphrase is lost, passwords are reset (ADM-26). The vault SHALL be updated by password resets (ADM-26) and role deletion (ADM-39). Making an observer a room member and revoking its voice SHALL run back to back, before the room is published to the observer, so an online observer has no window in which to post.
+- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Because S13 failed (§10), voice SHALL be revoked by the admin tooling logging in as the observer, using an encrypted observer-password vault: encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only. The vault holds the password of every role that is read-only in some room: observers, and roles with a per-room `access: read` entry (§3 rule 5), since both need their voice revoked the same way. If the passphrase is lost, passwords are reset (ADM-26). The vault SHALL be updated by password resets (ADM-26) and role deletion (ADM-39). Making an observer a room member and revoking its voice SHALL run back to back, before the room is published to the observer, so an online observer has no window in which to post.
 - ADM-38 Moving a role between forces SHALL grant the new access before revoking the old (R-D).
 - ADM-39 Deleting a role SHALL remove its room and node affiliations and subscriptions, then the account; `item-not-found` on account deletion SHALL be treated as already deleted (R-E).
 - ADM-40 Destroying a room deletes its history (R-F). The admin UI SHALL warn, show the message count and require confirmation.
@@ -222,9 +222,9 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 **Umpire**
 
-- PLY-15 Umpire-force roles SHALL see and post in every room. A combined cross-room view is deferred to the backlog (§8).
+- PLY-15 The admin, as umpire, and White Force roles that are not observers SHALL see and post in every room; White Force observers SHALL see their assigned rooms, or every room when none is assigned, read only (§3 rule 4). A combined cross-room view is deferred to the backlog (§8).
 
-- PLY-35 Umpire-force roles SHALL view and edit every force's objectives from the player client, with a Markdown preview; edits SHALL publish live to that force's force panel.
+- PLY-35 The admin and White Force roles that are not observers SHALL view and edit every force's objectives from the player client, with a Markdown preview; White Force observers SHALL view them read only; edits SHALL publish live to that force's force panel.
 
 **Out-of-game column**
 
@@ -376,6 +376,8 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 | Multiple wargames per server | Entity ids are slugs; a namespace prefix can be added |
 | Per-person accounts within a role | Role = account in v1; resource or nickname could identify individuals later |
 
+**Backlog:** the out-of-game column becomes a specially styled workspace tab when the client is narrow (Dev Plan FT-1; would relax PLY-36's permanently visible column).
+
 **Backlog:** umpire combined view — one merged, filterable timeline of all rooms, each message labelled with its room, with reply into the source room. Needs no new XMPP mechanism; it reads the rooms umpires already join.
 
 ## 9. Risks, critical analysis and open issues
@@ -393,7 +395,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 | R7 | **Cross-tab mock complexity.** Leader election, re-election and IndexedDB schema migration add failure modes | Medium | SharedWorker first; leader fallback covered by Playwright multi-tab tests |
 | R8 | **Browser-only layouts.** Demo laptops lose arrangements | Low | Layout export/import MAY be added cheaply |
 | R9 | **Message `type` is client-asserted.** A modified client can send arbitrary body JSON | Low in v1 (chat only) | Validate and render as plain text; never trust body for identity or permissions |
-| R10 | **Force objectives are confidential but would sit in readable PubSub.** The force panel shows objectives; WRX's open nodes let any player read every force's objectives | High | **Closed by spike:** `objectives:<forceId>` with whitelist read (force, umpires, admin) and publishers (admin, umpires) is enforced; revocation per ADM-36 |
+| R10 | **Force objectives are confidential but would sit in readable PubSub.** The force panel shows objectives; WRX's open nodes let any player read every force's objectives | High | **Closed by spike:** `objectives:<forceId>` with whitelist read (force, White Force, admin) and publishers (admin, White Force non-observers) is enforced; revocation per ADM-36 |
 | R11 | **Theme images vs PubSub limits and SVG scripting.** Large images can exceed item limits; SVG can carry script | Medium | **Closed by spike:** ejabberd caps items at 250,000 bytes (operator-configurable); 100 KB assets work. SVG sanitised and rendered via `<img>` only (§3 rule 12) |
 | R12 | **Welcome page precedes login,** but PubSub requires an authenticated session | Medium | Decided (D20): anonymous read access limited to `game-setup` and its theme assets (NFR-21), verified by S10 |
 
@@ -423,7 +425,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Follow-up spike S13: failed, so ADM-37 uses the encrypted vault (§10)
 - [ ] Repo visibility: should the spike and WRX1 code repos stay public, given DOC-2 keeps security detail off the site? (R18)
 - [x] Welcome page: before login, via anonymous read access (D20)
-- [x] Objectives: admin-written per force, force read-only, umpires may edit (D21)
+- [x] Objectives: admin-written per force, force read-only, the White Force (not its observers) may edit (D21)
 - [x] Concurrent logins per role: allowed silently (D22)
 - [x] Live editing: any change, applied live (D23)
 - [x] UI component kit: dev team decides, within constraints (D24)
@@ -495,7 +497,7 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 
 1. Opens the app, chooses the mock backend and logs in as `admin`.
 2. Sets game name, description and game theme with logo.
-3. Creates forces Blue, Red and Umpire (umpire flag set), each with a theme and colour, and writes Blue's and Red's objectives.
+3. Creates forces Blue, Red and White (umpire flag set), each with a theme and colour, and writes Blue's and Red's objectives.
 4. Creates roles in each force with generated passwords; marks one Blue role as observer.
 5. Creates rooms (Blue HQ, Red HQ, Blue–Red negotiation) with mixed force/role participants.
 6. Reviews the access matrix, publishes, and watches per-item progress complete.
@@ -539,14 +541,14 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 
 ### SC-5 Umpire monitors the game
 
-**Actor:** Umpire role.
+**Actor:** The admin, as umpire.
 
-1. Logs in and sees every room.
+1. Logs in to the game view and sees every room.
 2. Places Red HQ and the negotiation room side by side in the workspace.
 3. Posts a clarification in Red HQ, which Red sees attributed to the umpire.
 4. Opens Red's objectives, amends one, and Red's force panel updates live.
 
-**Outcome:** umpires see all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
+**Outcome:** the umpire sees all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
 
 ### SC-6 Admin changes the game during play
 
@@ -666,5 +668,13 @@ Changes made later on Oct 24, 2026, from the Phase 0 checks (WP 0.1–0.3):
 
 Changes from Phase 1 (WP 1.2 and 1.3):
 
+- §3 rule 4: access precedence stated (force entry, role entry, umpire, observer), as built in WP 1.6 and confirmed by Doc at gate G1.
+- ADM-37: the vault also holds passwords of roles with a per-room read-only entry, found while building WP 2.1.
 - §3 rule 14: objectives are kept as one item per author, with `updatedAt`, and readers show the newest. ejabberd refuses to let one publisher overwrite another's item, so umpires could not otherwise edit objectives the admin wrote (D21, PLY-35).
+
+Changes from the Phase 2 gate (Oct 25, 2026), confirmed by the product owner:
+
+- The umpire force is now the White Force, and the admin login is the umpire, a member of it; separate umpire role accounts are no longer needed (glossary, D8, ADM-4, SC-5).
+- §3 rule 4: White Force observers are read only (security review F5); one with rooms assigned in role entries sees only those rooms, otherwise every room. White Force roles that are not observers write in every room.
+- D21, §3 rule 14, PLY-15, PLY-35, R10: objectives may be edited by the admin and White Force non-observers; White Force observers read them.
 

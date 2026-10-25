@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LIMITS, RESERVED_ROLE_IDS, isoDateTimeSchema } from './common.ts'
+import { LIMITS, isReservedRoleId, isoDateTimeSchema } from './common.ts'
 import {
   assetSchema,
   forceSchema,
@@ -75,9 +75,19 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
 
   themeRefs('game.theme', design.game.theme)
 
+  // ADM-4: exactly one force carries the umpire flag, the White Force, which the admin belongs
+  // to as umpire. Live play takes the first in order if there are several.
   const umpires = design.forces.filter((f) => f.isUmpire)
   if (umpires.length > 1) {
-    warn('forces', `${umpires.length} umpire forces; at most one is expected (ADM-4)`)
+    warn(
+      'forces',
+      `${umpires.length} forces carry the umpire flag; exactly one is expected (ADM-4)`,
+    )
+  } else if (umpires.length === 0 && design.forces.length > 0) {
+    warn(
+      'forces',
+      'no force carries the umpire flag; exactly one, the White Force, is expected (ADM-4)',
+    )
   }
   design.forces.forEach((force, i) => {
     assetRef(`forces[${i}].iconAssetId`, force.iconAssetId)
@@ -85,10 +95,17 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
   })
 
   design.roles.forEach((role, i) => {
-    if (RESERVED_ROLE_IDS.includes(role.id)) {
+    if (isReservedRoleId(role.id)) {
       error(`roles[${i}].id`, `"${role.id}" is reserved and cannot be a role id`)
     }
     if (!forceIds.has(role.forceId)) error(`roles[${i}].forceId`, `unknown force "${role.forceId}"`)
+    // The admin's messages are labelled "Umpire" (SC-5); a role of that name would look the same.
+    if (role.name.trim().toLowerCase() === 'umpire') {
+      warn(
+        `roles[${i}].name`,
+        'a role named "Umpire" looks like the admin, who plays as the umpire',
+      )
+    }
   })
 
   design.rooms.forEach((room, i) => {

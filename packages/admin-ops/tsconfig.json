@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": [
+    "src",
+    "integration",
+    "ejabberd",
+    "ejabberd-publish",
+    "ejabberd-audit",
+    "scripts",
+    "vitest.ejabberd.config.ts",
+    "vitest.publish.ejabberd.config.ts",
+    "vitest.audit.ejabberd.config.ts"
+  ]
+}

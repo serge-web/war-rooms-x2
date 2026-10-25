@@ -2,6 +2,7 @@
 // only those a PR adds or changes. The PR index is left out: its content changes with every PR.
 import { expect, test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
+import { hostMockInLeaderTab, welcomeLoaded } from './mock-app.ts'
 
 const PAGES: readonly { readonly name: string; readonly path: string; readonly heading: string }[] =
   Object.freeze([
@@ -16,13 +17,15 @@ const PAGES: readonly { readonly name: string; readonly path: string; readonly h
 for (const { name, path, heading } of PAGES) {
   test(name, { tag: '@screenshot' }, async ({ page }) => {
     await freezeClock(page)
+    await hostMockInLeaderTab(page)
     await page.goto(path)
     await expect(page.getByRole('heading', { name: heading }).first()).toBeVisible()
     const diagrams = page.locator('.wrx-mermaid')
     for (const diagram of await diagrams.all())
       await expect(diagram).toHaveAttribute('data-rendered')
-    if (path === './') {
-      await expect(page.frameLocator('.wrx-demo iframe').getByLabel('Backend: MOCK')).toBeVisible()
+    // An embedded app starts its mock asynchronously; wait for its welcome page (DOC-20).
+    for (let i = 0; i < (await page.locator('.wrx-demo iframe').count()); i++) {
+      await welcomeLoaded(page.locator('.wrx-demo iframe').nth(i).contentFrame())
     }
     await shoot(page, name)
   })

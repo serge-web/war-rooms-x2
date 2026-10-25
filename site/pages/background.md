@@ -39,11 +39,11 @@ Each role is one XMPP account. Several people may log in to the same role at onc
 
 ### Forces, umpires and observers
 
-A game has forces, and each force has roles. One force may be the **umpire** force, whose roles are members of every room. A role can be an **observer**, who reads its rooms but cannot post. Room participants can be listed by force, by role, or a mix of both.
+A game has forces, and each force has roles. One force is the **White Force**, which carries the umpire flag. The admin is its **umpire**: the same login that designs the game plays it, sees every room and can post in each. A role can be an **observer**, who reads its rooms but cannot post. White Force roles that are not observers can post in every room; a White Force observer reads the rooms it is assigned, or every room when it has none. Room participants can be listed by force, by role, or a mix of both.
 
 ### Rooms, themes and objectives
 
-The admin designs rooms, and themes for the game, each room and each force: colours, a bundled font, a logo and an icon. The admin writes objectives for each force, which that force and the umpires can read. A themed welcome page is shown before login.
+The admin designs rooms, and themes for the game, each room and each force: colours, a bundled font, a logo and an icon. The admin writes objectives for each force, which that force and the White Force can read. During play the umpire, and White Force roles that are not observers, can amend them. A themed welcome page is shown before login.
 
 ### Live changes
 

@@ -203,7 +203,7 @@ test('the leader tab closes mid-conversation and messages keep flowing (R7)', as
   const red = await openTab(context, 'leader')
   for (const page of [blue, red])
     expect(await page.evaluate(() => window.wrx.isHosting())).toBe(false)
-  await player(umpire, 'umpire-1')
+  await player(umpire, 'admin')
   await player(blue, 'blue-co')
   await player(red, 'red-co')
   await send(blue, 'Blue: crossing at dawn.')

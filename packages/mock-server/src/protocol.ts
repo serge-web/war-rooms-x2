@@ -95,6 +95,7 @@ export interface OpMap {
     result: undefined
   }
   'admin.onlineUsers': { args: readonly []; result: readonly string[] }
+  'admin.registeredUsers': { args: readonly []; result: readonly string[] }
   'admin.addUser': { args: readonly [jid: string, password: string]; result: undefined }
   'admin.deleteUser': { args: readonly [jid: string]; result: undefined }
   'admin.changePassword': { args: readonly [jid: string, password: string]; result: undefined }

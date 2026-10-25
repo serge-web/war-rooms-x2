@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connectMockTransport } from './connect.ts'
 import type { MockHost, MockHostOptions } from './connect.ts'
 import { FakeBrowser } from './fixtures.ts'
+import { migrateMockState } from './migrate.ts'
 import { hostNames, mockNamespace } from './namespace.ts'
 import type { LogEntry } from './wire.ts'
 
@@ -106,7 +107,7 @@ describe('connectMockTransport, leader tab (D17, ARC-7, R7)', () => {
     const leader = await tab(browser)
     const two = await tab(browser)
     const three = await tab(browser)
-    const umpire = await player(leader.host, 'umpire-1')
+    const umpire = await player(leader.host, 'white-observer')
     const blue = await player(two.host, 'blue-co')
     const red = await player(three.host, 'red-co')
     await blue.send('Before the leader closes.')
@@ -166,6 +167,29 @@ describe('connectMockTransport, leader tab (D17, ARC-7, R7)', () => {
     })
     const bad = await two.host.importDatabase('{"not": "a database"}')
     expect(bad.ok).toBe(false)
+  })
+
+  it('turns an export after a rehearsal into the seed of another deployment (PLY-34)', async () => {
+    const rehearsal = await tab(new FakeBrowser())
+    const blue = await player(rehearsal.host, 'blue-co')
+    await blue.send('Said in the rehearsal.')
+    const exported = await rehearsal.host.exportDatabase()
+    if (!exported.ok) throw new Error(exported.error)
+    const seed = migrateMockState(exported.value)
+    if (!seed.ok) throw new Error(seed.error)
+
+    // A new browser, seeded from the export: the rehearsal's history is there, and a reset
+    // returns to it rather than to the demo.
+    const demo = await tab(new FakeBrowser(), 'http://localhost/demo/', { seed: seed.value.state })
+    const red = await player(demo.host, 'red-co')
+    expect(red.texts()).toContain('Said in the rehearsal.')
+    await red.send('Said in the demo.')
+    expect(await demo.host.resetToSeed()).toEqual({ ok: true, value: undefined })
+    await vi.waitFor(() => {
+      expect(red.recoveries()).toBe(1)
+      expect(red.texts()).toContain('Said in the rehearsal.')
+      expect(red.texts()).not.toContain('Said in the demo.')
+    })
   })
 
   it('keeps the state when every tab closes and a new one opens', async () => {

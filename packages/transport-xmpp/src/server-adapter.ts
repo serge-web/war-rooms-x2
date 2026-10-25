@@ -26,6 +26,15 @@ export interface ServerAdapter {
   /** XEP-0133 §4.18: the field of `get-online-users-list` that lists the accounts. */
   readonly onlineUsersField: string
 
+  /** XEP-0133 §4.17: the field of `get-registered-users-list` that lists the accounts. */
+  readonly registeredUsersField: string
+
+  /**
+   * Whether a bare JID has the form the server gives SASL ANONYMOUS sessions. Such a JID that is
+   * also online is left out of `registeredUsers`: it is a session, not an account.
+   */
+  isAnonymousAccount(bareJid: string): boolean
+
   /** XEP-0133 §4.16: the field of `get-online-users-num` that holds the count. */
   readonly onlineUsersCountField: string
 

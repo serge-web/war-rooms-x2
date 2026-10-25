@@ -50,6 +50,7 @@ const READ_ONLY_OPS: readonly OpName[] = Object.freeze([
   'pubsub.getAffiliations',
   'pubsub.getSubscriptions',
   'admin.onlineUsers',
+  'admin.registeredUsers',
   'admin.getPrivate',
 ])
 

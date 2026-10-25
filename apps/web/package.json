@@ -5,21 +5,38 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "vite --mode server",
     "build": "tsc --noEmit && vite build",
+    "build:server": "tsc --noEmit && vite build --mode server",
     "preview": "vite preview --port 4173 --strictPort",
+    "preview:server": "vite preview --mode server --port 4175 --strictPort",
     "typecheck": "tsc --noEmit",
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@wrx/admin-ops": "workspace:*",
+    "@wrx/admin-ui": "workspace:*",
+    "@wrx/domain": "workspace:*",
+    "@wrx/hooks": "workspace:*",
+    "@wrx/mock-host": "workspace:*",
+    "@wrx/mock-server": "workspace:*",
+    "@wrx/player-ui": "workspace:*",
     "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "@wrx/transport-xmpp": "workspace:*",
+    "@wrx/ui": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "happy-dom": "20.14.6",
     "vite": "^8.3.5"
   }
 }

@@ -44,7 +44,7 @@ A side in the game.
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
 | `colour` | string | yes | pattern `^#[0-9a-fA-F]{6}$` | Colour for message authors; not a theme token (§3 rule 13) |
 | `iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
-| `isUmpire` | boolean | yes |  | Umpire-force roles are members of every room (D8) |
+| `isUmpire` | boolean | yes |  | The umpire flag: this is the White Force, which the admin plays in as umpire; exactly one force has it (ADM-4, D8) |
 | `order` | integer | yes | ≥ 0 | Admin-set display order; ties sort by id (SRD §3 rule 7) |
 | `theme` | object | no |  | Styles the force panel only (D19) |
 | `theme.tokens` | object | yes |  | Design tokens; an unset token inherits from the game theme, then the default |
@@ -86,7 +86,7 @@ A channel: one MUC room plus this config.
 | `id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Stable URL-safe id, never reused (SRD §3 rule 1) |
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
 | `roomType` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Room type id from the registry (v1: chat) |
-| `participants` | array of object | yes |  | Mixed force and role entries; umpire-force roles are added implicitly |
+| `participants` | array of object | yes |  | Mixed force and role entries; White Force roles are added implicitly, and a role entry assigns a White Force observer the room (§3 rule 4) |
 | `participants[]` | object | yes |  | A room participant entry (§3 rule 4) |
 | `participants[].kind` | enum | yes | one of "force", "role" |  |
 | `participants[].id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Force or role id |
@@ -106,10 +106,10 @@ A channel: one MUC room plus this config.
 
 ## Objectives
 
-A force's objectives; confidential to that force, umpires and admin.
+A force's objectives; confidential to that force, the White Force and the admin.
 
 - **Location:** PubSub node `objectives:<forceId>`
-- **Access:** Read: the force's roles, umpires and admin. Publish: admin and umpires.
+- **Access:** Read: the force's roles, the White Force's roles and the admin. Publish: the admin and White Force roles that are not observers.
 
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |

@@ -38,7 +38,8 @@ export function s02(ctx: Ctx): void {
       )
     })
 
-    // §3 rule 14: umpire-force roles read and publish every force's objectives.
+    // §3 rule 14: White Force roles that are not observers read and publish every force's
+    // objectives.
     it('the umpire reads and publishes both forces’ objectives', async () => {
       const fx = ctx.fx()
       const umpire = await ctx.login(fx.users.umpire)
@@ -49,6 +50,19 @@ export function s02(ctx: Ctx): void {
           `publish ${node}`,
         )
         must(await umpire.pubsub.publish(node, 'umpire', json({ text: 'again' })), 'overwrite own')
+      }
+    })
+
+    // §3 rule 14, review F5: a White Force observer is a member, not a publisher, of every
+    // force's objectives node: it reads them and its publish is refused.
+    it('a White Force observer reads both forces’ objectives but cannot publish them', async () => {
+      const fx = ctx.fx()
+      const observer = await ctx.login(fx.users.whiteObs)
+      for (const node of [fx.nodes.objectivesBlue, fx.nodes.objectivesRed]) {
+        must(await observer.pubsub.getItems(node), `read ${node}`)
+        expect(
+          errorOf(await observer.pubsub.publish(node, 'white-obs', json({ text: 'no' }))),
+        ).toMatchObject({ condition: 'forbidden', type: 'auth' })
       }
     })
 

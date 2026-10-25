@@ -1,0 +1,216 @@
+/*
+ * The Publish section (WP 2.3). Colours come only from the --wrx-* properties, as admin.css.
+ * Printing shows the credentials sheet alone (ADM-26).
+ */
+
+.wrx-publish-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+.wrx-publish-panel {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 0.5rem;
+  background: var(--wrx-surface, #ffffff);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.wrx-publish-panel h4 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+
+.wrx-publish-checks,
+.wrx-publish-steps,
+.wrx-publish-details {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.wrx-publish-checks li[data-status='fail'],
+.wrx-publish-error {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-steps > li {
+  margin: 0.375rem 0;
+}
+
+.wrx-publish-state {
+  display: inline-block;
+  min-width: 4.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.wrx-publish-steps > li[data-state='done'] .wrx-publish-state {
+  color: var(--wrx-success, #15803d);
+}
+
+.wrx-publish-steps > li[data-state='failed'] .wrx-publish-state {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-steps > li[data-state='running'] .wrx-publish-state {
+  color: var(--wrx-primary, #1d4ed8);
+}
+
+.wrx-publish-steps > li[data-state='not-run'] {
+  opacity: 0.7;
+}
+
+.wrx-publish-danger {
+  margin-left: 0.5rem;
+  border-color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-online-tag {
+  margin-left: 0.5rem;
+}
+
+.wrx-publish-details {
+  font-size: 0.875rem;
+  color: var(--wrx-muted, #4b5563);
+}
+
+.wrx-publish-warnings li {
+  margin: 0.25rem 0;
+}
+
+.wrx-credentials-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.wrx-credentials-table th,
+.wrx-credentials-table td {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+}
+
+.wrx-credentials-password {
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.wrx-credentials-demo {
+  font-weight: 700;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .wrx-credentials-sheet,
+  .wrx-credentials-sheet * {
+    visibility: visible;
+  }
+
+  .wrx-credentials-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000000;
+    background: #ffffff;
+  }
+
+  .wrx-credentials-sheet .wrx-print-hide {
+    display: none;
+  }
+
+  .wrx-credentials-table th,
+  .wrx-credentials-table td {
+    border-color: #000000;
+  }
+}
+
+/* The plan's groups and batches: disclosure buttons, collapsed by default. */
+
+.wrx-publish-progress {
+  margin: 0;
+  color: var(--wrx-muted, #4b5563);
+}
+
+.wrx-publish-group {
+  border-top: 1px solid var(--wrx-border, #d1d5db);
+  padding: 0.25rem 0;
+}
+
+.wrx-publish-panel h4.wrx-publish-group-title {
+  margin: 0;
+}
+
+.wrx-publish-group-title,
+.wrx-publish-batch-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.wrx-publish-disclosure {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.25rem 0.375rem;
+  cursor: pointer;
+}
+
+.wrx-publish-disclosure:hover {
+  border-color: var(--wrx-border, #d1d5db);
+}
+
+.wrx-publish-disclosure:focus-visible {
+  outline: 2px solid var(--wrx-focus, #1d4ed8);
+  outline-offset: 1px;
+}
+
+.wrx-publish-chevron {
+  display: inline-block;
+  width: 1ch;
+}
+
+.wrx-publish-group-name {
+  font-weight: 700;
+}
+
+.wrx-publish-count {
+  font-weight: 400;
+}
+
+.wrx-publish-batch-title .wrx-publish-disclosure {
+  padding-left: 0;
+}
+
+.wrx-publish-rollup {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--wrx-muted, #4b5563);
+}
+
+.wrx-publish-rollup[data-state='done'] {
+  color: var(--wrx-success, #15803d);
+}
+
+.wrx-publish-rollup[data-state='failed'] {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-rollup[data-state='running'] {
+  color: var(--wrx-text, #111827);
+}

@@ -4,9 +4,10 @@ import type { ConnectionStatus } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import type { Ctx } from '../context.ts'
 import { GAME_ROOM, WHITELIST_NODE } from '../fixture.ts'
-import { errorOf, json, must, record, uniq } from '../harness.ts'
+import { errorOf, json, must, record, sleep, uniq } from '../harness.ts'
+import type { RawAccess } from '../suite.ts'
 
-export function s04(ctx: Ctx): void {
+export function s04(ctx: Ctx, raw: RawAccess | undefined): void {
   describe('S04 admin provisioning', () => {
     const account = () => uniq(`${ctx.fx().tag}-s04`)
 
@@ -52,6 +53,33 @@ export function s04(ctx: Ctx): void {
       const online = must(await ctx.admin().admin.onlineUsers(), 'online users')
       expect(online).toContain(ctx.jid(fx.users.redCo))
       expect(online.every((j) => !j.includes('/'))).toBe(true)
+    })
+
+    // §4.17 get-registered-users-list (field name is the server's: ejabberd `registereduserjids`,
+    // which lists the admin twice, and online anonymous sessions too). Every account once, online
+    // or not, as bare JIDs; not a deleted account, nor a SASL ANONYMOUS session (D20). The audit
+    // finds accounts with no role from it (ADM-41).
+    it('lists every registered account once as bare JIDs, not a deleted one or a session', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const user = account()
+      try {
+        must(await admin.admin.addUser(ctx.jid(user), 'pw'), 'add-user')
+        const anon = await ctx.anonymous()
+        const listed = must(await admin.admin.registeredUsers(), 'registered users')
+        for (const jid of [ctx.jid(user), ctx.jid(fx.users.blueObs), ctx.jid('admin')]) {
+          expect(listed).toContain(jid)
+        }
+        expect(listed).not.toContain(anon.jid.split('/')[0])
+        expect(listed.every((j) => !j.includes('/'))).toBe(true)
+        expect(new Set(listed).size).toBe(listed.length)
+      } finally {
+        await admin.admin.deleteUser(ctx.jid(user))
+      }
+      const after = must(await admin.admin.registeredUsers(), 'registered users after delete')
+      expect(after).not.toContain(ctx.jid(user))
+      const player = await ctx.login(fx.users.blueCo)
+      expect(errorOf(await player.admin.registeredUsers())?.condition).toBe('forbidden')
     })
 
     // §4.6 end-user-session ends every session of the account (D22: a role may have several).
@@ -160,5 +188,80 @@ export function s04(ctx: Ctx): void {
       must(await admin.admin.setPrivate(key, json(null)), 'overwrite')
       expect(must(await admin.admin.getPrivate(key), 'read again')).toBe('null')
     })
+
+    // Several keys in one session: the vault and the publish marker live side by side.
+    it('private storage keeps several keys apart', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const first = `contract-a-${fx.tag}`
+      const second = `contract-b-${fx.tag}`
+      must(await admin.admin.setPrivate(first, 'one'), 'write first')
+      must(await admin.admin.setPrivate(second, 'two'), 'write second')
+      expect(must(await admin.admin.getPrivate(first), 'read first')).toBe('one')
+      expect(must(await admin.admin.getPrivate(second), 'read second')).toBe('two')
+      must(await admin.admin.setPrivate(first, 'uno'), 'overwrite first')
+      expect(must(await admin.admin.getPrivate(second), 'second unchanged')).toBe('two')
+      expect(must(await admin.admin.getPrivate(first), 'first updated')).toBe('uno')
+    })
+
+    // Two admin sessions (two tabs, or multi-client panes) writing different keys at once: both
+    // writes survive, so the publish marker can never wipe the vault or the other way round
+    // (security review F14).
+    it('private storage keeps concurrent writes of different keys by two sessions', async () => {
+      const fx = ctx.fx()
+      const one = ctx.admin()
+      const two = await ctx.adminSession()
+      const keys = [0, 1, 2, 3].map((i) => `contract-c${i}-${fx.tag}`)
+      for (let round = 0; round < 3; round++) {
+        const writes = keys.map((key, i) =>
+          (i % 2 === 0 ? one : two).admin.setPrivate(key, `${key}-${round}`),
+        )
+        for (const done of await Promise.all(writes)) must(done, 'concurrent write')
+        for (const key of keys) {
+          expect(must(await one.admin.getPrivate(key), key), `${key} round ${round}`).toBe(
+            `${key}-${round}`,
+          )
+        }
+      }
+      // Clearing one key leaves the others.
+      const [cleared, kept] = [`contract-c0-${fx.tag}`, `contract-c1-${fx.tag}`]
+      must(await two.admin.setPrivate(cleared, ''), 'clear')
+      expect(must(await one.admin.getPrivate(cleared), 'cleared')).toBeUndefined()
+      expect(must(await one.admin.getPrivate(kept), 'kept')).toBe(`${kept}-2`)
+    })
+
+    if (raw === undefined) return
+
+    // A value written before each key had its own element (one JSON object in
+    // `urn:wrx:private:0`) still reads, until the key is written again (F14).
+    it(
+      'private storage still reads a value from the old shared object',
+      { tags: ['raw'] },
+      async () => {
+        const fx = ctx.fx()
+        const admin = await ctx.adminSession()
+        const key = `contract-legacy-${fx.tag}`
+        const id = uniq('s04-legacy')
+        const replies: string[] = []
+        const stop = raw.onIncoming(admin, (xml) => {
+          if (xml.includes(id)) replies.push(xml)
+        })
+        const stored = JSON.stringify({ [key]: 'old' })
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+        raw.send(
+          admin,
+          `<iq xmlns="jabber:client" type="set" id="${id}"><query xmlns="jabber:iq:private"><store xmlns="urn:wrx:private:0">${stored}</store></query></iq>`,
+        )
+        await sleep(1_000)
+        stop()
+        expect(replies[0]).toMatch(/type='result'/)
+        expect(must(await admin.admin.getPrivate(key), 'legacy read')).toBe('old')
+        must(await admin.admin.setPrivate(key, 'new'), 'write')
+        expect(must(await ctx.admin().admin.getPrivate(key), 'new read')).toBe('new')
+        must(await admin.admin.setPrivate(key, ''), 'clear')
+        expect(must(await ctx.admin().admin.getPrivate(key), 'cleared')).toBeUndefined()
+      },
+    )
   })
 }

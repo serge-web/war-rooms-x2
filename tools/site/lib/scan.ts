@@ -167,7 +167,8 @@ export const BUNDLE_RULES: readonly Rule[] = Object.freeze([
   {
     id: 'password-literal',
     pattern:
-      /\b(?:password|passwd|pwd|secret|client_?secret|api_?key|access_?key)["'`]?\s*[:=]\s*["'`][^"'`\s]{4,}["'`]/i,
+      // Not after a hyphen: `new-password` and `current-password` are autocomplete values.
+      /(?<![\w-])(?:password|passwd|pwd|secret|client_?secret|api_?key|access_?key)["'`]?\s*[:=]\s*["'`][^"'`\s]{4,}["'`]/i,
     why: 'A password or key assigned a literal value (NFR-1)',
   },
   {

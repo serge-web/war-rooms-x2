@@ -1,0 +1,248 @@
+// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed
+// out-of-game column on the right (PLY-36, WP 2.7). Each part has a *Core that takes plain props
+// and a wrapper that reads @wrx/hooks (NFR-18).
+import { UMPIRE_NAME } from '@wrx/domain'
+import type { StoreStatus } from '@wrx/domain'
+import { useGameSetup, useMe, useSessionStatus } from '@wrx/hooks'
+import type { ThemeTokens } from '@wrx/schemas'
+import { Banner, Button, Spinner, ThemeScope } from '@wrx/ui'
+import { useId } from 'react'
+import type { ReactNode } from 'react'
+import { OutOfGameColumn } from './column/index.ts'
+import { Workspace } from './workspace/index.ts'
+
+// ---- Connection status (PLY-2) ------------------------------------------------------------
+
+export function ConnectionIndicatorCore({ status }: { readonly status: StoreStatus }) {
+  if (status.state !== 'reconnecting') return null
+  return (
+    <Banner className="wrx-connection" tone="info" title="Reconnecting…">
+      The connection to the server dropped (attempt {status.attempt}). What you see stays here, and
+      missed messages are fetched when it is back.
+    </Banner>
+  )
+}
+
+// ---- Rooms (a plain list, the workspace before WP 2.5; kept for hosts that want no layout) ----
+
+export interface RoomSummary {
+  readonly id: string
+  readonly name: string
+  readonly access: 'write' | 'read'
+}
+
+export function RoomListCore({ rooms }: { readonly rooms: readonly RoomSummary[] }) {
+  const headingId = useId()
+  return (
+    <section className="wrx-room-list" aria-labelledby={headingId}>
+      <h2 id={headingId}>Your rooms</h2>
+      {rooms.length === 0 ? (
+        <p className="wrx-empty" role="status">
+          Your role has no rooms yet. Rooms appear here as soon as the admin gives your role access.
+        </p>
+      ) : (
+        <ul className="wrx-room-list__items">
+          {rooms.map((room) => (
+            <li key={room.id} className="wrx-room-list__item">
+              <span className="wrx-room-list__name">{room.name}</span>
+              {room.access === 'read' ? (
+                <span className="wrx-room-list__access">read only</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** The role's visible rooms, in display order (PLY-4), from `useMe`. */
+export function RoomList() {
+  const me = useMe()
+  if (me.status === 'loading') return <Spinner label="Loading your rooms" />
+  return (
+    <RoomListCore
+      rooms={me.data.rooms.map(({ room, access }) => ({ id: room.id, name: room.name, access }))}
+    />
+  )
+}
+
+// ---- Empty states (PLY-32) ----------------------------------------------------------------
+
+export function NoGameCore() {
+  const headingId = useId()
+  return (
+    <section className="wrx-no-game" aria-labelledby={headingId}>
+      <h2 id={headingId}>No game yet</h2>
+      <p className="wrx-empty" role="status">
+        No game has been published yet. This page updates by itself when the admin publishes one.
+      </p>
+    </section>
+  )
+}
+
+// ---- The shell ----------------------------------------------------------------------------------
+
+export interface ShellRole {
+  /** Role name, or "Umpire" for the admin. */
+  readonly name: string
+  readonly forceName?: string | undefined
+  readonly forceColour?: string | undefined
+}
+
+export interface ShellCoreProps {
+  readonly status: StoreStatus
+  readonly gameName: string | undefined
+  /** The game theme styles the client by default (D19). */
+  readonly theme?: ThemeTokens | undefined
+  readonly role: ShellRole | undefined
+  /** The backend badge (PLY-1). */
+  readonly backend: ReactNode
+  readonly onLogout: () => void
+  /** True while logging out. */
+  readonly loggingOut?: boolean
+  /** `none` shows the no-game empty state instead of the workspace (PLY-32). */
+  readonly game: 'loading' | 'ready' | 'none'
+  /** The workspace slot (WP 2.5). */
+  readonly workspace: ReactNode
+  /** The out-of-game column slot (WP 2.7). */
+  readonly column: ReactNode
+  /** Replaces the product heading, e.g. with a pane's name in the multi-client view. */
+  readonly title?: ReactNode
+  /** Extra header items before the backend badge, e.g. the admin's preview selector. */
+  readonly headerItems?: ReactNode
+  /** A notice under the header, e.g. that the admin is previewing as a role. */
+  readonly notice?: ReactNode
+}
+
+export function ShellCore({
+  status,
+  gameName,
+  theme,
+  role,
+  backend,
+  onLogout,
+  loggingOut = false,
+  game,
+  workspace,
+  column,
+  title,
+  headerItems,
+  notice,
+}: ShellCoreProps) {
+  const starting = status.state === 'starting' || game === 'loading'
+  return (
+    <ThemeScope tokens={theme} className="wrx-shell">
+      <header className="wrx-shell__header">
+        <div className="wrx-shell__brand">
+          {title ?? <h1 className="wrx-shell__product">War Rooms X1</h1>}
+          {gameName === undefined ? null : <span className="wrx-shell__game">{gameName}</span>}
+        </div>
+        <div className="wrx-shell__session">
+          {role === undefined ? null : (
+            <span className="wrx-shell__role" aria-label={roleLabel(role)}>
+              {role.forceColour === undefined ? null : (
+                <span
+                  className="wrx-shell__swatch"
+                  aria-hidden="true"
+                  style={{ background: role.forceColour }}
+                />
+              )}
+              {role.name}
+              {role.forceName === undefined ? null : (
+                <span className="wrx-shell__force">{role.forceName}</span>
+              )}
+            </span>
+          )}
+          {headerItems}
+          {backend}
+          <Button size="small" onClick={onLogout} busy={loggingOut}>
+            Log out
+          </Button>
+        </div>
+      </header>
+      {notice}
+      <ConnectionIndicatorCore status={status} />
+      <div className="wrx-shell__body">
+        <main className="wrx-shell__workspace" aria-label="Workspace">
+          {starting ? (
+            <div className="wrx-shell__loading">
+              <Spinner label="Loading the game" />
+            </div>
+          ) : game === 'none' ? (
+            <NoGameCore />
+          ) : (
+            workspace
+          )}
+        </main>
+        <aside className="wrx-shell__column" aria-label="Out-of-game column">
+          {column}
+        </aside>
+      </div>
+    </ThemeScope>
+  )
+}
+
+function roleLabel(role: ShellRole): string {
+  return role.forceName === undefined
+    ? `Logged in as ${role.name}`
+    : `Logged in as ${role.name}, ${role.forceName}`
+}
+
+export interface ShellProps {
+  readonly backend: ReactNode
+  readonly onLogout: () => void
+  readonly loggingOut?: boolean
+  /** The workspace; default the dockable `Workspace`, without saved layouts. */
+  readonly workspace?: ReactNode
+  /** The out-of-game column; default `OutOfGameColumn` (PLY-36). */
+  readonly column?: ReactNode
+  readonly title?: ReactNode
+  readonly headerItems?: ReactNode
+  readonly notice?: ReactNode
+  /** Who the header names; default the session's role, or "Umpire" for the admin. */
+  readonly role?: ShellRole
+}
+
+/** The shell over the pane's store; needs a SessionStoreProvider. */
+export function Shell({
+  backend,
+  onLogout,
+  loggingOut,
+  workspace,
+  column,
+  title,
+  headerItems,
+  notice,
+  role: roleOverride,
+}: ShellProps) {
+  const status = useSessionStatus().data
+  const me = useMe().data
+  const setup = useGameSetup()
+  const game = setup.data !== undefined ? 'ready' : setup.status === 'loading' ? 'loading' : 'none'
+  const role: ShellRole | undefined =
+    roleOverride ??
+    (me.role !== undefined
+      ? { name: me.role.name, forceName: me.force?.name, forceColour: me.force?.colour }
+      : me.identity.isAdmin
+        ? // The admin is the umpire, in the White Force (glossary, SC-5).
+          { name: UMPIRE_NAME, forceName: me.force?.name, forceColour: me.force?.colour }
+        : undefined)
+  return (
+    <ShellCore
+      status={status}
+      gameName={setup.data?.name}
+      theme={setup.data?.theme.tokens}
+      role={role}
+      backend={backend}
+      onLogout={onLogout}
+      loggingOut={loggingOut}
+      game={game}
+      workspace={workspace ?? <Workspace />}
+      column={column ?? <OutOfGameColumn />}
+      title={title}
+      headerItems={headerItems}
+      notice={notice}
+    />
+  )
+}

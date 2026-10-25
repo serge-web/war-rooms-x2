@@ -115,6 +115,18 @@ function isAbsentAccount(error: TransportError): boolean {
 }
 
 /**
+ * Quirk (WP 2.10 probe): with `auth_method: [internal, anonymous]`, ejabberd lists every online
+ * SASL ANONYMOUS session in `get-registered-users-list` (and in its count) until it disconnects.
+ * Their localparts are random decimal numbers (24 or 25 digits seen), so a long all-digit
+ * localpart is taken as anonymous; the transport also requires it to be online before leaving it
+ * out. No role id can have this shape (`ANONYMOUS_LIKE_ID` in @wrx/schemas, refused by the
+ * design check, AdminOps and the draft), so this never hides a role's account (review F4).
+ */
+function isAnonymousAccount(bareJid: string): boolean {
+  return /^\d{16,}@/.test(bareJid)
+}
+
+/**
  * Room config (XEP-0045 §10.2). The standard muc#roomconfig fields come from the interface; the
  * rest are ejabberd's own:
  * - `mam`: ejabberd's room archiving switch (XEP-0313 defines no room config field);
@@ -191,6 +203,14 @@ export const ejabberd: ServerAdapter = Object.freeze({
   /** Quirk (WP 0.3): XEP-0133 names no fields for these; ejabberd uses these two names. */
   onlineUsersField: 'onlineuserjids',
   onlineUsersCountField: 'onlineusersnum',
+  /**
+   * Quirk (WP 2.10 probe, ejabberd 26.09): XEP-0133 §4.17 names no field; ejabberd answers
+   * `get-registered-users-list` in one step (status `completed`, no `max_items` form) with every
+   * account in jid-multi `registereduserjids`, and lists `admin@<domain>` twice (its
+   * `get-registered-users-num` counts it twice too). The transport removes duplicates.
+   */
+  registeredUsersField: 'registereduserjids',
+  isAnonymousAccount,
   roomConfigFields,
   roomArchive,
   nodeConfigFields,

@@ -34,6 +34,7 @@ flowchart TB
         wp22["2.2 Design editor"]
         wp23["2.3 Publish and provisioning"]
         wp210["2.10 Audit and repair"]
+        wp211["2.11 White Force and admin umpire"]
         wp24["2.4 Player shell"]
         wp25["2.5 Workspace"]
         wp26["2.6 Chat panel"]
@@ -61,6 +62,7 @@ flowchart TB
     wp13 & wp16 & wp01 --> wp21
     wp16 --> wp22
     wp21 & wp22 --> wp23 --> wp210
+    wp210 & wp27 --> wp211
     wp16 --> wp24
     wp02 & wp24 --> wp25 --> wp26
     wp25 & wp21 --> wp27
@@ -78,8 +80,8 @@ flowchart TB
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp04,wp21,wp22,wp23,wp210,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34 todo
-    class wp01,wp02,wp03,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16 done
+    class wp04,wp31,wp32,wp33,wp34 todo
+    class wp01,wp02,wp03,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211 done
     class G0,G1,G2,G3 gate
 ```
 
