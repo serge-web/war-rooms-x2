@@ -376,6 +376,11 @@ class MockAdmin implements AdminApi {
     return r.op === 'admin.onlineUsers' || r.op === 'failed' ? r.result : mismatch()
   }
 
+  registeredUsers: AdminApi['registeredUsers'] = async () => {
+    const r = await this.caller.call({ op: 'admin.registeredUsers', args: [] })
+    return r.op === 'admin.registeredUsers' || r.op === 'failed' ? r.result : mismatch()
+  }
+
   addUser: AdminApi['addUser'] = async (jid, password) => {
     const r = await this.caller.call({ op: 'admin.addUser', args: [jid, password] })
     return r.op === 'admin.addUser' || r.op === 'failed' ? r.result : mismatch()

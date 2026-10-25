@@ -290,6 +290,11 @@ export class PublishController {
     return undefined
   }
 
+  /** The vault, while it is unlocked here; the audit (WP 2.10) checks voice with it. */
+  currentVault(): ObserverVault | undefined {
+    return this.vault?.unlocked === true ? this.vault : undefined
+  }
+
   /** Drops the vault's key and passwords from memory. */
   lockVault(): void {
     this.vault?.lock()

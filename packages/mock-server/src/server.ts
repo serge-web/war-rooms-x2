@@ -265,6 +265,8 @@ export class MockServer implements ServerLink {
         return { op: request.op, result: pubsub.setSubscriptions(conn, ...request.args) }
       case 'admin.onlineUsers':
         return { op: request.op, result: this.onlineUsers(conn) }
+      case 'admin.registeredUsers':
+        return { op: request.op, result: this.registeredUsers(conn) }
       case 'admin.addUser':
         return { op: request.op, result: this.addUser(conn, ...request.args) }
       case 'admin.deleteUser':
@@ -292,6 +294,13 @@ export class MockServer implements ServerLink {
     const allowed = this.requireAdmin(conn)
     if (!allowed.ok) return allowed
     return ok([...new Set([...this.world.connections].map((c) => c.bare))])
+  }
+
+  /** §4.17: every account, the admin's included, each once (S04). */
+  private registeredUsers(conn: Connection): Outcome<readonly string[]> {
+    const allowed = this.requireAdmin(conn)
+    if (!allowed.ok) return allowed
+    return ok([...this.world.accounts.keys()])
   }
 
   /** The bare JID of an account on this server, or undefined. */

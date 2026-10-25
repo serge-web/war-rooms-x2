@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "test:ejabberd": "node scripts/run-ejabberd.ts",
-    "test:publish:ejabberd": "node scripts/run-publish-ejabberd.ts"
+    "test:publish:ejabberd": "node scripts/run-publish-ejabberd.ts",
+    "test:audit:ejabberd": "node scripts/run-audit-ejabberd.ts"
   },
   "dependencies": {
     "@wrx/domain": "workspace:*",

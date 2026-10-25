@@ -1,0 +1,65 @@
+/*
+ * The Audit section (WP 2.10). Colours come only from the --wrx-* properties, as admin.css; the
+ * panels and states reuse the Publish section's classes.
+ */
+
+.wrx-audit-group {
+  margin: 1rem 0 0;
+}
+
+.wrx-audit-group h4 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.wrx-audit-group[data-severity='critical'] h4 {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-audit-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wrx-audit-items > li {
+  border-left: 3px solid var(--wrx-border, #d1d5db);
+  padding: 0.375rem 0 0.375rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.wrx-audit-group[data-severity='critical'] .wrx-audit-items > li {
+  border-left-color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-audit-items > li[data-state='done'] .wrx-publish-state {
+  color: var(--wrx-success, #15803d);
+}
+
+.wrx-audit-items > li[data-state='failed'] .wrx-publish-state {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-audit-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.wrx-audit-diff {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.125rem 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.wrx-audit-diff dt {
+  font-weight: 600;
+}
+
+.wrx-audit-diff dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

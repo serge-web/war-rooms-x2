@@ -45,6 +45,19 @@ async function connectToMock(): Promise<PublishConnection> {
   }
 }
 
+/**
+ * Drift for trying the Audit section (WP 2.10): turns moderation off in the first room on the
+ * in-page mock server, with an ordinary admin room configuration.
+ */
+async function unmoderateFirstRoom(connection: PublishConnection): Promise<void> {
+  const muc = connection.ops.session.muc
+  const rooms = await muc.listRooms()
+  const room = rooms.ok ? rooms.value[0] : undefined
+  if (room === undefined) return
+  const config = await muc.getRoomConfig(room)
+  if (config.ok) await muc.configureRoom(room, { ...config.value, moderated: false })
+}
+
 /** One connection per page, shared by StrictMode's double render. */
 let connecting: Promise<PublishConnection> | undefined
 
@@ -116,7 +129,17 @@ function Dev() {
           }}
         >
           Dev: reset the draft to the seed
-        </button>
+        </button>{' '}
+        {connection !== undefined && (
+          <button
+            type="button"
+            onClick={() => {
+              void unmoderateFirstRoom(connection)
+            }}
+          >
+            Dev: unmoderate the first room (audit drift)
+          </button>
+        )}
       </footer>
     </>
   )
