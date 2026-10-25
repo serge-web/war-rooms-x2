@@ -1,6 +1,6 @@
 # WP 2.2 — Admin design editor and screen layout
 
-**SRD ids:** ADM-1–9, ADM-27–28 · **Depends on:** 1.6 · **Status:** to do
+**SRD ids:** ADM-1–9, ADM-27–28 · **Depends on:** 1.6 · **Status:** done
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # WP 2.1 — Admin operations
 
-**SRD ids:** ADM-35–40, ADM-12, NFR-3 · **Depends on:** 1.3, 1.6, 0.1 · **Status:** to do · **Security review required**
+**SRD ids:** ADM-35–40, ADM-12, NFR-3 · **Depends on:** 1.3, 1.6, 0.1 · **Status:** done · **Security review required**
 
 ## Goal
 
