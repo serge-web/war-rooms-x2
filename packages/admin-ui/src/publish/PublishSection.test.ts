@@ -74,6 +74,15 @@ async function setup() {
 
 const planRegion = () => screen.getByRole('region', { name: /plan$/ })
 
+/** The disclosure button of a group in the plan, e.g. "Access". */
+const groupButton = (name: string) =>
+  within(within(planRegion()).getByRole('region', { name })).getAllByRole('button')[0]!
+
+const stepItems = () =>
+  within(planRegion())
+    .queryAllByRole('listitem')
+    .filter((li) => li.dataset.step !== undefined)
+
 async function planAndWait(
   user: ReturnType<typeof userEvent.setup>,
   label: string | RegExp = /plan/i,
@@ -130,10 +139,33 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const { user } = await setup()
     await planAndWait(user, 'Check the server and plan')
     const plan = planRegion()
-    for (const group of ['Accounts', 'Rooms', 'Nodes', 'Access', 'Documents']) {
+    for (const group of ['Accounts', 'Rooms', 'Nodes', 'Access', 'Documents', 'Game setup']) {
       expect(within(plan).getByRole('region', { name: group })).toBeTruthy()
+      // Collapsed by default, with a count and a status.
+      expect(groupButton(group).getAttribute('aria-expanded')).toBe('false')
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
+    expect(stepItems()).toEqual([])
+    expect(groupButton('Access').textContent).toBe('▸Access19 stepsTo do')
+    expect(groupButton('Nodes').textContent).toContain('Create nodes: 17 nodes')
+    // Repeated access steps read as one line each kind, expandable to every step.
+    await user.click(groupButton('Access'))
+    expect(groupButton('Access').getAttribute('aria-expanded')).toBe('true')
+    const access = within(plan).getByRole('region', { name: 'Access' })
+    const nodeGrants = within(access).getByRole('button', {
+      name: /^Give node access: 15 nodes × roles \(54 grants\)/,
+    })
+    expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
+    expect(stepItems().map((li) => li.dataset.step)).toEqual(['read-only-grant:blue-observer'])
+    await user.click(nodeGrants)
+    expect(stepItems()).toHaveLength(16)
+    expect(access.textContent).toContain('Blue CO: read')
+    await user.click(groupButton('Access'))
+    expect(stepItems()).toEqual([])
+    await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
+    expect(stepItems()).toHaveLength(57)
+    await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
+    expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
     expect(screen.getByText(/No rooms yet; checked after publishing/)).toBeTruthy()
     // Applying is blocked until the vault exists.
@@ -145,10 +177,13 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     cleanup()
     const fresh = await setup()
     await firstPublish(fresh)
-    const steps = within(planRegion())
-      .getAllByRole('listitem')
-      .filter((li) => li.dataset.step !== undefined)
-    expect(steps.length).toBeGreaterThan(20)
+    const groups = within(planRegion()).getAllByRole('region')
+    expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
+    expect(groupButton('Access').textContent).toContain('Done')
+    expect(within(planRegion()).getByText(/^All 57 steps done\.$/)).toBeTruthy()
+    await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
+    const steps = stepItems()
+    expect(steps).toHaveLength(57)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
@@ -271,9 +306,16 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     await waitFor(() => {
       expect(screen.getByText('Publish stopped at a failure.')).toBeTruthy()
     })
-    const failed = within(planRegion())
-      .getAllByRole('listitem')
-      .filter((li) => li.dataset.state === 'failed')
+    // The group holding the failure opens by itself and says so; the others stay closed.
+    expect(groupButton('Rooms').getAttribute('aria-expanded')).toBe('true')
+    expect(groupButton('Rooms').textContent).toContain('Failed: 1 of 3 done')
+    expect(groupButton('Accounts').getAttribute('aria-expanded')).toBe('false')
+    expect(groupButton('Accounts').textContent).toContain('Done')
+    expect(groupButton('Nodes').textContent).toContain('Not run')
+    expect(
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 57 steps done\.$/),
+    ).toBeTruthy()
+    const failed = stepItems().filter((li) => li.dataset.state === 'failed')
     expect(failed.map((li) => li.dataset.step)).toEqual(['room:red-hq'])
     expect(screen.getByText(/steps? not run\. Nothing after the failure was applied/)).toBeTruthy()
     expect(
@@ -284,12 +326,15 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Plan the rest again' }))
     await waitFor(() => {
-      expect(within(planRegion()).queryByText('Create room Blue HQ')).toBeNull()
+      expect(groupButton('Rooms').textContent).toContain('Create rooms: 2 rooms')
     })
+    await user.click(groupButton('Rooms'))
+    expect(within(planRegion()).queryByText('Create room Blue HQ')).toBeNull()
     expect(within(planRegion()).getByText('Create room Red HQ')).toBeTruthy()
     await publishAll(user)
     // Accounts the first run created are not listable (no registeredUsers): they are created
     // again, found to exist, and given the same password.
+    await user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     expect(screen.getAllByText(/the account already existed/).length).toBeGreaterThan(0)
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
   })
