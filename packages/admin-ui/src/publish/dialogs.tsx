@@ -61,7 +61,8 @@ export interface ApplyDialogProps {
   /** When set, the admin types this text to confirm (ADM-15). */
   readonly typed?: string
   readonly confirmLabel: string
-  readonly onConfirm: () => void
+  /** Called with the ids of the ticked acknowledgements (all of them, by then). */
+  readonly onConfirm: (ticked: ReadonlySet<string>) => void
 }
 
 /** Confirms applying a plan: enabled once every tick box is ticked and any typed text matches. */
@@ -148,7 +149,7 @@ export function ApplyDialog({
             setOpen(false)
             setTicked(new Set())
             setText('')
-            onConfirm()
+            onConfirm(ticked)
           }}
         >
           {confirmLabel}

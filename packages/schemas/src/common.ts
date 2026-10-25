@@ -1,3 +1,4 @@
+import './jitless.ts'
 import { z } from 'zod'
 
 /** Size limits shared by the client, the mock and the admin tools (SRD §3 rule 12, PLY-53, R15). */
@@ -57,3 +58,15 @@ export const sha256Schema = z
 
 /** Role ids become XMPP localparts, so these are taken by the server or the app. */
 export const RESERVED_ROLE_IDS: readonly string[] = Object.freeze(['admin', 'anonymous'])
+
+/**
+ * The shape of the localparts ejabberd gives online SASL ANONYMOUS sessions, which its
+ * registered-users list includes and the transport leaves out (transport-xmpp `ejabberd.ts`).
+ * No role id may have it, so the filter can never hide a role's account (security review F4).
+ */
+export const ANONYMOUS_LIKE_ID = /^\d{16,}$/
+
+/** Whether a slug can never be a role id: reserved, or shaped like an anonymous session. */
+export function isReservedRoleId(id: string): boolean {
+  return RESERVED_ROLE_IDS.includes(id) || ANONYMOUS_LIKE_ID.test(id)
+}

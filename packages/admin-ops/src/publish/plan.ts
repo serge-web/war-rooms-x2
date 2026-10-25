@@ -121,6 +121,12 @@ export type PlanWarning =
     }
   /** ADM-26, ADM-37: the vault has no password for a role that becomes read-only. */
   | { readonly kind: 'password-reset'; readonly roleId: string; readonly name: string }
+  /**
+   * The role's account exists although nothing else on the server shows the role (an earlier
+   * publish that stopped, or an account made outside the tooling). It is not created and its
+   * password is not changed; reset it from the credentials sheet if its players need one (F3).
+   */
+  | { readonly kind: 'account-exists'; readonly roleId: string; readonly name: string }
   /** No AdminOps operation retracts an item, so removed objectives text stays published. */
   | { readonly kind: 'objectives-kept'; readonly forceId: string }
 
@@ -131,6 +137,57 @@ export function needsConfirmation(warning: PlanWarning): boolean {
     warning.kind === 'room-destroyed' ||
     warning.kind === 'password-reset'
   )
+}
+
+/**
+ * The key the admin confirms a warning by (the apply dialog's tick box), for the warnings that
+ * need confirmation; the executor wants the same key for the step (`stepConfirmation`).
+ */
+export function confirmationKey(warning: PlanWarning): string | undefined {
+  switch (warning.kind) {
+    case 'role-deleted':
+      return `role:${warning.roleId}`
+    case 'room-destroyed':
+      return `room:${warning.roomId}`
+    case 'password-reset':
+      return `password:${warning.roleId}`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * The keys of every warning in `plan` that needs confirming: what the apply dialog hands the
+ * executor once the admin has ticked each one (and what a test passes to confirm them all).
+ */
+export function planConfirmations(plan: Pick<PublishPlan, 'warnings'>): Set<string> {
+  return new Set(plan.warnings.map(confirmationKey).filter((k): k is string => k !== undefined))
+}
+
+/**
+ * The confirmation a step needs before the executor runs it, worked out from its action alone,
+ * never from a flag the step carries (security review F9): deleting a role, destroying a room
+ * and resetting a password.
+ */
+export function stepConfirmation(action: StepAction): string | undefined {
+  switch (action.type) {
+    case 'delete-role':
+      return `role:${action.roleId}`
+    case 'destroy-room':
+      return `room:${action.roomId}`
+    case 'reset-password':
+      return `password:${action.roleId}`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Whether an action cannot be undone: it deletes an account, a room and its history or a node,
+ * or replaces a password. Worked out from the action type, for the audit's repairs (F9).
+ */
+export function isDestructiveAction(action: StepAction): boolean {
+  return stepConfirmation(action) !== undefined || action.type === 'delete-node'
 }
 
 export type VaultNeed =
@@ -372,6 +429,11 @@ export function planPublish(
   const serverRooms = new Map(view.rooms.map((r) => [r.roomId, r]))
   const serverNodes = new Map(view.nodes.map((n) => [n.node, n]))
   const known = new Set(knownRoles(view))
+  const registered = new Set(
+    view.registered
+      .map((j) => roleIdOf(j, view.domain))
+      .filter((id): id is string => id !== undefined),
+  )
   const targetRoles = new Set(target.roles)
   const readOnlyRoles = new Set(target.readOnlyRoles)
 
@@ -386,9 +448,17 @@ export function planPublish(
   let vaultUsed = false
 
   // ---- accounts ------------------------------------------------------------------------------
+  // Only an account the server does not list is created. An existing one keeps its password: a
+  // reset is its own destructive, confirmed step (below, or the credentials sheet), never a side
+  // effect of a create (F3).
   const created = new Set<string>()
   for (const roleId of target.roles) {
-    if (known.has(roleId)) continue
+    if (registered.has(roleId)) {
+      if (!known.has(roleId)) {
+        warnings.push({ kind: 'account-exists', roleId, name: roleName(roleId) })
+      }
+      continue
+    }
     const readOnly = readOnlyRoles.has(roleId)
     if (readOnly || view.vault.exists) vaultUsed = true
     created.add(roleId)
@@ -522,6 +592,11 @@ export function planPublish(
           ? `Give ${roleName(roleId)} read-only access to ${names}`
           : `Make ${roleName(roleId)} read-only in ${names}`,
       details: [
+        ...(phase === 'revoke'
+          ? [
+              'Its membership is taken away first, so it cannot post if a later step fails; its online sessions leave these rooms',
+            ]
+          : []),
         'Membership and voice revocation run back to back, through the role’s own login (ADM-37)',
       ],
       risk: { destructive: phase === 'revoke', roles: [roleId] },

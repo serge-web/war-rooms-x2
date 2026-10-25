@@ -32,6 +32,8 @@ export type AdminOpsErrorCode =
   | 'verify-failed'
   /** A room's message count changed after it was confirmed, so the room was not destroyed. */
   | 'count-changed'
+  /** A plan step that needs the admin's confirmation (`stepConfirmation`) was not confirmed. */
+  | 'not-confirmed'
 
 export interface AdminOpsError {
   readonly code: AdminOpsErrorCode
@@ -51,6 +53,11 @@ export interface AdminOpsError {
   readonly rolledBack?: boolean
   /** For `count-changed`: the room's message count now. */
   readonly messageCount?: number
+  /**
+   * For an operation over several targets that carries on after one fails (read-only access to
+   * several rooms or roles): every failure, in order. The error itself is the first of them.
+   */
+  readonly failures?: readonly AdminOpsError[]
 }
 
 export type OpsResult<T> = Result<T, AdminOpsError>
@@ -66,6 +73,16 @@ export function opsErr(
   extra: Omit<AdminOpsError, 'code' | 'message'> = {},
 ): { readonly ok: false; readonly error: AdminOpsError } {
   return { ok: false, error: { code, message, ...extra } }
+}
+
+/**
+ * Several failures of one operation as one result: ok when there are none; otherwise the first,
+ * with `failures` listing all of them when there is more than one.
+ */
+export function opsAll(failures: readonly AdminOpsError[]): OpsResult<void> {
+  const [first] = failures
+  if (first === undefined) return opsOk(undefined)
+  return { ok: false, error: failures.length === 1 ? first : { ...first, failures } }
 }
 
 /** One step of an operation, for 2.3's progress view (ADM-11). */

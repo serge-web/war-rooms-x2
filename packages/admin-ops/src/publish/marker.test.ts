@@ -16,6 +16,7 @@ import {
   storageMarkerStore,
 } from './marker.ts'
 import { preparePublish } from './prepare.ts'
+import { planConfirmations } from './plan.ts'
 import { readServerView } from './view.ts'
 
 const domain = 'marker.mock'
@@ -133,6 +134,7 @@ describe('the publish marker in private storage', () => {
     const result = await executePlan(ops, plan, {
       passwordFor: (id) => book.passwordFor(id),
       marker: refusing,
+      confirmed: planConfirmations(plan),
     })
     expect(result.ok).toBe(false)
     expect(result.failed?.stepId).toBe(MARKER_STEP)

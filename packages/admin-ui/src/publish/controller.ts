@@ -207,8 +207,12 @@ export class PublishController {
     })
   }
 
-  /** Runs the plan shown; the UI confirms first. Stops at the first failure (ADM-11). */
-  async apply(): Promise<void> {
+  /**
+   * Runs the plan shown, with the confirmations the admin ticked (`confirmationKey`); the
+   * executor refuses the plan if one it needs is missing (F9). Stops at the first failure
+   * (ADM-11).
+   */
+  async apply(confirmed: ReadonlySet<string>): Promise<void> {
     const plan = this.snapshot.plan
     if (plan === undefined || this.snapshot.busy !== undefined) return
     if (plan.vault === 'create' || plan.vault === 'unlock') {
@@ -225,6 +229,7 @@ export class PublishController {
     })
     const result = await executePlan(this.connection.ops, plan, {
       passwordFor: (roleId) => this.book.passwordFor(roleId),
+      confirmed,
       now: this.now,
       ...(this.connection.marker === undefined ? {} : { marker: this.connection.marker }),
       onStep: (event) => {

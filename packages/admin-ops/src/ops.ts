@@ -21,7 +21,7 @@
 // Operations are primitives for a planner (2.3 publish, 2.10 audit). Each resolves to a Result
 // and never rejects for a refusal (ARC-14), and reports each step to an optional listener.
 import { bareJid, domainpart } from '@wrx/domain'
-import { RESERVED_ROLE_IDS, parseNodeName, slugSchema } from '@wrx/schemas'
+import { isReservedRoleId, parseNodeName, slugSchema } from '@wrx/schemas'
 import type {
   AffiliationEntry,
   Endpoint,
@@ -36,7 +36,7 @@ import type {
   Transport,
   TransportError,
 } from '@wrx/transport'
-import { opsErr, opsOk } from './errors.ts'
+import { opsAll, opsErr, opsOk } from './errors.ts'
 import type { AdminOpsError, OpsOutcome, OpsResult, ProgressListener } from './errors.ts'
 import { gameRoomConfig } from './target.ts'
 import type { NodeAccess, RoomAccess } from './target.ts'
@@ -264,7 +264,7 @@ export class AdminOps {
     if (!slugSchema.safeParse(roleId).success) {
       return opsErr('invalid', `"${roleId}" is not a role id`, { op, target: roleId })
     }
-    if (RESERVED_ROLE_IDS.includes(roleId)) {
+    if (isReservedRoleId(roleId)) {
       return opsErr('invalid', `"${roleId}" is reserved; the tooling never changes it`, {
         op,
         target: roleId,
@@ -352,7 +352,10 @@ export class AdminOps {
 
   /**
    * Several roles' access to one room: write grants, then read-only grants (membership and voice
-   * revocation back to back), then revocations.
+   * revocation back to back), then revocations. A failed change does not stop the others: each
+   * read-only change fails closed on its own (`readOnlyIn`), and a revocation only takes access
+   * away, so running the rest leaves less write access than stopping would. Every failure is
+   * reported (`failures`).
    */
   async applyRoomAccess(roomId: string, changes: readonly RoomAccessChange[]): OpsOutcome<void> {
     const op = 'applyRoomAccess'
@@ -368,6 +371,7 @@ export class AdminOps {
     )
     if (!members.ok) return members
     const isMember = new Set(members.value.map((m) => bareJid(m.jid)))
+    const failures: AdminOpsError[] = []
 
     const writes = changes.filter((c) => c.access === 'write')
     const newWrites = writes.filter((c) => !isMember.has(this.roleJid(c.roleId)))
@@ -378,17 +382,17 @@ export class AdminOps {
           newWrites.map((c) => ({ jid: this.roleJid(c.roleId), affiliation: 'member' as const })),
         ),
       )
-      if (!granted.ok) return granted
+      if (!granted.ok) failures.push(granted.error)
     }
     for (const change of writes) {
       if (change.from !== 'read' || !isMember.has(this.roleJid(change.roleId))) continue
       const restored = await this.restoreVoice(op, roomId, change.roleId)
-      if (!restored.ok) return restored
+      if (!restored.ok) failures.push(restored.error)
     }
 
     for (const change of changes.filter((c) => c.access === 'read')) {
       const readOnly = await this.readOnlyIn(op, change.roleId, [roomId])
-      if (!readOnly.ok) return readOnly
+      if (!readOnly.ok) failures.push(...(readOnly.error.failures ?? [readOnly.error]))
     }
 
     const revokes = changes.filter((c) => c.access === 'none')
@@ -399,24 +403,29 @@ export class AdminOps {
           revokes.map((c) => ({ jid: this.roleJid(c.roleId), affiliation: 'none' as const })),
         ),
       )
-      if (!revoked.ok) return revoked
+      if (!revoked.ok) failures.push(revoked.error)
     }
-    return opsOk(undefined)
+    return opsAll(failures)
   }
 
   /**
-   * Makes a role read-only in rooms (ADM-37, the S13 vault route), granting membership where it
-   * is missing. Call this before publishing the documents that tell the role's client about the
-   * rooms, so its client has no reason to join early. For each room, back to back:
+   * Makes a role read-only in rooms (ADM-37, the S13 vault route). Call this before publishing
+   * the documents that tell the role's client about the rooms, so its client has no reason to
+   * join early. It fails closed in every room (security review F1):
    *
-   * 1. the admin is in the room (owner, so moderator);
-   * 2. the role becomes a member, if it is not one;
-   * 3. the role's own session, logged in with its vault password, joins;
-   * 4. the admin sets it to `visitor` by nick, which ejabberd stores per account (R13);
-   * 5. it rejoins, to check that the stored role is `visitor`, and leaves.
+   * 1. first, before anything that can fail (the vault, the role's login), the role's membership
+   *    is taken away in every room where it is a member, so a writer becoming read-only loses
+   *    its voice at once; its online sessions leave those rooms (status 321);
+   * 2. the role's own session logs in with its vault password;
+   * 3. then for each room, back to back: the admin is in the room (owner, so moderator); the role
+   *    becomes a member; the role's session joins; the admin sets it to `visitor` by nick, which
+   *    ejabberd stores per account (R13); it rejoins, to check that the stored role is
+   *    `visitor`, and leaves.
    *
-   * The role's session is closed at the end. If a step fails, the role's membership of that room
-   * is taken away again, so it is never left able to post (`rolledBack` in the error).
+   * If a room's step fails, the role's membership of that room is taken away again
+   * (`rolledBack`), and the other rooms are still handled. If the vault or the login fails, the
+   * role is left a member of none of the rooms. Every failure is reported (`failures`). The
+   * role's session is closed at the end.
    */
   makeReadOnly(roleId: string, roomIds: readonly string[]): OpsOutcome<void> {
     const op = 'makeReadOnly'
@@ -468,13 +477,49 @@ export class AdminOps {
     roleId: string,
     roomIds: readonly string[],
   ): OpsOutcome<void> {
-    return this.asRole(op, roleId, async (role) => {
-      for (const roomId of roomIds) {
-        const done = await this.revokeVoice(op, role, roleId, roomId)
-        if (!done.ok) return done
+    const jid = this.roleJid(roleId)
+    const failures: AdminOpsError[] = []
+    // Each room that can be handled, and whether the role is still a member there.
+    const rooms: { readonly roomId: string; member: boolean }[] = []
+    let dropped = 0
+    for (const roomId of roomIds) {
+      const room = this.roomJid(roomId)
+      // Read first: it fails `item-not-found` for a missing room, where a join would create it.
+      const members = await this.query(op, 'read members', roomId, () =>
+        this.session.muc.getAffiliations(room, 'member'),
+      )
+      if (!members.ok) {
+        failures.push(members.error)
+        continue
+      }
+      let member = members.value.some((m) => bareJid(m.jid) === jid)
+      if (member) {
+        // Fail closed before anything that can fail: a member may have voice.
+        const taken = await this.step(op, 'take membership away', roomId, () =>
+          this.session.muc.setAffiliations(room, [{ jid, affiliation: 'none' }]),
+        )
+        if (taken.ok) {
+          member = false
+          dropped++
+        } else failures.push(taken.error)
+      }
+      rooms.push({ roomId, member })
+    }
+    const handled = await this.asRole(op, roleId, async (role) => {
+      for (const { roomId, member } of rooms) {
+        const done = await this.revokeVoice(op, role, roleId, roomId, member)
+        if (!done.ok) failures.push(done.error)
       }
       return opsOk(undefined)
     })
+    if (!handled.ok) {
+      // No room was handled. Say whether that leaves the role a member of none of them.
+      const stillMember = rooms.some((r) => r.member) || failures.length > 0
+      failures.unshift(
+        dropped > 0 || stillMember ? { ...handled.error, rolledBack: !stillMember } : handled.error,
+      )
+    }
+    return opsAll(failures)
   }
 
   /** Logs in as the role with its vault password, runs `body`, and always disconnects. */
@@ -537,19 +582,16 @@ export class AdminOps {
     })
   }
 
+  /** One room of `readOnlyIn`; `member` says whether the role is a member there now. */
   private async revokeVoice(
     op: string,
     role: Session,
     roleId: string,
     roomId: string,
+    member: boolean,
   ): OpsOutcome<void> {
     const room = this.roomJid(roomId)
     const jid = this.roleJid(roleId)
-    // Read first: it fails `item-not-found` for a missing room, where a join would create it.
-    const members = await this.query(op, 'read members', roomId, () =>
-      this.session.muc.getAffiliations(room, 'member'),
-    )
-    if (!members.ok) return members
     const admin = await this.adminIn(op, roomId)
     if (!admin.ok) return admin
     const rollback = async (
@@ -568,7 +610,7 @@ export class AdminOps {
       })
     }
     try {
-      if (!members.value.some((m) => bareJid(m.jid) === jid)) {
+      if (!member) {
         const granted = await this.step(op, 'grant membership', roomId, () =>
           this.session.muc.setAffiliations(room, [{ jid, affiliation: 'member' }]),
         )

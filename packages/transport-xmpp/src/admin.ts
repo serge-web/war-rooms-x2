@@ -10,21 +10,38 @@ import type { FieldValue } from './forms.ts'
 import { Refusal } from './refusal.ts'
 
 const NS_ADMIN = 'http://jabber.org/protocol/admin'
+/** The legacy store: every key in one JSON object (read only, for values written before F14). */
 const NS_PRIVATE = 'urn:wrx:private:0'
+/** Each key's own element: `<store xmlns='urn:wrx:private:1:<key>' v='1'>value</store>`. */
+const NS_PRIVATE_KEY = 'urn:wrx:private:1:'
 
 /**
- * All of WRX1's private-storage values, as one JSON object of key → text inside
- * `<store xmlns='urn:wrx:private:0'>`. One element, because StanzaJS resolves every element
- * defined on the same path to the last one defined, so per-key elements cannot coexist.
+ * Private-storage values (XEP-0049). Each key has its own element, in its own namespace, so the
+ * server replaces only that element on a write: two admin sessions writing different keys at
+ * once (the vault and the publish marker, from two tabs) cannot lose each other's update, which
+ * a read-modify-write of one shared object could (security review F14). Each element is defined
+ * on its own path (`iq.privateStorage.<pathOf(key)>`): StanzaJS resolves every element defined
+ * on the same path to the last one defined, which is what broke the first per-key attempt.
+ *
+ * `v='1'` marks a stored value, so an empty text is a cleared key and a missing mark is a key
+ * never written this way, read from the legacy store instead.
  */
 interface PrivateValue {
   readonly value?: string
+  readonly v?: string
 }
 
 declare module 'stanza/protocol' {
   interface PrivateStorage {
     wrxPrivate?: PrivateValue
+    [key: `wrx_${string}`]: PrivateValue | undefined
   }
+}
+
+/** A JXT path segment for a key: no dots, one per key. */
+function pathOf(key: string): `wrx_${string}` {
+  const hex = Array.from(new TextEncoder().encode(key), (b) => b.toString(16).padStart(2, '0'))
+  return `wrx_${hex.join('')}`
 }
 
 /** Keys become part of an XML namespace, so they are kept to a safe alphabet. */
@@ -32,6 +49,7 @@ const KEY_PATTERN = /^[a-z0-9][a-z0-9.-]{0,63}$/
 
 export class XmppAdmin implements AdminApi {
   private storeDefined = false
+  private readonly keysDefined = new Set<string>()
 
   constructor(private readonly core: Core) {}
 
@@ -144,6 +162,15 @@ export class XmppAdmin implements AdminApi {
     if (!KEY_PATTERN.test(key)) {
       throw new Refusal({ condition: 'bad-request', text: `private key ${key} is not allowed` })
     }
+    if (!this.keysDefined.has(key)) {
+      this.core.client.stanzas.define({
+        element: 'store',
+        namespace: `${NS_PRIVATE_KEY}${key}`,
+        path: `iq.privateStorage.${pathOf(key)}`,
+        fields: { value: JXT.text(), v: JXT.attribute('v') },
+      })
+      this.keysDefined.add(key)
+    }
     if (this.storeDefined) return
     this.core.client.stanzas.define({
       element: 'store',
@@ -154,7 +181,7 @@ export class XmppAdmin implements AdminApi {
     this.storeDefined = true
   }
 
-  /** XEP-0049 §3: the stored object; empty if nothing is stored yet. */
+  /** XEP-0049 §3: the legacy stored object; empty if nothing is stored there. */
   private async readStore(): Promise<Record<string, string>> {
     const result = await sendIq(this.core.client, {
       type: 'get',
@@ -181,19 +208,24 @@ export class XmppAdmin implements AdminApi {
   getPrivate(key: string): Outcome<string | undefined> {
     return this.core.run(async () => {
       this.checkKey(key)
-      const value = (await this.readStore())[key]
+      const path = pathOf(key)
+      const result = await sendIq(this.core.client, {
+        type: 'get',
+        privateStorage: { [path]: {} },
+      })
+      const own = result.privateStorage?.[path]
+      const value = own?.v === '1' ? own.value : (await this.readStore())[key]
       return value === undefined || value === '' ? undefined : value
     })
   }
 
-  /** Read, update, write: another session writing in between can lose an update. */
+  /** One element for this key alone: the server replaces it and leaves every other key. */
   setPrivate(key: string, value: string): Outcome<void> {
     return this.core.run(async () => {
       this.checkKey(key)
-      const values = { ...(await this.readStore()), [key]: value }
       await sendIq(this.core.client, {
         type: 'set',
-        privateStorage: { wrxPrivate: { value: JSON.stringify(values) } },
+        privateStorage: { [pathOf(key)]: { v: '1', value } },
       })
     })
   }

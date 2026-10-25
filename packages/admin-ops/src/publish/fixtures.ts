@@ -17,6 +17,7 @@ export function emptyView(overrides: Partial<ServerView> = {}): ServerView {
     online: [],
     vault: { exists: false },
     marker: undefined,
+    registered: [jid('admin')],
     ...overrides,
   }
 }
@@ -53,6 +54,7 @@ export function publishedView(design: DesignFile, overrides: Partial<ServerView>
   return emptyView({
     rooms,
     nodes,
+    registered: [jid('admin'), ...target.roles.map(jid)],
     vault: readOnly.length > 0 ? { exists: true, roles: readOnly } : { exists: false },
     ...overrides,
   })

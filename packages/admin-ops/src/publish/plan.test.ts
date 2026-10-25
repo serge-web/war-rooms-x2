@@ -367,6 +367,62 @@ describe('changes', () => {
   })
 })
 
+describe('accounts against the registered list (security review F3)', () => {
+  const withRole = (id: string, isObserver: boolean) =>
+    edit((d) => ({
+      ...d,
+      roles: [
+        ...d.roles,
+        { schemaVersion: 1, id, name: id.toUpperCase(), forceId: 'blue', isObserver, order: 9 },
+      ],
+    }))
+
+  it('plans no create, and no reset, for an account that exists but nothing else shows', () => {
+    const design = withRole('blue-xo', false)
+    const view = publishedView(sampleDesign())
+    const plan = planPublish(design, { ...view, registered: [...view.registered, jid('blue-xo')] })
+    expect(ids(plan)).not.toContain('account:blue-xo')
+    expect(plan.steps.filter((s) => s.action.type === 'reset-password')).toEqual([])
+    expect(plan.warnings).toContainEqual({
+      kind: 'account-exists',
+      roleId: 'blue-xo',
+      name: 'BLUE-XO',
+    })
+    expect(plan.warnings.filter(needsConfirmation)).toEqual([])
+    // Still creates one that does not exist.
+    expect(step(planPublish(design, view), 'account:blue-xo').action).toEqual({
+      type: 'create-account',
+      roleId: 'blue-xo',
+      readOnly: false,
+    })
+  })
+
+  it('resets an existing read-only account only as its own destructive, confirmed step', () => {
+    const design = withRole('blue-watch', true)
+    const view = publishedView(sampleDesign())
+    const plan = planPublish(design, {
+      ...view,
+      registered: [...view.registered, jid('blue-watch')],
+    })
+    expect(ids(plan)).not.toContain('account:blue-watch')
+    const reset = step(plan, 'password:blue-watch')
+    expect(reset.action).toEqual({ type: 'reset-password', roleId: 'blue-watch', readOnly: true })
+    expect(reset.risk.destructive).toBe(true)
+    expect(plan.warnings.filter(needsConfirmation)).toEqual([
+      { kind: 'password-reset', roleId: 'blue-watch', name: 'BLUE-WATCH' },
+    ])
+  })
+
+  it('creates an account the documents know but the server does not list', () => {
+    const view = publishedView(sampleDesign())
+    const plan = planPublish(sampleDesign(), {
+      ...view,
+      registered: view.registered.filter((j) => j !== jid('red-co')),
+    })
+    expect(ids(plan)).toEqual(['account:red-co', 'doc:game-setup:current'])
+  })
+})
+
 describe('a publish that did not finish (the marker)', () => {
   it('owes the marker’s version even when nothing else is left, and publishes it once', () => {
     const view = publishedView(sampleDesign(), {

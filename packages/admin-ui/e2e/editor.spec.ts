@@ -154,9 +154,12 @@ test('previews the briefing sanitised, and warns that it is public', async ({ pa
   await page.getByRole('tab', { name: 'Preview' }).click()
   const preview = page.getByRole('tabpanel', { name: 'Preview' })
   await expect(preview.getByRole('heading', { level: 1, name: 'Welcome' })).toBeVisible()
+  // The players' sanitiser (F8): raw HTML is shown as text, never as elements.
+  await expect(preview.locator('img, script, [onerror]')).toHaveCount(0)
+  await expect(preview).toContainText('<img src="x" onerror="alert(1)">')
   const html = await preview.innerHTML()
-  expect(html).not.toContain('onerror')
   expect(html).not.toContain('<script')
+  expect(html).not.toContain('<img')
   expect(dialogs).toEqual([])
 })
 

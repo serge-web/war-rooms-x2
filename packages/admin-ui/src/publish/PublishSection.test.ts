@@ -331,11 +331,10 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     await user.click(groupButton('Rooms'))
     expect(within(planRegion()).queryByText('Create room Blue HQ')).toBeNull()
     expect(within(planRegion()).getByText('Create room Red HQ')).toBeTruthy()
+    // Accounts the first run created exist: they are neither created again nor reset (F3).
+    expect(screen.getAllByText(/already exists, so it is not created/).length).toBeGreaterThan(0)
+    expect(within(planRegion()).queryByRole('region', { name: 'Accounts' })).toBeNull()
     await publishAll(user)
-    // Accounts the first run created are not listable (no registeredUsers): they are created
-    // again, found to exist, and given the same password.
-    await user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
-    expect(screen.getAllByText(/the account already existed/).length).toBeGreaterThan(0)
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
   })
 

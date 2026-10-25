@@ -4,7 +4,7 @@
 // the credentials sheet (ADM-26), reset (ADM-15) and design import / export (ADM-16).
 //
 // `PublishSectionCore` draws plain props; `PublishSection` wires a `PublishController`.
-import { needsConfirmation } from '@wrx/admin-ops'
+import { confirmationKey, needsConfirmation } from '@wrx/admin-ops'
 import type {
   Credential,
   ExecutionResult,
@@ -68,7 +68,7 @@ export function PublishSection({
       snapshot={snapshot}
       onPlan={() => void controller?.plan()}
       onPlanReset={() => void controller?.planReset()}
-      onApply={() => void controller?.apply()}
+      onApply={(confirmed) => void controller?.apply(confirmed)}
       onDismiss={() => controller?.dismiss()}
       onCreateVault={(p) => controller?.createVault(p) ?? notConnected()}
       onUnlockVault={(p) => controller?.unlockVault(p) ?? notConnected()}
@@ -108,7 +108,8 @@ export interface PublishSectionCoreProps {
   readonly snapshot: PublishSnapshot
   readonly onPlan: () => void
   readonly onPlanReset: () => void
-  readonly onApply: () => void
+  /** Applies the plan, with the confirmation keys the admin ticked. */
+  readonly onApply: (confirmed: ReadonlySet<string>) => void
   readonly onDismiss: () => void
   readonly onCreateVault: (passphrase: string) => Promise<string | undefined>
   readonly onUnlockVault: (passphrase: string) => Promise<string | undefined>
@@ -284,23 +285,24 @@ function warningText(w: PlanWarning): string {
       return w.message
     case 'password-reset':
       return `${w.name} gets a new password: the vault must hold it to make the role read-only. Its players need the new password at their next login.`
+    case 'account-exists':
+      return `The account of ${w.name} (${w.roleId}) already exists, so it is not created and its password is not changed. If its players do not have the password, reset it from the credentials sheet.`
     case 'objectives-kept':
       return `The objectives of force ${w.forceId} were removed from the draft, but the published text stays: no operation retracts it.`
   }
 }
 
 function acknowledgementOf(w: PlanWarning): Acknowledgement | undefined {
-  if (!needsConfirmation(w)) return undefined
+  // The executor wants the same key for the step (F9).
+  const id = confirmationKey(w)
+  if (!needsConfirmation(w) || id === undefined) return undefined
   switch (w.kind) {
     case 'role-deleted':
-      return { id: `role:${w.roleId}`, label: `Delete ${w.name}; its history keeps the old login` }
+      return { id, label: `Delete ${w.name}; its history keeps the old login` }
     case 'room-destroyed':
-      return {
-        id: `room:${w.roomId}`,
-        label: `Destroy ${w.name} and its ${plural(w.messageCount, 'message')}`,
-      }
+      return { id, label: `Destroy ${w.name} and its ${plural(w.messageCount, 'message')}` }
     case 'password-reset':
-      return { id: `password:${w.roleId}`, label: `Reset the password of ${w.name}` }
+      return { id, label: `Reset the password of ${w.name}` }
     default:
       return undefined
   }

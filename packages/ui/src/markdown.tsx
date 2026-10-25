@@ -3,7 +3,14 @@
 // before it reaches the DOM (D24). Images are dropped: theme images are assets (§3 rule 12),
 // and a remote image would be a runtime fetch from outside the build (NFR-7). Message text is
 // never Markdown (PLY-14).
+//
+// This is the one sanitiser for player views and the admin's preview, so the preview shows
+// what players see (security review F8). Links keep only http, https and mailto targets and
+// open in a new tab with `rel="noopener noreferrer nofollow"`, so a link never navigates the
+// app away and drops the session. `class`, `id`, `name` and `style` are stripped, so text
+// cannot reuse the app's own classes to fake its UI.
 import DOMPurify from 'dompurify'
+import type { DOMPurify as Purifier } from 'dompurify'
 import { Marked } from 'marked'
 import { useMemo } from 'react'
 
@@ -16,7 +23,49 @@ function escapeHtml(text: string): string {
     .replaceAll("'", '&#39;')
 }
 
-const FORBID_TAGS = Object.freeze(['img', 'picture', 'video', 'audio', 'style', 'form', 'input'])
+const FORBID_TAGS = Object.freeze([
+  'img',
+  'picture',
+  'video',
+  'audio',
+  'source',
+  'track',
+  'style',
+  'form',
+  'input',
+  'button',
+  'select',
+  'textarea',
+  'svg',
+  'math',
+])
+const FORBID_ATTR = Object.freeze(['style', 'class', 'id', 'name', 'srcset'])
+const LINK_PROTOCOLS = Object.freeze(['http:', 'https:', 'mailto:'])
+
+function safeHref(href: string): boolean {
+  try {
+    // No base: a relative or fragment href does not parse, so it is dropped too.
+    return LINK_PROTOCOLS.includes(new URL(href).protocol)
+  } catch {
+    return false
+  }
+}
+
+// A fresh instance per call (the callers memoise), so the hook never touches other users of
+// the default DOMPurify and no state is shared between panes (ARC-2).
+function markdownPurifier(): Purifier {
+  const instance = DOMPurify(window)
+  instance.addHook('afterSanitizeAttributes', (node) => {
+    if (!(node instanceof Element)) return
+    const href = node.getAttribute('href')
+    if (href !== null && !safeHref(href)) node.removeAttribute('href')
+    if (node.tagName === 'A' && node.hasAttribute('href')) {
+      node.setAttribute('target', '_blank')
+      node.setAttribute('rel', 'noopener noreferrer nofollow')
+    }
+  })
+  return instance
+}
 
 /** Markdown to sanitised HTML. Raw HTML in the source comes out escaped, as text. */
 export function renderMarkdown(markdown: string): string {
@@ -29,10 +78,10 @@ export function renderMarkdown(markdown: string): string {
     },
   })
   const html = marked.parse(markdown, { async: false })
-  return DOMPurify.sanitize(html, {
+  return markdownPurifier().sanitize(html, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: [...FORBID_TAGS],
-    FORBID_ATTR: ['style'],
+    FORBID_ATTR: [...FORBID_ATTR],
   })
 }
 

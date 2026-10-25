@@ -178,6 +178,15 @@ describe('generated ids (§3 rule 1)', () => {
     expect(takenIds(published, 'roles')).toEqual(new Set(['admin', 'anonymous', 'co']))
   })
 
+  it('never gives a role an id that looks like an anonymous session (security review F4)', () => {
+    const force = addForce(createDraft(), 'Blue').draft
+    expect(addRole(force, 'blue', '1234567890123456').id).toBe('role-1234567890123456')
+    expect(addRole(force, 'blue', '123456789012345').id).toBe('123456789012345')
+    expect(roleIdProblem(sample(), 'blue-co', '1234567890123456')).toBe(
+      '"1234567890123456" is reserved',
+    )
+  })
+
   it('falls back to the kind for names without letters or digits', () => {
     expect(addForce(createDraft(), '***').id).toBe('force')
     expect(addRoom(createDraft(), '').id).toBe('room')

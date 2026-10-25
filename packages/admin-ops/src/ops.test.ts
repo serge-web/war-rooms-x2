@@ -5,6 +5,7 @@ import { err, ok } from '@wrx/transport'
 import type { SubscriptionEntry } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, MUC, joined, ops, rig } from './fixtures.ts'
+import type { Rig } from './fixtures.ts'
 import { AdminOps } from './ops.ts'
 import { gameNodeConfig, gameRoomConfig } from './target.ts'
 import { VAULT_STORAGE_KEY } from './vault.ts'
@@ -115,7 +116,7 @@ describe('R-B: read-only room access (the vault route)', () => {
     )
   })
 
-  it('keeps an existing membership and skips setRole when the stored role is already visitor', async () => {
+  it('takes an existing membership away before logging in, then grants it and checks voice', async () => {
     const { admin, role, ops: adminOps, log } = await rig()
     admin.stub('muc', 'getAffiliations', () =>
       Promise.resolve(ok([{ jid: jid('blue-observer'), affiliation: 'member' as const }])),
@@ -125,7 +126,10 @@ describe('R-B: read-only room access (the vault route)', () => {
       return joined(String(r), String(n), 'visitor')
     })
     expect((await adminOps.makeReadOnly('blue-observer', ['blue-hq'])).ok).toBe(true)
-    expect(ops(log)).not.toContain('admin.muc.setAffiliations')
+    const affs = log.filter((l) => l.startsWith('admin.muc.setAffiliations'))
+    expect(affs.map((l) => (l.includes('"none"') ? 'none' : 'member'))).toEqual(['none', 'member'])
+    expect(ops(log).indexOf('admin.muc.setAffiliations')).toBeLessThan(ops(log).indexOf('connect'))
+    // Already a visitor on joining: no setRole.
     expect(ops(log)).not.toContain('admin.muc.setRole')
   })
 
@@ -196,6 +200,121 @@ describe('R-B: read-only room access (the vault route)', () => {
     expect((await adminOps.setRoomAccess('red-hq', 'red-liaison', 'write', 'read')).ok).toBe(true)
     const affs = log.filter((l) => l.startsWith('admin.muc.setAffiliations'))
     expect(affs.map((l) => (l.includes('"none"') ? 'none' : 'member'))).toEqual(['none', 'member'])
+  })
+})
+
+describe('R-B: write to read fails closed (security review F1)', () => {
+  const refusingLogin = (admin: Rig['admin'], vault: Rig['vault']) =>
+    new AdminOps({
+      session: admin,
+      login: {
+        transport: { kind: 'mock', connect: () => Promise.resolve(err('not-authorized')) },
+        endpoint: { websocketUrl: 'fake://', domain: DOMAIN },
+      },
+      ...(vault === undefined ? {} : { vault }),
+    })
+  const memberOf = (admin: Rig['admin'], ...roleIds: string[]) => {
+    admin.stub('muc', 'getAffiliations', () =>
+      Promise.resolve(ok(roleIds.map((r) => ({ jid: jid(r), affiliation: 'member' as const })))),
+    )
+  }
+  const dropped = (log: readonly string[], roleId: string) =>
+    log.filter(
+      (l) =>
+        l.startsWith('admin.muc.setAffiliations') &&
+        l.includes(jid(roleId)) &&
+        l.includes('"none"'),
+    )
+
+  it('a refused role login takes an existing membership away first', async () => {
+    const { admin, vault, log } = await rig()
+    memberOf(admin, 'blue-observer')
+    const result = await refusingLogin(admin, vault).applyRoomAccess('blue-hq', [
+      { roleId: 'blue-observer', access: 'read' },
+    ])
+    expect(result).toMatchObject({ ok: false, error: { code: 'login-failed', rolledBack: true } })
+    expect(dropped(log, 'blue-observer')).toHaveLength(1)
+    expect(log.filter((l) => l.includes('"member"'))).toEqual([])
+  })
+
+  it('no vault password, or a locked vault, takes an existing membership away', async () => {
+    const { admin, ops: adminOps, log } = await rig()
+    memberOf(admin, 'red-co')
+    const result = await adminOps.makeReadOnly('red-co', ['blue-hq', 'red-hq'])
+    expect(result).toMatchObject({ ok: false, error: { code: 'no-password', rolledBack: true } })
+    expect(dropped(log, 'red-co')).toHaveLength(2)
+
+    const locked = await rig({ vault: false })
+    memberOf(locked.admin, 'blue-observer')
+    const lockedResult = await locked.ops.makeReadOnly('blue-observer', ['blue-hq'])
+    expect(lockedResult.ok ? undefined : lockedResult.error.code).toBe('vault-locked')
+    expect(dropped(locked.log, 'blue-observer')).toHaveLength(1)
+  })
+
+  it('takes every membership away before the role logs in', async () => {
+    const { admin, ops: adminOps, log } = await rig()
+    memberOf(admin, 'blue-observer')
+    expect((await adminOps.makeReadOnly('blue-observer', ['blue-hq', 'red-hq'])).ok).toBe(true)
+    const steps = ops(log)
+    const login = steps.indexOf('connect')
+    expect(steps.slice(0, login)).toEqual([
+      'admin.muc.setAffiliations',
+      'admin.muc.setAffiliations',
+    ])
+    expect(dropped(log, 'blue-observer')).toHaveLength(2)
+    // Then, per room, membership and voice revocation back to back (R-B).
+    expect(steps.slice(login + 1, login + 5)).toEqual([
+      'admin.muc.join',
+      'admin.muc.setAffiliations',
+      'role.muc.join',
+      'admin.muc.setRole',
+    ])
+  })
+
+  it('handles every room after one fails, and reports each failure', async () => {
+    const { admin, role, ops: adminOps, log } = await rig()
+    memberOf(admin, 'blue-observer')
+    const visitorIn = new Set<string>()
+    admin.stub('muc', 'setRole', (r, ...rest) => {
+      log.push(`admin.muc.setRole ${JSON.stringify([r, ...rest])}`)
+      if (String(r).startsWith('blue-hq@') || String(r).startsWith('red-hq@')) {
+        return Promise.resolve(err('not-allowed', 'no', 'cancel'))
+      }
+      visitorIn.add(String(r))
+      return Promise.resolve(ok(undefined))
+    })
+    role.stub('muc', 'join', (r, n) => {
+      log.push(`role.muc.join ${JSON.stringify([r, n])}`)
+      return joined(String(r), String(n), visitorIn.has(String(r)) ? 'visitor' : 'participant')
+    })
+    const result = await adminOps.makeReadOnly('blue-observer', ['blue-hq', 'red-hq', 'umpire-hq'])
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toMatchObject({ code: 'refused', target: 'blue-hq', rolledBack: true })
+    expect(result.error.failures?.map((f) => f.target)).toEqual(['blue-hq', 'red-hq'])
+    // umpire-hq was still handled: the role joined it and the admin set it to visitor.
+    expect(log.some((l) => l.startsWith('admin.muc.setRole') && l.includes('umpire-hq@'))).toBe(
+      true,
+    )
+    // Each failed room ends with the membership taken away.
+    for (const room of ['blue-hq', 'red-hq']) {
+      expect(
+        log
+          .filter((l) => l.startsWith('admin.muc.setAffiliations') && l.includes(`${room}@`))
+          .at(-1),
+      ).toContain('"none"')
+    }
+  })
+
+  it('applyRoomAccess runs the other changes after a read-only change fails', async () => {
+    const { admin, vault, log } = await rig()
+    memberOf(admin, 'blue-observer')
+    const result = await refusingLogin(admin, vault).applyRoomAccess('blue-hq', [
+      { roleId: 'blue-observer', access: 'read' },
+      { roleId: 'red-co', access: 'none' },
+    ])
+    expect(result.ok ? undefined : result.error.code).toBe('login-failed')
+    expect(dropped(log, 'red-co')).toHaveLength(1)
   })
 })
 
@@ -364,6 +483,17 @@ describe('R-E: deleting a role', () => {
       await adminOps.deleteAccount('admin'),
       await adminOps.setPassword('admin', 'x'),
       await adminOps.setRoomAccess('blue-hq', 'admin', 'none'),
+    ]) {
+      expect(result.ok ? undefined : result.error.code).toBe('invalid')
+    }
+    expect(log).toEqual([])
+  })
+
+  it('refuses a role id that looks like an anonymous session (security review F4)', async () => {
+    const { ops: adminOps, log } = await rig()
+    for (const result of [
+      await adminOps.createAccount('1234567890123456', 'pw'),
+      await adminOps.deleteRole('1234567890123456'),
     ]) {
       expect(result.ok ? undefined : result.error.code).toBe('invalid')
     }
