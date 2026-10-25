@@ -27,6 +27,7 @@
     "stack:up": "sh deploy/ejabberd/up.sh",
     "stack:down": "sh deploy/ejabberd/down.sh",
     "test:contract": "pnpm --filter @wrx/contract-suite test:ejabberd",
+    "test:admin-ops:ejabberd": "pnpm --filter @wrx/admin-ops test:ejabberd",
     "test:contract:mock": "vitest run packages/mock-server/src/mock.contract.test.ts",
     "site:serve": "node tools/site/serve.ts site/dist 4174 /",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:trace && pnpm check:dictionary && pnpm check:blog"
