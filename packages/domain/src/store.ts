@@ -126,6 +126,12 @@ export interface RoomView {
   readonly messages: readonly TimelineEntry[]
   readonly hasOlder: boolean
   readonly loadingOlder: boolean
+  /**
+   * The first history query has finished (merged, or failed), so `messages` is no longer
+   * waiting for it. Stays true across rejoins. Lets a UI tell "no messages" from "loading",
+   * and treat the history present at first load as already read (PLY-11).
+   */
+  readonly historyLoaded: boolean
   /** The last refused post, kept so it can be copied (PLY-33). */
   readonly unsent: UnsentMessage | undefined
 }
@@ -259,6 +265,7 @@ interface RoomEntry {
   readonly timeline: Timeline
   olderCursor: string | undefined
   hasOlder: boolean
+  historyLoaded: boolean
   older: Promise<DomainResult<{ added: number; complete: boolean }>> | undefined
   readonly occupants: Map<string, Occupant>
   occupantsVersion: number
@@ -921,6 +928,7 @@ class Store implements SessionStore {
       timeline: new Timeline(),
       olderCursor: undefined,
       hasOlder: true,
+      historyLoaded: false,
       older: undefined,
       occupants: new Map(),
       occupantsVersion: 0,
@@ -979,6 +987,10 @@ class Store implements SessionStore {
         mode === 'gap' && entry.timeline.size > 0
           ? await this.fillGap(entry, current)
           : await this.loadLatest(entry, current)
+      if (current() && !entry.historyLoaded) {
+        entry.historyLoaded = true
+        if (history.ok) this.roomChanged(entry)
+      }
       if (!history.ok && current()) {
         if (history.error.code === 'access-withdrawn') return this.failRoom(entry, history.error)
         entry.error = history.error
@@ -1162,6 +1174,7 @@ class Store implements SessionStore {
         messages: entry.timeline.entries(),
         hasOlder: entry.hasOlder,
         loadingOlder: entry.older !== undefined,
+        historyLoaded: entry.historyLoaded,
         unsent: entry.unsent,
       })
       const status: LoadStatus =

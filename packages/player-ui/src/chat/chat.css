@@ -1,0 +1,289 @@
+/*
+ * The chat room panel (WP 2.6). Colours and font come only from --wrx-* (D24), set on the room
+ * panel's own theme scope (PLY-24, PLY-26). Body text is --wrx-text on --wrx-background or
+ * --wrx-surface; --wrx-primary is used only for fills, never small text (colour pairs).
+ */
+
+.wrx-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 12rem;
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  font-family: var(--wrx-font-family);
+}
+
+/* ---- Who is online (PLY-13) ---- */
+
+.wrx-chat__online {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--wrx-border);
+  background: var(--wrx-surface);
+  font-size: 0.8125rem;
+}
+
+.wrx-chat__online-label {
+  color: var(--wrx-muted);
+  font-weight: 600;
+}
+
+.wrx-chat__online-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wrx-chat__online-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+
+.wrx-chat__swatch {
+  display: inline-block;
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 50%;
+  background: var(--wrx-surface);
+}
+
+.wrx-chat__you,
+.wrx-chat__force {
+  color: var(--wrx-muted);
+  font-weight: 400;
+}
+
+.wrx-chat__problem {
+  margin: 0.5rem 0.75rem 0;
+}
+
+/* ---- The message list (PLY-9, PLY-43, PLY-45) ---- */
+
+.wrx-chat__scroller {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0.75rem;
+}
+
+.wrx-chat__scroller:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: -2px;
+}
+
+.wrx-chat__feed {
+  position: relative;
+  width: 100%;
+}
+
+.wrx-chat__row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+.wrx-chat__older {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 0 0.25rem;
+  color: var(--wrx-muted);
+  font-size: 0.8125rem;
+}
+
+.wrx-chat__empty {
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.wrx-chat__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 0 0.25rem;
+  color: var(--wrx-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.wrx-chat__divider::before,
+.wrx-chat__divider::after {
+  content: '';
+  flex: 1 1 auto;
+  border-top: 1px solid var(--wrx-border);
+}
+
+.wrx-chat__message {
+  position: relative;
+  padding: 0.125rem 0.75rem;
+  border: 1px solid var(--wrx-border);
+  border-top-width: 0;
+  border-bottom-width: 0;
+  border-left: 4px solid var(--wrx-border);
+  background: var(--wrx-surface);
+}
+
+.wrx-chat__message--first {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top-width: 1px;
+  border-radius: 0.375rem 0.375rem 0 0;
+}
+
+.wrx-chat__message--last {
+  padding-bottom: 0.5rem;
+  border-bottom-width: 1px;
+  border-radius: 0 0 0.375rem 0.375rem;
+}
+
+.wrx-chat__message--first.wrx-chat__message--last {
+  border-radius: 0.375rem;
+}
+
+.wrx-chat__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.375rem;
+  margin-bottom: 0.125rem;
+  font-size: 0.875rem;
+}
+
+.wrx-chat__header .wrx-chat__swatch {
+  align-self: center;
+}
+
+.wrx-chat__sender {
+  font-weight: 700;
+}
+
+.wrx-chat__time {
+  margin-left: auto;
+  color: var(--wrx-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Continuation messages share the header; their time shows on hover or focus. */
+.wrx-chat__time--more {
+  float: right;
+  margin-left: 0.5rem;
+  opacity: 0;
+}
+
+.wrx-chat__message:hover .wrx-chat__time--more,
+.wrx-chat__message:focus-within .wrx-chat__time--more {
+  opacity: 1;
+}
+
+.wrx-chat__text {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wrx-chat__text a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.wrx-chat__text--unreadable {
+  color: var(--wrx-muted);
+  font-style: italic;
+}
+
+/* ---- The composer (PLY-44, PLY-12, PLY-33, PLY-53) ---- */
+
+.wrx-composer {
+  flex: none;
+  padding: 0.5rem 0.75rem 0.625rem;
+  border-top: 1px solid var(--wrx-border);
+  background: var(--wrx-surface);
+}
+
+.wrx-composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.wrx-composer__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Grows with its text (PLY-44); composer.tsx measures instead where this is unsupported. */
+  field-sizing: content;
+  /* One line: 1.5rem of text, 1rem of padding and the borders, 42px at 16px. */
+  min-height: 2.625rem;
+  max-height: 200px;
+  box-sizing: border-box;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 0.375rem;
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  font: inherit;
+  /* Whole pixels (24px at 16px), so the field and the bottom-aligned Send button never sit on a
+     fractional pixel, which renders differently from run to run. */
+  line-height: 1.5rem;
+  resize: none;
+}
+
+/* A fixed size, the field's one-line height, so the button and the field beside it sit on whole
+   pixels whatever the font's metrics. */
+.wrx-composer__row > .wrx-button {
+  flex: none;
+  width: 5rem;
+  height: 2.625rem;
+}
+
+.wrx-composer__input:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 1px;
+}
+
+.wrx-composer__input:disabled,
+.wrx-composer__input[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.wrx-composer__input::placeholder {
+  color: var(--wrx-muted);
+}
+
+.wrx-composer__reason,
+.wrx-composer__note,
+.wrx-composer__error {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.wrx-composer__reason,
+.wrx-composer__note {
+  color: var(--wrx-muted);
+}
+
+.wrx-composer__note {
+  margin: 0.375rem 0 0;
+}
+
+.wrx-composer__error {
+  color: var(--wrx-danger);
+  font-weight: 600;
+}

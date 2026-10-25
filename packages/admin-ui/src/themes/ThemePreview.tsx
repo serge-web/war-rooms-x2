@@ -1,12 +1,15 @@
 // The live preview beside the theme controls (ADM-19): the welcome page, a room panel and the
 // force panel, each in its own ThemeScope, so each shows its own resolved theme exactly as a
-// player's panel would (PLY-26). Representative stand-ins: WP 2.4 and 2.6 build the real ones.
+// player's panel would (PLY-26). The room pane renders the real chat panel (WP 2.6) over sample
+// messages; the welcome page and force panel are representative stand-ins.
 import { byOrderThenId } from '@wrx/domain'
 import type { DesignFile } from '@wrx/schemas'
 import { resolveTheme } from '@wrx/theme'
 import type { ResolvedTheme } from '@wrx/theme'
+import { ChatPanelCore } from '@wrx/player-ui/chat'
+import type { ChatMessage } from '@wrx/player-ui/chat'
 import { AssetImageCore, ThemeScope } from '@wrx/theme/react'
-import { useId } from 'react'
+import { useId, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { MarkdownView } from '../components/index.ts'
 import { objectivesOf, sortedRoles } from '../draft/index.ts'
@@ -41,8 +44,7 @@ export function ThemePreview({ design, target }: ThemePreviewProps) {
   const gameName = design.game.name.trim() === '' ? 'Untitled game' : design.game.name
   const roles = force === undefined ? [] : sortedRoles(design).filter((r) => r.forceId === force.id)
   const objectives = force === undefined ? undefined : objectivesOf(design, force.id)
-  const forces = new Map(design.forces.map((f) => [f.id, f]))
-  const speakers = sortedRoles(design).slice(0, 2)
+  const sample = useMemo(() => sampleChat(design), [design])
 
   return (
     <div className="wrx-theme-preview" aria-label="Live preview" role="group">
@@ -74,25 +76,16 @@ export function ThemePreview({ design, target }: ThemePreviewProps) {
             {image(roomTheme, 'icon', '', 'wrx-preview-icon')}
             <span>{room?.name ?? 'A room'}</span>
           </div>
-          <ul className="wrx-preview-messages">
-            {(speakers.length > 0 ? speakers : [undefined, undefined]).map((role, i) => (
-              <li key={role?.id ?? i}>
-                <span
-                  className="wrx-preview-author"
-                  style={{
-                    color: role === undefined ? undefined : forces.get(role.forceId)?.colour,
-                  }}
-                >
-                  {role?.name ?? (i === 0 ? 'Blue CO' : 'Red CO')}
-                </span>{' '}
-                <span className="wrx-preview-muted">09:3{i}</span>
-                <p>{i === 0 ? 'Moving to the crossing now.' : 'Understood. Holding position.'}</p>
-              </li>
-            ))}
-          </ul>
-          <div className="wrx-preview-composer" aria-hidden="true">
-            <span className="wrx-preview-field">Write a message</span>
-            <span className="wrx-preview-button">Send</span>
+          <div className="wrx-preview-chat">
+            <ChatPanelCore
+              roomName={room?.name ?? 'A room'}
+              messages={sample.messages}
+              online={sample.online}
+              hasOlder={false}
+              loadingOlder={false}
+              // A preview: nothing is posted anywhere.
+              onSend={() => Promise.resolve({ ok: true })}
+            />
           </div>
         </div>
       </Pane>
@@ -122,6 +115,52 @@ export function ThemePreview({ design, target }: ThemePreviewProps) {
       </Pane>
     </div>
   )
+}
+
+/** Two speakers' sample messages, from the design's first roles and their force colours. */
+function sampleChat(design: DesignFile): {
+  readonly messages: readonly ChatMessage[]
+  readonly online: readonly { id: string; name: string; colour?: string; self: boolean }[]
+} {
+  const forces = new Map(design.forces.map((f) => [f.id, f]))
+  const roles = sortedRoles(design).slice(0, 2)
+  const people = [0, 1].map((i) => {
+    const role = roles[i]
+    const force = role === undefined ? undefined : forces.get(role.forceId)
+    return {
+      id: role?.id ?? (i === 0 ? 'blue-co' : 'red-co'),
+      name: role?.name ?? (i === 0 ? 'Blue CO' : 'Red CO'),
+      forceName: force?.name,
+      colour: force?.colour,
+    }
+  })
+  const texts = [
+    [0, 'Moving to the crossing now.'],
+    [0, 'Recce team at the bridge by 09:40.'],
+    [1, 'Understood. Holding position.'],
+  ] as const
+  const messages = texts.map(([who, text], i): ChatMessage => {
+    const person = people[who] ?? people[0]
+    return {
+      id: `preview-${i}`,
+      timestamp: `2026-01-15T09:3${i}:00Z`,
+      senderKey: person?.id ?? 'x',
+      senderName: person?.name ?? '',
+      forceName: person?.forceName,
+      colour: person?.colour,
+      self: false,
+      text,
+    }
+  })
+  return {
+    messages,
+    online: people.map((p) => ({
+      id: p.id,
+      name: p.name,
+      ...(p.colour === undefined ? {} : { colour: p.colour }),
+      self: false,
+    })),
+  }
 }
 
 function Pane({

@@ -17,6 +17,7 @@ export {
   OnlinePanelCore,
   RoomPanel,
   RoomPlaceholderCore,
+  onlineRoles,
 } from './panels.tsx'
 export type {
   GameInfoPanelCoreProps,

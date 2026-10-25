@@ -1,7 +1,8 @@
-// The workspace's panels: a room panel (the room type's player component, or a placeholder until
-// WP 2.6 registers one), and the non-room panels game info and online (PLY-8). Each has a *Core
+// The workspace's panels: a room panel (the room type's player component, or a placeholder for a
+// type with none), and the non-room panels game info and online (PLY-8). Each has a *Core
 // over plain props (NFR-18).
 import { roomConfig } from '@wrx/domain'
+import type { Author, Occupant } from '@wrx/domain'
 import { useAuthors, useGameSetup, useMe } from '@wrx/hooks'
 import type { ReactRoomTypeRegistry } from '@wrx/hooks'
 import { RoomThemeScope } from '@wrx/theme/react'
@@ -66,7 +67,7 @@ export function RoomPanel({ roomId, registry }: RoomPanelProps) {
       data-room={roomId}
     >
       {Panel !== undefined && config.ok ? (
-        <Panel roomId={roomId} room={room} config={config.value} />
+        <Panel roomId={roomId} room={room} config={config.value} access={access} />
       ) : (
         <RoomPlaceholderCore
           name={room.name}
@@ -156,12 +157,16 @@ export function OnlinePanelCore({ roles }: { readonly roles: readonly OnlineRole
   )
 }
 
-/** Roles present in any of the given rooms, by name. Joins those rooms while shown. */
-export function OnlinePanel({ roomIds }: { readonly roomIds: readonly string[] }) {
-  const lists = useOccupantsOf(roomIds)
-  const authors = useAuthors().data
+/**
+ * Occupants merged by role (the sessions of one role share it, D22) and sorted by name, with
+ * their display data from the role and force documents.
+ */
+export function onlineRoles(
+  occupants: readonly Occupant[],
+  authors: ReadonlyMap<string, Author>,
+): readonly OnlineRole[] {
   const byId = new Map<string, OnlineRole>()
-  for (const occupant of lists.flat()) {
+  for (const occupant of occupants) {
     const id = occupant.roleId ?? occupant.nick
     const known = byId.get(id)
     if (known !== undefined) {
@@ -177,6 +182,12 @@ export function OnlinePanel({ roomIds }: { readonly roomIds: readonly string[] }
       self: occupant.self,
     })
   }
-  const roles = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'en'))
-  return <OnlinePanelCore roles={roles} />
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'en'))
+}
+
+/** Roles present in any of the given rooms, by name. Joins those rooms while shown. */
+export function OnlinePanel({ roomIds }: { readonly roomIds: readonly string[] }) {
+  const lists = useOccupantsOf(roomIds)
+  const authors = useAuthors().data
+  return <OnlinePanelCore roles={onlineRoles(lists.flat(), authors)} />
 }

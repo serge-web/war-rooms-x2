@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The admin backend's screens (WP 2.2, 2.3): the design editor over a local draft, the effective-access matrix (ADM-3–9, ADM-27, ADM-28), and publishing (ADM-10–17, ADM-25, ADM-26).",
+  "description": "The admin backend's screens (WP 2.2, 2.3): the design editor over a local draft, the effective-access matrix (ADM-3\u20139, ADM-27, ADM-28), and publishing (ADM-10\u201317, ADM-25, ADM-26).",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -22,6 +22,7 @@
     "@wrx/admin-ops": "workspace:*",
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
+    "@wrx/player-ui": "workspace:*",
     "@wrx/schemas": "workspace:*",
     "@wrx/theme": "workspace:*",
     "dompurify": "3.4.16",
