@@ -110,7 +110,7 @@ test('a role with no rooms sees an empty state (PLY-32)', async ({ page }) => {
   await expect(page.getByText('Your role has no rooms yet.')).toBeVisible()
 })
 
-test('the admin route needs an admin login; multi-client has its placeholder (ADM-1, NFR-8)', async ({
+test('the admin route needs an admin login; the views link to each other (ADM-1, NFR-8)', async ({
   page,
 }) => {
   await page.goto('./#/admin')

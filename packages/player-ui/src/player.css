@@ -306,3 +306,26 @@
   color: var(--wrx-muted);
   font-size: 0.875rem;
 }
+
+/* ---- The admin's preview as a role (ADM-30), in the shell header ---- */
+
+.wrx-preview-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.wrx-preview-selector select {
+  max-width: 14rem;
+  padding: 0.125rem 0.25rem;
+  border: 1px solid currentColor;
+  border-radius: 0.25rem;
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  font: inherit;
+}
+
+.wrx-preview-notice {
+  margin: 0.5rem 1rem 0;
+}

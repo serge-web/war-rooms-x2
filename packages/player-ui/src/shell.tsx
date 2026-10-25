@@ -106,6 +106,12 @@ export interface ShellCoreProps {
   readonly workspace: ReactNode
   /** The out-of-game column slot (WP 2.7). */
   readonly column: ReactNode
+  /** Replaces the product heading, e.g. with a pane's name in the multi-client view. */
+  readonly title?: ReactNode
+  /** Extra header items before the backend badge, e.g. the admin's preview selector. */
+  readonly headerItems?: ReactNode
+  /** A notice under the header, e.g. that the admin is previewing as a role. */
+  readonly notice?: ReactNode
 }
 
 export function ShellCore({
@@ -119,13 +125,16 @@ export function ShellCore({
   game,
   workspace,
   column,
+  title,
+  headerItems,
+  notice,
 }: ShellCoreProps) {
   const starting = status.state === 'starting' || game === 'loading'
   return (
     <ThemeScope tokens={theme} className="wrx-shell">
       <header className="wrx-shell__header">
         <div className="wrx-shell__brand">
-          <h1 className="wrx-shell__product">War Rooms X1</h1>
+          {title ?? <h1 className="wrx-shell__product">War Rooms X1</h1>}
           {gameName === undefined ? null : <span className="wrx-shell__game">{gameName}</span>}
         </div>
         <div className="wrx-shell__session">
@@ -144,12 +153,14 @@ export function ShellCore({
               )}
             </span>
           )}
+          {headerItems}
           {backend}
           <Button size="small" onClick={onLogout} busy={loggingOut}>
             Log out
           </Button>
         </div>
       </header>
+      {notice}
       <ConnectionIndicatorCore status={status} />
       <div className="wrx-shell__body">
         <main className="wrx-shell__workspace" aria-label="Workspace">
@@ -185,20 +196,36 @@ export interface ShellProps {
   readonly workspace?: ReactNode
   /** The out-of-game column; default `OutOfGameColumn` (PLY-36). */
   readonly column?: ReactNode
+  readonly title?: ReactNode
+  readonly headerItems?: ReactNode
+  readonly notice?: ReactNode
+  /** Who the header names; default the session's role, or "Admin". */
+  readonly role?: ShellRole
 }
 
 /** The shell over the pane's store; needs a SessionStoreProvider. */
-export function Shell({ backend, onLogout, loggingOut, workspace, column }: ShellProps) {
+export function Shell({
+  backend,
+  onLogout,
+  loggingOut,
+  workspace,
+  column,
+  title,
+  headerItems,
+  notice,
+  role: roleOverride,
+}: ShellProps) {
   const status = useSessionStatus().data
   const me = useMe().data
   const setup = useGameSetup()
   const game = setup.data !== undefined ? 'ready' : setup.status === 'loading' ? 'loading' : 'none'
   const role: ShellRole | undefined =
-    me.role !== undefined
+    roleOverride ??
+    (me.role !== undefined
       ? { name: me.role.name, forceName: me.force?.name, forceColour: me.force?.colour }
       : me.identity.isAdmin
         ? { name: 'Admin' }
-        : undefined
+        : undefined)
   return (
     <ShellCore
       status={status}
@@ -211,6 +238,9 @@ export function Shell({ backend, onLogout, loggingOut, workspace, column }: Shel
       game={game}
       workspace={workspace ?? <Workspace />}
       column={column ?? <OutOfGameColumn />}
+      title={title}
+      headerItems={headerItems}
+      notice={notice}
     />
   )
 }

@@ -1,5 +1,6 @@
 // One player client: the welcome page and login while signed out, the shell while signed in.
-// The multi-client view (WP 2.9) renders one per pane, each with its own session and store.
+// The multi-client view (WP 2.9) renders one per pane, each with its own session and store. An
+// admin login gets the game view with its preview-as-role selector (ADM-28–31).
 import { SessionStoreProvider } from '@wrx/hooks'
 import type { ReactNode } from 'react'
 import { BackendBadge } from './backend.tsx'
@@ -9,6 +10,7 @@ import { LoginFormCore } from './login-form.tsx'
 import type { DemoLogin } from './login-form.tsx'
 import { useAnonymousStore, usePlayerSession } from './session.ts'
 import type { AnonymousOptions, Connection, PlayerSession, SessionOptions } from './session.ts'
+import { AdminGameView } from './preview/admin-game-view.tsx'
 import { Shell } from './shell.tsx'
 import { WelcomePage } from './welcome.tsx'
 
@@ -50,24 +52,49 @@ export interface PlayerClientProps {
   readonly column?: ReactNode
   readonly sessionOptions?: SessionOptions
   readonly anonymousOptions?: AnonymousOptions
+  /**
+   * A session the host owns, e.g. a multi-client pane that logs in from its own header
+   * (PLY-18). Without it the client makes its own. Do not switch between the two while mounted.
+   */
+  readonly session?: PlayerSession
+  /** Shown instead of the welcome page while signed out, e.g. a pane's compact login. */
+  readonly signedOut?: ReactNode
+  /** Replaces the shell's product heading, e.g. with the pane's name. */
+  readonly title?: ReactNode
 }
 
 export function PlayerClient(props: PlayerClientProps) {
+  return props.session === undefined ? (
+    <OwnSessionClient {...props} />
+  ) : (
+    <PlayerClientView {...props} session={props.session} />
+  )
+}
+
+function OwnSessionClient(props: PlayerClientProps) {
   const session = usePlayerSession(props.connection, props.sessionOptions)
+  return <PlayerClientView {...props} session={session} />
+}
+
+function PlayerClientView(props: PlayerClientProps & { readonly session: PlayerSession }) {
+  const { session } = props
   const { state } = session
   if (state.phase === 'signed-in') {
+    const shell = {
+      backend: <BackendBadge backend={props.backend} />,
+      onLogout: () => void session.logout(),
+      workspace: props.workspace,
+      column: props.column,
+      title: props.title,
+    }
     return (
       <SessionStoreProvider store={state.store}>
-        <Shell
-          backend={<BackendBadge backend={props.backend} />}
-          onLogout={() => void session.logout()}
-          workspace={props.workspace}
-          column={props.column}
-        />
+        {state.store.identity.isAdmin ? <AdminGameView {...shell} /> : <Shell {...shell} />}
       </SessionStoreProvider>
     )
   }
-  return <SignedOut {...props} session={session} />
+  if (props.signedOut !== undefined) return <>{props.signedOut}</>
+  return <SignedOut {...props} />
 }
 
 function SignedOut({

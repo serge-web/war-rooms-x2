@@ -22,6 +22,8 @@ export interface LoginFormCoreProps {
   readonly before?: ReactNode
   /** The form's heading. Default "Log in". */
   readonly title?: string
+  /** The role id to start with, e.g. from a multi-client preset (PLY-19). */
+  readonly initialRoleId?: string
 }
 
 export function LoginFormCore({
@@ -31,10 +33,11 @@ export function LoginFormCore({
   demoLogins = [],
   before,
   title = 'Log in',
+  initialRoleId = '',
 }: LoginFormCoreProps) {
   // Ids are per instance: the multi-client view shows several forms on one page.
   const headingId = useId()
-  const [roleId, setRoleId] = useState('')
+  const [roleId, setRoleId] = useState(initialRoleId)
   const [password, setPassword] = useState('')
   return (
     <section className="wrx-login" aria-labelledby={headingId}>

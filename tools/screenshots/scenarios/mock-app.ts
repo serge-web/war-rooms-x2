@@ -48,7 +48,7 @@ export async function welcomeLoaded(app: Page | FrameLocator): Promise<void> {
 }
 
 /** The room tabs in the player's workspace, docked area only, in DOM order (WP 2.5). */
-export function roomTabs(app: Page | FrameLocator): Locator {
+export function roomTabs(app: Page | FrameLocator | Locator): Locator {
   return app.locator('.flexlayout__layout_main').getByRole('tab')
 }
 
