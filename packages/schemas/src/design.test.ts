@@ -48,6 +48,16 @@ describe('checkDesign', () => {
     )
   })
 
+  it('refuses all-digit role ids of 16 or more, which ejabberd’s anonymous sessions use (F4)', () => {
+    const design = sampleDesign()
+    design.roles[0] = { ...design.roles[0]!, id: '1234567890123456' }
+    design.roles[1] = { ...design.roles[1]!, id: '123456789012345' }
+    expect(messages(design)).toContain(
+      'error roles[0].id: "1234567890123456" is reserved and cannot be a role id',
+    )
+    expect(messages(design).filter((m) => m.includes('roles[1].id'))).toEqual([])
+  })
+
   it('finds participants that do not exist', () => {
     const design = sampleDesign()
     design.rooms[0]!.participants.push({ kind: 'role', id: 'ghost', access: 'read' })

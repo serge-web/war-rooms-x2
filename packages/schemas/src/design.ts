@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LIMITS, RESERVED_ROLE_IDS, isoDateTimeSchema } from './common.ts'
+import { LIMITS, isReservedRoleId, isoDateTimeSchema } from './common.ts'
 import {
   assetSchema,
   forceSchema,
@@ -85,7 +85,7 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
   })
 
   design.roles.forEach((role, i) => {
-    if (RESERVED_ROLE_IDS.includes(role.id)) {
+    if (isReservedRoleId(role.id)) {
       error(`roles[${i}].id`, `"${role.id}" is reserved and cannot be a role id`)
     }
     if (!forceIds.has(role.forceId)) error(`roles[${i}].forceId`, `unknown force "${role.forceId}"`)

@@ -3,7 +3,7 @@
 // every operation returns a new draft and leaves its input untouched, and unchanged items keep
 // their identity. Operations on an unknown id return the draft unchanged.
 import { byOrderThenId } from '@wrx/domain'
-import { RESERVED_ROLE_IDS } from '@wrx/schemas'
+import { ANONYMOUS_LIKE_ID, LIMITS, RESERVED_ROLE_IDS, isReservedRoleId } from '@wrx/schemas'
 import type {
   DesignFile,
   Force,
@@ -283,7 +283,7 @@ export function roleIdProblem(draft: Draft, id: string, newId: string): string |
     return 'the login id cannot change after the role has been published'
   }
   if (!isSlug(newId)) return 'use lowercase letters, digits and single hyphens'
-  if (RESERVED_ROLE_IDS.includes(newId)) return `"${newId}" is reserved`
+  if (isReservedRoleId(newId)) return `"${newId}" is reserved`
   if (draft.design.roles.some((r) => r.id === newId)) return `another role is "${newId}"`
   if (draft.meta.retiredIds.roles.includes(newId) || draft.meta.publishedRoleIds.includes(newId)) {
     return `"${newId}" was used by a deleted role and cannot be reused`
@@ -533,7 +533,13 @@ function withDesign(draft: Draft, changes: Partial<DesignFile>): Draft {
 }
 
 function newId(draft: Draft, kind: IdKind, name: string, fallback: string): string {
-  return uniqueSlug(slugify(name, fallback), takenIds(draft, kind))
+  const base = slugify(name, fallback)
+  // A long all-digit login id would look like an anonymous session (F4): prefix it.
+  const safe =
+    kind === 'roles' && ANONYMOUS_LIKE_ID.test(base)
+      ? `${fallback}-${base}`.slice(0, LIMITS.slugChars)
+      : base
+  return uniqueSlug(safe, takenIds(draft, kind))
 }
 
 function retire(draft: Draft, kind: IdKind, id: string): Draft {

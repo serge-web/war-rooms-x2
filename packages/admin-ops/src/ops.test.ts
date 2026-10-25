@@ -488,6 +488,17 @@ describe('R-E: deleting a role', () => {
     }
     expect(log).toEqual([])
   })
+
+  it('refuses a role id that looks like an anonymous session (security review F4)', async () => {
+    const { ops: adminOps, log } = await rig()
+    for (const result of [
+      await adminOps.createAccount('1234567890123456', 'pw'),
+      await adminOps.deleteRole('1234567890123456'),
+    ]) {
+      expect(result.ok ? undefined : result.error.code).toBe('invalid')
+    }
+    expect(log).toEqual([])
+  })
 })
 
 describe('R-F: destroying a room', () => {

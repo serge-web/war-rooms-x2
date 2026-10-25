@@ -21,7 +21,7 @@
 // Operations are primitives for a planner (2.3 publish, 2.10 audit). Each resolves to a Result
 // and never rejects for a refusal (ARC-14), and reports each step to an optional listener.
 import { bareJid, domainpart } from '@wrx/domain'
-import { RESERVED_ROLE_IDS, parseNodeName, slugSchema } from '@wrx/schemas'
+import { isReservedRoleId, parseNodeName, slugSchema } from '@wrx/schemas'
 import type {
   AffiliationEntry,
   Endpoint,
@@ -264,7 +264,7 @@ export class AdminOps {
     if (!slugSchema.safeParse(roleId).success) {
       return opsErr('invalid', `"${roleId}" is not a role id`, { op, target: roleId })
     }
-    if (RESERVED_ROLE_IDS.includes(roleId)) {
+    if (isReservedRoleId(roleId)) {
       return opsErr('invalid', `"${roleId}" is reserved; the tooling never changes it`, {
         op,
         target: roleId,
