@@ -22,6 +22,7 @@ import {
   VAULT_KDF,
   VAULT_STORAGE_KEY,
   executePlan,
+  planConfirmations,
   findings,
   gameRoomConfig,
   isClean,
@@ -104,6 +105,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       const prepared = mustOps(await prepareReset(theOps(), auditOptions()), 'plan reset')
       const result = await executePlan(theOps(), prepared.plan, {
         passwordFor: (id) => book.passwordFor(id),
+        confirmed: planConfirmations(prepared.plan),
       })
       if (!result.ok) throw new Error(`reset failed at ${result.failed?.stepId}`)
       await theOps().deleteRole(STRAY, { rooms: [], nodes: [] })
@@ -140,6 +142,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       const prepared = mustOps(await preparePublish(theOps(), design, { vault }), 'plan')
       const published = await executePlan(theOps(), prepared.plan, {
         passwordFor: (id) => book.passwordFor(id),
+        confirmed: planConfirmations(prepared.plan),
       })
       if (!published.ok) throw new Error(`publish failed: ${published.failed?.error.message}`)
     }, 300_000)

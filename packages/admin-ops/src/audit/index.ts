@@ -6,7 +6,7 @@ export { diffAudit, repairRank, voiceChecks } from './diff.ts'
 export type { AuditInput, VoiceCheck, VoicePlan, VoiceProblem, VoiceReading } from './diff.ts'
 export { runAudit } from './run.ts'
 export type { AuditOptions, AuditPhase, AuditProgress, AuditRun } from './run.ts'
-export { repairAndAudit, repairItems } from './repair.ts'
+export { isDestructiveItem, repairAndAudit, repairItems } from './repair.ts'
 export type {
   RepairAndAudit,
   RepairEvent,

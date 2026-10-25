@@ -8,6 +8,7 @@ import { opsErr, opsOk } from '../errors.ts'
 import type { AdminOps } from '../ops.ts'
 import { newMarker } from './marker.ts'
 import type { MarkerStore } from './marker.ts'
+import { stepConfirmation } from './plan.ts'
 import type { PlanStep, PublishPlan } from './plan.ts'
 
 /** The step id a failure to set the publish marker is reported under; no step has run. */
@@ -33,6 +34,11 @@ export interface ExecuteOptions {
   readonly now?: () => Date
   /** Where the publish marker is kept (marker.ts). */
   readonly marker?: MarkerStore
+  /**
+   * The confirmations the admin gave (`confirmationKey` of each warning ticked). A plan with a
+   * step whose `stepConfirmation` is not in here runs no step at all (security review F9).
+   */
+  readonly confirmed: ReadonlySet<string>
 }
 
 export interface ExecutionResult {
@@ -69,6 +75,26 @@ export async function executePlan(
     }
   }
   if (plan.steps.length === 0) return { ok: true, done, notRun: [], passwordsSet, notes }
+
+  // Every confirmation is checked before the first step, so a refusal changes nothing.
+  const unconfirmed = plan.steps.find((s) => {
+    const key = stepConfirmation(s.action)
+    return key !== undefined && !options.confirmed.has(key)
+  })
+  if (unconfirmed !== undefined) {
+    const error = opsErr('not-confirmed', `${unconfirmed.summary}: not confirmed`, {
+      target: unconfirmed.id,
+    }).error
+    options.onStep?.({ stepId: unconfirmed.id, state: 'failed', error })
+    return {
+      ok: false,
+      done,
+      failed: { stepId: unconfirmed.id, error },
+      notRun: plan.steps.filter((s) => s !== unconfirmed).map((s) => s.id),
+      passwordsSet,
+      notes,
+    }
+  }
 
   if (plan.kind === 'publish' && plan.designVersion !== undefined && options.marker !== undefined) {
     // Fail closed: without the marker another admin browser could trust documents this publish

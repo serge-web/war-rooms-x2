@@ -36,10 +36,47 @@ describe('executePlan', () => {
     admin.stub('admin', 'addUser', () => Promise.resolve(err('conflict', 'exists')))
     const result = await executePlan(adminOps, planOf([createBlueCo]), {
       passwordFor: () => 'new-password',
+      confirmed: new Set(),
     })
     expect(result).toMatchObject({ ok: false, failed: { stepId: 'account:blue-co' } })
     expect(result.failed?.error.code).toBe('exists')
     expect(ops(log)).not.toContain('admin.admin.changePassword')
     expect(result.passwordsSet).toEqual([])
+  })
+})
+
+describe('confirmations are enforced by the executor, not only the UI (security review F9)', () => {
+  const deleteGhost: PlanStep = {
+    id: 'delete-role:ghost',
+    group: 'removals',
+    summary: 'Delete role ghost',
+    details: [],
+    risk: { destructive: true, roles: ['ghost'] },
+    action: { type: 'delete-role', roleId: 'ghost', rooms: [], nodes: [] },
+  }
+
+  it('refuses a plan with an unconfirmed step, before running anything', async () => {
+    const { ops: adminOps, log } = await rig()
+    const result = await executePlan(adminOps, planOf([createBlueCo, deleteGhost]), {
+      passwordFor: () => 'pw',
+      confirmed: new Set(),
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      done: [],
+      failed: { stepId: 'delete-role:ghost', error: { code: 'not-confirmed' } },
+      notRun: ['account:blue-co'],
+    })
+    expect(log).toEqual([])
+  })
+
+  it('runs it once its confirmation is given', async () => {
+    const { ops: adminOps, log } = await rig()
+    const result = await executePlan(adminOps, planOf([deleteGhost]), {
+      passwordFor: () => 'pw',
+      confirmed: new Set(['role:ghost']),
+    })
+    expect(result.ok).toBe(true)
+    expect(ops(log)).toContain('admin.admin.deleteUser')
   })
 })

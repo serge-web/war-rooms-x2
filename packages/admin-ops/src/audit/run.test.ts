@@ -186,6 +186,49 @@ describe('repair', () => {
     expect(ops(r.log)).toContain('admin.admin.deleteUser')
   })
 
+  it('works out destructiveness from the actions, not the item’s own flag (security review F9)', async () => {
+    const r = await rig()
+    const flaggedSafe: AuditItem = {
+      id: 'stray-access:ghost',
+      kind: 'stray-access',
+      target: 'ghost',
+      roleId: 'ghost',
+      expected: '',
+      found: '',
+      severity: 'high',
+      repairable: true,
+      destructive: false,
+      repair: [{ type: 'delete-role', roleId: 'ghost', rooms: [], nodes: [] }],
+    }
+    const result = await repairItems(r.ops, [flaggedSafe], { passwordFor })
+    expect(result.skipped).toEqual([{ itemId: 'stray-access:ghost', reason: 'not confirmed' }])
+    expect(ops(r.log)).not.toContain('admin.admin.deleteUser')
+    // And the audit itself marks such an item destructive.
+    const design = sampleDesign()
+    const view = publishedView(design)
+    const stray = {
+      ...view,
+      rooms: view.rooms.map((room) =>
+        room.roomId === 'blue-hq'
+          ? {
+              ...room,
+              affiliations: [
+                ...room.affiliations,
+                { jid: jid('ghost'), affiliation: 'member' as const },
+              ],
+            }
+          : room,
+      ),
+    }
+    const report = diffAudit(design, {
+      view: stray,
+      registered: stray.registered,
+      voice: [],
+      messageCounts: new Map(),
+    })
+    expect(report.items.find((i) => i.id === 'stray-access:ghost')?.destructive).toBe(true)
+  })
+
   it('an account-missing repair never resets an account that exists (security review F3)', async () => {
     const design = sampleDesign()
     const view = publishedView(design, {

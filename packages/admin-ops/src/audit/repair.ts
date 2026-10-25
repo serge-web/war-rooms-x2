@@ -10,7 +10,7 @@ import type { AdminOpsError, OpsOutcome } from '../errors.ts'
 import { opsOk } from '../errors.ts'
 import type { AdminOps } from '../ops.ts'
 import { executePlan } from '../publish/execute.ts'
-import { canonicalJson } from '../publish/plan.ts'
+import { canonicalJson, isDestructiveAction, stepConfirmation } from '../publish/plan.ts'
 import type { PlanStep, PublishPlan, StepAction, StepGroup } from '../publish/plan.ts'
 import { repairRank } from './diff.ts'
 import { runAudit } from './run.ts'
@@ -61,6 +61,14 @@ interface Job {
   readonly items: string[]
 }
 
+/**
+ * Whether repairing an item cannot be undone, worked out from its actions as well as its flag,
+ * so an item can never make a destructive action run unconfirmed (security review F9).
+ */
+export function isDestructiveItem(item: Pick<AuditItem, 'destructive' | 'repair'>): boolean {
+  return item.destructive || item.repair.some(isDestructiveAction)
+}
+
 /** The repairs to run for `items`, deduplicated and in order. */
 function jobsFor(items: readonly AuditItem[]): Job[] {
   const jobs = new Map<string, Job>()
@@ -104,7 +112,7 @@ export async function repairItems(
   for (const item of items) {
     const reason = !item.repairable
       ? 'nothing here repairs it'
-      : item.destructive && !confirmed.has(item.id)
+      : isDestructiveItem(item) && !confirmed.has(item.id)
         ? 'not confirmed'
         : undefined
     if (reason === undefined) runnable.push(item)
@@ -135,7 +143,12 @@ export async function repairItems(
       risk: { destructive: false, roles: [] },
       action: job.action,
     }
-    const result = await executePlan(ops, onePlan(step), { passwordFor: options.passwordFor })
+    // Every item behind this job was confirmed above if its repair needs it.
+    const key = stepConfirmation(job.action)
+    const result = await executePlan(ops, onePlan(step), {
+      passwordFor: options.passwordFor,
+      confirmed: new Set(key === undefined ? [] : [key]),
+    })
     passwordsSet.push(...result.passwordsSet)
     const note = result.notes.get(step.id)
     for (const id of live) {

@@ -11,6 +11,7 @@ import {
   ObserverVault,
   VAULT_KDF,
   executePlan,
+  planConfirmations,
   gameRoomConfig,
   preparePublish,
 } from '@wrx/admin-ops'
@@ -187,6 +188,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
     if (!prepared.ok) throw new Error('plan')
     const published = await executePlan(ops, prepared.value.plan, {
       passwordFor: (id) => book.passwordFor(id),
+      confirmed: planConfirmations(prepared.value.plan),
     })
     expect(published.ok).toBe(true)
     created.value.lock()

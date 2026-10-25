@@ -245,7 +245,7 @@ describe('drift', () => {
     }
     expect(item(audit(drifted), 'stray-access:ghost')).toMatchObject({
       severity: 'high',
-      destructive: false,
+      destructive: true,
       repair: [{ type: 'delete-role', roleId: 'ghost', rooms: ['red-hq'], nodes: [] }],
     })
   })

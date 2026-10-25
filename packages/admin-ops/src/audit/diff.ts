@@ -17,7 +17,12 @@ import { RESERVED_ROLE_IDS, SINGLETON_NODES, parseNodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import type { MucRole, NodeConfig, RoomConfig } from '@wrx/transport'
 import { bareJid, domainpart, localpart } from '@wrx/domain'
-import { canonicalJson, planPublish, publishedDesign } from '../publish/plan.ts'
+import {
+  canonicalJson,
+  isDestructiveAction,
+  planPublish,
+  publishedDesign,
+} from '../publish/plan.ts'
 import type { PlanStep, StepAction } from '../publish/plan.ts'
 import { roleIdOf } from '../publish/view.ts'
 import type { ServerView } from '../publish/view.ts'
@@ -230,7 +235,8 @@ function builder(): Builder {
       byId.set(item.id, {
         ...item,
         repairable: item.repair.length > 0,
-        destructive: item.destructive ?? false,
+        // From the actions too, so no item claims a destructive repair is safe (F9).
+        destructive: (item.destructive ?? false) || item.repair.some(isDestructiveAction),
       })
     },
     items: () => [...byId.values()],

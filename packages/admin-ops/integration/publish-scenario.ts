@@ -22,6 +22,7 @@ import {
   VAULT_KDF,
   VAULT_STORAGE_KEY,
   executePlan,
+  planConfirmations,
   memoryMarkerStore,
   preparePublish,
   prepareReset,
@@ -163,7 +164,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
     const plan = async (design: DesignFile): Promise<PublishPlan> =>
       mustOps(await preparePublish(theOps(), design, viewOptions()), 'plan').plan
     const apply = (p: PublishPlan, passwordFor = (id: string) => book.passwordFor(id)) =>
-      executePlan(theOps(), p, { passwordFor, marker })
+      executePlan(theOps(), p, { passwordFor, marker, confirmed: planConfirmations(p) })
     const gameVersion = async (): Promise<number | undefined> => {
       const items = must(await theOps().session.pubsub.getItems('game-setup'), 'game-setup')
       const payload = items.find((i) => i.id === 'current')?.payload

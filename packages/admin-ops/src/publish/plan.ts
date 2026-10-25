@@ -139,6 +139,57 @@ export function needsConfirmation(warning: PlanWarning): boolean {
   )
 }
 
+/**
+ * The key the admin confirms a warning by (the apply dialog's tick box), for the warnings that
+ * need confirmation; the executor wants the same key for the step (`stepConfirmation`).
+ */
+export function confirmationKey(warning: PlanWarning): string | undefined {
+  switch (warning.kind) {
+    case 'role-deleted':
+      return `role:${warning.roleId}`
+    case 'room-destroyed':
+      return `room:${warning.roomId}`
+    case 'password-reset':
+      return `password:${warning.roleId}`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * The keys of every warning in `plan` that needs confirming: what the apply dialog hands the
+ * executor once the admin has ticked each one (and what a test passes to confirm them all).
+ */
+export function planConfirmations(plan: Pick<PublishPlan, 'warnings'>): Set<string> {
+  return new Set(plan.warnings.map(confirmationKey).filter((k): k is string => k !== undefined))
+}
+
+/**
+ * The confirmation a step needs before the executor runs it, worked out from its action alone,
+ * never from a flag the step carries (security review F9): deleting a role, destroying a room
+ * and resetting a password.
+ */
+export function stepConfirmation(action: StepAction): string | undefined {
+  switch (action.type) {
+    case 'delete-role':
+      return `role:${action.roleId}`
+    case 'destroy-room':
+      return `room:${action.roomId}`
+    case 'reset-password':
+      return `password:${action.roleId}`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Whether an action cannot be undone: it deletes an account, a room and its history or a node,
+ * or replaces a password. Worked out from the action type, for the audit's repairs (F9).
+ */
+export function isDestructiveAction(action: StepAction): boolean {
+  return stepConfirmation(action) !== undefined || action.type === 'delete-node'
+}
+
 export type VaultNeed =
   /** No step needs the vault. */
   | 'none'

@@ -32,6 +32,8 @@ export type AdminOpsErrorCode =
   | 'verify-failed'
   /** A room's message count changed after it was confirmed, so the room was not destroyed. */
   | 'count-changed'
+  /** A plan step that needs the admin's confirmation (`stepConfirmation`) was not confirmed. */
+  | 'not-confirmed'
 
 export interface AdminOpsError {
   readonly code: AdminOpsErrorCode
