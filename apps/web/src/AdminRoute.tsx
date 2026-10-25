@@ -5,10 +5,12 @@ import { demoPassword } from '@wrx/mock-server'
 import { AppBarCore, LoginFormCore, usePlayerSession } from '@wrx/player-ui'
 import type { DemoLogin } from '@wrx/player-ui'
 import { SessionStoreProvider } from '@wrx/hooks'
-import { Banner, ThemeScope } from '@wrx/ui'
-import { useEffect, useMemo, useState } from 'react'
-import { AdminApp } from './seams/AdminApp.tsx'
+import { Banner, Spinner, ThemeScope } from '@wrx/ui'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import type { RouteProps } from './seams/types.ts'
+
+// The admin backend loads on demand, so players never download the editors.
+const AdminApp = lazy(() => import('./seams/AdminApp.tsx').then((m) => ({ default: m.AdminApp })))
 
 export function AdminRoute(props: RouteProps) {
   const session = usePlayerSession(props.connection)
@@ -35,7 +37,9 @@ export function AdminRoute(props: RouteProps) {
   if (store !== undefined && isAdmin) {
     return (
       <SessionStoreProvider store={store}>
-        <AdminApp {...props} session={store} onLogout={() => void logout()} />
+        <Suspense fallback={<Spinner label="Loading the admin backend" />}>
+          <AdminApp {...props} session={store} onLogout={() => void logout()} />
+        </Suspense>
       </SessionStoreProvider>
     )
   }
