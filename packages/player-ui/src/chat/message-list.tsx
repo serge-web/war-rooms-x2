@@ -76,10 +76,23 @@ export function MessageListCore({
 
   const canAutoLoad = hasOlder && !loadingOlder && !loading && olderError === undefined
 
+  // The last scroll position seen, to tell the reader scrolling up from rows growing under them.
+  const lastTop = useRef(0)
+
   const onScroll = () => {
     const el = ref.current
     if (el === null) return
-    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK
+    const movedUp = el.scrollTop < lastTop.current - 1
+    lastTop.current = el.scrollTop
+    // Only the reader moving up leaves the bottom. Rows measured taller than estimated push the
+    // bottom away without the reader doing anything; stay pinned and follow it.
+    if (nearBottom) atBottom.current = true
+    else if (movedUp) atBottom.current = false
+    else if (atBottom.current) {
+      el.scrollTop = el.scrollHeight
+      lastTop.current = el.scrollTop
+    }
     previous.current.fromBottom = el.scrollHeight - el.scrollTop
     if (el.scrollTop <= TOP_SLACK && canAutoLoad) onLoadOlder?.()
   }
