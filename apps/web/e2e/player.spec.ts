@@ -122,7 +122,9 @@ test('the admin route needs an admin login; multi-client has its placeholder (AD
     'Only the admin account can open the admin backend.',
   )
   await logIn(page, 'admin', 'demo-admin')
-  await expect(page.getByRole('heading', { name: 'Admin backend' })).toBeVisible()
+  // The design editor (WP 2.2), starting from the demo design on the mock.
+  await expect(page.getByRole('navigation', { name: 'Admin sections' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Exercise Northern Gate' })).toBeVisible()
   await page.getByRole('button', { name: 'Log out' }).click()
   await expect(page.getByRole('heading', { name: 'Admin login' })).toBeVisible()
 

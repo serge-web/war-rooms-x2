@@ -14,6 +14,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@wrx/admin-ui": "workspace:*",
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
     "@wrx/mock-host": "workspace:*",

@@ -324,7 +324,12 @@ class Store implements SessionStore {
     this.gapPageLimit = options.gapPageLimit ?? 20
     this.now = options.now ?? (() => new Date().toISOString())
     this.newId = options.newId ?? (() => globalThis.crypto.randomUUID())
-    this.defer = options.defer ?? queueMicrotask
+    // Wrapped: an unbound queueMicrotask throws "Illegal invocation" in browsers.
+    this.defer =
+      options.defer ??
+      ((task) => {
+        queueMicrotask(task)
+      })
 
     const bare = bareJid(this.session.jid)
     const local = localpart(bare)

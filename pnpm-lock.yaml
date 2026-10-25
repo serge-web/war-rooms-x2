@@ -47,6 +47,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@wrx/admin-ui':
+        specifier: workspace:*
+        version: link:../../packages/admin-ui
       '@wrx/domain':
         specifier: workspace:*
         version: link:../../packages/domain

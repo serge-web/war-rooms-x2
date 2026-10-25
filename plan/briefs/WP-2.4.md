@@ -1,6 +1,6 @@
 # WP 2.4 — Player shell
 
-**SRD ids:** PLY-1–3, PLY-27–32, PLY-46–48, PLY-50–52, NFR-8–9 · **Depends on:** 1.6 · **Status:** to do
+**SRD ids:** PLY-1–3, PLY-27–32, PLY-46–48, PLY-50–52, NFR-8–9 · **Depends on:** 1.6 · **Status:** done
 
 ## Goal
 

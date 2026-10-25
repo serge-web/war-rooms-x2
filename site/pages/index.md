@@ -31,4 +31,4 @@ Below is the app from this build, running on the mock backend. The <DemoLink>liv
 
 <AppDemo />
 
-The app is a shell for now: the welcome page, login and chat workspace arrive in Phase 2. The [blog](/blog/) follows progress.
+The app is being built in Phase 2. Today it has the welcome page and login, with demo accounts on the mock backend, and the admin's design editor at `#/admin` (log in as `admin`). The chat workspace comes next. The [blog](/blog/) follows progress.
