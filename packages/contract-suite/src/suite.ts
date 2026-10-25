@@ -122,7 +122,7 @@ export function defineContractSuite(backend: ContractBackend, options: SuiteOpti
     c01(ctx)
     s02(ctx)
     s03(ctx)
-    s04(ctx)
+    s04(ctx, options.raw)
     s05(ctx, options.mamMessages ?? 120)
     s06(ctx)
     s10(ctx)
