@@ -1,6 +1,6 @@
 # WP 1.1 — XMPP-level transport interface
 
-**SRD ids:** ARC-1, ARC-12–14 · **Depends on:** 0.3, 0.8 · **Status:** to do · **Designated interface WP**
+**SRD ids:** ARC-1, ARC-12–14 · **Depends on:** 0.3, 0.8 · **Status:** done · **Designated interface WP**
 
 ## Goal
 

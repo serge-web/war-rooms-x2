@@ -226,5 +226,10 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 1.2 and 1.4: the contract suite covers the errors for a role change on an absent occupant (`not-allowed`, `not-acceptable`), and the mock matches them | Found by WP 0.1; the earlier spike had recorded a different error |
 | 1.3 uses StanzaJS 12.22.1; 2.5 uses FlexLayout; the site uses VitePress 1.6.4 | Decisions from WP 0.3, 0.2 and 0.6 (`plan/decisions/`, `site/README.md`) |
 | 0.7's screenshots run in the site build rather than their own workflow, and compare with `main`'s published set | Images deploy with their preview, and `main` needs no second build per PR |
+| 0.8's objectives schema gains `updatedAt`; each author publishes its own item (§3 rule 14) | Found by 1.2: a PubSub publisher cannot overwrite another publisher's item, which blocked umpire edits (PLY-35) |
+| 1.1 interface clarified in comments only: subscriptions are per full JID, and document nodes use item id `current` | Found by 1.6; several sessions share a role (D22) |
+| 2.1 must create every node before publishing, give objectives nodes room for one item per author, and revoke subscriptions per full JID | Found by 1.2: ejabberd auto-creates a missing node with an open config when the admin publishes to it |
+| 1.4's mock leaves out the raw-stanza contract tests, which run against ejabberd only, and lists every behaviour the contract does not cover | ARC-10; raw stanzas are not part of the 1.1 interface |
+| 1.5's mock controls return promises, and the mock saves to IndexedDB after every change rather than debounced | The server runs in another tab or worker; a debounce lost the last messages when the leader tab closed |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
 

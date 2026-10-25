@@ -106,7 +106,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
 13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `schemaVersion`), with whitelist read for that force's roles, umpire-force roles and admin, and publish by admin and umpire-force roles.
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest; whitelist read for that force's roles, umpire-force roles and admin, and publish by admin and umpire-force roles.
 15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements node SHALL be readable by every role and publishable only by the admin (PLY-37).
 
 ## 4. Functional requirements — admin backend
@@ -663,4 +663,8 @@ Changes made later on Oct 24, 2026, from the Phase 0 checks (WP 0.1–0.3):
 - §10: S13 outcome added; the open issue is closed.
 - R15 rewritten: no WebSocket size limit up to 64 MiB, and the earlier ~885 KB drop did not reproduce. PLY-53 now states a 64 KiB cap.
 - NFR-22: `mod_adhoc_api` added to what the reference deployment excludes.
+
+Changes from Phase 1 (WP 1.2 and 1.3):
+
+- §3 rule 14: objectives are kept as one item per author, with `updatedAt`, and readers show the newest. ejabberd refuses to let one publisher overwrite another's item, so umpires could not otherwise edit objectives the admin wrote (D21, PLY-35).
 

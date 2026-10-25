@@ -1,0 +1,28 @@
+{
+  "name": "@wrx/mock-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mock hosting (WP 1.5): one mock server per deployment, shared by every tab through a SharedWorker or a Web Locks-elected leader tab, persisted to IndexedDB (D17, ARC-7, DOC-10, DOC-17).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@wrx/mock-server": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.0.0",
+    "@wrx/contract-suite": "workspace:*",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

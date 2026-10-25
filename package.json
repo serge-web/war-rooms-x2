@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "build": "pnpm -r build",
     "e2e": "pnpm --filter @wrx/web e2e",
+    "e2e:mock-host": "pnpm --filter @wrx/mock-host e2e",
     "dictionary": "pnpm --filter @wrx/schemas dictionary",
     "check:dictionary": "pnpm --filter @wrx/schemas dictionary --check",
     "check:mermaid": "node tools/check-mermaid.ts",
@@ -23,6 +24,10 @@
     "check:blog": "node tools/site/check-blog.ts",
     "check:site": "node tools/site/check-deny-list.ts site/dist && node tools/site/check-site-bundle.ts site/dist && node tools/site/size-report.ts site/dist",
     "site:build": "pnpm --filter \"@wrx/site...\" build",
+    "stack:up": "sh deploy/ejabberd/up.sh",
+    "stack:down": "sh deploy/ejabberd/down.sh",
+    "test:contract": "pnpm --filter @wrx/contract-suite test:ejabberd",
+    "test:contract:mock": "vitest run packages/mock-server/src/mock.contract.test.ts",
     "site:serve": "node tools/site/serve.ts site/dist 4174 /",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:trace && pnpm check:dictionary && pnpm check:blog"
   },

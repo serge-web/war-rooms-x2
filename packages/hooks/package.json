@@ -1,0 +1,29 @@
+{
+  "name": "@wrx/hooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wrx/domain": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "@wrx/transport": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "^19.3.0",
+    "happy-dom": "20.14.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

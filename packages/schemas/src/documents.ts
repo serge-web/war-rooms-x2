@@ -93,6 +93,9 @@ export const objectivesSchema = z
     schemaVersion: z.literal(1),
     forceId: slugSchema.describe('Id of the force these objectives belong to'),
     markdown: z.string().max(LIMITS.objectivesChars).describe('Objectives as Markdown'),
+    updatedAt: isoDateTimeSchema.describe(
+      "When this version was written. The node holds one item per author, because a publisher cannot overwrite another publisher's item; readers take the newest (§3 rule 14)",
+    ),
   })
   .describe("A force's objectives; confidential to that force, umpires and admin")
 

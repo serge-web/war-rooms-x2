@@ -69,6 +69,10 @@ jobs:
           name: playwright-report
           path: apps/web/playwright-report
           retention-days: 7
+      - name: Mock host shared across tabs, isolated per deployment (D17, ARC-7, DOC-10, DOC-17, R7)
+        run: pnpm e2e:mock-host
+        env:
+          CI: 'true'
       - name: Site end to end, offline, under a nested base path (DOC-6, DOC-11, DOC-15)
         run: pnpm --filter @wrx/site e2e
         env:

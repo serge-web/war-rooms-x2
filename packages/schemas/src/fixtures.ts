@@ -110,8 +110,18 @@ export function sampleDesign(): DesignFile {
       },
     ],
     objectives: [
-      { schemaVersion: 1, forceId: 'blue', markdown: '1. Secure the crossing.' },
-      { schemaVersion: 1, forceId: 'red', markdown: '1. Delay Blue.' },
+      {
+        schemaVersion: 1,
+        forceId: 'blue',
+        markdown: '1. Secure the crossing.',
+        updatedAt: '2026-10-24T12:00:00.000Z',
+      },
+      {
+        schemaVersion: 1,
+        forceId: 'red',
+        markdown: '1. Delay Blue.',
+        updatedAt: '2026-10-24T12:00:00.000Z',
+      },
     ],
     assets: [pixelAsset('game-logo')],
   }

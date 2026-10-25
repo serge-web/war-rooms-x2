@@ -1,6 +1,6 @@
 # WP 1.4 — Mock server core
 
-**SRD ids:** ARC-7, D14, NFR-21 · **Depends on:** 1.1 · **Status:** to do
+**SRD ids:** ARC-7, D14, NFR-21 · **Depends on:** 1.1 · **Status:** done
 
 ## Goal
 
