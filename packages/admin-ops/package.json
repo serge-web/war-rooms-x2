@@ -10,7 +10,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "test:ejabberd": "node scripts/run-ejabberd.ts"
+    "test:ejabberd": "node scripts/run-ejabberd.ts",
+    "test:publish:ejabberd": "node scripts/run-publish-ejabberd.ts"
   },
   "dependencies": {
     "@wrx/domain": "workspace:*",

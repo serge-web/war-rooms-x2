@@ -5,6 +5,7 @@ import type { AccessMatrix } from '@wrx/domain'
 import { useDesignAccess } from '@wrx/hooks'
 import type { ReactRoomTypeRegistry } from '@wrx/hooks'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Button, Notice } from './components/index.ts'
 import type { Draft, DraftStore, DraftValidation } from './draft/index.ts'
 import { AccessSectionCore } from './sections/AccessSection.tsx'
@@ -14,6 +15,9 @@ import { RolesSectionCore } from './sections/RolesSection.tsx'
 import { RoomsSectionCore } from './sections/RoomsSection.tsx'
 import { ThemesSectionCore } from './sections/ThemesSection.tsx'
 import type { ThemesSlot } from './sections/ThemesSection.tsx'
+import type { PublishConnection } from './publish/controller.ts'
+import { PublishSection } from './publish/PublishSection.tsx'
+import { usePublish } from './publish/usePublish.ts'
 import { useDraft, useDraftValidation } from './useDraft.ts'
 import './admin.css'
 
@@ -24,6 +28,7 @@ export const ADMIN_SECTIONS = Object.freeze([
   'rooms',
   'themes',
   'access',
+  'publish',
 ] as const)
 export type AdminSection = (typeof ADMIN_SECTIONS)[number]
 
@@ -34,6 +39,7 @@ const SECTION_LABEL: Readonly<Record<AdminSection, string>> = Object.freeze({
   rooms: 'Rooms',
   themes: 'Themes',
   access: 'Access matrix',
+  publish: 'Publish',
 })
 
 /** The issue paths that belong to each section, for the menu's counts. */
@@ -44,6 +50,7 @@ const SECTION_PATHS: Readonly<Record<AdminSection, readonly string[]>> = Object.
   rooms: ['rooms'],
   themes: ['assets'],
   access: [],
+  publish: [],
 })
 
 export interface AdminAppProps {
@@ -58,12 +65,21 @@ export interface AdminAppProps {
   readonly initialSection?: AdminSection
   /** The clock for objectives' `updatedAt`. */
   readonly now?: () => Date
+  /**
+   * The server, once the admin has logged in (WP 2.3). Without it the Publish section offers
+   * only import and export.
+   */
+  readonly publish?: PublishConnection
+  /** For tests: file downloads and printing. */
+  readonly download?: (name: string, text: string) => void
+  readonly print?: () => void
 }
 
-export function AdminApp({ store, registry, ...rest }: AdminAppProps) {
+export function AdminApp({ store, registry, publish, download, print, ...rest }: AdminAppProps) {
   const snapshot = useDraft(store)
   const validation = useDraftValidation(snapshot.draft, registry)
   const matrix = useDesignAccess(snapshot.draft.design)
+  const publishing = usePublish(publish, store)
   return (
     <AdminAppCore
       draft={snapshot.draft}
@@ -73,18 +89,34 @@ export function AdminApp({ store, registry, ...rest }: AdminAppProps) {
       matrix={matrix}
       registry={registry}
       onChange={store.commit}
+      publishPanel={
+        <PublishSection
+          publish={publishing}
+          kind={publish?.kind}
+          store={store}
+          draft={snapshot.draft}
+          validation={validation}
+          {...(download === undefined ? {} : { download })}
+          {...(print === undefined ? {} : { print })}
+        />
+      }
       {...rest}
     />
   )
 }
 
-export interface AdminAppCoreProps extends Omit<AdminAppProps, 'store'> {
+export interface AdminAppCoreProps extends Omit<
+  AdminAppProps,
+  'store' | 'publish' | 'download' | 'print'
+> {
   readonly draft: Draft
   readonly validation: DraftValidation
   readonly matrix: AccessMatrix
   readonly onChange: (next: Draft) => void
   readonly loadError?: string | undefined
   readonly saveError?: string | undefined
+  /** The Publish section, drawn by the host (it holds the server connection). */
+  readonly publishPanel?: ReactNode
 }
 
 export function AdminAppCore({
@@ -99,6 +131,7 @@ export function AdminAppCore({
   themes,
   initialSection = 'game',
   now,
+  publishPanel,
 }: AdminAppCoreProps) {
   const [section, setSection] = useState<AdminSection>(initialSection)
   const props = { draft, validation, onChange }
@@ -165,6 +198,7 @@ export function AdminAppCore({
           {section === 'access' && (
             <AccessSectionCore matrix={matrix} design={draft.design} validation={validation} />
           )}
+          {section === 'publish' && publishPanel}
         </main>
       </div>
     </div>

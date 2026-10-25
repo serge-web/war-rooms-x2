@@ -1,0 +1,133 @@
+/*
+ * The Publish section (WP 2.3). Colours come only from the --wrx-* properties, as admin.css.
+ * Printing shows the credentials sheet alone (ADM-26).
+ */
+
+.wrx-publish-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+}
+
+.wrx-publish-panel {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 0.5rem;
+  background: var(--wrx-surface, #ffffff);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.wrx-publish-panel h4 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1rem;
+}
+
+.wrx-publish-checks,
+.wrx-publish-steps,
+.wrx-publish-details {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+
+.wrx-publish-checks li[data-status='fail'],
+.wrx-publish-error {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-steps > li {
+  margin: 0.375rem 0;
+}
+
+.wrx-publish-state {
+  display: inline-block;
+  min-width: 4.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.wrx-publish-steps > li[data-state='done'] .wrx-publish-state {
+  color: var(--wrx-success, #15803d);
+}
+
+.wrx-publish-steps > li[data-state='failed'] .wrx-publish-state {
+  color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-steps > li[data-state='running'] .wrx-publish-state {
+  color: var(--wrx-primary, #1d4ed8);
+}
+
+.wrx-publish-steps > li[data-state='not-run'] {
+  opacity: 0.7;
+}
+
+.wrx-publish-danger {
+  margin-left: 0.5rem;
+  border-color: var(--wrx-danger, #b91c1c);
+}
+
+.wrx-publish-online-tag {
+  margin-left: 0.5rem;
+}
+
+.wrx-publish-details {
+  font-size: 0.875rem;
+  color: var(--wrx-muted, #4b5563);
+}
+
+.wrx-publish-warnings li {
+  margin: 0.25rem 0;
+}
+
+.wrx-credentials-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.wrx-credentials-table th,
+.wrx-credentials-table td {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  padding: 0.375rem 0.5rem;
+  text-align: left;
+}
+
+.wrx-credentials-password {
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.wrx-credentials-demo {
+  font-weight: 700;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .wrx-credentials-sheet,
+  .wrx-credentials-sheet * {
+    visibility: visible;
+  }
+
+  .wrx-credentials-sheet {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000000;
+    background: #ffffff;
+  }
+
+  .wrx-credentials-sheet .wrx-print-hide {
+    display: none;
+  }
+
+  .wrx-credentials-table th,
+  .wrx-credentials-table td {
+    border-color: #000000;
+  }
+}

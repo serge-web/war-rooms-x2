@@ -39,6 +39,9 @@ jobs:
       - name: Admin operations on ejabberd (WP 2.1)
         run: pnpm test:admin-ops:ejabberd
 
+      - name: Publish and provisioning on ejabberd (WP 2.3)
+        run: pnpm test:publish:ejabberd
+
       - name: Install Chromium for the bundle check
         run: pnpm --filter @wrx/transport-xmpp exec playwright install --with-deps chromium
 

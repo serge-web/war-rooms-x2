@@ -4,5 +4,13 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["src", "integration", "ejabberd", "scripts", "vitest.ejabberd.config.ts"]
+  "include": [
+    "src",
+    "integration",
+    "ejabberd",
+    "ejabberd-publish",
+    "scripts",
+    "vitest.ejabberd.config.ts",
+    "vitest.publish.ejabberd.config.ts"
+  ]
 }

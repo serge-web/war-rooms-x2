@@ -115,6 +115,9 @@ importers:
       '@radix-ui/react-tabs':
         specifier: 1.1.22
         version: 1.1.22(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@wrx/admin-ops':
+        specifier: workspace:*
+        version: link:../admin-ops
       '@wrx/domain':
         specifier: workspace:*
         version: link:../domain
@@ -164,6 +167,9 @@ importers:
       '@wrx/mock-server':
         specifier: workspace:*
         version: link:../mock-server
+      '@wrx/transport':
+        specifier: workspace:*
+        version: link:../transport
       happy-dom:
         specifier: 20.14.6
         version: 20.14.6

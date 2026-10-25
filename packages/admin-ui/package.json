@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The admin backend's screens (WP 2.2): the design editor over a local draft, and the effective-access matrix (ADM-3–9, ADM-27, ADM-28).",
+  "description": "The admin backend's screens (WP 2.2, 2.3): the design editor over a local draft, the effective-access matrix (ADM-3–9, ADM-27, ADM-28), and publishing (ADM-10–17, ADM-25, ADM-26).",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -19,6 +19,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@radix-ui/react-alert-dialog": "1.1.24",
     "@radix-ui/react-tabs": "1.1.22",
+    "@wrx/admin-ops": "workspace:*",
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
     "@wrx/schemas": "workspace:*",
@@ -41,6 +42,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "@wrx/mock-host": "workspace:*",
     "@wrx/mock-server": "workspace:*",
+    "@wrx/transport": "workspace:*",
     "happy-dom": "20.14.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
