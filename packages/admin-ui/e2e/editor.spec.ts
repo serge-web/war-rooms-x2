@@ -91,20 +91,32 @@ test('reorders forces with the keyboard', { tag: '@screenshot' }, async ({ page 
   await open(page, 'Forces')
   const list = page.getByRole('list', { name: 'Forces' })
   await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Blue', 'Red', 'Umpire'])
-  await page.getByRole('button', { name: 'Reorder Blue' }).focus()
+  // Wait for each step to register before the next key, as a keyboard user would: dnd-kit
+  // measures the list between steps, and CI runners can be slower than the keys. The pick-up
+  // shows as the handle being pressed; its announcement is replaced at once by a "moved" one.
+  const announced = (text: string) => expect(page.getByText(text)).toBeAttached()
+  const blue = page.getByRole('button', { name: 'Reorder Blue' })
+  await blue.focus()
   await page.keyboard.press('Space')
+  await expect(blue).toHaveAttribute('aria-pressed', 'true')
   await page.keyboard.press('ArrowDown')
+  await announced('Blue moved to position 2 of 3.')
   await page.keyboard.press('ArrowDown')
+  await announced('Blue moved to position 3 of 3.')
   await page.screenshot({ path: testInfo.outputPath('reorder-keyboard.png') })
   await page.keyboard.press('Space')
   await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'Umpire', 'Blue'])
   await expect(page.getByText('Blue dropped in position 3 of 3.')).toBeAttached()
 
   // Escape cancels.
-  await page.getByRole('button', { name: 'Reorder Red' }).focus()
+  const red = page.getByRole('button', { name: 'Reorder Red' })
+  await red.focus()
   await page.keyboard.press('Space')
+  await expect(red).toHaveAttribute('aria-pressed', 'true')
   await page.keyboard.press('ArrowDown')
+  await announced('Red moved to position 2 of 3.')
   await page.keyboard.press('Escape')
+  await announced('Moving Red cancelled.')
   await expect(list.locator('.wrx-admin-list-label')).toHaveText(['Red', 'Umpire', 'Blue'])
 })
 
