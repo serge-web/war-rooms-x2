@@ -1,7 +1,7 @@
 [
   {
     "name": "app-shell",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-architecture",
@@ -21,10 +21,18 @@
   },
   {
     "name": "page-home",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-technical",
-    "status": "unchanged"
+    "status": "changed"
+  },
+  {
+    "name": "player-shell",
+    "status": "new"
+  },
+  {
+    "name": "player-welcome",
+    "status": "new"
   }
 ]

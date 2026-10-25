@@ -1,12 +1,14 @@
 {
   "version": 1,
   "shots": {
-    "app-shell": "70fde772fd501e4bafef69fb8d74efda5f71acf25b512008180cb48f72b251b7",
+    "app-shell": "829d13b6fafd154c106c172c8cc4d79e69551244796bcd4712d7457fd71687a2",
     "page-architecture": "5aa09f875d271e77e58eb26bfd8d7362001f38d50777ceb2646f150ead516175",
     "page-background": "4f59478445dd91c4d2c65897daae64c311513341a2bebe5bfb803133e194f3af",
     "page-blog": "e4785a1435676c7086d1e300fffdfb7f1bbf765f388863aec4330c8fcd4557a2",
     "page-data-dictionary": "a0bee9904da82f178d4892e043a6eb63395429d81cb2a39da910a0a04210f951",
-    "page-home": "629eff9b32036429d4d4c9a24002f82093fb24ad73570d1f729e32745b9e6903",
-    "page-technical": "88afc57ecea9bd97e0177f33915564d147a18e6aef810e8c7039ed44f3984ae5"
+    "page-home": "e23c9050d51671f2aa285508b94a5b3258c608d9b75968f24f44a5230894a9e1",
+    "page-technical": "43fbc12621f5d4acdfa81f9a8f406315f5214840504d12e3afd8aec6fca59d2c",
+    "player-shell": "4e34d33038e209a242a2d5f13d0ccea31f6abf552ab441dc97368e9cce0a1058",
+    "player-welcome": "829d13b6fafd154c106c172c8cc4d79e69551244796bcd4712d7457fd71687a2"
   }
 }
