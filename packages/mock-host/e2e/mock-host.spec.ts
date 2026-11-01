@@ -168,7 +168,7 @@ for (const mode of MODES) {
       await check.goto('/dep-a/?nohost')
       await check.waitForFunction(() => 'wrxStorage' in window)
       const stored = await check.evaluate(() => window.wrxStorage.read())
-      expect(typeof stored === 'string' && JSON.parse(stored)).toMatchObject({ version: 1 })
+      expect(typeof stored === 'string' && JSON.parse(stored)).toMatchObject({ version: 2 })
     })
 
     test('a database from a newer release resets with a notice', async ({ context }) => {
