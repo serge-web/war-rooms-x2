@@ -1,10 +1,10 @@
-// The out-of-game column against the mock (WP 2.7, WP 2.11): the admin, as umpire, sees every
-// room, posts as the umpire and edits a force's objectives, which that force's player sees live
-// (SC-5, PLY-15, PLY-35); a White Force observer reads but cannot edit; the admin posts an
-// announcement from the game view and players see it arrive highlighted (ADM-29, PLY-37,
-// PLY-38); objectives written in the admin editor reach players on publish (ADM-23, ADM-24); and
-// the server enforces who may post where (PLY-15, PLY-39). Pages of one browser context share
-// the mock, as separate tabs do (D17).
+// The out-of-game column against the mock (WP 2.7, WP 2.11); the umpire's own walk through it,
+// posting as the umpire and editing a force's objectives live, is the SC-5 scenario
+// (scenarios/sc-5-umpire-monitors.spec.ts). A White Force observer reads but cannot edit; the
+// admin posts an announcement from the game view and players see it arrive highlighted (ADM-29,
+// PLY-37, PLY-38); objectives written in the admin editor reach players on publish (ADM-23,
+// ADM-24); and the server enforces who may post where (PLY-15, PLY-39). Pages of one browser
+// context share the mock, as separate tabs do (D17).
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { DOMAIN, logIn, roomTabs } from './mock.ts'
@@ -49,59 +49,6 @@ test('the column sits outside the workspace: game time, admin panel, force panel
   // Players are offered neither the post box nor the objectives editor.
   await expect(announcements(page).getByRole('textbox')).toHaveCount(0)
   await expect(forcePanel(page).getByRole('button', { name: /Edit/ })).toHaveCount(0)
-})
-
-test('SC-5: the admin, as umpire, sees every room, posts as the umpire and amends Red’s objectives live (PLY-15, PLY-35)', async ({
-  context,
-}) => {
-  const red = await context.newPage()
-  await player(red, 'red-co')
-  const redObjectives = forcePanel(red).getByRole('region', { name: 'Objectives' })
-  await expect(redObjectives).toContainText('Delay Blue.')
-
-  // 1. The admin login is the umpire, in the White Force, and sees every room.
-  const umpire = await context.newPage()
-  await umpire.setViewportSize({ width: 1400, height: 900 })
-  await player(umpire, 'admin')
-  await expect(umpire.getByLabel('Logged in as Umpire, White')).toBeVisible()
-  await expect(roomTabs(umpire)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
-  await expect(forcePanel(umpire).getByRole('heading', { name: 'Umpire' })).toBeVisible()
-
-  // 3. A clarification in Red HQ, which Red sees from the umpire, in White.
-  await umpire.getByRole('tab', { name: 'Red HQ', exact: true }).click()
-  const box = umpire.getByRole('textbox', { name: 'Message Red HQ', exact: true })
-  await box.fill('Clarification: the bridge is passable on foot only.')
-  await box.press('Enter')
-  await expect(box).toHaveValue('')
-  const card = red
-    .getByRole('region', { name: 'Messages in Red HQ', exact: true })
-    .getByRole('article')
-    .filter({ hasText: 'passable on foot only' })
-  await expect(card).toContainText('Umpire')
-  await expect(card).toContainText('White')
-
-  // 4. Red's objectives, amended with a preview; Red's force panel updates live.
-  await forcePanel(umpire).getByLabel('Show objectives for').selectOption({ label: 'Red' })
-  await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
-    'Delay Blue.',
-  )
-  await forcePanel(umpire).getByRole('button', { name: 'Edit Red objectives' }).click()
-  const dialog = umpire.getByRole('dialog', { name: 'Edit Red objectives' })
-  await dialog
-    .getByRole('textbox', { name: 'Objectives (Markdown)' })
-    .fill('1. Delay Blue.\n2. **Hold** the east bank until noon.')
-  await expect(
-    dialog.getByRole('region', { name: 'Objectives preview' }).locator('strong'),
-  ).toHaveText('Hold')
-  await dialog.getByRole('button', { name: 'Publish objectives' }).click()
-  await expect(dialog).toHaveCount(0)
-
-  // Live on Red's page, with no reload (PLY-28).
-  await expect(redObjectives).toContainText('Hold the east bank until noon.')
-  await expect(redObjectives.locator('strong')).toHaveText('Hold')
-  await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
-    'Hold the east bank until noon.',
-  )
 })
 
 test('a White Force observer sees every room read only and reads, but cannot edit, objectives (§3 rule 4, PLY-35)', async ({

@@ -4,7 +4,9 @@ import {
   chartNodes,
   expandIds,
   planWorkPackages,
+  scenarioProblems,
   srdRequirementIds,
+  srdScenarios,
   trace,
 } from './trace.ts'
 
@@ -63,5 +65,38 @@ describe('trace', () => {
       unknown: ['ADM-9'],
       missingFromChart: ['0.2'],
     })
+  })
+})
+
+describe('scenarios', () => {
+  const srd = [
+    '### SC-1 Admin designs',
+    '',
+    '**Outcome:** a game. **Traces to:** ADM-1–16, ADM-26.',
+    '',
+    '### SC-2 Player arrives',
+    '',
+    '**Traces to:** PLY-1, D20.',
+    '',
+    '### Gaps found',
+  ].join('\n')
+
+  it('reads each scenario and its traces', () => {
+    expect(srdScenarios(srd)).toEqual([
+      { id: 'SC-1', traces: 'ADM-1–16, ADM-26' },
+      { id: 'SC-2', traces: 'PLY-1, D20' },
+    ])
+  })
+
+  it('wants one spec per scenario, naming it and its traces in the header', () => {
+    const specs = new Map([
+      ['sc-1-design.spec.ts', '// SC-1 Admin designs. Traces to: ADM-1–16,\n// ADM-26.\nimport x'],
+      ['sc-2-player.spec.ts', '// SC-2 Player arrives. Traces to: PLY-1.\n'],
+      ['backend.ts', '// helpers'],
+    ])
+    expect(scenarioProblems(srdScenarios(srd), specs)).toEqual([
+      'sc-2-player.spec.ts must say "Traces to: PLY-1, D20." as SRD §12 does',
+    ])
+    expect(scenarioProblems(srdScenarios(srd), new Map())).toHaveLength(2)
   })
 })
