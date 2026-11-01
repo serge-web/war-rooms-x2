@@ -20,6 +20,10 @@ export interface ComposerCoreProps {
   readonly initialError?: string | undefined
   /** The text area's accessible name. */
   readonly label?: string
+  /** Told of every change to the text, so a parent can keep it while this is unmounted. */
+  readonly onTextChange?: (text: string) => void
+  /** Inside the template composer, which draws the frame (chat-composer.tsx). */
+  readonly embedded?: boolean
 }
 
 /** The tallest the text area grows before it scrolls, in pixels (also in chat.css). */
@@ -45,6 +49,8 @@ export function ComposerCore({
   initialText = '',
   initialError,
   label = 'Message',
+  onTextChange,
+  embedded = false,
 }: ComposerCoreProps) {
   const [text, setText] = useState(initialText)
   const [error, setError] = useState(initialError)
@@ -97,6 +103,7 @@ export function ComposerCore({
     setSending(false)
     if (outcome.ok) {
       setText('')
+      onTextChange?.('')
       setError(undefined)
     } else {
       // PLY-33: the text stays, so it can be sent again or copied.
@@ -125,7 +132,11 @@ export function ComposerCore({
     .join(' ')
 
   return (
-    <form className="wrx-composer" onSubmit={onSubmit} aria-label="Send a message">
+    <form
+      className={embedded ? 'wrx-composer__text' : 'wrx-composer'}
+      onSubmit={onSubmit}
+      aria-label="Send a message"
+    >
       {disabled ? (
         <p id={reasonId} className="wrx-composer__reason">
           {disabledReason}
@@ -154,6 +165,7 @@ export function ComposerCore({
           aria-disabled={disabled || undefined}
           onChange={(event) => {
             setText(event.target.value)
+            onTextChange?.(event.target.value)
           }}
           onKeyDown={onKeyDown}
         />

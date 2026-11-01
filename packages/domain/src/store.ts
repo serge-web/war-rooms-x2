@@ -159,6 +159,13 @@ export interface UnsentMessage {
   readonly error: DomainError
 }
 
+/** A refused templated message, kept so its form can show the values again (PLY-33). */
+export interface UnsentTemplateMessage {
+  readonly templateId: string
+  readonly values: Readonly<Record<string, TemplateValue>>
+  readonly error: TemplateSendError
+}
+
 export interface RoomView {
   readonly roomId: string
   readonly status: RoomStatus
@@ -179,6 +186,8 @@ export interface RoomView {
   readonly historyLoaded: boolean
   /** The last refused post, kept so it can be copied (PLY-33). */
   readonly unsent: UnsentMessage | undefined
+  /** The last refused templated message, kept so its form keeps the values (PLY-33). */
+  readonly unsentTemplate: UnsentTemplateMessage | undefined
 }
 
 export interface Occupant {
@@ -379,6 +388,7 @@ interface RoomEntry {
   /** Bumped by every join, close and teardown, so late replies are ignored. */
   generation: number
   unsent: UnsentMessage | undefined
+  unsentTemplate: UnsentTemplateMessage | undefined
 }
 
 const LOADING: Snapshot<undefined> = Object.freeze({
@@ -1238,6 +1248,7 @@ class Store implements SessionStore {
       joining: undefined,
       generation: 0,
       unsent: undefined,
+      unsentTemplate: undefined,
     }
   }
 
@@ -1477,6 +1488,7 @@ class Store implements SessionStore {
         loadingOlder: entry.older !== undefined,
         historyLoaded: entry.historyLoaded,
         unsent: entry.unsent,
+        unsentTemplate: entry.unsentTemplate,
       })
       const status: LoadStatus =
         entry.status === 'joining' ? 'loading' : entry.status === 'joined' ? 'ready' : 'error'
@@ -1631,15 +1643,19 @@ class Store implements SessionStore {
     values: Readonly<Record<string, TemplateValue>>,
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }> {
     const entry = this.roomEntries.get(roomId)
-    const refuse = (error: DomainError, check?: TemplateCheck) => ({
-      ok: false as const,
-      error: {
+    const refuse = (error: DomainError, check?: TemplateCheck) => {
+      const sendError: TemplateSendError = {
         ...error,
         templateId,
         unsentValues: values,
         ...(check === undefined ? {} : { check }),
-      },
-    })
+      }
+      if (entry !== undefined) {
+        entry.unsentTemplate = { templateId, values, error: sendError }
+        this.roomChanged(entry)
+      }
+      return { ok: false as const, error: sendError }
+    }
     if (this.isEnded()) return refuse({ code: 'session-ended', message: 'the session has ended' })
     if (entry?.status !== 'joined' || entry.joined === undefined) {
       return refuse({ code: 'not-joined', message: 'the room is not joined' })
@@ -1692,6 +1708,10 @@ class Store implements SessionStore {
     if (!sent.ok) {
       const error = fromTransport(sent.error, 'Sending')
       return refuse(error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error)
+    }
+    if (entry.unsentTemplate !== undefined) {
+      entry.unsentTemplate = undefined
+      this.roomChanged(entry)
     }
     return { ok: true, value: { stanzaId: sent.value.stanzaId } }
   }

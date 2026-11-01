@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  markdown-to-jsx: 9.10.3
+
 importers:
 
   .:
@@ -390,6 +393,12 @@ importers:
 
   packages/player-ui:
     dependencies:
+      '@rjsf/core':
+        specifier: 6.11.0
+        version: 6.11.0(@rjsf/utils@6.11.0(react@19.3.1))(react@19.3.1)(vue@3.5.43(typescript@6.0.3))
+      '@rjsf/utils':
+        specifier: 6.11.0
+        version: 6.11.0(react@19.3.1)
       '@tanstack/react-virtual':
         specifier: 3.14.13
         version: 3.14.13(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

@@ -1,12 +1,39 @@
 // The chat room panel (WP 2.6), also importable alone as `@wrx/player-ui/chat` (the admin's
 // theme preview renders ChatPanelCore without the workspace). Importing it loads its stylesheet.
 import './chat.css'
+// The card and the form's styles: eager, though the form is not, so a popout copies them.
+import '../templates/templates.css'
 
-export { ChatPanel, ChatPanelCore, readOnlyExplanation, refusalText } from './chat-panel.tsx'
+export {
+  ChatPanel,
+  ChatPanelCore,
+  readOnlyExplanation,
+  refusalText,
+  templateRefusal,
+} from './chat-panel.tsx'
 export type { ChatPanelCoreProps } from './chat-panel.tsx'
+export {
+  ChatComposerCore,
+  NO_TEMPLATES_REASON,
+  initialValues,
+  sendableValues,
+} from './chat-composer.tsx'
+export type {
+  ChatComposerCoreProps,
+  TemplateSendOutcome,
+  UnsentTemplate,
+} from './chat-composer.tsx'
 export { ComposerCore } from './composer.tsx'
 export type { ComposerCoreProps, SendOutcome } from './composer.tsx'
-export { chatClock, chatRows, linkify, messageSize, safeHref, sizeNote } from './format.ts'
+export {
+  chatClock,
+  chatRows,
+  linkify,
+  messageSize,
+  safeHref,
+  sizeNote,
+  templateMessageSize,
+} from './format.ts'
 export type {
   ChatClock,
   ChatMessage,

@@ -6,6 +6,9 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button, Spinner } from '@wrx/ui'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { ReactNode, RefObject } from 'react'
+import { cardClock } from '../templates/card.ts'
+import type { CardClock } from '../templates/card.ts'
+import { TemplateCard } from '../templates/card-view.tsx'
 import { chatClock, linkify } from './format.ts'
 import type { ChatRow, TimeFormat } from './format.ts'
 
@@ -35,7 +38,15 @@ const TOP_SLACK = 400
 
 function estimate(row: ChatRow | undefined): number {
   if (row === undefined) return 40
-  return 28 + (row.header ? 30 : 0) + (row.divider === undefined ? 0 : 40) + (row.last ? 8 : 0)
+  const { card, warning } = row.message
+  const body = card === undefined ? 28 : 44 + 24 * card.fields.length
+  return (
+    body +
+    (warning === undefined ? 0 : 28) +
+    (row.header ? 30 : 0) +
+    (row.divider === undefined ? 0 : 40) +
+    (row.last ? 8 : 0)
+  )
 }
 
 export function MessageListCore({
@@ -56,6 +67,7 @@ export function MessageListCore({
     () => chatClock(timeFormat),
     [timeFormat?.locale, timeFormat?.timeZone], // a new object with the same values is the same
   )
+  const dates = useMemo(() => cardClock(timeFormat), [timeFormat?.locale, timeFormat?.timeZone])
   const atBottom = useRef(true)
   const previous = useRef<{ firstKey: string | undefined; count: number; fromBottom: number }>({
     firstKey: undefined,
@@ -210,6 +222,7 @@ export function MessageListCore({
               <MessageRow
                 row={row}
                 clock={clock}
+                dates={dates}
                 position={item.index + 1}
                 setSize={hasOlder ? -1 : rows.length}
               />
@@ -224,11 +237,13 @@ export function MessageListCore({
 function MessageRow({
   row,
   clock,
+  dates,
   position,
   setSize,
 }: {
   readonly row: ChatRow
   readonly clock: ReturnType<typeof chatClock>
+  readonly dates: CardClock
   readonly position: number
   readonly setSize: number
 }) {
@@ -284,7 +299,14 @@ function MessageRow({
             {time}
           </time>
         )}
-        {message.text === undefined ? (
+        {message.warning === undefined ? null : (
+          <p className="wrx-chat__warning">
+            <span className="wrx-chat__warning-label">Warning:</span> {message.warning}
+          </p>
+        )}
+        {message.card !== undefined ? (
+          <TemplateCard card={message.card} clock={dates} />
+        ) : message.text === undefined ? (
           <p className="wrx-chat__text wrx-chat__text--unreadable">
             This message could not be read.
           </p>

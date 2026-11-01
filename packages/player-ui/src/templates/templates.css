@@ -1,0 +1,282 @@
+/*
+ * Message templates (Annex A, WP 4.2): the composer's form and the card. Colours and font come
+ * only from --wrx-*, set on the room panel's theme scope (D24, PLY-26). Loaded with the chat
+ * panel, not with the lazily loaded form, so a popout copies it with the rest.
+ */
+
+/* ---- The card (TD7, TPL-5) ---- */
+
+.wrx-tcard {
+  margin: 0.125rem 0 0;
+  padding: 0.375rem 0.625rem 0.5rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 0.375rem;
+  background: var(--wrx-background);
+}
+
+.wrx-tcard__name {
+  margin: 0 0 0.25rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.wrx-tcard__fields {
+  display: grid;
+  grid-template-columns: minmax(6rem, max-content) 1fr;
+  gap: 0.125rem 0.75rem;
+  margin: 0;
+}
+
+.wrx-tcard__field {
+  display: contents;
+}
+
+.wrx-tcard__label {
+  color: var(--wrx-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.wrx-tcard__value {
+  margin: 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wrx-tcard__deleted,
+.wrx-tcard__empty {
+  color: var(--wrx-muted);
+}
+
+.wrx-tcard__empty {
+  margin: 0;
+  font-style: italic;
+}
+
+.wrx-chat__warning {
+  margin: 0.125rem 0;
+  padding: 0.125rem 0 0.125rem 0.5rem;
+  border-left: 3px solid var(--wrx-danger);
+  font-size: 0.8125rem;
+}
+
+.wrx-chat__warning-label {
+  color: var(--wrx-danger);
+  font-weight: 700;
+}
+
+/* ---- The composer's type drop-down and form (TD3, TPL-3) ---- */
+
+.wrx-composer--templates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  /* The message list keeps at least half the panel, however long the form. */
+  max-height: 50%;
+  min-height: 0;
+}
+
+.wrx-composer__type {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+
+.wrx-composer__type-label {
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.wrx-composer__type-select {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.wrx-composer__description {
+  margin: 0;
+  color: var(--wrx-muted);
+  font-size: 0.8125rem;
+}
+
+/* The form scrolls inside the composer, so the message list keeps room above it. */
+.wrx-composer__template {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-height: 0;
+}
+
+.wrx-composer__form {
+  flex: 1 1 auto;
+  min-height: 4rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.125rem 0.125rem 0;
+}
+
+.wrx-composer__actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.375rem 0 0.125rem;
+  background: var(--wrx-surface);
+}
+
+.wrx-composer__actions .wrx-composer__note {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.wrx-composer__actions > .wrx-button {
+  min-width: 5rem;
+}
+
+.wrx-tform__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wrx-tfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+}
+
+.wrx-tfield__label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.wrx-tfield__required {
+  color: var(--wrx-danger);
+}
+
+.wrx-tfield__input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 0.375rem;
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  font: inherit;
+}
+
+.wrx-tfield__textarea {
+  resize: vertical;
+}
+
+/* A date field's focus moves through its parts and the browser's calendar button inside it,
+   where :focus-visible does not reach the field itself. */
+.wrx-tfield__input:focus-visible,
+.wrx-tfield__date:focus-within,
+.wrx-tfield__slider:focus-visible,
+.wrx-tfield__check input:focus-visible,
+.wrx-tfield__radio input:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 1px;
+}
+
+.wrx-tfield__input[aria-invalid='true'],
+.wrx-tfield--invalid .wrx-tfield__input {
+  border-color: var(--wrx-danger);
+}
+
+.wrx-tfield__hint,
+.wrx-tfield__count,
+.wrx-tfield__errors {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.wrx-tfield__hint,
+.wrx-tfield__count {
+  color: var(--wrx-muted);
+}
+
+.wrx-tfield__count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wrx-tfield__errors {
+  padding: 0;
+  list-style: none;
+  color: var(--wrx-danger);
+  font-weight: 600;
+}
+
+.wrx-tfield__range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrx-tfield__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--wrx-primary);
+}
+
+.wrx-tfield__range .wrx-tfield__number {
+  flex: none;
+  width: 5.5rem;
+}
+
+.wrx-tfield__check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wrx-tfield__check input,
+.wrx-tfield__radio input {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--wrx-primary);
+}
+
+.wrx-tfield__radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+.wrx-tfield__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* ---- Narrow panels: the card stacks label over value ---- */
+
+@container wrx-chat (max-width: 18rem) {
+  .wrx-tcard__fields {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .wrx-tcard__value {
+    margin-bottom: 0.25rem;
+  }
+
+  .wrx-composer__actions > .wrx-button {
+    flex: 1 1 auto;
+  }
+}
