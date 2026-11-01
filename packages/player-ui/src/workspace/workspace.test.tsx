@@ -116,10 +116,14 @@ describe('Workspace', () => {
       <UnreadBadge count={roomId === 'red-hq' ? 4 : roomId === 'blue-hq' ? 120 : 0} />
     )
     await mount({ tabBadge: Badge })
-    expect(within(tab('red-hq')).getByLabelText('4 unread').textContent).toBe('4')
-    expect(within(tab('blue-hq')).getByLabelText('99+ unread')).toBeTruthy()
+    expect(within(tab('red-hq')).getByLabelText('4 unread messages').textContent).toBe('4')
+    expect(within(tab('blue-hq')).getByLabelText('99+ unread messages')).toBeTruthy()
     expect(within(tab('negotiation')).queryByText(/unread/)).toBeNull()
     expect(document.querySelectorAll('[role="tab"] .wrx-unread')).toHaveLength(2)
+    // NFR-14: the count is the tab's description; its name stays the room's name.
+    const badge = within(tab('red-hq')).getByRole('img', { name: '4 unread messages' })
+    expect(tab('red-hq').getAttribute('aria-describedby')).toBe(badge.id)
+    expect(tab('negotiation').hasAttribute('aria-describedby')).toBe(false)
   })
 
   it('reconciles live: a new room goes to the fewest-tab tabset, a lost one closes (PLY-6, PLY-41)', async () => {

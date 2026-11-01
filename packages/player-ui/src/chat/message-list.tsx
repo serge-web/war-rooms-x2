@@ -242,11 +242,14 @@ function MessageRow({
     .filter(Boolean)
     .join(' ')
   const accent = message.colour === undefined ? undefined : { borderLeftColor: message.colour }
+  // A feed holds only articles (NFR-14), so the day divider is drawn beside the article but read
+  // as the start of its name: "Today, Blue CO, 09:12".
+  const name = `${message.senderName}, ${time}`
   return (
     <>
       {row.divider === undefined ? null : (
-        <div className="wrx-chat__divider" role="separator" aria-label={row.divider}>
-          <span aria-hidden="true">{row.divider}</span>
+        <div className="wrx-chat__divider" aria-hidden="true">
+          <span>{row.divider}</span>
         </div>
       )}
       <article
@@ -254,7 +257,7 @@ function MessageRow({
         style={accent}
         aria-posinset={position}
         aria-setsize={setSize}
-        aria-label={`${message.senderName}, ${time}`}
+        aria-label={row.divider === undefined ? name : `${row.divider}, ${name}`}
         data-sender={message.senderKey}
       >
         {row.header ? (

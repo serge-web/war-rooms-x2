@@ -3,8 +3,8 @@
 // LayoutStorage (PLY-5), reconciles it whenever the tabs change (PLY-6), docks popouts back when
 // their window closes, and adds the Alt+Shift+Arrow keyboard move with focus kept on the moved
 // tab (NFR-14). `Workspace` (workspace.tsx) wires it to the pane's store.
-import { Layout, TabNode } from 'flexlayout-react'
-import type { ITabRenderValues, TabSetNode } from 'flexlayout-react'
+import { Layout, OverflowIcon, TabNode } from 'flexlayout-react'
+import type { IIcons, ITabRenderValues, TabSetNode } from 'flexlayout-react'
 import { Button } from '@wrx/ui'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
@@ -76,6 +76,24 @@ function initialModel(
 }
 
 const EMPTY_PANELS: readonly WorkspacePanel[] = Object.freeze([])
+
+/**
+ * The hidden-tabs button as the library draws it, but with the count drawn by CSS (workspace.css)
+ * instead of as text (NFR-14, WCAG 2.5.3): the button is named "Hidden tabs" and its menu lists
+ * them, so a bare number as its visible text only made the name disagree with what is shown.
+ */
+const ICONS: IIcons = Object.freeze({
+  more: (_node: unknown, hidden: readonly unknown[]) => (
+    <>
+      <OverflowIcon />
+      <span
+        className="flexlayout__tab_button_overflow_count wrx-overflow-count"
+        data-count={hidden.length > 0 ? hidden.length : ''}
+        aria-hidden="true"
+      />
+    </>
+  ),
+})
 
 export function WorkspaceCore({
   rooms,
@@ -210,6 +228,7 @@ export function WorkspaceCore({
           onRenderTab={onRenderTab}
           onTabSetPlaceHolder={onTabSetPlaceHolder}
           popoutURL={popoutUrl}
+          icons={ICONS}
         />
       </div>
     </div>

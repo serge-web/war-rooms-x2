@@ -62,6 +62,23 @@
   overflow: hidden;
 }
 
+/* WCAG 2.5.8: the layout's toolbar buttons (pop out, maximise, the hidden-tabs menu) are at
+   least 24 px square; the library draws them 17 px. */
+.wrx-workspace .flexlayout__tab_toolbar_button,
+.wrx-workspace .flexlayout__border_toolbar_button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  box-sizing: border-box;
+}
+
+/* The hidden-tabs count, drawn here so that it is not text in the button (workspace-core.tsx). */
+.wrx-overflow-count::after {
+  content: attr(data-count);
+}
+
 .wrx-workspace__empty {
   padding: 1rem;
 }
