@@ -444,7 +444,7 @@ The server question is settled. These remaining checks come first in the develop
 | # | Check | When | Owner | Decides |
 | --- | --- | --- | --- | --- |
 | P1 | S13 offline voice revocation, plus whether `max_stanza_size` applies to the WebSocket listener. **Done:** S13 failed (vault); no WebSocket size limit (64 KiB client cap) | Before start | Claude Code / dev | ADM-37, R15 |
-| P2 | Target environment: analyst browsers and versions (SharedWorker, IndexedDB, Web Locks), approval to run ejabberd/Erlang on internal and air-gapped hosts, who verifies NFR-23 | Before start | Doc, with customer | D12, D17, NFR-23 |
+| P2 | Target environment: analyst browsers and versions (SharedWorker, IndexedDB, Web Locks), approval to run ejabberd/Erlang on internal and air-gapped hosts, who verifies NFR-23. **Done** (WP 0.4): Chrome and Edge only; see `plan/decisions/target-environment.md` | Before start | Doc, with customer | D12, D17, NFR-23 |
 | P3 | Layout library, FlexLayout vs dockview: four independent workspaces with pop-outs on one page (D15), add to the fewest-tab tabset via public API only (PLY-41), save/restore across room changes (D6) | Sprint 1 | Claude Code / dev | ARC, PLY-40–42 |
 | P4 | StanzaJS health: maintenance status, typing of ad-hoc commands, MAM and RSM, and a fallback library if needed | Sprint 1 | Claude Code / dev | ARC-12 |
 | P5 | JSON schemas for every PubSub document in §3 | Sprint 1, first | Dev team | Mock, contract suite, design import/export |
@@ -693,6 +693,10 @@ Changes from Dev Plan FT-1 (Nov 1, 2026), raised by the product owner from the m
 - PLY-36 relaxed: the out-of-game column is always visible only while the client is at least 45rem wide; below that it is a special workspace tab. PLY-8 and PLY-37 say so, the scope line no longer calls the column fixed, and the §8 backlog line is removed.
 - Why 45rem and not the 400 px first suggested: the column is 18rem wide (13rem in a pane), so at 400 px the workspace would keep under 7rem, and the case the product owner saw (three panes at 125% zoom, each about 500 to 680 CSS px wide, the column taking about 40%) would not switch at all. At 45rem the column takes at most 40% of a client and the workspace keeps about 27rem, one chat room. The width is the client's own, in rem, so zoom and font size count, and each pane switches on its own.
 - Where the tab goes: first in the strip along the bottom of the workspace, next to the game info and online panels (PLY-8), unselected. In a tabset of a narrow pane the tab strip scrolls, and the new tab, badge included, was out of sight behind the overflow button; the bottom strip is as wide as the client and holds short tabs, so the tab and its badge stay in view. Opening it opens the strip's panel, which can be resized, and the tab can be dragged into a tabset like a room.
+
+Changes from WP 0.4 (Nov 1, 2026), answered by the product owner (`plan/decisions/target-environment.md`):
+
+- NFR-13: the customer's analysts use Chrome and Edge only, so those two are the SHALL and Firefox joins Safari as a SHOULD. It read "Current Chrome, Edge and Firefox SHALL be supported; Safari SHOULD be." P2 in §9 is marked done.
 
 Changes from the product owner's revision (Nov 1, 2026), merged onto the text above. The owner's copy was based on the Oct 20 text; every decision since then is kept unless listed here (record: `plan/reviews/srd-merge-2026-11-01.md`).
 

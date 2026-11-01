@@ -1,6 +1,6 @@
 # WP 3.3 — Reference deployment and air-gapped install
 
-**SRD ids:** NFR-2, NFR-4, NFR-10, NFR-22, NFR-23 · **Depends on:** 0.4, 1.3 · **Status:** active: built and tested in containers (`ops/README.md`, "Testing"); the real-hardware run and the WP 0.4 answers need a person
+**SRD ids:** NFR-2, NFR-4, NFR-10, NFR-22, NFR-23 · **Depends on:** 0.4, 1.3 · **Status:** active: built and tested in containers (`ops/README.md`, "Testing"); the real-hardware run needs a person (the product owner, WP 0.4)
 
 ## Goal
 
@@ -13,7 +13,7 @@ Everything needed to deploy WRX1 on an internal or air-gapped network, built and
 - **Internal CA (NFR-2):** a guide and scripts for server certificates from an internal CA, and for trusting that CA in browsers. `deploy/ejabberd/make-ca.sh` is the starting point.
 - **Setup guide (NFR-4):** the server settings WRX1 relies on, and how the admin backend verifies them at publish (room config, MAM enabled).
 - **Backup and restore:** what to back up, and how (ejabberd's database and the uploaded assets), with a restore tested on the stack.
-- **Left for a person:** the real-hardware run and the answers to WP 0.4, recorded in `plan/decisions/target-environment.md` once known.
+- **Left for a person:** the real-hardware run, by the product owner on a spare machine (WP 0.4), recorded in `plan/decisions/target-environment.md`. The WP 0.4 answers are recorded there; the CA question is still open.
 
 ## Owns
 

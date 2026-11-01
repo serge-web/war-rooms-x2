@@ -1,7 +1,9 @@
 // The scenarios' starting game on the reference ejabberd: what the mock's demo seed is in the
 // browser (D17), made on the real server through the real admin tooling before each scenario.
 // The server is reset (ADM-15), the demo design published (ADM-10) with the demo's known
-// passwords and its vault passphrase, and the demo's message history posted by its authors.
+// passwords, and the demo's message history posted by its authors. The vault takes
+// SCENARIO_VAULT_PASSPHRASE, not the mock's published demo passphrase: a real server's vault
+// must pass the strength check (F12), which only the mock's demo vault skips.
 // Known passwords on a throwaway test server are test set-up only: the admin UI on a real server
 // always issues random ones (NFR-6), as SC-1 shows.
 import {
@@ -16,13 +18,16 @@ import {
   privateMarkerStore,
 } from '@wrx/admin-ops'
 import type { PublishPlan } from '@wrx/admin-ops'
-import { DEMO_VAULT_PASSPHRASE, demoPassword, demoSeed } from '@wrx/mock-server'
+import { demoPassword, demoSeed } from '@wrx/mock-server'
 import type { DesignFile } from '@wrx/schemas'
 import type { Endpoint, Session } from '@wrx/transport'
 import { XmppTransport } from '@wrx/transport-xmpp'
 import { existsSync, readFileSync } from 'node:fs'
 import { getCACertificates, setDefaultCACertificates } from 'node:tls'
 import { fileURLToPath } from 'node:url'
+
+/** The observer vault's passphrase in the scenarios' game on ejabberd; strong enough for F12. */
+export const SCENARIO_VAULT_PASSPHRASE = 'northern gate umpire ledger kestrel'
 
 export interface EjabberdServer {
   readonly endpoint: Endpoint
@@ -131,7 +136,7 @@ export async function publishDemoGame(server: EjabberdServer): Promise<void> {
   const admin = await connect(server, transport, 'admin', server.adminPassword)
   try {
     const { ops, marker } = await reset(server, transport, admin)
-    const vault = await ObserverVault.create(admin.admin, DEMO_VAULT_PASSPHRASE, {
+    const vault = await ObserverVault.create(admin.admin, SCENARIO_VAULT_PASSPHRASE, {
       iterations: VAULT_KDF.minIterations,
     })
     if (!vault.ok) throw new Error(`create vault: ${vault.error.message}`)

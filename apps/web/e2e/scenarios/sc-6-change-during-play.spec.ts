@@ -59,7 +59,7 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   await expect(admin.getByLabel('Access for Force: Red')).toHaveValue('write')
 
   // 2. Before anything is applied, the plan names the online roles it affects.
-  await plan(admin)
+  await plan(admin, backend)
   const region = admin.getByRole('region', { name: 'Publish plan' })
   const online = region.getByLabel('Online roles affected')
   await expect(online).toContainText('Affected while online:')
@@ -139,7 +139,7 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   await admin.getByRole('button', { name: 'Red CO', exact: true }).click()
   await admin.getByRole('button', { name: 'Delete Red CO' }).click()
   await admin.getByRole('alertdialog').getByRole('button', { name: 'Delete role' }).click()
-  await plan(admin)
+  await plan(admin, backend)
   await expect(region.getByLabel('Online roles affected').locator('strong')).toContainText('Red CO')
   await publishPlan(admin, [/Delete Red CO/])
   // The publish removes the role's login with its documents; which of the two the client hears

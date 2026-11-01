@@ -264,4 +264,5 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | 3.5 added, and 3.4 now waits for it: GUID ids, login names, deleted-entity records, the reserved `templates` name, objectives by the admin only, and the migration of designs, the seed and tests | The product owner's SRD revision of Nov 1, 2026 (SRD §14; `plan/reviews/srd-merge-2026-11-01.md`). It changes ids and objectives access, so it lands before the security review |
 | Spike S14 added, after v1, with its own node in the chart; the deny-list gains S14 | SRD Annex B: the force-asset node layout depends on it. It touches access control, so its record stays off the site like S13's |
 | Future tasks FT-2 and FT-3 added for Annexes A and B | Planned in `plan/decisions/annex-a-b-implementation.md`; WPs are numbered once the owner answers its open questions |
+| NFR-13 narrowed to Chrome and Edge as the SHALL, Firefox and Safari as a SHOULD; the Firefox CI job becomes advisory, like WebKit's | WP 0.4: the customer's analysts use Chrome and Edge only (`plan/decisions/target-environment.md`). Firefox and WebKit failures are recorded in `plan/reviews/phase-3-browsers.md` |
 

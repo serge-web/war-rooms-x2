@@ -147,10 +147,14 @@ async function focusIsVisible(page: Page): Promise<string | undefined> {
   })
 }
 
-/** Presses Tab until `target` is focused, checking the focus indicator at every stop. */
-async function tabTo(page: Page, target: Locator, max = 60): Promise<void> {
+/**
+ * Presses Tab (or Shift+Tab, `backward`) until `target` is focused, checking the focus indicator
+ * at every stop. Past the page's last stop Chromium wraps to its first, but Firefox leaves focus
+ * in its own controls; so a control earlier on the page is reached backward, not by wrapping.
+ */
+async function tabTo(page: Page, target: Locator, max = 60, backward = false): Promise<void> {
   for (let i = 0; i < max; i++) {
-    await page.keyboard.press('Tab')
+    await page.keyboard.press(backward ? 'Shift+Tab' : 'Tab')
     expect(await focusIsVisible(page)).toBeUndefined()
     if (await target.evaluate((el) => el === document.activeElement)) return
   }
@@ -229,7 +233,8 @@ test.describe('keyboard only', () => {
       'Sent from the keyboard.',
     )
 
-    await tabTo(page, page.getByRole('button', { name: 'Log out' }), 120)
+    // Back from the composer to the header's Log out.
+    await tabTo(page, page.getByRole('button', { name: 'Log out' }), 120, true)
     await page.keyboard.press('Enter')
     await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
   })

@@ -5,6 +5,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { asMockAdmin, logIn } from './mock.ts'
+import { isBrowserNotice } from './notices.ts'
 
 const ROOMS = { blue: 'Blue HQ', red: 'Red HQ', talks: 'Blue–Red negotiation' } as const
 
@@ -20,7 +21,9 @@ function watchErrors(page: Page): string[] {
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
   })
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => {
+    if (!isBrowserNotice(e.message)) errors.push(e.message)
+  })
   return errors
 }
 

@@ -7,11 +7,19 @@
 import { test as base, expect } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import { DOMAIN } from '../mock.ts'
-import { ejabberdServer, nodeTransport, publishDemoGame, resetServer } from './ejabberd-game.ts'
+import { DEMO_VAULT_PASSPHRASE } from '@wrx/mock-server'
+import {
+  SCENARIO_VAULT_PASSPHRASE,
+  ejabberdServer,
+  nodeTransport,
+  publishDemoGame,
+  resetServer,
+} from './ejabberd-game.ts'
 import type { EjabberdServer } from './ejabberd-game.ts'
 import { cuttableLink } from './link.ts'
 import type { CuttableLink } from './link.ts'
 import { rawRun } from './raw.ts'
+import { isBrowserNotice } from '../notices.ts'
 import type { RawStep } from './raw.ts'
 
 export type BackendKind = 'mock' | 'ejabberd'
@@ -24,6 +32,8 @@ export interface Backend {
   password(id: string): string
   /** The badge the app shows for this backend. */
   readonly badge: string
+  /** The passphrase of the demo game's observer vault on this backend. */
+  readonly vaultPassphrase: string
   /**
    * Logs in as `username` with a client other than the app and runs the steps: as the admin,
    * or as a role (a modified client, SC-4). In the page on the mock (it lives there), in Node
@@ -122,6 +132,7 @@ export const test = base.extend<ScenarioFixtures, WorkerFixtures>({
           kind: 'mock',
           domain: DOMAIN,
           badge: 'Backend: MOCK',
+          vaultPassphrase: DEMO_VAULT_PASSPHRASE,
           password: (id) => `demo-${id}`,
           raw: async (page, username, steps) => {
             await page.waitForFunction(() => window.wrxMock !== undefined)
@@ -155,6 +166,7 @@ export const test = base.extend<ScenarioFixtures, WorkerFixtures>({
         kind: 'ejabberd',
         domain: server.endpoint.domain,
         badge: 'Backend: Reference ejabberd',
+        vaultPassphrase: SCENARIO_VAULT_PASSPHRASE,
         password,
         raw: (_page, username, steps) =>
           rawRun(
@@ -207,6 +219,8 @@ export function watchErrors(page: Page): string[] {
   page.on('console', (m) => {
     if (m.type() === 'error' && !SOCKET_REPORT.test(m.text())) errors.push(m.text())
   })
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => {
+    if (!isBrowserNotice(e.message)) errors.push(e.message)
+  })
   return errors
 }
