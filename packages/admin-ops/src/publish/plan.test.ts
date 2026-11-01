@@ -777,3 +777,80 @@ describe('a server published before GUID ids (merge record N3)', () => {
     expect(ids(plan).some((i) => i.includes('templates'))).toBe(false)
   })
 })
+
+describe('a published role’s login name is fixed (ADM-5, WP 3.4)', () => {
+  const published = publishedView(sampleDesignWithWhiteCell())
+  const renamed = (to: string) =>
+    edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) => (r.loginName === 'blue-co' ? { ...r, loginName: to } : r)),
+    }))
+
+  it('refuses a changed login name with an error naming the role, both names and the remedy', () => {
+    const plan = planPublish(renamed('blue-commander'), published)
+    expect(plan.errors).toEqual([
+      expect.objectContaining({
+        kind: 'login-name-changed',
+        roleId: tid('blue-co'),
+        name: 'Blue CO',
+        from: 'blue-co',
+        to: 'blue-commander',
+      }),
+    ])
+    const message = plan.errors[0]?.message ?? ''
+    expect(message).toContain('Blue CO')
+    expect(message).toContain('blue-co')
+    expect(message).toContain('blue-commander')
+    expect(message).toMatch(/delete the role and add a new one/)
+  })
+
+  it('plans nothing: never a new account and a deleted one', () => {
+    const plan = planPublish(renamed('blue-commander'), published)
+    expect(plan.steps).toEqual([])
+    expect(plan.warnings).toEqual([])
+    expect(plan.designVersion).toBeUndefined()
+    expect(plan.documentsChange).toBe(false)
+  })
+
+  it('names every role whose login name changes', () => {
+    const design = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) =>
+        r.loginName === 'blue-co'
+          ? { ...r, loginName: 'blue-1' }
+          : r.loginName === 'red-co'
+            ? { ...r, loginName: 'red-1' }
+            : r,
+      ),
+    }))
+    expect(planPublish(design, published).errors.map((e) => [e.from, e.to])).toEqual([
+      ['blue-co', 'blue-1'],
+      ['red-co', 'red-1'],
+    ])
+  })
+
+  it('allows the remedy: the role deleted and a new one added with the new login name', () => {
+    const design = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) =>
+        r.loginName === 'blue-co'
+          ? { ...r, id: tid('blue-commander'), loginName: 'blue-commander' }
+          : r,
+      ),
+      rooms: d.rooms.map((room) => ({
+        ...room,
+        participants: room.participants.map((p) =>
+          p.id === tid('blue-co') ? { ...p, id: tid('blue-commander') } : p,
+        ),
+      })),
+    }))
+    const plan = planPublish(design, published)
+    expect(plan.errors).toEqual([])
+    expect(ids(plan)).toContain('account:blue-commander')
+    expect(ids(plan)).toContain('delete-role:blue-co')
+  })
+
+  it('an unpublished role’s login name may still change', () => {
+    expect(planPublish(renamed('blue-commander'), emptyView()).errors).toEqual([])
+  })
+})

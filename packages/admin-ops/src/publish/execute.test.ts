@@ -9,6 +9,7 @@ import type { PlanStep, PublishPlan } from './plan.ts'
 function planOf(steps: readonly PlanStep[]): PublishPlan {
   return {
     kind: 'publish',
+    errors: [],
     steps,
     designVersion: undefined,
     publishedVersion: undefined,
@@ -42,6 +43,34 @@ describe('executePlan', () => {
     expect(result.failed?.error.code).toBe('exists')
     expect(ops(log)).not.toContain('admin.admin.changePassword')
     expect(result.passwordsSet).toEqual([])
+  })
+
+  it('runs nothing of a plan with errors, whatever steps it carries (ADM-5)', async () => {
+    const { ops: adminOps, log } = await rig()
+    const plan: PublishPlan = {
+      ...planOf([createBlueCo]),
+      errors: [
+        {
+          kind: 'login-name-changed',
+          roleId: 'r',
+          name: 'Blue CO',
+          from: 'blue-co',
+          to: 'blue-1',
+          message: 'fixed',
+        },
+      ],
+    }
+    const result = await executePlan(adminOps, plan, {
+      passwordFor: () => 'pw',
+      confirmed: new Set(),
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      done: [],
+      failed: { stepId: 'error:login-name-changed', error: { code: 'invalid' } },
+      notRun: ['account:blue-co'],
+    })
+    expect(log).toEqual([])
   })
 })
 

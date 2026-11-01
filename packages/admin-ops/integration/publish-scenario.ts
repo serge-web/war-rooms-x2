@@ -438,6 +438,43 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
     })
 
+    describe('2b. a design that changes a published role’s login name is refused (ADM-5)', () => {
+      const renamed = (): DesignFile => {
+        const base = sampleDesignWithWhiteCell()
+        return {
+          ...base,
+          roles: base.roles.map((r) =>
+            r.loginName === 'blue-co' ? { ...r, loginName: 'blue-commander' } : r,
+          ),
+        }
+      }
+
+      it('plans an error naming the role, both login names and the remedy, and no step', async () => {
+        const refused = await plan(renamed())
+        expect(refused.steps).toEqual([])
+        expect(refused.errors).toHaveLength(1)
+        expect(refused.errors[0]).toMatchObject({
+          kind: 'login-name-changed',
+          roleId: tid('blue-co'),
+          from: 'blue-co',
+          to: 'blue-commander',
+        })
+        expect(refused.errors[0]?.message).toMatch(/delete the role and add a new one/)
+        const result = await apply(refused)
+        expect(result).toMatchObject({ ok: false, done: [] })
+      })
+
+      it('the server is unchanged: the old account works, no new one exists', async () => {
+        const blue = await login('blue-co')
+        expect(blue.jid.startsWith('blue-co@')).toBe(true)
+        const attempt = await connect('blue-commander', 'any-password-at-all')
+        if (attempt.ok) await attempt.value.disconnect()
+        expect(attempt.ok).toBe(false)
+        expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+        await closeAll()
+      })
+    })
+
     describe('3. a change published while players are online', () => {
       let changed: PublishPlan | undefined
       let result: ExecutionResult | undefined

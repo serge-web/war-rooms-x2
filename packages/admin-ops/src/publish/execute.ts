@@ -74,6 +74,19 @@ export async function executePlan(
       notes,
     }
   }
+  // A plan with errors (ADM-5) runs nothing, whatever steps it carries.
+  const planError = plan.errors[0]
+  if (planError !== undefined) {
+    const error = opsErr('invalid', planError.message, { target: planError.roleId }).error
+    return {
+      ok: false,
+      done,
+      failed: { stepId: `error:${planError.kind}`, error },
+      notRun: plan.steps.map((s) => s.id),
+      passwordsSet,
+      notes,
+    }
+  }
   if (plan.steps.length === 0) return { ok: true, done, notRun: [], passwordsSet, notes }
 
   // Every confirmation is checked before the first step, so a refusal changes nothing.
