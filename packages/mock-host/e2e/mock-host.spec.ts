@@ -4,10 +4,12 @@
 import { expect, test } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import './app/hooks.ts'
+import { ROOM as SAMPLE_ROOM } from '../../schemas/src/fixtures.ts'
 
 type Mode = 'shared-worker' | 'leader'
 const MODES: readonly Mode[] = ['shared-worker', 'leader']
-const ROOM = 'negotiation'
+// The demo seed's negotiation room, by its fixed GUID (§3 rule 1).
+const ROOM = SAMPLE_ROOM.negotiation
 
 async function openTab(context: BrowserContext, mode: Mode, deployment = '/dep-a/') {
   const page = await context.newPage()

@@ -4,6 +4,7 @@
 // unread badge on it. Width is the client's own, so multi-client panes switch on theirs.
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
+import { FORCE } from '@wrx/schemas/fixtures'
 import { columnTab, logIn, roomTabs } from './mock.ts'
 
 const WIDE = { width: 1400, height: 900 }
@@ -94,12 +95,12 @@ test('the column keeps its state when it becomes a tab and back (FT-1)', async (
   await expect(region.getByRole('textbox', { name: 'New announcement' })).toHaveValue(
     'Draft: break at 10:30',
   )
-  await expect(region.getByLabel('Show objectives for')).toHaveValue('red')
+  await expect(region.getByLabel('Show objectives for')).toHaveValue(FORCE.red)
   await expect(region.getByRole('region', { name: 'Red objectives' })).toContainText('Delay Blue')
 
   await page.setViewportSize(WIDE)
   await expect(box).toHaveValue('Draft: break at 10:30')
-  await expect(panel.getByLabel('Show objectives for')).toHaveValue('red')
+  await expect(panel.getByLabel('Show objectives for')).toHaveValue(FORCE.red)
 })
 
 test('an announcement that arrives while the tab is hidden shows an unread badge on it (FT-1, PLY-38)', async ({

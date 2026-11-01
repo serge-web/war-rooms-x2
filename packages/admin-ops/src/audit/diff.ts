@@ -13,7 +13,7 @@
 //   affiliations other than `member`, node affiliations that grant nothing the planner models
 //   (`owner`, `publish-only`), JIDs that are no role account, and `game-setup` without its version.
 import { DOCUMENT_ITEM_ID } from '@wrx/domain'
-import { RESERVED_ROLE_IDS, SINGLETON_NODES, parseNodeName } from '@wrx/schemas'
+import { RESERVED_LOGIN_NAMES, SINGLETON_NODES, parseNodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import type { MucRole, NodeConfig, RoomConfig } from '@wrx/transport'
 import { bareJid, domainpart, localpart } from '@wrx/domain'
@@ -219,12 +219,15 @@ export function repairRank(action: StepAction): number {
     case 'room-access':
     case 'node-access':
       return action.changes.some((c) => c.access !== 'none') ? 3 : 4
-    case 'publish':
+    // A purge runs before the publish that puts the admin's objectives back (D21).
+    case 'purge-node':
       return 5
+    case 'publish':
+      return 6
     case 'delete-role':
     case 'destroy-room':
     case 'delete-node':
-      return 6
+      return 7
   }
 }
 
@@ -274,7 +277,7 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     const bare = bareJid(jid)
     if (domainpart(bare) !== domain) continue
     const local = localpart(bare) ?? ''
-    if (RESERVED_ROLE_IDS.includes(local)) continue
+    if (RESERVED_LOGIN_NAMES.includes(local)) continue
     const id = roleIdOf(bare, domain)
     if (id !== undefined) {
       registered.add(id)
@@ -285,7 +288,7 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
       kind: 'account-unknown',
       target: bare,
       expected: 'no account that is not a role',
-      found: 'an account whose name is not a role id',
+      found: 'an account whose name is no role’s login name',
       severity: 'high',
       repair: [],
       note: 'The tooling only deletes role accounts; remove this one with the server’s own tools.',
@@ -375,10 +378,16 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     })
   }
 
+  const purged = new Set(
+    plan.steps.flatMap((s) => (s.action.type === 'purge-node' ? [s.action.node] : [])),
+  )
   for (const step of plan.steps) {
     roomAccessItems(step, view, roleName, out)
     nodeAccessItems(step, view, roleName, out)
-    documentItems(step, view, out)
+    strayItems(step, plan.steps, out)
+    if (step.action.type !== 'publish' || !purged.has(step.action.node)) {
+      documentItems(step, view, out)
+    }
     removalItems(step, view, input.messageCounts, out)
   }
 
@@ -531,15 +540,48 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     found: `${view.nodes.length} node names, listable by anyone, even without logging in`,
     severity: 'info',
     repair: [],
-    note: 'Force, role, room and asset ids are part of node names (ADM-42, R17). Node contents stay protected.',
+    note: 'Node names carry only GUIDs (§3 rule 1), so they show how many forces, roles, rooms and assets there are, not their names (ADM-42, R17). Node contents stay protected.',
   })
 
+  const named = nameTargets(design, published)
   return {
-    items: sortItems(out.items()),
+    items: sortItems(out.items()).map((item) => {
+      const name = named(item.target)
+      return name === undefined ? item : { ...item, targetName: name }
+    }),
     vault: vaultState(view, plannedVoice),
     voiceChecked: input.voice.filter((r) => r.role !== undefined).length,
     publishedVersion: published.game?.designVersion,
     online: view.online,
+  }
+}
+
+/**
+ * Readable names for the audit's targets: entity GUIDs mean nothing to the admin (§3 rule 1).
+ * Names come from the design, else from the server's documents.
+ */
+function nameTargets(
+  design: DesignFile,
+  published: ReturnType<typeof publishedDesign>,
+): (target: string) => string | undefined {
+  const names = new Map<string, string>()
+  for (const list of [
+    published.forces,
+    published.rooms,
+    published.roles,
+    design.forces,
+    design.rooms,
+    design.roles,
+  ]) {
+    for (const entity of list) names.set(entity.id, entity.name)
+  }
+  return (target) => {
+    const room = names.get(target)
+    if (room !== undefined) return room
+    const ref = parseNodeName(target)
+    if (ref === undefined || ref.kind === 'singleton') return undefined
+    const name = names.get(ref.id)
+    return name === undefined ? undefined : `${ref.kind}: ${name}`
   }
 }
 
@@ -566,6 +608,7 @@ const KIND_ORDER: readonly AuditKind[] = Object.freeze([
   'node-missing',
   'room-extra',
   'node-extra',
+  'stray-items',
   'document',
   'writers-unchecked',
   'design-version',
@@ -715,6 +758,29 @@ function nodeAccessItems(
       })
     }
   }
+}
+
+/**
+ * Items on an objectives node that are not the admin's (D21, §3 rule 14): a White Force editor's
+ * from a publish before WP 3.5, or text the design no longer has. The repair is the planner's:
+ * purge the node, then publish the admin's item again, in that order (`repairRank`).
+ */
+function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): void {
+  const action = step.action
+  if (action.type !== 'purge-node') return
+  const republish = steps
+    .map((s) => s.action)
+    .filter((a) => a.type === 'publish' && a.node === action.node)
+  out.add({
+    id: `stray-items:${action.node}`,
+    kind: 'stray-items',
+    target: action.node,
+    expected: 'the admin’s item only: only the admin publishes objectives (D21)',
+    found: `${action.stray.length === 1 ? 'an item' : `${action.stray.length} items`} the design does not hold: ${action.stray.join(', ')}`,
+    severity: 'medium',
+    repair: [action, ...republish],
+    note: 'Repair removes every item, then publishes the admin’s again. The game client shows the admin’s item only, but other XMPP clients of the force’s roles read the rest.',
+  })
 }
 
 function documentItems(step: PlanStep, view: ServerView, out: Builder): void {

@@ -154,7 +154,7 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
         <>
           {connection.kind === 'mock' && (
             <Notice title="Mock server.">
-              New roles get known demo passwords (demo-&lt;login id&gt;), which are not secret. A
+              New roles get known demo passwords (demo-&lt;login name&gt;), which are not secret. A
               real server gets random passwords.
               {connection.demoVaultPassphrase !== undefined && (
                 <DemoPassphrase passphrase={connection.demoVaultPassphrase} />
@@ -303,8 +303,6 @@ function warningText(w: PlanWarning): string {
       return `${w.name} gets a new password: the vault must hold it to make the role read-only. Its players need the new password at their next login.`
     case 'account-exists':
       return `The account of ${w.name} (${w.roleId}) already exists, so it is not created and its password is not changed. If its players do not have the password, reset it from the credentials sheet.`
-    case 'objectives-kept':
-      return `The objectives of force ${w.forceId} were removed from the draft, but the published text stays: no operation retracts it.`
   }
 }
 
@@ -506,12 +504,13 @@ export interface CredentialsSheetProps {
   readonly published: readonly string[]
   readonly credentials: readonly Credential[]
   readonly busy: boolean
-  readonly onReset: (roleId: string) => Promise<string | undefined>
+  /** Resets a role's password, by login name (the account). */
+  readonly onReset: (loginName: string) => Promise<string | undefined>
   readonly print?: () => void
 }
 
 /**
- * ADM-26: role, force, login id and password, for the passwords issued in this browser session.
+ * ADM-26: role, force, login name and password, for the passwords issued in this browser session.
  * Generated on demand from memory, never stored; printed with print CSS that hides the rest of
  * the page.
  */
@@ -560,7 +559,7 @@ export function CredentialsSheet({
               <tr>
                 <th scope="col">Role</th>
                 <th scope="col">Force</th>
-                <th scope="col">Login id</th>
+                <th scope="col">Login name</th>
                 <th scope="col">Password</th>
                 <th scope="col" className="wrx-print-hide">
                   Actions
@@ -569,14 +568,15 @@ export function CredentialsSheet({
             </thead>
             <tbody>
               {roles.map((role) => {
-                const credential = passwordOf.get(role.id)
+                // Passwords belong to accounts, so the book is keyed by login name.
+                const credential = passwordOf.get(role.loginName)
                 const error = errors.get(role.id)
                 return (
                   <tr key={role.id}>
                     <th scope="row">{role.name}</th>
                     <td>{forceName(role.forceId)}</td>
                     <td>
-                      <code>{role.id}</code>
+                      <code>{role.loginName}</code>
                     </td>
                     <td>
                       {credential === undefined ? (
@@ -593,7 +593,7 @@ export function CredentialsSheet({
                         disabled={busy}
                         aria-label={`Reset the password of ${role.name}`}
                         onClick={() => {
-                          void onReset(role.id).then((problem) => {
+                          void onReset(role.loginName).then((problem) => {
                             const next = new Map(errors)
                             if (problem === undefined) next.delete(role.id)
                             else next.set(role.id, problem)

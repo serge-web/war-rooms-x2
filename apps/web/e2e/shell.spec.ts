@@ -43,7 +43,7 @@ test('the build runs under its Content-Security-Policy, with no violation (F7)',
   expect(csp).not.toContain('unsafe-eval')
   expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
   await expect(page.getByRole('heading', { name: 'Exercise Northern Gate' })).toBeVisible()
-  await page.getByLabel('Role id').fill('blue-co')
+  await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in' }).click()
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()

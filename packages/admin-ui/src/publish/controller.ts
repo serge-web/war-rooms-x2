@@ -10,6 +10,7 @@ import {
   knownRoles,
   preparePublish,
   prepareReset,
+  publishedDesign,
   targetState,
 } from '@wrx/admin-ops'
 import type {
@@ -23,7 +24,7 @@ import type {
   StepState,
 } from '@wrx/admin-ops'
 import type { Draft } from '../draft/index.ts'
-import { markPublished, markRolesPublished } from '../draft/index.ts'
+import { markPublished, markRolesPublished, mergeRetired } from '../draft/index.ts'
 
 /** How the admin UI reaches the server; the host builds it after the admin logs in. */
 export interface PublishConnection {
@@ -156,7 +157,7 @@ export class PublishController {
     this.book.subscribe(() => {
       this.set({ credentials: this.book.list() })
     })
-    this.knowDemoPasswords(this.getDraft().meta.publishedRoleIds)
+    this.knowDemoPasswords(publishedLogins(this.getDraft()))
   }
 
   /**
@@ -164,9 +165,9 @@ export class PublishController {
    * other there, and the demo seed starts with them. So the sheet shows them for published roles
    * without a reset. Nothing on a real server.
    */
-  private knowDemoPasswords(roleIds: readonly string[]): void {
+  private knowDemoPasswords(loginNames: readonly string[]): void {
     if (this.connection.kind !== 'mock') return
-    for (const roleId of roleIds) {
+    for (const roleId of loginNames) {
       if (this.book.get(roleId) !== undefined) continue
       this.book.restore({
         roleId,
@@ -229,10 +230,14 @@ export class PublishController {
     let planned = draft
     if (kind === 'publish') {
       // Roles the server already has are published, whichever browser published them (or the
-      // mock's demo seed): their login ids are fixed (ADM-5) and the sheet lists them.
-      planned = markRolesPublished(draft, knownRoles(view))
+      // mock's demo seed): their login names are fixed (ADM-5) and the sheet lists them. The
+      // server's deleted-role records keep their login names from new roles (§3 rule 1).
+      planned = mergeRetired(
+        markRolesPublished(draft, knownRoles(view)),
+        publishedDesign(view).retired,
+      )
       if (planned !== draft) this.commit(planned)
-      this.knowDemoPasswords(planned.meta.publishedRoleIds)
+      this.knowDemoPasswords(publishedLogins(planned))
     }
     this.set({
       busy: undefined,
@@ -286,7 +291,7 @@ export class PublishController {
     if (!result.ok) return
     const draft = this.getDraft()
     if (plan.kind === 'publish') {
-      // The draft now matches the server: its roles' login ids are fixed (ADM-5), and it carries
+      // The draft now matches the server: its roles' login names are fixed (ADM-5), and it carries
       // the published version, so the next change is published as the one after it.
       const version = plan.designVersion ?? draft.design.game.designVersion
       this.commit(
@@ -297,7 +302,7 @@ export class PublishController {
       )
     } else {
       // After a reset the next publish starts a new design version, so saved layouts of the old
-      // game are not reused (PLY-5). Ids stay retired (§3 rule 1).
+      // game are not reused (PLY-5). The draft keeps its `retired` records (§3 rule 1).
       const version = Math.max(plan.publishedVersion ?? 0, draft.design.game.designVersion) + 1
       this.commit({
         ...draft,
@@ -314,6 +319,12 @@ export class PublishController {
     if (!after.ok) {
       this.set({ error: `Reading the server back failed: ${describeError(after.error)}` })
       return
+    }
+    // The publish may have recorded deleted entities the draft did not (§3 rule 1).
+    if (plan.kind === 'publish') {
+      const current = this.getDraft()
+      const merged = mergeRetired(current, publishedDesign(after.value.view).retired)
+      if (merged !== current) this.commit(merged)
     }
     this.set({
       checks: await checkServer(this.connection.ops, after.value.view),
@@ -431,6 +442,7 @@ export class PublishController {
    * vault. Resolves with an error message, or undefined.
    */
   async resetPassword(roleId: string): Promise<string | undefined> {
+    // `roleId` is the login name: passwords belong to accounts (§3 rule 1).
     if (this.snapshot.busy !== undefined) return 'busy'
     const readOnly =
       targetState(this.getDraft().design).readOnlyRoles.includes(roleId) ||
@@ -469,4 +481,11 @@ function vaultMessage(error: AdminOpsError): string {
     default:
       return describeError(error)
   }
+}
+
+/** Login names of the draft's published roles: the credentials book is keyed by account. */
+function publishedLogins(draft: Draft): string[] {
+  return draft.design.roles
+    .filter((r) => draft.meta.publishedRoleIds.includes(r.id))
+    .map((r) => r.loginName)
 }

@@ -3,7 +3,7 @@
 // changes nothing. The planner itself (plan.ts) is pure over this view, so it is unit-tested
 // without a server.
 import { bareJid, domainpart, localpart } from '@wrx/domain'
-import { isReservedRoleId, slugSchema } from '@wrx/schemas'
+import { isReservedLoginName, slugSchema } from '@wrx/schemas'
 import type { Item } from '@wrx/transport'
 import { opsErr, opsOk } from '../errors.ts'
 import type { OpsOutcome } from '../errors.ts'
@@ -45,7 +45,7 @@ export function roleIdOf(jid: string, domain: string): string | undefined {
   const bare = bareJid(jid)
   if (!bare.endsWith(`@${domain}`)) return undefined
   const id = localpart(bare)
-  if (id === undefined || isReservedRoleId(id)) return undefined
+  if (id === undefined || isReservedLoginName(id)) return undefined
   return slugSchema.safeParse(id).success ? id : undefined
 }
 

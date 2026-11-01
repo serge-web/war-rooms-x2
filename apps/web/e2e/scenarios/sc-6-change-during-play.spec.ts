@@ -8,6 +8,7 @@
 // message being typed) untouched. Then the admin deletes Red CO, who is told and logged out.
 // Both backends; on ejabberd the admin first imports the published design (admin.ts).
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { columns } from '../layout.ts'
 import { openAdminOnDemo, openSection, plan, publishPlan } from './admin.ts'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
@@ -69,8 +70,8 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   const order = await region
     .locator('li[data-step]')
     .evaluateAll((all) => all.map((li) => li.getAttribute('data-step')))
-  const grant = order.indexOf('grant-room:red-hq')
-  const revoke = order.indexOf('revoke-room:blue-hq')
+  const grant = order.indexOf(`grant-room:${ROOM.redHq}`)
+  const revoke = order.indexOf(`revoke-room:${ROOM.blueHq}`)
   expect(grant, order.join(' ')).toBeGreaterThanOrEqual(0)
   expect(revoke, order.join(' ')).toBeGreaterThan(grant)
 
@@ -90,11 +91,11 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
     Object.assign(window, { wrxTabsSeen: seen })
   })
   await publishPlan(admin)
-  await expect(region.locator('li[data-step="grant-room:red-hq"]')).toHaveAttribute(
+  await expect(region.locator(`li[data-step="grant-room:${ROOM.redHq}"]`)).toHaveAttribute(
     'data-state',
     'done',
   )
-  await expect(region.locator('li[data-step="revoke-room:blue-hq"]')).toHaveAttribute(
+  await expect(region.locator(`li[data-step="revoke-room:${ROOM.blueHq}"]`)).toHaveAttribute(
     'data-state',
     'done',
   )

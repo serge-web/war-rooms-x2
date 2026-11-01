@@ -200,7 +200,7 @@ export async function openApp(page: Page, backend: Backend, path = './'): Promis
 
 /** Logs in on the welcome page as a demo role (or the admin) with its password. */
 export async function logInAs(page: Page, backend: Backend, id: string): Promise<void> {
-  await page.getByLabel('Role id').fill(id)
+  await page.getByLabel('Login name').fill(id)
   await page.getByLabel('Password', { exact: true }).fill(backend.password(id))
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
 }

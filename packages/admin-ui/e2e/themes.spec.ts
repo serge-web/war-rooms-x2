@@ -3,6 +3,7 @@
 // appears without blocking the save, and each preview pane themes on its own (PLY-26).
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
+import { ASSET, FORCE } from '@wrx/schemas/fixtures'
 
 async function openThemes(page: Page) {
   await page.goto('./')
@@ -98,7 +99,11 @@ test('an uploaded SVG has its script removed before it is stored', async ({ page
     }
     return values.find((v) => v.includes('wrx1-design'))
   })
-  expect(draft).toContain('"logoAssetId":"game-logo-2"')
+  // A new asset id, a GUID (§3 rule 1), in place of the seed's logo.
+  expect(draft).toMatch(
+    /"logoAssetId":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"/,
+  )
+  expect(draft).not.toContain(`"logoAssetId":"${ASSET.gameLogo}"`)
 })
 
 test('a contrast warning appears and the theme is still saved', async ({ page }) => {
@@ -123,7 +128,7 @@ test(
   { tag: '@screenshot' },
   async ({ page }, testInfo) => {
     await openThemes(page)
-    await page.getByLabel('Theme for').selectOption('force:blue')
+    await page.getByLabel('Theme for').selectOption(`force:${FORCE.blue}`)
     await page.getByLabel('Primary', { exact: true }).fill('#065f46')
     const force = scope(pane(page, /^Force panel: Blue/))
     await expect.poll(() => cssVar(force, '--wrx-primary')).toBe('#065f46')
@@ -133,8 +138,8 @@ test(
       .getByRole('group', { name: 'Live preview' })
       .screenshot({ path: testInfo.outputPath('force-themed.png') })
 
-    await page.getByLabel('Theme for').selectOption('force:red')
-    await page.getByLabel('Copy theme from').selectOption('force:blue')
+    await page.getByLabel('Theme for').selectOption(`force:${FORCE.red}`)
+    await page.getByLabel('Copy theme from').selectOption(`force:${FORCE.blue}`)
     await page.getByRole('button', { name: 'Copy theme' }).click()
     const red = scope(pane(page, /^Force panel: Red/))
     await expect.poll(() => cssVar(red, '--wrx-primary')).toBe('#065f46')

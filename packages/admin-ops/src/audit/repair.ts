@@ -51,6 +51,7 @@ const GROUP_OF_RANK: readonly StepGroup[] = Object.freeze([
   'access',
   'access',
   'documents',
+  'documents',
   'removals',
 ])
 

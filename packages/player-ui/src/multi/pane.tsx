@@ -83,10 +83,11 @@ function PlayerPane(props: ClientPaneProps & { readonly name: string }) {
   const { connection, demoLogins, autoLogin, onLogin, name } = props
   const session = usePlayerSession(connection)
   const store = session.state.phase === 'signed-in' ? session.state.store : undefined
+  // The login name the pane is signed in as (`admin` for the admin): what a preset keeps.
   const roleId =
     store === undefined
       ? undefined
-      : (store.identity.roleId ?? (store.identity.isAdmin ? 'admin' : undefined))
+      : (store.identity.loginName ?? (store.identity.isAdmin ? 'admin' : undefined))
 
   const report = useRef(onLogin)
   report.current = onLogin

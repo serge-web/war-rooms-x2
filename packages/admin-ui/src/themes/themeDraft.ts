@@ -7,7 +7,7 @@ import type { Asset, DesignFile, Force, Room, Theme, ThemeTokens } from '@wrx/sc
 import { isEmptyTheme, resolveTheme } from '@wrx/theme'
 import type { ResolvedTheme, TokenName } from '@wrx/theme'
 import type { Draft } from '../draft/index.ts'
-import { slugify, uniqueSlug } from '../draft/index.ts'
+import { newEntityId } from '@wrx/schemas'
 
 export type ThemeTarget =
   | { readonly kind: 'game' }
@@ -160,13 +160,9 @@ export function resetTheme(draft: Draft, target: ThemeTarget): Draft {
   return setTheme(draft, target, undefined)
 }
 
-/** A fresh asset id for the target's logo or icon, e.g. `force-blue-logo`. */
-export function newAssetId(design: DesignFile, target: ThemeTarget, image: ThemeImage): string {
-  const base =
-    target.kind === 'game'
-      ? `game-${image}`
-      : slugify(`${target.kind}-${target.id}-${image}`, image)
-  return uniqueSlug(base, new Set(design.assets.map((a) => a.id)))
+/** A fresh asset id: a GUID (§3 rule 1), unique by construction. */
+export function newAssetId(): string {
+  return newEntityId()
 }
 
 /** Adds an asset, replacing any asset with the same id. */

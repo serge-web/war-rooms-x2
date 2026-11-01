@@ -82,7 +82,7 @@ export async function asMockAdmin(page: Page, ops: readonly AdminOp[]): Promise<
 
 /** Logs in on the welcome page with a role id and password. */
 export async function logIn(page: Page, roleId: string, password: string): Promise<void> {
-  await page.getByLabel('Role id').fill(roleId)
+  await page.getByLabel('Login name').fill(roleId)
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in' }).click()
 }

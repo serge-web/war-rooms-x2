@@ -9,7 +9,16 @@
 // - Getters return frozen snapshots that keep their identity until something they depend on
 //   changes, so they can be passed straight to `useSyncExternalStore`.
 import { LIMITS, SINGLETON_NODES, checkItemSize, parseDocument } from '@wrx/schemas'
-import type { Announcement, Asset, Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
+import type {
+  Announcement,
+  Asset,
+  Force,
+  GameSetup,
+  Objectives,
+  Retired,
+  Role,
+  Room,
+} from '@wrx/schemas'
 import type {
   ConnectionStatus,
   EndReason,
@@ -24,7 +33,13 @@ import type {
 } from '@wrx/transport'
 import { byOrderThenId, effectiveAccess, roomsForRole } from './access.ts'
 import type { AccessMatrix } from './access.ts'
-import { DOCUMENT_ITEM_ID, documentValue, nodeSpec, parseItem, safeNodeName } from './documents.ts'
+import {
+  OBJECTIVES_ITEM_ID,
+  documentValue,
+  nodeSpec,
+  parseItem,
+  safeNodeName,
+} from './documents.ts'
 import type { DocumentValues, LiveDocument, NodeSpec } from './documents.ts'
 import { domainErr, domainOk, fromTransport } from './errors.ts'
 import type { DomainError, DomainResult } from './errors.ts'
@@ -63,8 +78,11 @@ export interface Identity {
   readonly jid: string
   readonly bareJid: string
   readonly domain: string
-  /** The role id (the JID's local part), or `undefined` for the admin and anonymous sessions. */
-  readonly roleId: string | undefined
+  /**
+   * The role's login name (the JID's local part), or `undefined` for the admin and anonymous
+   * sessions. The role itself, and its GUID, come from the role documents: `Me.role`.
+   */
+  readonly loginName: string | undefined
   /** The server's `admin` account (D3). The server, not this flag, enforces admin rights. */
   readonly isAdmin: boolean
   readonly anonymous: boolean
@@ -79,8 +97,8 @@ export interface Me {
   readonly isUmpire: boolean
   readonly isObserver: boolean
   /**
-   * May edit every force's objectives: the admin and White Force roles that are not observers
-   * (PLY-35, §3 rule 14). White Force observers read them only.
+   * May edit every force's objectives: the admin only (PLY-35, §3 rule 14, D21). Every White
+   * Force role reads them, and none edits.
    */
   readonly canEditObjectives: boolean
   /**
@@ -91,15 +109,20 @@ export interface Me {
 }
 
 /**
- * Display data for a message author, resolved live from role and force documents (§3 rule 6).
- * The admin is listed under ADMIN_AUTHOR_ID as the umpire, in the White Force.
+ * Display data for a message author, resolved live from role and force documents by the
+ * author's login name (§3 rule 6). The admin is listed under ADMIN_AUTHOR_ID as the umpire, in
+ * the White Force. A deleted role is listed from its `retired` record, marked `deleted`.
  */
 export interface Author {
+  /** The role's GUID; ADMIN_AUTHOR_ID for the admin. */
   readonly roleId: string
+  readonly loginName: string
   readonly name: string
   readonly forceId: string
   readonly forceName: string | undefined
   readonly colour: string | undefined
+  /** The role was deleted; `name` is its last name, from `retired` (§3 rule 1, ADM-14). */
+  readonly deleted: boolean
 }
 
 export interface AnnouncementEntry {
@@ -149,7 +172,8 @@ export interface RoomView {
 export interface Occupant {
   readonly nick: string
   readonly jid: string | undefined
-  readonly roleId: string | undefined
+  /** The JID's local part on this game's domain: a role's login name. */
+  readonly loginName: string | undefined
   /** The server's `admin` account, the umpire, from the occupant JID (§3 rule 3). */
   readonly isAdmin: boolean
   readonly role: MucRole
@@ -212,7 +236,10 @@ export interface SessionStore {
   announcements(): Snapshot<readonly AnnouncementEntry[]>
   access(): Snapshot<AccessMatrix>
   me(): Snapshot<Me>
+  /** Login names keyed to authors, deleted roles included (§3 rule 6). */
   authors(): Snapshot<ReadonlyMap<string, Author>>
+  /** The last names of deleted forces and roles (§3 rule 1); never used for access. */
+  retired(): Snapshot<readonly Retired[]>
 
   /** Reference-counted room membership: join and load history on first, leave on last. */
   acquireRoom(roomId: string): Release
@@ -363,7 +390,7 @@ class Store implements SessionStore {
       jid: this.session.jid,
       bareJid: bare,
       domain: domainpart(bare),
-      roleId: this.session.anonymous || isAdmin ? undefined : local,
+      loginName: this.session.anonymous || isAdmin ? undefined : local,
       isAdmin,
       anonymous: this.session.anonymous,
     })
@@ -568,7 +595,7 @@ class Store implements SessionStore {
       const next = new Map<string, NodeItem>()
       const receivedAt = this.clockMs()
       for (const item of fetched.value) {
-        if (touched.has(item.id)) continue
+        if (touched.has(item.id) || !shownItem(spec, item.id)) continue
         const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
         if (doc !== undefined) {
           next.set(item.id, { id: item.id, doc, live: false, receivedAt, arrival: 0 })
@@ -613,13 +640,15 @@ class Store implements SessionStore {
     const spec = entry.spec
     if (!entry.alive || spec === undefined) return
     if (deleted) {
+      // Before the items go: the own role is found from them (by login name).
+      const ownRole = this.isOwnRoleNode(entry.node)
       entry.items.clear()
       entry.touched?.clear()
       entry.touched = undefined
       entry.status = 'error'
       entry.error = { code: 'not-found', message: `${entry.node} was deleted` }
       this.nodeChanged(entry)
-      if (this.isOwnRoleNode(entry.node)) void this.endSession('deleted')
+      if (ownRole) void this.endSession('deleted')
       return
     }
     let changed = false
@@ -630,6 +659,7 @@ class Store implements SessionStore {
     const arrival = ++this.arrivals
     const receivedAt = this.clockMs()
     for (const item of items) {
+      if (!shownItem(spec, item.id)) continue
       const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
       if (doc === undefined) continue
       entry.touched?.add(item.id)
@@ -671,8 +701,15 @@ class Store implements SessionStore {
   }
 
   private isOwnRoleNode(node: string): boolean {
-    const roleId = this.identity.roleId
-    return roleId !== undefined && node === safeNodeName('role', roleId)
+    const role = this.ownRole()
+    return role !== undefined && node === safeNodeName('role', role.id)
+  }
+
+  /** This session's role: the role document whose login name is the session's (§3 rule 1). */
+  private ownRole(): Role | undefined {
+    const login = this.identity.loginName
+    if (login === undefined) return undefined
+    return this.collection('role').find((r) => r.loginName === login)
   }
 
   private async listNodes(): Promise<void> {
@@ -689,8 +726,9 @@ class Store implements SessionStore {
     const desired = new Set<string>([SINGLETON_NODES.gameSetup])
     if (this.identity.anonymous) return desired
     desired.add(SINGLETON_NODES.announcements)
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    // The deleted-entity records, for message authors only; nothing reads them for access.
+    desired.add(SINGLETON_NODES.retired)
+    const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
     for (const node of this.listed) {
@@ -702,8 +740,8 @@ class Store implements SessionStore {
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
-    if (roleId !== undefined) add(safeNodeName('role', roleId))
     if (role !== undefined) {
+      add(safeNodeName('role', role.id))
       add(safeNodeName('force', role.forceId))
       add(safeNodeName('objectives', role.forceId))
     }
@@ -869,8 +907,8 @@ class Store implements SessionStore {
   me(): Snapshot<Me> {
     const matrix = this.access().data
     const rooms = this.collection('room')
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    const role = this.ownRole()
+    const roleId = role?.id
     const forces = this.collection('force')
     // The admin is the umpire, a member of the White Force (glossary, D8).
     const force = this.identity.isAdmin
@@ -894,38 +932,77 @@ class Store implements SessionStore {
         force,
         isUmpire: this.identity.isAdmin || force?.isUmpire === true,
         isObserver: role?.isObserver === true,
-        canEditObjectives: canEditObjectives(this.identity.isAdmin, force, role),
+        canEditObjectives: canEditObjectives(this.identity.isAdmin),
         rooms: Object.freeze(visible),
       })
     })
     return this.memo('me', [me, this.currentStatus], () => this.collectionStatus(me))
   }
 
+  retired(): Snapshot<readonly Retired[]> {
+    const data = this.retiredList()
+    return this.memo('retired', [data, this.currentStatus], () => this.collectionStatus(data))
+  }
+
+  private retiredList(): readonly Retired[] {
+    const entry = this.nodes.get(SINGLETON_NODES.retired)
+    if (entry === undefined) return EMPTY_RETIRED
+    return this.memo('retired-list', [entry, entry.version], () => {
+      const list: Retired[] = []
+      for (const item of entry.items.values()) {
+        // The item id is the entity's GUID; a record under another id is ignored.
+        if (item.doc.kind === 'retired' && item.doc.value.id === item.id) list.push(item.doc.value)
+      }
+      return Object.freeze(list.sort((a, b) => compareStrings(a.id, b.id)))
+    })
+  }
+
   authors(): Snapshot<ReadonlyMap<string, Author>> {
     const forces = this.collection('force')
     const roles = this.collection('role')
-    const map = this.memo('authors-value', [forces, roles], () => {
+    const retired = this.retiredList()
+    const map = this.memo('authors-value', [forces, roles, retired], () => {
       const byForce = new Map(forces.map((f) => [f.id, f]))
       const authors = new Map<string, Author>()
+      // Deleted roles first, so a current role's document wins should a login name ever be in
+      // both (the design check and the editor refuse that, §3 rule 1).
+      for (const record of retired) {
+        if (record.kind !== 'role' || record.loginName === undefined) continue
+        if (record.loginName === ADMIN_AUTHOR_ID) continue
+        authors.set(record.loginName, {
+          roleId: record.id,
+          loginName: record.loginName,
+          name: record.name,
+          forceId: '',
+          forceName: undefined,
+          colour: record.colour,
+          deleted: true,
+        })
+      }
       for (const role of roles) {
+        if (role.loginName === ADMIN_AUTHOR_ID) continue
         const force = byForce.get(role.forceId)
-        authors.set(role.id, {
+        authors.set(role.loginName, {
           roleId: role.id,
+          loginName: role.loginName,
           name: role.name,
           forceId: role.forceId,
           forceName: force?.name,
           colour: force?.colour,
+          deleted: false,
         })
       }
-      // The admin is the umpire, in the White Force. Set last: `admin` is a reserved id, so a
-      // role document claiming it cannot take the umpire's label.
+      // The admin is the umpire, in the White Force. `admin` is a reserved login name, so a role
+      // document claiming it cannot take the umpire's label (skipped above).
       const white = whiteForceOf(forces)
       authors.set(ADMIN_AUTHOR_ID, {
         roleId: ADMIN_AUTHOR_ID,
+        loginName: ADMIN_AUTHOR_ID,
         name: UMPIRE_NAME,
         forceId: white?.id ?? '',
         forceName: white?.name,
         colour: white?.colour,
+        deleted: false,
       })
       return authors
     })
@@ -1010,7 +1087,7 @@ class Store implements SessionStore {
     entry.error = undefined
     this.attachRoom(entry)
     this.roomChanged(entry)
-    const nick = this.identity.roleId ?? localpart(this.identity.bareJid) ?? 'admin'
+    const nick = this.identity.loginName ?? localpart(this.identity.bareJid) ?? 'admin'
     const run = async (): Promise<DomainResult<Joined>> => {
       const joined = await this.session.muc.join(entry.jid, nick)
       if (!current()) return domainErr('not-joined', 'superseded')
@@ -1140,7 +1217,7 @@ class Store implements SessionStore {
     const onDomain = bare !== undefined && domainpart(bare) === this.identity.domain
     const local = onDomain ? localpart(bare) : undefined
     const isAdmin = local === 'admin'
-    return { nick, jid: bare, roleId: isAdmin ? undefined : local, isAdmin }
+    return { nick, jid: bare, loginName: isAdmin ? undefined : local, isAdmin }
   }
 
   private toOccupant(event: OccupantEvent): Occupant {
@@ -1148,7 +1225,7 @@ class Store implements SessionStore {
     return {
       nick: event.nick,
       jid: sender.jid,
-      roleId: sender.roleId,
+      loginName: sender.loginName,
       isAdmin: sender.isAdmin,
       role: event.role,
       affiliation: event.affiliation,
@@ -1364,10 +1441,7 @@ class Store implements SessionStore {
   async publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
     if (!this.me().data.canEditObjectives) {
-      return domainErr(
-        'not-permitted',
-        'only the umpire and White Force roles that are not observers edit objectives (PLY-35)',
-      )
+      return domainErr('not-permitted', 'only the admin, as umpire, edits objectives (PLY-35)')
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
@@ -1378,10 +1452,8 @@ class Store implements SessionStore {
       updatedAt: this.now(),
     })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    // One item per author: ejabberd refuses to let a publisher overwrite another's item, so the
-    // admin and each White Force editor keep their own, and readers take the newest (§3 rule 14).
-    const author = localpart(this.session.jid) ?? DOCUMENT_ITEM_ID
-    return this.publish(node, author, parsed.value, 'Publishing objectives')
+    // The admin's single item, replaced on each edit (§3 rule 14).
+    return this.publish(node, OBJECTIVES_ITEM_ID, parsed.value, 'Publishing objectives')
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -1481,14 +1553,26 @@ function noop(): void {
   return undefined
 }
 
+const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+
 /**
- * The document a node shows. Single-document nodes hold one item, so the last one received is
- * the newest. Objectives hold one item per author (§3 rule 14), so the newest edit has to be
- * picked, and the server gives no order for that: ejabberd returns items in the order they were
- * first created, not last published, and carries no publish time (review F11, probed on
- * ejabberd 26.09). So:
+ * Whether the store takes this item at all. An objectives node shows the admin's item only
+ * (§3 rule 14): a server published before WP 3.5 can still hold White Force editors' items until
+ * the next publish purges them, and those are not the force's objectives.
+ */
+function shownItem(spec: NodeSpec, itemId: string): boolean {
+  return spec.kind !== 'objectives' || itemId === OBJECTIVES_ITEM_ID
+}
+
+/**
+ * The document a node shows. Single-document nodes hold one item, and objectives nodes one too,
+ * the admin's (§3 rule 14; `shownItem` drops any other), so the last one received is the newest.
+ * The ordering below is kept for any node that still holds several items (review F11; ejabberd
+ * returns items in the order they were first created and carries no publish time):
  * - an item that arrived live is newer than any item read by a fetch, and a later live event is
- *   newer than an earlier one: the server notifies in publish order (contract S06);
+ *   newer than an earlier one: the server notifies in publish order (contract S06). A fetch that
+ *   answers after a live event never replaces the item that event brought (`touched`), so a
+ *   live notification beats the copy fetched at login, whatever its `updatedAt` says;
  * - among items of one fetch (or one event), the author's `updatedAt` decides, clamped to when
  *   this client received it, so a clock set ahead cannot pin an edit above later live ones.
  */
@@ -1540,7 +1624,7 @@ function endedError(reason: SessionEndReason): DomainError {
 /** How the admin's messages are labelled: the umpire, in the White Force (SC-5). */
 export const UMPIRE_NAME = 'Umpire'
 
-/** The admin's key in `authors()`: the reserved account name, never a role id. */
+/** The admin's key in `authors()`: the reserved account name, never a login name. */
 export const ADMIN_AUTHOR_ID = 'admin'
 
 /**
@@ -1551,12 +1635,11 @@ export function whiteForceOf(forces: readonly Force[]): Force | undefined {
   return [...forces].filter((f) => f.isUmpire).sort(byOrderThenId)[0]
 }
 
-/** PLY-35, §3 rule 14: the admin, and White Force roles that are not observers. */
-export function canEditObjectives(
-  isAdmin: boolean,
-  force: Force | undefined,
-  role: Role | undefined,
-): boolean {
-  if (isAdmin) return true
-  return role !== undefined && force?.isUmpire === true && !role.isObserver
+/**
+ * PLY-35, §3 rule 14, D21: only the admin edits objectives. White Force roles, observers or not,
+ * read every force's objectives but never edit them; the server refuses them too (no publisher
+ * affiliation).
+ */
+export function canEditObjectives(isAdmin: boolean): boolean {
+  return isAdmin
 }

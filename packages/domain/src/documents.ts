@@ -9,6 +9,7 @@ import type {
   Objectives,
   ParseError,
   Result,
+  Retired,
   Role,
   Room,
 } from '@wrx/schemas'
@@ -23,6 +24,8 @@ export interface DocumentValues {
   readonly room: Room
   readonly objectives: Objectives
   readonly asset: Asset
+  /** An item of `retired`: a deleted force's or role's last name (§3 rule 1). */
+  readonly retired: Retired
 }
 
 /** A validated document, tagged with its kind. */
@@ -48,6 +51,12 @@ export type LiveDocumentKind = LiveDocument['kind']
  */
 export const DOCUMENT_ITEM_ID = 'current'
 
+/**
+ * The one item an objectives node holds: the admin's, the only publisher (§3 rule 14, D21).
+ * Readers ignore any other item, which only a server published before WP 3.5 can hold.
+ */
+export const OBJECTIVES_ITEM_ID = 'admin'
+
 export interface NodeSpec {
   readonly kind: LiveDocumentKind
   /** For per-entity nodes, the id the document must carry. */
@@ -59,13 +68,13 @@ export function nodeSpec(node: string): NodeSpec | undefined {
   const ref = parseNodeName(node)
   if (ref === undefined) return undefined
   if (ref.kind === 'singleton') {
-    const kind =
-      ref.node === 'game-setup'
-        ? 'game-setup'
-        : ref.node === 'game-state'
-          ? 'game-state'
-          : 'announcement'
-    return { kind, id: undefined }
+    const kinds = {
+      'game-setup': 'game-setup',
+      'game-state': 'game-state',
+      announcements: 'announcement',
+      retired: 'retired',
+    } as const
+    return { kind: kinds[ref.node], id: undefined }
   }
   const kinds = {
     forces: 'force',
@@ -141,6 +150,10 @@ function parseAs(kind: LiveDocumentKind, payload: string): Result<LiveDocument> 
     }
     case 'asset': {
       const r = parseDocument('asset', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
+    case 'retired': {
+      const r = parseDocument('retired', payload)
       return r.ok ? done({ kind, value: r.value }) : fail(r.error)
     }
   }

@@ -199,7 +199,7 @@ test.describe('keyboard only', () => {
   }) => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
-    await tabTo(page, page.getByLabel('Role id'))
+    await tabTo(page, page.getByLabel('Login name'))
     await page.keyboard.type('blue-co')
     await page.keyboard.press('Tab')
     expect(await focusIsVisible(page)).toBeUndefined()

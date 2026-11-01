@@ -26,8 +26,8 @@ Game properties and the game theme.
 | `theme.tokens.surface` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.text` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.fontFamily` | enum | no | one of "sans", "serif", "mono" | Bundled font id |
-| `theme.logoAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
-| `theme.iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
+| `theme.logoAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
+| `theme.iconAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
 | `roomTypeDefaults` | map of map of any | yes |  | Default config per room type, validated by that type (ARC-5) |
 
 ## Force
@@ -40,10 +40,10 @@ A side in the game.
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
-| `id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Stable URL-safe id, never reused (SRD §3 rule 1) |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1) |
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
 | `colour` | string | yes | pattern `^#[0-9a-fA-F]{6}$` | Colour for message authors; not a theme token (§3 rule 13) |
-| `iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
+| `iconAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
 | `isUmpire` | boolean | yes |  | The umpire flag: this is the White Force, which the admin plays in as umpire; exactly one force has it (ADM-4, D8) |
 | `order` | integer | yes | ≥ 0 | Admin-set display order; ties sort by id (SRD §3 rule 7) |
 | `theme` | object | no |  | Styles the force panel only (D19) |
@@ -54,22 +54,23 @@ A side in the game.
 | `theme.tokens.surface` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.text` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.fontFamily` | enum | no | one of "sans", "serif", "mono" | Bundled font id |
-| `theme.logoAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
-| `theme.iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
+| `theme.logoAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
+| `theme.iconAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
 
 ## Role
 
 A player position; one XMPP account.
 
-- **Location:** PubSub node `roles:<roleId>`
+- **Location:** PubSub node `roles:<roleId>`; the role is the XMPP account `<loginName>@<domain>`
 - **Access:** Read: all game users. Publish: admin.
 
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
-| `id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Role id and login id: the XMPP localpart |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Role id, a GUID |
+| `loginName` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Login name: the role's XMPP account name, readable, fixed once published (§3 rule 1, ADM-5) |
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
-| `forceId` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of the role's force |
+| `forceId` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of the role's force |
 | `isObserver` | boolean | yes |  | Observers read but never post, in all their rooms (D8) |
 | `order` | integer | yes | ≥ 0 | Admin-set display order; ties sort by id (SRD §3 rule 7) |
 
@@ -83,13 +84,13 @@ A channel: one MUC room plus this config.
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
-| `id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Stable URL-safe id, never reused (SRD §3 rule 1) |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1) |
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
 | `roomType` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Room type id from the registry (v1: chat) |
 | `participants` | array of object | yes |  | Mixed force and role entries; White Force roles are added implicitly, and a role entry assigns a White Force observer the room (§3 rule 4) |
 | `participants[]` | object | yes |  | A room participant entry (§3 rule 4) |
 | `participants[].kind` | enum | yes | one of "force", "role" |  |
-| `participants[].id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Force or role id |
+| `participants[].id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Force or role id |
 | `participants[].access` | enum | yes | one of "write", "read" | Read-only entries join as MUC visitors |
 | `config` | map of any | yes |  | Type-specific config, validated by the room type (ARC-5) |
 | `order` | integer | yes | ≥ 0 | Admin-set display order; ties sort by id (SRD §3 rule 7) |
@@ -101,22 +102,22 @@ A channel: one MUC room plus this config.
 | `theme.tokens.surface` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.text` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `theme.tokens.fontFamily` | enum | no | one of "sans", "serif", "mono" | Bundled font id |
-| `theme.logoAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
-| `theme.iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
+| `theme.logoAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
+| `theme.iconAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
 
 ## Objectives
 
 A force's objectives; confidential to that force, the White Force and the admin.
 
 - **Location:** PubSub node `objectives:<forceId>`
-- **Access:** Read: the force's roles, the White Force's roles and the admin. Publish: the admin and White Force roles that are not observers.
+- **Access:** Read: the force's roles, every White Force role and the admin. Publish: the admin only, as one item (`admin`) replaced on each edit.
 
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
-| `forceId` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of the force these objectives belong to |
+| `forceId` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of the force these objectives belong to |
 | `markdown` | string | yes | length ≤ 50000 | Objectives as Markdown |
-| `updatedAt` | string | yes | format date-time | When this version was written. The node holds one item per author, because a publisher cannot overwrite another publisher's item; readers take the newest (§3 rule 14) |
+| `updatedAt` | string | yes | format date-time | When the admin wrote this version, by the admin's clock; display only. The node holds one item, the admin's, replaced on each edit; a live notification replaces the copy fetched at login, whatever this says (§3 rule 14) |
 
 ## Asset
 
@@ -128,7 +129,7 @@ An image used by themes.
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
-| `id` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Stable URL-safe id, never reused (SRD §3 rule 1) |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1) |
 | `mimeType` | enum | yes | one of "image/png", "image/webp", "image/svg+xml" |  |
 | `size` | integer | yes | ≥ 1; ≤ 180000 | Decoded size in bytes |
 | `sha256` | string | yes | pattern `^[0-9a-f]{64}$` | SHA-256 of the decoded bytes, lowercase hex |
@@ -146,6 +147,23 @@ An out-of-game announcement from the admin.
 | `schemaVersion` | constant | yes | = 1 |  |
 | `text` | string | yes | length ≥ 1; length ≤ 2000 | Plain text |
 | `postedAt` | string | yes | format date-time | Admin's clock when posted; display only |
+
+## Deleted force or role
+
+The last name of a deleted force or role.
+
+- **Location:** One item of PubSub node `retired`, the item id the entity’s GUID
+- **Access:** Read: all game users. Publish: admin. Never used to decide access.
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The deleted force or role GUID; also the item id |
+| `kind` | enum | yes | one of "force", "role" |  |
+| `name` | string | yes | length ≥ 1; length ≤ 120 | Its last display name |
+| `loginName` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | A role’s login name, which no other role may take (§3 rule 1) |
+| `colour` | string | no | pattern `^#[0-9a-fA-F]{6}$` | The force’s colour, or a role’s force’s colour when it was deleted |
+| `deletedAt` | string | yes | format date-time | Admin's clock when the deletion was recorded |
 
 ## Game state
 
@@ -174,8 +192,8 @@ Theme: tokens plus optional logo and icon assets.
 | `tokens.surface` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `tokens.text` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
 | `tokens.fontFamily` | enum | no | one of "sans", "serif", "mono" | Bundled font id |
-| `logoAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
-| `iconAssetId` | string | no | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of an `assets:<id>` node |
+| `logoAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
+| `iconAssetId` | string | no | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Id of an `assets:<id>` node |
 
 ## Chat message body
 
@@ -201,7 +219,7 @@ A complete game design, as exported and imported by the admin.
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `format` | constant | yes | = "wrx1-design" |  |
-| `schemaVersion` | constant | yes | = 1 |  |
+| `schemaVersion` | constant | yes | = 2 |  |
 | `exportedAt` | string | yes | format date-time | ISO 8601 date-time |
 | `game` | object | yes |  | The game setup document |
 | `forces` | array of object | yes |  | Force documents |
@@ -209,3 +227,4 @@ A complete game design, as exported and imported by the admin.
 | `rooms` | array of object | yes |  | Room documents |
 | `objectives` | array of object | yes |  | Objectives documents, at most one per force |
 | `assets` | array of object | yes |  | Asset documents |
+| `retired` | array of object | yes |  | The last names of deleted forces and roles that were published, kept so old messages show them (§3 rule 1) |

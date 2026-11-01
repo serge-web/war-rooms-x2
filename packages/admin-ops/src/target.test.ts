@@ -3,17 +3,19 @@
 import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { sampleDesign } from '../../schemas/src/fixtures.ts'
-import { objectivesMaxItems, targetState } from './target.ts'
+import { nodeName } from '@wrx/schemas'
+import { sampleDesign, tid } from '../../schemas/src/fixtures.ts'
+import { OBJECTIVES_MAX_ITEMS, RETIRED_MAX_ITEMS, targetState } from './target.ts'
 
 /** The sample design with a White Force writer, and a White observer assigned to one room. */
 function withWhiteRoles() {
   const design = sampleDesign()
-  const role = (id: string, name: string, isObserver: boolean, order: number) => ({
+  const role = (login: string, name: string, isObserver: boolean, order: number) => ({
     schemaVersion: 1 as const,
-    id,
+    id: tid(login),
+    loginName: login,
     name,
-    forceId: 'white',
+    forceId: tid('white'),
     isObserver,
     order,
   })
@@ -25,12 +27,12 @@ function withWhiteRoles() {
       role('mediator', 'Mediator', true, 2),
     ],
     rooms: design.rooms.map((r) =>
-      r.id === 'negotiation'
+      r.id === tid(tid('negotiation'))
         ? {
             ...r,
             participants: [
               ...r.participants,
-              { kind: 'role' as const, id: 'mediator', access: 'write' as const },
+              { kind: 'role' as const, id: tid('mediator'), access: 'write' as const },
             ],
           }
         : r,
@@ -54,7 +56,7 @@ describe('targetState(sampleDesign())', () => {
       // The White observer has no assigned rooms, so it reads every room (§3 rule 4).
       expect(room.access.get('white-observer')).toBe('read')
     }
-    const blueHq = target.rooms.find((r) => r.roomId === 'blue-hq')
+    const blueHq = target.rooms.find((r) => r.roomId === tid(tid('blue-hq')))
     expect(Object.fromEntries(blueHq?.access ?? [])).toEqual({
       'blue-co': 'write',
       'blue-observer': 'read',
@@ -63,48 +65,80 @@ describe('targetState(sampleDesign())', () => {
     expect(target.readOnlyRoles).toEqual(['blue-observer', 'white-observer'])
   })
 
+  it('names roles by login name, the account, and nodes and rooms by GUID (§3 rule 1)', () => {
+    expect(target.roles).toEqual(['blue-co', 'blue-observer', 'red-co', 'white-observer'])
+    expect(target.loginNames.get(tid('blue-co'))).toBe('blue-co')
+    expect(target.rooms.map((r) => r.roomId)).toEqual([
+      tid('blue-hq'),
+      tid('red-hq'),
+      tid('negotiation'),
+    ])
+  })
+
+  it('keeps the deleted entities’ records in `retired`, read by every role (§3 rule 1)', () => {
+    const design = sampleDesign()
+    design.retired.push({
+      schemaVersion: 1,
+      id: tid('old-co'),
+      kind: 'role',
+      name: 'Old CO',
+      loginName: 'old-co',
+      deletedAt: '2026-11-01T10:00:00.000Z',
+    })
+    const retired = targetState(design).nodes.find((n) => n.node === 'retired')
+    expect(retired?.config).toMatchObject({ accessModel: 'whitelist', maxItems: RETIRED_MAX_ITEMS })
+    expect([...(retired?.access.values() ?? [])]).toEqual(['read', 'read', 'read', 'read'])
+    expect(retired?.documents.map((d) => d.itemId)).toEqual([tid('old-co')])
+    // Effective access never reads it: the deleted role has no room or node.
+    const target = targetState(design)
+    expect(target.roles).not.toContain('old-co')
+    expect(target.rooms.some((r) => r.access.has('old-co'))).toBe(false)
+    expect(target.nodes.some((n) => n.access.has('old-co'))).toBe(false)
+  })
+
   it('opens only game-setup and the game theme asset; everything is publishers', () => {
     const open = target.nodes.filter((n) => n.config.accessModel === 'open').map((n) => n.node)
-    expect(open).toEqual(['game-setup', 'assets:game-logo'])
+    expect(open).toEqual(['game-setup', nodeName.asset(tid('game-logo'))])
     expect(target.nodes.every((n) => n.config.publishModel === 'publishers')).toBe(true)
   })
 
   it('sizes objectives for the admin, with the force and the White observer reading (§3 rule 14)', () => {
-    const blue = target.nodes.find((n) => n.node === 'objectives:blue')
+    const blue = target.nodes.find((n) => n.node === nodeName.objectives(tid('blue')))
     expect(Object.fromEntries(blue?.access ?? [])).toEqual({
       'blue-co': 'read',
       'blue-observer': 'read',
       'white-observer': 'read',
     })
-    expect(blue?.config.maxItems).toBe(objectivesMaxItems(0))
-    expect(objectivesMaxItems(0)).toBe(10)
-    expect(objectivesMaxItems(20)).toBe(21)
+    expect(blue?.config.maxItems).toBe(OBJECTIVES_MAX_ITEMS)
+    expect(OBJECTIVES_MAX_ITEMS).toBe(1)
     expect(blue?.documents.map((d) => d.itemId)).toEqual(['admin'])
   })
 
-  it('F5: White Force observers read objectives and never publish; its other roles publish', () => {
+  it('D21: every White Force role reads objectives and none publishes, observer or not', () => {
     const white = targetState(withWhiteRoles())
     for (const forceId of ['blue', 'red', 'white']) {
-      const node = white.nodes.find((n) => n.node === `objectives:${forceId}`)
-      expect(node?.access.get('white-cell'), forceId).toBe('publish')
+      const node = white.nodes.find((n) => n.node === nodeName.objectives(tid(forceId)))
+      // Before WP 3.5 the White Force role that is not an observer published.
+      expect(node?.access.get('white-cell'), forceId).toBe('read')
       expect(node?.access.get('white-observer'), forceId).toBe('read')
       expect(node?.access.get('mediator'), forceId).toBe('read')
-      expect(node?.config.maxItems).toBe(objectivesMaxItems(1))
+      expect(node?.config.maxItems).toBe(1)
     }
+    // No role publishes anywhere: the admin, as owner, is the only publisher of every node.
     const publishers = white.nodes.flatMap((n) =>
       [...n.access].filter(([, a]) => a === 'publish').map(([id]) => `${n.node}:${id}`),
     )
-    expect(publishers.every((p) => p.endsWith(':white-cell'))).toBe(true)
+    expect(publishers).toEqual([])
   })
 
   it('F5: a White observer with an assigned room is a read-only member of that room only', () => {
     const white = targetState(withWhiteRoles())
     const access = (roomId: string, roleId: string) =>
       white.rooms.find((r) => r.roomId === roomId)?.access.get(roleId)
-    expect(access('negotiation', 'mediator')).toBe('read')
-    expect(access('blue-hq', 'mediator')).toBeUndefined()
-    expect(access('red-hq', 'mediator')).toBeUndefined()
-    for (const roomId of ['blue-hq', 'red-hq', 'negotiation']) {
+    expect(access(tid(tid('negotiation')), 'mediator')).toBe('read')
+    expect(access(tid(tid('blue-hq')), 'mediator')).toBeUndefined()
+    expect(access(tid(tid('red-hq')), 'mediator')).toBeUndefined()
+    for (const roomId of [tid(tid('blue-hq')), tid(tid('red-hq')), tid(tid('negotiation'))]) {
       expect(access(roomId, 'white-cell')).toBe('write')
       expect(access(roomId, 'white-observer')).toBe('read')
     }
@@ -120,7 +154,7 @@ describe('targetState(sampleDesign())', () => {
       const target = targetState(make())
       const seeded = stateFromDesign({ design: make(), domain: 'wrx.test' })
       if (!seeded.ok) throw new Error(seeded.error)
-      const jid = (id: string) => `${id}@wrx.test`
+      const jid = (login: string) => `${login}@wrx.test`
       for (const room of target.rooms) {
         const seed = seeded.value.rooms.find((r) => r.jid === `${room.roomId}@conference.wrx.test`)
         const members = (seed?.affiliations ?? [])

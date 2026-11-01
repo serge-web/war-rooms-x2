@@ -4,6 +4,7 @@
 // stays plain text in a real browser (PLY-14). Two pages of one context share one mock server.
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { asMockAdmin, logIn } from './mock.ts'
 import { isBrowserNotice } from './notices.ts'
 
@@ -125,7 +126,7 @@ test('scrolling up pages back through the room’s history (PLY-49)', async ({ p
     { length: 130 },
     (_, i) => `History item ${String(i + 1).padStart(3, '0')}`,
   )
-  await asMockAdmin(page, [{ op: 'post', room: 'blue-hq', texts }])
+  await asMockAdmin(page, [{ op: 'post', room: ROOM.blueHq, texts }])
   // A fresh session loads only the latest page, then pages back on scroll.
   await page.reload()
   await logIn(page, 'blue-co', 'demo-blue-co')

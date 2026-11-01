@@ -7,12 +7,14 @@
 //    tooling could have missed (R14): Red HQ unmoderated; Blue CO granted Red's objectives,
 //    subscribed, then its affiliation removed without its subscription (R-A); Blue Observer given
 //    voice back by a moderator while it is in Blue HQ (R-B); an extra account; Blue's objectives
-//    node opened to `open` access; Red's force document changed;
+//    node opened to `open` access; Red's force document changed; White Cell made a publisher of
+//    White's objectives, as before WP 3.5, and its own item published there (D21);
 // 3. the audit finds each, with its full JID for the subscription and the stored role through
 //    the vault login for the observer;
 // 4. repairing everything (destructive items confirmed) leaves a clean re-audit, and the effects
 //    hold for players; repairing again changes nothing (idempotent).
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+import { nodeName } from '@wrx/schemas'
+import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -168,7 +170,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         const session = theOps().session
         // Red HQ unmoderated.
         must(
-          await session.muc.configureRoom(room('red-hq'), {
+          await session.muc.configureRoom(room(tid('red-hq')), {
             ...gameRoomConfig('Red HQ'),
             moderated: false,
           }),
@@ -177,8 +179,8 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         // The negotiation room's side channels opened, with every standard field still right
         // (review F6): before, the audit compared only the standard fields and saw nothing.
         must(
-          await session.muc.configureRoom(room('negotiation'), {
-            ...gameRoomConfig(design.rooms.find((r) => r.id === 'negotiation')?.name ?? ''),
+          await session.muc.configureRoom(room(tid('negotiation')), {
+            ...gameRoomConfig(design.rooms.find((r) => r.id === tid('negotiation'))?.name ?? ''),
             visitorPrivateMessages: 'anyone',
             subscriptions: true,
           }),
@@ -187,65 +189,102 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         // A revoked reader keeps its subscription: Blue CO reads Red's objectives, subscribes,
         // and only its affiliation is removed (the missed R-A step).
         must(
-          await session.pubsub.setAffiliations('objectives:red', [
+          await session.pubsub.setAffiliations(nodeName.objectives(tid('red')), [
             { jid: theOps().roleJid('blue-co'), affiliation: 'member' },
           ]),
           'grant blue-co',
         )
         blueSubscriber = await login('blue-co')
-        must(await blueSubscriber.pubsub.subscribe('objectives:red'), 'subscribe')
+        must(await blueSubscriber.pubsub.subscribe(nodeName.objectives(tid('red'))), 'subscribe')
         must(
-          await session.pubsub.setAffiliations('objectives:red', [
+          await session.pubsub.setAffiliations(nodeName.objectives(tid('red')), [
             { jid: theOps().roleJid('blue-co'), affiliation: 'none' },
           ]),
           'revoke blue-co, leaving the subscription',
         )
         // The observer given voice back by a moderator while it is in the room (R-B).
         const observer = await login('blue-observer')
-        must(await session.muc.join(room('blue-hq'), 'admin'), 'admin joins blue-hq')
-        const joined = must(await observer.muc.join(room('blue-hq'), 'blue-observer'), 'join')
+        must(await session.muc.join(room(tid('blue-hq')), 'admin'), 'admin joins blue-hq')
+        const joined = must(await observer.muc.join(room(tid('blue-hq')), 'blue-observer'), 'join')
         expect(joined.role).toBe('visitor')
         must(
-          await session.muc.setRole(room('blue-hq'), 'blue-observer', 'participant', 'drift'),
+          await session.muc.setRole(room(tid('blue-hq')), 'blue-observer', 'participant', 'drift'),
           'voice the observer',
         )
-        must(await observer.muc.leave(room('blue-hq')), 'observer leaves')
-        must(await session.muc.leave(room('blue-hq')), 'admin leaves')
+        must(await observer.muc.leave(room(tid('blue-hq'))), 'observer leaves')
+        must(await session.muc.leave(room(tid('blue-hq'))), 'admin leaves')
         await observer.disconnect()
         // An account that is no role.
         must(await session.admin.addUser(theOps().roleJid(STRAY), `pw-${run}`), 'extra account')
         // Blue's objectives opened to anyone.
-        const objectives = targetState(design).nodes.find((n) => n.node === 'objectives:blue')
-        if (objectives === undefined) throw new Error('no objectives:blue in the target')
+        const objectives = targetState(design).nodes.find(
+          (n) => n.node === nodeName.objectives(tid('blue')),
+        )
+        if (objectives === undefined)
+          throw new Error(`no ${nodeName.objectives(tid('blue'))} in the target`)
         must(
-          await session.pubsub.configureNode('objectives:blue', {
+          await session.pubsub.configureNode(nodeName.objectives(tid('blue')), {
             ...objectives.config,
             accessModel: 'open',
           }),
-          'open objectives:blue',
+          `open ${nodeName.objectives(tid('blue'))}`,
         )
         // Red's force document changed.
         const red = design.forces.find((f) => f.id === 'red')
         must(
           await session.pubsub.publish(
-            'forces:red',
+            nodeName.force(tid('red')),
             'current',
             JSON.stringify({ ...red, name: 'Tampered' }),
           ),
-          'change forces:red',
+          `change ${nodeName.force(tid('red'))}`,
+        )
+        // White Cell an objectives publisher again, with its own item (D21: a publish before
+        // WP 3.5 left this).
+        must(
+          await session.pubsub.setAffiliations(nodeName.objectives(tid('white')), [
+            { jid: theOps().roleJid('white-cell'), affiliation: 'publisher' },
+          ]),
+          'White Cell publishes objectives',
+        )
+        const cell = await login('white-cell')
+        must(
+          await cell.pubsub.publish(
+            nodeName.objectives(tid('white')),
+            'white-cell',
+            JSON.stringify({
+              schemaVersion: 1,
+              forceId: tid('white'),
+              markdown: 'Umpire notes',
+              updatedAt: '2026-10-30T09:00:00.000Z',
+            }),
+          ),
+          'White Cell writes its own objectives item',
         )
         drifted = await audit()
       }, 300_000)
 
+      it('finds White Cell publishing objectives, and its item (D21)', () => {
+        expect(item(`node-access:${nodeName.objectives(tid('white'))}:white-cell`)).toMatchObject({
+          severity: 'critical',
+          expected: 'member',
+          found: 'publisher',
+        })
+        expect(item(`stray-items:${nodeName.objectives(tid('white'))}`)).toMatchObject({
+          severity: 'medium',
+          repairable: true,
+        })
+      })
+
       it('finds the unmoderated room', () => {
-        expect(item('room-config:red-hq')).toMatchObject({
+        expect(item(`room-config:${tid('red-hq')}`)).toMatchObject({
           severity: 'critical',
           found: 'moderated: false',
         })
       })
 
       it('finds the opened side channels of a room that is otherwise right (F6)', () => {
-        expect(item('room-config:negotiation')).toMatchObject({
+        expect(item(`room-config:${tid('negotiation')}`)).toMatchObject({
           severity: 'critical',
           expected: 'visitorPrivateMessages: nobody, subscriptions: false',
           found: 'visitorPrivateMessages: anyone, subscriptions: true',
@@ -255,7 +294,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       it('finds the leftover subscription, by full JID', () => {
         const jid = blueSubscriber?.jid ?? ''
         expect(jid).toContain('/')
-        expect(item(`subscription:objectives:red:${jid}`)).toMatchObject({
+        expect(item(`subscription:${nodeName.objectives(tid('red'))}:${jid}`)).toMatchObject({
           severity: 'critical',
           roleId: 'blue-co',
           target: jid,
@@ -263,7 +302,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       })
 
       it('finds the observer’s voice, through its own login', () => {
-        expect(item('voice:blue-observer:blue-hq')).toMatchObject({
+        expect(item(`voice:blue-observer:${tid('blue-hq')}`)).toMatchObject({
           kind: 'voice',
           severity: 'critical',
           found: 'participant: can post',
@@ -273,7 +312,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       it('finds the White observer voiced by the unmoderated Red HQ (§3 rule 4, F5)', () => {
         // Unmoderated, the room gives every member voice, so the White observer, which reads
         // every room, could post there.
-        expect(item('voice:white-observer:red-hq')).toMatchObject({
+        expect(item(`voice:white-observer:${tid('red-hq')}`)).toMatchObject({
           kind: 'voice',
           severity: 'critical',
           found: 'participant: can post',
@@ -285,14 +324,16 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       })
 
       it('finds the opened node', () => {
-        expect(item('node-config:objectives:blue')).toMatchObject({
+        expect(item(`node-config:${nodeName.objectives(tid('blue'))}`)).toMatchObject({
           severity: 'critical',
           found: 'accessModel: open',
         })
       })
 
       it('finds the changed document', () => {
-        expect(item('document:forces:red:current')).toMatchObject({ found: 'differs' })
+        expect(item(`document:${nodeName.force(tid('red'))}:current`)).toMatchObject({
+          found: 'differs',
+        })
       })
 
       it('finds nothing else', () => {
@@ -300,9 +341,11 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         expect(kinds.sort()).toEqual([
           'account-unknown',
           'document',
+          'node-access',
           'node-config',
           'room-config',
           'room-config',
+          'stray-items',
           'subscription',
           'voice',
           'voice',
@@ -339,14 +382,14 @@ export function defineAuditIntegration(backend: AuditBackend): void {
 
       it('the observer is read-only again; Red HQ is moderated', async () => {
         const observer = await login('blue-observer')
-        const joined = must(await observer.muc.join(room('blue-hq'), 'blue-observer'), 'join')
+        const joined = must(await observer.muc.join(room(tid('blue-hq')), 'blue-observer'), 'join')
         expect(joined.role).toBe('visitor')
-        const posted = await observer.muc.send(room('blue-hq'), JSON.stringify({ text: run }))
+        const posted = await observer.muc.send(room(tid('blue-hq')), JSON.stringify({ text: run }))
         expect(errorOf(posted)?.condition).toBe('forbidden')
-        const config = must(await theOps().session.muc.getRoomConfig(room('red-hq')), 'config')
+        const config = must(await theOps().session.muc.getRoomConfig(room(tid('red-hq'))), 'config')
         expect(config.moderated).toBe(true)
         const negotiation = must(
-          await theOps().session.muc.getRoomConfig(room('negotiation')),
+          await theOps().session.muc.getRoomConfig(room(tid('negotiation'))),
           'negotiation config',
         )
         expect(negotiation).toMatchObject(CLOSED_SIDE_CHANNELS)
@@ -354,12 +397,12 @@ export function defineAuditIntegration(backend: AuditBackend): void {
 
       it('Blue CO no longer receives or reads Red’s objectives', async () => {
         const subs = must(
-          await theOps().session.pubsub.getSubscriptions('objectives:red'),
+          await theOps().session.pubsub.getSubscriptions(nodeName.objectives(tid('red'))),
           'subscriptions',
         )
         expect(subs.filter((s) => s.jid.startsWith(theOps().roleJid('blue-co')))).toEqual([])
         const blue = await login('blue-co')
-        expect(errorOf(await blue.pubsub.getItems('objectives:red'))).toBeDefined()
+        expect(errorOf(await blue.pubsub.getItems(nodeName.objectives(tid('red'))))).toBeDefined()
       })
 
       it('the extra account is gone, Blue’s objectives are closed, Red’s document restored', async () => {
@@ -372,9 +415,27 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         })
         const anon = must(anonymous, 'anonymous login')
         opened.push(anon)
-        expect(errorOf(await anon.pubsub.getItems('objectives:blue'))).toBeDefined()
-        const items = must(await theOps().session.pubsub.getItems('forces:red'), 'forces:red')
+        expect(errorOf(await anon.pubsub.getItems(nodeName.objectives(tid('blue'))))).toBeDefined()
+        const items = must(
+          await theOps().session.pubsub.getItems(nodeName.force(tid('red'))),
+          nodeName.force(tid('red')),
+        )
         expect(JSON.parse(items[0]?.payload ?? '{}')).toMatchObject({ name: 'Red' })
+      })
+
+      it('White’s objectives hold the admin’s item only, and White Cell cannot publish (D21)', async () => {
+        const items = must(
+          await theOps().session.pubsub.getItems(nodeName.objectives(tid('white'))),
+          nodeName.objectives(tid('white')),
+        )
+        expect(items.map((i) => i.id)).toEqual(
+          design.objectives.some((o) => o.forceId === 'white') ? ['admin'] : [],
+        )
+        const cell = await login('white-cell')
+        expect(
+          errorOf(await cell.pubsub.publish(nodeName.objectives(tid('white')), 'white-cell', '{}'))
+            ?.condition,
+        ).toBe('forbidden')
       })
 
       it('repairing again changes nothing (idempotent)', async () => {

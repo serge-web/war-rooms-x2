@@ -119,7 +119,7 @@ function isAbsentAccount(error: TransportError): boolean {
  * SASL ANONYMOUS session in `get-registered-users-list` (and in its count) until it disconnects.
  * Their localparts are random decimal numbers (24 or 25 digits seen), so a long all-digit
  * localpart is taken as anonymous; the transport also requires it to be online before leaving it
- * out. No role id can have this shape (`ANONYMOUS_LIKE_ID` in @wrx/schemas, refused by the
+ * out. No login name can have this shape (`ANONYMOUS_LIKE_NAME` in @wrx/schemas, refused by the
  * design check, AdminOps and the draft), so this never hides a role's account (review F4).
  */
 function isAnonymousAccount(bareJid: string): boolean {

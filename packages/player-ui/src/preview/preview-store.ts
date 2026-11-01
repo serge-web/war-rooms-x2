@@ -8,9 +8,16 @@
 import { canEditObjectives, roomsForRole } from '@wrx/domain'
 import type { Identity, Me, SessionStore, Snapshot } from '@wrx/domain'
 
-/** A view of an admin store as `roleId` sees it. Holds its memo in the closure, per preview. */
+/**
+ * A view of an admin store as the role `roleId` (its GUID) sees it. Holds its memo in the
+ * closure, per preview. The identity carries the role's login name once its document is known.
+ */
 export function previewAsRole(store: SessionStore, roleId: string): SessionStore {
-  const identity: Identity = Object.freeze({ ...store.identity, roleId, isAdmin: false })
+  let identity: Identity = Object.freeze({
+    ...store.identity,
+    loginName: undefined,
+    isAdmin: false,
+  })
   let last: { readonly deps: readonly unknown[]; readonly value: Snapshot<Me> } | undefined
 
   const me = (): Snapshot<Me> => {
@@ -21,6 +28,9 @@ export function previewAsRole(store: SessionStore, roleId: string): SessionStore
     const deps = [base, matrix, roles, forces]
     if (last?.deps.every((d, i) => Object.is(d, deps[i])) === true) return last.value
     const role = roles.find((r) => r.id === roleId)
+    if (role !== undefined && identity.loginName !== role.loginName) {
+      identity = Object.freeze({ ...identity, loginName: role.loginName })
+    }
     const force = role === undefined ? undefined : forces.find((f) => f.id === role.forceId)
     const byId = new Map(base.data.rooms.map(({ room }) => [room.id, room]))
     const rooms = roomsForRole(matrix, roleId).flatMap(({ roomId, access }) => {
@@ -33,8 +43,8 @@ export function previewAsRole(store: SessionStore, roleId: string): SessionStore
       force,
       isUmpire: force?.isUmpire === true,
       isObserver: role?.isObserver === true,
-      // What the role itself may do, so a White observer's preview offers no editing.
-      canEditObjectives: canEditObjectives(false, force, role),
+      // What the role itself may do: no role edits objectives, so the preview is read only.
+      canEditObjectives: canEditObjectives(false),
       rooms: Object.freeze(rooms),
     })
     const value: Snapshot<Me> = Object.freeze({ ...base, data })
@@ -46,7 +56,10 @@ export function previewAsRole(store: SessionStore, roleId: string): SessionStore
   const bound = new Map<PropertyKey, unknown>()
   return new Proxy(store, {
     get(target, property) {
-      if (property === 'identity') return identity
+      if (property === 'identity') {
+        me()
+        return identity
+      }
       if (property === 'me') return me
       const known = bound.get(property)
       if (known !== undefined) return known

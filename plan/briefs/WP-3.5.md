@@ -1,6 +1,6 @@
 # WP 3.5 — GUID ids, login names, and objectives by the admin only
 
-**SRD ids:** §3 rules 1, 6 and 14, D21, ADM-5, ADM-14, ADM-16, ADM-26, ADM-42, PLY-1, PLY-35, R10 · **Depends on:** Phase 2 (G2) · **Blocks:** 3.4 · **Status:** to do · **Security review required**
+**SRD ids:** §3 rules 1, 6 and 14, D21, ADM-5, ADM-14, ADM-16, ADM-26, ADM-42, PLY-1, PLY-35, R10 · **Depends on:** Phase 2 (G2) · **Blocks:** 3.4 · **Status:** done · **Security review required**
 
 ## Goal
 

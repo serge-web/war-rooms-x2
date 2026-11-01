@@ -12,7 +12,7 @@
 // Run with `pnpm test:restore:ejabberd`, against a server it may reset (one game per server, D11).
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import type { Session } from '@wrx/transport'
 import { XmppTransport } from '@wrx/transport-xmpp'
 import { describe, expect, it } from 'vitest'
@@ -123,7 +123,7 @@ describe.runIf(step === 'seed')('restore check, step 1: seed', () => {
         }),
         'blue-co login',
       )
-      const room = ops.roomJid('blue-hq')
+      const room = ops.roomJid(tid('blue-hq'))
       must(await blue.muc.join(room, 'blue-co'), 'join')
       for (let i = 0; i < MESSAGES; i++) {
         must(
@@ -133,7 +133,7 @@ describe.runIf(step === 'seed')('restore check, step 1: seed', () => {
       }
       await blue.disconnect()
       const print = await fingerprint(ops)
-      expect(print.rooms['blue-hq']).toBeGreaterThanOrEqual(MESSAGES)
+      expect(print.rooms[tid('blue-hq')]).toBeGreaterThanOrEqual(MESSAGES)
       writeFileSync(stateFile, JSON.stringify(print, null, 2))
     } finally {
       await ops.session.disconnect()

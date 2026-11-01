@@ -1,5 +1,6 @@
 // The leader-tab path in Node (D17, R7): several "tabs" of one fake browser profile, sharing
 // Web Locks, BroadcastChannels and storage. The SharedWorker path runs in Playwright (e2e/).
+import { tid } from '@wrx/schemas/fixtures'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connectMockTransport } from './connect.ts'
@@ -9,7 +10,7 @@ import { migrateMockState } from './migrate.ts'
 import { hostNames, mockNamespace } from './namespace.ts'
 import type { LogEntry } from './wire.ts'
 
-const ROOM = 'negotiation@conference.wrx.mock'
+const ROOM = `${tid('negotiation')}@conference.wrx.mock`
 const endpoint = { websocketUrl: 'mock://test', domain: 'wrx.mock' }
 
 const open: MockHost[] = []

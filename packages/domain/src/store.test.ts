@@ -2,7 +2,19 @@ import { err, ok } from '@wrx/transport'
 import type { Item } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { accessOf } from './access.ts'
-import { force, game, harness, objectives, role, room, flush, sampleDocuments } from './fixtures.ts'
+import {
+  force,
+  game,
+  harness,
+  objectives,
+  role,
+  room,
+  flush,
+  nameOf,
+  sampleDocuments,
+  tid,
+} from './fixtures.ts'
+import { nodeName } from '@wrx/schemas'
 
 const getItemsCalls = (h: ReturnType<typeof harness>, node: string) =>
   h.session.calls.filter((c) => c.op === 'getItems' && c.args[0] === node).length
@@ -14,15 +26,19 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(h.store.forces().status).toBe('loading')
     expect(await h.store.ready()).toEqual({ state: 'ready' })
     expect(h.store.gameSetup().data?.name).toBe('Exercise Northern Gate')
-    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'red', 'white'])
-    expect(h.store.roles().data.map((r) => r.id)).toEqual([
+    expect(h.store.forces().data.map((f) => nameOf(f.id))).toEqual(['blue', 'red', 'white'])
+    expect(h.store.roles().data.map((r) => nameOf(r.id))).toEqual([
       'blue-co',
       'red-co',
       'white-1',
       'blue-observer',
       'white-observer',
     ])
-    expect(h.store.rooms().data.map((r) => r.id)).toEqual(['blue-hq', 'red-hq', 'negotiation'])
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toEqual([
+      'blue-hq',
+      'red-hq',
+      'negotiation',
+    ])
     expect(h.store.forces().status).toBe('ready')
     expect(await h.store.ready()).toEqual({ state: 'ready' })
   })
@@ -30,24 +46,28 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
   it("reads only its own force's objectives (§3 rule 14)", async () => {
     const h = harness()
     await h.store.ready()
-    expect(h.store.objectives('blue').data?.markdown).toBe('Secure the crossing.')
-    expect(getItemsCalls(h, 'objectives:red')).toBe(0)
-    expect(h.store.objectives('red').status).toBe('loading')
+    expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Secure the crossing.')
+    expect(getItemsCalls(h, nodeName.objectives(tid('red')))).toBe(0)
+    expect(h.store.objectives(tid('red')).status).toBe('loading')
   })
 
   it("reads every force's objectives in the White Force, observers too, and as the admin (PLY-35)", async () => {
     for (const roleId of ['white-1', 'white-observer', 'admin']) {
       const h = harness({ roleId })
       await h.store.ready()
-      expect(h.store.objectives('red').data?.markdown).toBe('Delay Blue.')
-      expect(h.store.objectives('blue').data?.markdown).toBe('Secure the crossing.')
+      expect(h.store.objectives(tid('red')).data?.markdown).toBe('Delay Blue.')
+      expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Secure the crossing.')
     }
   })
 
   it('reads only game-setup when anonymous (D20, NFR-21)', async () => {
     const h = harness({ fake: { anonymous: true, jid: 'anon-1@wrx.test/x' } })
     await h.store.ready()
-    expect(h.store.identity).toMatchObject({ anonymous: true, roleId: undefined, isAdmin: false })
+    expect(h.store.identity).toMatchObject({
+      anonymous: true,
+      loginName: undefined,
+      isAdmin: false,
+    })
     expect(h.store.gameSetup().data?.designVersion).toBe(1)
     expect(h.session.calls.some((c) => c.op === 'listNodes')).toBe(false)
     expect(h.session.calls.filter((c) => c.op === 'getItems').map((c) => c.args[0])).toEqual([
@@ -57,23 +77,23 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
 
   it('logs and ignores invalid items, never throwing (NFR-5)', async () => {
     const docs = sampleDocuments()
-    docs.set('forces:red', ['{not json'])
-    docs.set('forces:green', [{ ...force('green'), colour: 'green' }])
-    docs.set('roles:mallory', [role('eve', 'blue')])
-    docs.set('rooms:odd', [{ schemaVersion: 2, id: 'odd' }])
+    docs.set(nodeName.force(tid('red')), ['{not json'])
+    docs.set(nodeName.force(tid('green')), [{ ...force(tid('green')), colour: 'green' }])
+    docs.set(nodeName.role(tid('mallory')), [role('eve', 'blue')])
+    docs.set(nodeName.room(tid('odd')), [{ schemaVersion: 2, id: tid('odd') }])
     const h = harness({ docs })
     await h.store.ready()
-    expect(h.store.forces().data.map((f) => f.id)).toEqual(['blue', 'white'])
-    expect(h.store.roles().data.map((r) => r.id)).not.toContain('eve')
-    expect(h.store.rooms().data.map((r) => r.id)).not.toContain('odd')
+    expect(h.store.forces().data.map((f) => nameOf(f.id))).toEqual(['blue', 'white'])
+    expect(h.store.roles().data.map((r) => nameOf(r.id))).not.toContain('eve')
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).not.toContain('odd')
     expect(h.warnings.filter((w) => w === 'Ignoring an invalid item')).toHaveLength(4)
     h.session.emitItems({
-      node: 'forces:blue',
+      node: nodeName.force(tid('blue')),
       items: [{ id: 'current', payload: '[]', publisher: undefined }],
       retracted: [],
       deleted: false,
     })
-    expect(h.store.force('blue').data?.id).toBe('blue')
+    expect(h.store.force(tid('blue')).data?.id).toBe(tid('blue'))
   })
 
   it('applies changes live, keeping unrelated snapshots identical (PLY-28)', async () => {
@@ -81,14 +101,16 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     await h.store.ready()
     const forces = h.store.forces()
     const rooms = h.store.rooms()
-    h.publish('roles:red-co', role('red-co', 'red', { name: 'Red Commander' }))
-    expect(h.store.role('red-co').data?.name).toBe('Red Commander')
+    h.publish(nodeName.role(tid('red-co')), role('red-co', 'red', { name: 'Red Commander' }))
+    expect(h.store.role(tid('red-co')).data?.name).toBe('Red Commander')
     expect(h.store.authors().data.get('red-co')).toEqual({
-      roleId: 'red-co',
+      roleId: tid('red-co'),
+      loginName: 'red-co',
       name: 'Red Commander',
-      forceId: 'red',
+      forceId: tid('red'),
       forceName: 'RED',
       colour: '#b91c1c',
+      deleted: false,
     })
     expect(h.store.forces()).toBe(forces)
     expect(h.store.rooms().data).toBe(rooms.data)
@@ -98,23 +120,38 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
   it('drops retracted items and deleted nodes', async () => {
     const h = harness()
     await h.store.ready()
-    h.session.emitItems({ node: 'rooms:red-hq', items: [], retracted: ['current'], deleted: false })
-    expect(h.store.rooms().data.map((r) => r.id)).toEqual(['blue-hq', 'negotiation'])
-    h.session.emitItems({ node: 'rooms:negotiation', items: [], retracted: [], deleted: true })
-    expect(h.store.rooms().data.map((r) => r.id)).toEqual(['blue-hq'])
-    expect(h.store.room('negotiation')).toMatchObject({
+    h.session.emitItems({
+      node: nodeName.room(tid('red-hq')),
+      items: [],
+      retracted: ['current'],
+      deleted: false,
+    })
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toEqual(['blue-hq', 'negotiation'])
+    h.session.emitItems({
+      node: nodeName.room(tid('negotiation')),
+      items: [],
+      retracted: [],
+      deleted: true,
+    })
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toEqual(['blue-hq'])
+    expect(h.store.room(tid('negotiation'))).toMatchObject({
       data: undefined,
       status: 'error',
       error: { code: 'not-found' },
     })
-    h.publish('rooms:negotiation', room('negotiation', []))
-    expect(h.store.room('negotiation').status).toBe('ready')
+    h.publish(nodeName.room(tid('negotiation')), room('negotiation', []))
+    expect(h.store.room(tid('negotiation')).status).toBe('ready')
   })
 
   it("ends the session as deleted when the role's own document is (PLY-29)", async () => {
     const h = harness()
     await h.store.ready()
-    h.session.emitItems({ node: 'roles:blue-co', items: [], retracted: [], deleted: true })
+    h.session.emitItems({
+      node: nodeName.role(tid('blue-co')),
+      items: [],
+      retracted: [],
+      deleted: true,
+    })
     await flush()
     expect(h.store.status()).toEqual({ state: 'ended', reason: 'deleted' })
     expect(h.session.calls.some((c) => c.op === 'disconnect')).toBe(true)
@@ -124,43 +161,45 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
   it('follows a role that moves force (PLY-30)', async () => {
     const h = harness()
     await h.store.ready()
-    expect(h.store.me().data.force?.id).toBe('blue')
-    h.publish('roles:blue-co', role('blue-co', 'red'))
+    expect(h.store.me().data.force?.id).toBe(tid('blue'))
+    h.publish(nodeName.role(tid('blue-co')), role('blue-co', 'red'))
     await flush()
-    expect(h.store.me().data.force?.id).toBe('red')
-    expect(h.store.objectives('red').data?.markdown).toBe('Delay Blue.')
-    expect(h.store.objectives('blue').status).toBe('loading')
+    expect(h.store.me().data.force?.id).toBe(tid('red'))
+    expect(h.store.objectives(tid('red')).data?.markdown).toBe('Delay Blue.')
+    expect(h.store.objectives(tid('blue')).status).toBe('loading')
     expect(
-      h.session.calls.some((c) => c.op === 'unsubscribe' && c.args[0] === 'objectives:blue'),
+      h.session.calls.some(
+        (c) => c.op === 'unsubscribe' && c.args[0] === nodeName.objectives(tid('blue')),
+      ),
     ).toBe(true)
-    expect(h.store.me().data.rooms.map((r) => r.room.id)).toEqual(['red-hq', 'negotiation'])
+    expect(h.store.me().data.rooms.map((r) => nameOf(r.room.id))).toEqual(['red-hq', 'negotiation'])
   })
 
   it('marks a refused node as withdrawn and does not retry (PLY-52)', async () => {
     const h = harness()
-    h.refused.set('rooms:red-hq', 'forbidden')
+    h.refused.set(nodeName.room(tid('red-hq')), 'forbidden')
     await h.store.ready()
-    expect(h.store.room('red-hq')).toMatchObject({
+    expect(h.store.room(tid('red-hq'))).toMatchObject({
       status: 'error',
       error: { code: 'access-withdrawn' },
     })
     await flush(20)
-    expect(getItemsCalls(h, 'rooms:red-hq')).toBe(1)
+    expect(getItemsCalls(h, nodeName.room(tid('red-hq')))).toBe(1)
   })
 
   it('looks for new nodes when the design version changes, and retries failed ones', async () => {
     const h = harness()
-    h.refused.set('rooms:red-hq', 'forbidden')
+    h.refused.set(nodeName.room(tid('red-hq')), 'forbidden')
     await h.store.ready()
-    h.docs.set('rooms:new-room', [
+    h.docs.set(nodeName.room(tid('new-room')), [
       room('new-room', [{ kind: 'force', id: 'blue', access: 'read' }]),
     ])
-    h.refused.delete('rooms:red-hq')
+    h.refused.delete(nodeName.room(tid('red-hq')))
     h.publish('game-setup', game(2))
     await flush()
-    expect(h.store.rooms().data.map((r) => r.id)).toContain('new-room')
-    expect(h.store.room('red-hq').status).toBe('ready')
-    expect(h.store.me().data.rooms.find((r) => r.room.id === 'new-room')?.access).toBe('read')
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toContain('new-room')
+    expect(h.store.room(tid('red-hq')).status).toBe('ready')
+    expect(h.store.me().data.rooms.find((r) => r.room.id === tid('new-room'))?.access).toBe('read')
   })
 
   it('does not let a stale fetch overwrite a newer notification', async () => {
@@ -177,10 +216,10 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
           }
         }),
     )
-    const release = h.store.acquire('assets:logo')
-    h.publish('assets:logo', {
+    const release = h.store.acquire(nodeName.asset(tid('logo')))
+    h.publish(nodeName.asset(tid('logo')), {
       schemaVersion: 1,
-      id: 'logo',
+      id: tid('logo'),
       mimeType: 'image/png',
       size: 3,
       sha256: '1'.repeat(64),
@@ -201,15 +240,15 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
       },
     ])
     await flush()
-    expect(h.store.asset('logo').data?.sha256).toBe('1'.repeat(64))
+    expect(h.store.asset(tid('logo')).data?.sha256).toBe('1'.repeat(64))
     release()
   })
 
   it('reports transport read failures as errors', async () => {
     const h = harness()
-    h.refused.set('rooms:red-hq', 'timeout')
+    h.refused.set(nodeName.room(tid('red-hq')), 'timeout')
     await h.store.ready()
-    expect(h.store.room('red-hq').error?.code).toBe('transport')
+    expect(h.store.room(tid('red-hq')).error?.code).toBe('transport')
     expect(h.store.room('Not An Id')).toMatchObject({ status: 'error', error: { code: 'invalid' } })
     expect(h.store.document('nothing-here')).toMatchObject({ status: 'loading' })
     const release = h.store.acquire('not-a-wrx-node')
@@ -224,9 +263,11 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     const { createSessionStore } = await import('./store.ts')
     const store = createSessionStore({ session: h.session, logger: h.logger })
     await store.ready()
-    expect(store.me().data.role?.id).toBe('blue-co')
-    expect(store.me().data.force?.id).toBe('blue')
+    // The role is found by its login name among the role documents (§3 rule 1), so with no
+    // listing there is none to find; it starts, with nothing to show.
+    expect(store.me().data.role).toBeUndefined()
     expect(store.rooms().data).toEqual([])
+    expect(store.gameSetup().data?.designVersion).toBe(1)
     expect(h.warnings).toContain('Could not list nodes')
   })
 
@@ -270,15 +311,15 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     const h = harness({ roleId: 'blue-observer' })
     await h.store.ready()
     const matrix = h.store.access().data
-    expect(accessOf(matrix, 'blue-hq', 'blue-observer')).toBe('read')
-    expect(accessOf(matrix, 'red-hq', 'white-1')).toBe('write')
+    expect(accessOf(matrix, tid('blue-hq'), tid('blue-observer'))).toBe('read')
+    expect(accessOf(matrix, tid('red-hq'), tid('white-1'))).toBe('write')
     const me = h.store.me().data
     expect(me).toMatchObject({ isObserver: true, isUmpire: false })
-    expect(me.rooms.map((r) => [r.room.id, r.access])).toEqual([['blue-hq', 'read']])
+    expect(me.rooms.map((r) => [nameOf(r.room.id), r.access])).toEqual([['blue-hq', 'read']])
     expect(h.store.me()).toBe(h.store.me())
     const admin = harness({ roleId: 'admin' })
     await admin.store.ready()
-    expect(admin.store.me().data.rooms.map((r) => [r.room.id, r.access])).toEqual([
+    expect(admin.store.me().data.rooms.map((r) => [nameOf(r.room.id), r.access])).toEqual([
       ['blue-hq', 'write'],
       ['red-hq', 'write'],
       ['negotiation', 'write'],
@@ -290,7 +331,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     await admin.store.ready()
     const me = admin.store.me().data
     expect(me).toMatchObject({ role: undefined, isUmpire: true, canEditObjectives: true })
-    expect(me.force?.id).toBe('white')
+    expect(me.force?.id).toBe(tid('white'))
     expect(me.identity.isAdmin).toBe(true)
   })
 
@@ -299,14 +340,16 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     await h.store.ready()
     const me = h.store.me().data
     expect(me).toMatchObject({ isObserver: true, isUmpire: true, canEditObjectives: false })
-    expect(me.rooms.map((r) => [r.room.id, r.access])).toEqual([
+    expect(me.rooms.map((r) => [nameOf(r.room.id), r.access])).toEqual([
       ['blue-hq', 'read'],
       ['red-hq', 'read'],
       ['negotiation', 'read'],
     ])
+    // Only the admin edits objectives; a White Force role that is not an observer reads them too.
     const white = harness({ roleId: 'white-1' })
     await white.store.ready()
-    expect(white.store.me().data.canEditObjectives).toBe(true)
+    expect(white.store.me().data.canEditObjectives).toBe(false)
+    expect(white.store.objectives(tid('red')).data?.markdown).toBe('Delay Blue.')
   })
 })
 
@@ -315,8 +358,8 @@ describe('session store: reference counting (ARC-2)', () => {
     const h = harness()
     await h.store.ready()
     const baseline = h.session.listenerCount()
-    const a = h.store.acquire('assets:logo')
-    const b = h.store.acquire('assets:logo')
+    const a = h.store.acquire(nodeName.asset(tid('logo')))
+    const b = h.store.acquire(nodeName.asset(tid('logo')))
     expect(h.session.listenerCount()).toBe(baseline + 1)
     a()
     a()
@@ -325,24 +368,28 @@ describe('session store: reference counting (ARC-2)', () => {
     b()
     await flush()
     expect(h.session.listenerCount()).toBe(baseline)
-    expect(getItemsCalls(h, 'assets:logo')).toBe(1)
+    expect(getItemsCalls(h, nodeName.asset(tid('logo')))).toBe(1)
   })
 
   it('absorbs a release followed at once by an acquire (StrictMode)', async () => {
     const h = harness()
     await h.store.ready()
-    h.store.acquire('assets:logo')()
-    const again = h.store.acquire('assets:logo')
+    h.store.acquire(nodeName.asset(tid('logo')))()
+    const again = h.store.acquire(nodeName.asset(tid('logo')))
     await flush()
-    expect(getItemsCalls(h, 'assets:logo')).toBe(1)
-    expect(h.session.calls.some((c) => c.op === 'unsubscribe' && c.args[0] === 'assets:logo')).toBe(
-      false,
-    )
+    expect(getItemsCalls(h, nodeName.asset(tid('logo')))).toBe(1)
+    expect(
+      h.session.calls.some(
+        (c) => c.op === 'unsubscribe' && c.args[0] === nodeName.asset(tid('logo')),
+      ),
+    ).toBe(false)
     again()
     await flush()
-    expect(h.session.calls.some((c) => c.op === 'unsubscribe' && c.args[0] === 'assets:logo')).toBe(
-      true,
-    )
+    expect(
+      h.session.calls.some(
+        (c) => c.op === 'unsubscribe' && c.args[0] === nodeName.asset(tid('logo')),
+      ),
+    ).toBe(true)
   })
 
   it('notifies subscribers and stops after unsubscribe', async () => {
@@ -350,9 +397,9 @@ describe('session store: reference counting (ARC-2)', () => {
     await h.store.ready()
     let calls = 0
     const off = h.store.subscribe(() => calls++)
-    h.publish('forces:red', force('red', { name: 'Reds' }))
+    h.publish(nodeName.force(tid('red')), force('red', { name: 'Reds' }))
     off()
-    h.publish('forces:red', force('red', { name: 'Redder' }))
+    h.publish(nodeName.force(tid('red')), force('red', { name: 'Redder' }))
     expect(calls).toBe(1)
   })
 })
@@ -371,10 +418,10 @@ describe('session store: connection (PLY-2, PLY-50)', () => {
   it('refetches documents after a reconnection', async () => {
     const h = harness()
     await h.store.ready()
-    h.docs.set('forces:red', [force('red', { name: 'Missed while offline' })])
+    h.docs.set(nodeName.force(tid('red')), [force('red', { name: 'Missed while offline' })])
     h.session.emitRecovered('reconnected')
     await flush()
-    expect(h.store.force('red').data?.name).toBe('Missed while offline')
+    expect(h.store.force(tid('red')).data?.name).toBe('Missed while offline')
   })
 
   it('ends with the transport reason and drops everything (PLY-50)', async () => {
@@ -384,7 +431,7 @@ describe('session store: connection (PLY-2, PLY-50)', () => {
     expect(h.store.status()).toEqual({ state: 'ended', reason: 'session-ended', text: 'bye' })
     expect(h.store.forces()).toMatchObject({ data: [], status: 'error' })
     expect(h.session.listenerCount()).toBe(0)
-    expect(h.store.acquire('forces:red')).toBeTypeOf('function')
+    expect(h.store.acquire(nodeName.force(tid('red')))).toBeTypeOf('function')
     expect(h.session.listenerCount()).toBe(0)
     expect(await h.store.ready()).toMatchObject({ state: 'ended' })
   })
@@ -407,115 +454,129 @@ describe('session store: connection (PLY-2, PLY-50)', () => {
 })
 
 describe('session store: operations', () => {
-  it('publishes objectives as an umpire (PLY-35)', async () => {
-    const h = harness({ roleId: 'white-1' })
+  it('publishes objectives as the admin, as its single item (PLY-35, §3 rule 14)', async () => {
+    const h = harness({ roleId: 'admin' })
     await h.store.ready()
-    expect(await h.store.publishObjectives('red', '1. Hold the line.')).toEqual(ok(undefined))
+    expect(await h.store.publishObjectives(tid('red'), '1. Hold the line.')).toEqual(ok(undefined))
     const call = h.session.calls.find((c) => c.op === 'publish')
-    // Each author has its own item: a publisher cannot overwrite another's (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'white-1'])
+    // One item, the admin's, replaced on each edit.
+    expect(call?.args.slice(0, 2)).toEqual([nodeName.objectives(tid('red')), 'admin'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
       schemaVersion: 1,
-      forceId: 'red',
+      forceId: tid('red'),
       markdown: '1. Hold the line.',
     })
   })
 
-  it("shows the newest author's objectives, whatever order items arrive in", async () => {
-    const h = harness()
+  it("shows the admin's item only, never a former White Force editor's (§3 rule 14)", async () => {
+    // A server published before WP 3.5 can hold an editor's item until the next publish purges it.
+    const docs = sampleDocuments()
+    docs.set(nodeName.objectives(tid('blue')), [
+      objectives('blue', 'Admin original', '2026-10-24T10:00:00.000Z'),
+      objectives('blue', 'Old umpire edit', '2026-10-24T11:00:00.000Z'),
+    ])
+    const h = harness({ docs })
     await h.store.ready()
+    expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Admin original')
     const item = (id: string, markdown: string, updatedAt: string) => ({
       id,
       payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
       publisher: undefined,
     })
     h.session.emitItems({
-      node: 'objectives:blue',
-      items: [
-        item('white-1', 'Umpire edit', '2026-10-24T11:00:00.000Z'),
-        item('admin', 'Admin original', '2026-10-24T10:00:00+00:00'),
-      ],
+      node: nodeName.objectives(tid('blue')),
+      items: [item('white-1', 'Umpire edit', '2026-10-24T12:00:00.000Z')],
       retracted: [],
       deleted: false,
     })
-    expect(h.store.objectives('blue').data?.markdown).toBe('Umpire edit')
+    expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Admin original')
     h.session.emitItems({
-      node: 'objectives:blue',
+      node: nodeName.objectives(tid('blue')),
       items: [item('admin', 'Admin revision', '2026-10-24T13:00:00+01:00')],
       retracted: [],
       deleted: false,
     })
-    // 13:00+01:00 is 12:00Z, after the umpire's 11:00Z.
-    expect(h.store.objectives('blue').data?.markdown).toBe('Admin revision')
+    expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Admin revision')
   })
 
-  describe('F11: an author’s clock cannot hide or pin an objectives edit', () => {
+  describe('F11: a live notification beats the fetched copy, whatever the clock says', () => {
     const NOW = '2026-10-25T09:00:00.000Z'
-    const item = (id: string, markdown: string, updatedAt: string) => ({
-      id,
+    const item = (markdown: string, updatedAt: string) => ({
+      id: 'admin',
       payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
       publisher: undefined,
     })
-    const live = (h: ReturnType<typeof harness>, ...items: ReturnType<typeof item>[]) => {
-      h.session.emitItems({ node: 'objectives:blue', items, retracted: [], deleted: false })
+    const live = (h: ReturnType<typeof harness>, markdown: string, updatedAt: string) => {
+      h.session.emitItems({
+        node: nodeName.objectives(tid('blue')),
+        items: [item(markdown, updatedAt)],
+        retracted: [],
+        deleted: false,
+      })
     }
-    /** Blue's objectives node as read on login: the admin's item and an umpire's. */
-    function stored(admin: string, umpire: string) {
+
+    it('a fetched copy stamped in the future does not pin itself above a live edit', async () => {
       const docs = sampleDocuments()
-      docs.set('objectives:blue', [
-        objectives('blue', 'Admin', admin),
-        objectives('blue', 'Umpire', umpire),
+      docs.set(nodeName.objectives(tid('blue')), [
+        objectives('blue', 'Read at login', '2030-01-01T00:00:00.000Z'),
       ])
-      return harness({ docs, now: () => NOW })
-    }
-
-    it('a clock set ahead does not pin an edit above a later one', async () => {
-      // The umpire's clock is years ahead; the admin edits afterwards with a correct clock.
-      const h = stored('2026-10-24T09:00:00.000Z', '2030-01-01T00:00:00.000Z')
+      const h = harness({ docs, now: () => NOW })
       await h.store.ready()
-      // On a fresh read the future stamp counts as the read time, so it is still the newest...
-      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire')
-      live(h, item('current', 'Admin, later', '2026-10-25T09:00:00.000Z'))
-      // ...but any edit published after it wins. Before F11, 2030 hid it until 2030.
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, later')
+      expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Read at login')
+      // The admin's clock was a day slow when it published this edit.
+      live(h, 'Live edit', '2026-10-24T09:00:00.000Z')
+      expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Live edit')
     })
 
-    it('a clock set behind does not hide a live edit', async () => {
-      const h = stored('2026-10-25T08:00:00.000Z', '2026-10-24T09:00:00.000Z')
+    it('a fetch that answers after a live edit does not overwrite it', async () => {
+      const h = harness({ now: () => NOW })
       await h.store.ready()
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
-      // The umpire edits now, but its clock is a day slow.
-      live(h, item('item-1', 'Umpire, now', '2026-10-24T09:05:00.000Z'))
-      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire, now')
-      // Arrival order, not stamps, decides between live edits.
-      live(h, item('current', 'Admin again', '2026-10-25T08:30:00.000Z'))
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin again')
-    })
-
-    it('within one read, stamps decide, a future one counting as the read time', async () => {
-      const h = stored('2026-10-25T09:00:00.000Z', '2026-10-24T09:00:00.000Z')
-      await h.store.ready()
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
-      // In one event, a stamp ahead of the receipt time ties with one at it; the later item wins.
-      live(
-        h,
-        item('item-1', 'Umpire, ahead', '2027-01-01T00:00:00.000Z'),
-        item('current', 'Admin, at receipt', NOW),
+      let answer: (items: readonly Item[]) => void = () => undefined
+      h.session.stub(
+        'pubsub',
+        'getItems',
+        () =>
+          new Promise((resolve) => {
+            answer = (items) => {
+              resolve(ok(items))
+            }
+          }),
       )
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, at receipt')
+      const refreshing = h.store.refresh()
+      await flush()
+      live(h, 'Live edit', '2026-10-24T09:00:00.000Z')
+      answer([item('Stale copy', '2030-01-01T00:00:00.000Z')])
+      await refreshing
+      await flush()
+      expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Live edit')
+    })
+
+    it('between live edits, arrival order decides, not stamps', async () => {
+      const h = harness({ now: () => NOW })
+      await h.store.ready()
+      live(h, 'First', '2026-10-25T08:59:00.000Z')
+      live(h, 'Second, clock behind', '2026-10-20T00:00:00.000Z')
+      expect(h.store.objectives(tid('blue')).data?.markdown).toBe('Second, clock behind')
     })
   })
 
-  it('refuses objectives from a player, a White Force observer, and invalid ones', async () => {
+  it('refuses objectives from a player and every White Force role, and invalid ones', async () => {
     const h = harness()
     await h.store.ready()
-    expect(await h.store.publishObjectives('blue', 'x')).toMatchObject({
+    expect(await h.store.publishObjectives(tid('blue'), 'x')).toMatchObject({
       ok: false,
       error: { code: 'not-permitted' },
     })
+    const white = harness({ roleId: 'white-1' })
+    await white.store.ready()
+    expect(await white.store.publishObjectives(tid('blue'), 'x')).toMatchObject({
+      ok: false,
+      error: { code: 'not-permitted' },
+    })
+    expect(white.session.calls.some((c) => c.op === 'publish')).toBe(false)
     const observer = harness({ roleId: 'white-observer' })
     await observer.store.ready()
-    expect(await observer.store.publishObjectives('blue', 'x')).toMatchObject({
+    expect(await observer.store.publishObjectives(tid('blue'), 'x')).toMatchObject({
       ok: false,
       error: { code: 'not-permitted' },
     })
@@ -523,12 +584,12 @@ describe('session store: operations', () => {
     const admin = harness({ roleId: 'admin' })
     await admin.store.ready()
     expect((await admin.store.publishObjectives('Bad Id', 'x')).ok).toBe(false)
-    expect(await admin.store.publishObjectives('blue', 'x'.repeat(50_001))).toMatchObject({
+    expect(await admin.store.publishObjectives(tid('blue'), 'x'.repeat(50_001))).toMatchObject({
       ok: false,
       error: { code: 'invalid' },
     })
     admin.session.stub('pubsub', 'publish', () => Promise.resolve(err('forbidden')))
-    expect(await admin.store.publishObjectives('blue', 'x')).toMatchObject({
+    expect(await admin.store.publishObjectives(tid('blue'), 'x')).toMatchObject({
       ok: false,
       error: { code: 'not-permitted', cause: { condition: 'forbidden' } },
     })
@@ -559,7 +620,7 @@ describe('session store: operations', () => {
   it('logs out: leaves rooms, releases subscriptions, clears data, disconnects (PLY-3)', async () => {
     const h = harness()
     await h.store.ready()
-    const watch = await h.store.watchRoom('blue-hq')
+    const watch = await h.store.watchRoom(tid('blue-hq'))
     expect(watch.ok).toBe(true)
     expect(await h.store.logout()).toEqual(ok(undefined))
     const ops = h.session.calls.map((c) => c.op)
@@ -569,16 +630,22 @@ describe('session store: operations', () => {
     expect(h.store.status()).toEqual({ state: 'ended', reason: 'logout' })
     expect(h.session.listenerCount()).toBe(0)
     expect(h.store.forces().data).toEqual([])
-    expect(h.store.roomView('blue-hq').data).toBeUndefined()
+    expect(h.store.roomView(tid('blue-hq')).data).toBeUndefined()
     expect(await h.store.logout()).toEqual(ok(undefined))
-    expect(await h.store.publishObjectives('blue', 'x')).toMatchObject({
+    expect(await h.store.publishObjectives(tid('blue'), 'x')).toMatchObject({
       error: { code: 'session-ended' },
     })
     expect(await h.store.postAnnouncement('x')).toMatchObject({ error: { code: 'session-ended' } })
-    expect(await h.store.watchRoom('blue-hq')).toMatchObject({ error: { code: 'session-ended' } })
-    expect(await h.store.loadOlder('blue-hq')).toMatchObject({ error: { code: 'session-ended' } })
-    expect(await h.store.rejoinRoom('blue-hq')).toMatchObject({ error: { code: 'session-ended' } })
-    expect(await h.store.sendMessage('blue-hq', 'hi')).toMatchObject({
+    expect(await h.store.watchRoom(tid('blue-hq'))).toMatchObject({
+      error: { code: 'session-ended' },
+    })
+    expect(await h.store.loadOlder(tid('blue-hq'))).toMatchObject({
+      error: { code: 'session-ended' },
+    })
+    expect(await h.store.rejoinRoom(tid('blue-hq'))).toMatchObject({
+      error: { code: 'session-ended' },
+    })
+    expect(await h.store.sendMessage(tid('blue-hq'), 'hi')).toMatchObject({
       error: { code: 'session-ended', unsentText: 'hi' },
     })
     await h.store.refresh()
@@ -590,10 +657,63 @@ describe('session store: operations', () => {
     const a = harness()
     const b = harness({ roleId: 'red-co' })
     await Promise.all([a.store.ready(), b.store.ready()])
-    a.publish('forces:blue', force('blue', { name: 'Only in A' }))
-    expect(a.store.force('blue').data?.name).toBe('Only in A')
-    expect(b.store.force('blue').data?.name).toBe('BLUE')
+    a.publish(nodeName.force(tid('blue')), force('blue', { name: 'Only in A' }))
+    expect(a.store.force(tid('blue')).data?.name).toBe('Only in A')
+    expect(b.store.force(tid('blue')).data?.name).toBe('BLUE')
     await a.store.logout()
     expect(b.store.status()).toEqual({ state: 'ready' })
+  })
+})
+
+describe('session store: login names and deleted roles (§3 rules 1 and 6)', () => {
+  const retired = {
+    schemaVersion: 1,
+    id: tid('old-co'),
+    kind: 'role',
+    name: 'Old CO',
+    loginName: 'old-co',
+    colour: '#b91c1c',
+    deletedAt: '2026-11-01T10:00:00.000Z',
+  }
+
+  it('finds its own role by login name, not by id', async () => {
+    const docs = sampleDocuments()
+    // A role whose login name is not its id's short name.
+    docs.set(nodeName.role(tid('blue-co')), [role('blue-co', 'blue', { loginName: 'bluecmd' })])
+    const h = harness({ docs, roleId: 'bluecmd' })
+    await h.store.ready()
+    expect(h.store.identity.loginName).toBe('bluecmd')
+    expect(h.store.me().data.role?.id).toBe(tid('blue-co'))
+    expect(h.store.me().data.rooms.map((r) => nameOf(r.room.id))).toEqual([
+      'blue-hq',
+      'negotiation',
+    ])
+  })
+
+  it('resolves authors by login name, and a deleted role from its `retired` record', async () => {
+    const docs = sampleDocuments()
+    docs.set('retired', [retired])
+    const h = harness({ docs })
+    await h.store.ready()
+    expect(h.store.retired().data).toEqual([retired])
+    expect(h.store.authors().data.get('old-co')).toEqual({
+      roleId: tid('old-co'),
+      loginName: 'old-co',
+      name: 'Old CO',
+      forceId: '',
+      forceName: undefined,
+      colour: '#b91c1c',
+      deleted: true,
+    })
+    expect(h.store.authors().data.get('red-co')).toMatchObject({ deleted: false, name: 'red-co' })
+  })
+
+  it('never reads `retired` for access: a record with a room’s participant id grants nothing', async () => {
+    const docs = sampleDocuments()
+    docs.set('retired', [{ ...retired, id: tid('blue-co'), loginName: 'blue-co' }])
+    const h = harness({ docs, roleId: 'old-co' })
+    await h.store.ready()
+    expect(h.store.me().data.role).toBeUndefined()
+    expect(h.store.me().data.rooms).toEqual([])
   })
 })

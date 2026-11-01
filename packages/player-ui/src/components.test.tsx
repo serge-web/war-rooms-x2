@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { flush, harness, room } from '@wrx/domain/fixtures'
 import { SessionStoreProvider } from '@wrx/hooks'
@@ -62,7 +63,7 @@ describe('LoginFormCore', () => {
     )
     expect(screen.getByRole('columnheader', { name: 'Demo password' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Use the demo login for Blue CO (Blue)' }))
-    expect(screen.getByLabelText<HTMLInputElement>('Role id').value).toBe('blue-co')
+    expect(screen.getByLabelText<HTMLInputElement>('Login name').value).toBe('blue-co')
     fireEvent.submit(screen.getByRole('button', { name: 'Log in' }))
     expect(onSubmit).toHaveBeenCalledWith('blue-co', 'demo-blue-co')
   })
@@ -72,8 +73,8 @@ describe('LoginFormCore', () => {
     const { rerender } = render(<LoginFormCore onSubmit={onSubmit} />)
     fireEvent.submit(screen.getByRole('button', { name: 'Log in' }))
     expect(onSubmit).not.toHaveBeenCalled()
-    rerender(<LoginFormCore onSubmit={onSubmit} busy error="Wrong role id or password." />)
-    expect(screen.getByRole('alert').textContent).toBe('Wrong role id or password.')
+    rerender(<LoginFormCore onSubmit={onSubmit} busy error="Wrong login name or password." />)
+    expect(screen.getByRole('alert').textContent).toBe('Wrong login name or password.')
     expect(screen.getByRole('button', { name: 'Logging in…' })).toHaveProperty('disabled', true)
   })
 })
@@ -209,11 +210,11 @@ describe('Shell over a store', () => {
 
     act(() => {
       h.publish(
-        nodeName.room('blue-hq'),
+        nodeName.room(tid('blue-hq')),
         room('blue-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
       )
       h.publish(
-        nodeName.room('negotiation'),
+        nodeName.room(tid('negotiation')),
         room('negotiation', [{ kind: 'role', id: 'red-co', access: 'write' }]),
       )
     })

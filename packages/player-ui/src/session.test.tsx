@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { nodeName } from '@wrx/schemas'
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { SessionStore } from '@wrx/domain'
 import { flush, harness } from '@wrx/domain/fixtures'
@@ -84,7 +86,7 @@ describe('usePlayerSession', () => {
     await act(() => result.current.login('blue-co', 'wrong'))
     expect(result.current.state).toEqual({
       phase: 'signed-out',
-      error: 'Wrong role id or password.',
+      error: 'Wrong login name or password.',
     })
   })
 
@@ -125,7 +127,12 @@ describe('usePlayerSession', () => {
     const h = connection.made[0]!
     await act(async () => {
       await h.store.ready()
-      h.session.emitItems({ node: 'roles:blue-co', items: [], retracted: [], deleted: true })
+      h.session.emitItems({
+        node: nodeName.role(tid('blue-co')),
+        items: [],
+        retracted: [],
+        deleted: true,
+      })
       await flush()
     })
     expect(result.current.state).toEqual({ phase: 'signed-out', ended: { reason: 'deleted' } })

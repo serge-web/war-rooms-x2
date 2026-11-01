@@ -6,7 +6,13 @@ import type { AdminOps, RoleAccessPlan } from '../src/index.ts'
 import { targetState } from '../src/index.ts'
 import type { AdminOpsError, TargetState } from '../src/index.ts'
 
-const EMPTY: TargetState = Object.freeze({ roles: [], readOnlyRoles: [], rooms: [], nodes: [] })
+const EMPTY: TargetState = Object.freeze({
+  roles: [],
+  readOnlyRoles: [],
+  rooms: [],
+  nodes: [],
+  loginNames: new Map<string, string>(),
+})
 
 function must<T>(
   result:

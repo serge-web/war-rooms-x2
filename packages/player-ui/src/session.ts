@@ -135,7 +135,7 @@ export interface PlayerSession {
 export function loginErrorMessage(error: TransportError): string {
   switch (error.condition) {
     case 'not-authorized':
-      return 'Wrong role id or password.'
+      return 'Wrong login name or password.'
     case 'timeout':
     case 'disconnected':
     case 'remote-server-not-found':

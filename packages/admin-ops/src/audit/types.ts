@@ -55,6 +55,8 @@ export type AuditKind =
   | 'stray-access'
   /** A published document differs from the design, or is missing. */
   | 'document'
+  /** An objectives node holds an item that is not the admin's (D21, §3 rule 14). */
+  | 'stray-items'
   /** The server's design version is not this design's. */
   | 'design-version'
   /** ADM-42, R17: anyone, even anonymous, can list node names. */
@@ -64,8 +66,13 @@ export interface AuditItem {
   /** Stable across audits of the same drift, e.g. `voice:blue-observer:blue-hq`. */
   readonly id: string
   readonly kind: AuditKind
-  /** The room id, node name, role id or full JID the difference is about. */
+  /** The room id, node name, login name or full JID the difference is about. */
   readonly target: string
+  /**
+   * `target` as the admin reads it: a room's name, or a node with its entity's name
+   * (`objectives: Red`), since ids are GUIDs (§3 rule 1). Undefined when it has none.
+   */
+  readonly targetName?: string
   /** The role it concerns, when it concerns one. */
   readonly roleId?: string
   /** One line each, for the report. */

@@ -153,6 +153,11 @@ function kindOf(step: PlanStep): Kind {
       }
     case 'delete-node':
       return { key: 'delete-node', summary: (s) => `Delete nodes: ${plural(s.length, 'node')}` }
+    case 'purge-node':
+      return {
+        key: 'purge-node',
+        summary: (s) => `Remove objectives items not the admin's: ${plural(s.length, 'node')}`,
+      }
   }
 }
 

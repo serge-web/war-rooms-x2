@@ -50,6 +50,6 @@ test('a wrong password is refused by ejabberd', async ({ page }) => {
   await page.goto('./')
   await logIn(page, 'admin', 'not-the-password')
   await expect(
-    page.getByRole('alert').filter({ hasText: 'Wrong role id or password.' }),
+    page.getByRole('alert').filter({ hasText: 'Wrong login name or password.' }),
   ).toBeVisible({ timeout: 20_000 })
 })

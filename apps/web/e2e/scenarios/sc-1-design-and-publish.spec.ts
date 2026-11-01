@@ -33,7 +33,7 @@ const NEGOTIATION = 'Blue–Red negotiation'
 
 async function adminLogin(page: Page, password: string): Promise<void> {
   await page.goto('./#/admin')
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   await expect(adminNav(page)).toBeVisible({ timeout: 20_000 })
@@ -146,7 +146,7 @@ async function credentials(page: Page): Promise<Record<string, string>> {
 async function playerView(page: Page, roleId: string, password: string) {
   await page.goto('./')
   await expect(page.getByRole('heading', { name: GAME })).toBeVisible({ timeout: 20_000 })
-  await page.getByLabel('Role id').fill(roleId)
+  await page.getByLabel('Login name').fill(roleId)
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   const tabs = page.locator('.flexlayout__layout_main').getByRole('tab')
@@ -215,7 +215,7 @@ test('SC-1: the admin designs a game on the mock, publishes it, moves it to the 
     await page.getByRole('button', { name: 'Add role' }).click()
     const form = page.getByRole('form', { name: `Role: ${role.name}` })
     await expect(form).toBeVisible()
-    await expect(form.getByLabel('Login id')).toHaveValue(role.id)
+    await expect(form.getByLabel('Login name')).toHaveValue(role.id)
     if (role.observer) await form.getByLabel('Observer').check()
   }
 

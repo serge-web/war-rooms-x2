@@ -55,7 +55,7 @@ export function roomTabs(app: Page | FrameLocator | Locator): Locator {
 
 /** Logs in on the app's welcome page with a demo login (NFR-6). */
 export async function demoLogIn(app: Page | FrameLocator, roleId: string): Promise<void> {
-  await app.getByLabel('Role id').fill(roleId)
+  await app.getByLabel('Login name').fill(roleId)
   await app.getByLabel('Password', { exact: true }).fill(`demo-${roleId}`)
   await app.getByRole('button', { name: 'Log in', exact: true }).click()
 }

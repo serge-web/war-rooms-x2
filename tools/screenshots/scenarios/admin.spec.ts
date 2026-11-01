@@ -11,7 +11,7 @@ async function adminLogin(page: Page): Promise<void> {
   await page.goto('./app/#/admin')
   await expect(page.getByRole('heading', { name: 'Admin login' })).toBeVisible()
   await expect(page.getByLabel('Backend: MOCK')).toBeVisible()
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   await expect(page.getByRole('navigation', { name: 'Admin sections' })).toBeVisible()

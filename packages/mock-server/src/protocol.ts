@@ -97,6 +97,7 @@ export interface OpMap {
   }
   'pubsub.getNodeConfig': { args: readonly [node: string]; result: NodeConfig }
   'pubsub.deleteNode': { args: readonly [node: string]; result: undefined }
+  'pubsub.purgeNode': { args: readonly [node: string]; result: undefined }
   'pubsub.getAffiliations': {
     args: readonly [node: string]
     result: readonly PubsubAffiliationEntry[]

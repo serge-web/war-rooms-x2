@@ -2,6 +2,7 @@
 // The chat panel over a store (happy-dom): history with shared headers and plain text, sending
 // with Enter, a refused post kept with its reason, the observer's disabled composer, who is
 // online, unread counts, and a 10,000-message list rendering only what is in view.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { DOMAIN, MUC, chatBody, flush, harness, message, selfPresence } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
@@ -33,7 +34,7 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
-const HQ = `blue-hq@${MUC}`
+const HQ = `${tid('blue-hq')}@${MUC}`
 
 function from(roleId: string, text: string, extra: Partial<RoomMessage> = {}): RoomMessage {
   return message('blue-hq', {
@@ -58,13 +59,13 @@ async function mount({
   const h = harness({ roleId })
   h.archive.set(HQ, archive)
   await h.store.ready()
-  const roomDoc = h.store.room('blue-hq').data
+  const roomDoc = h.store.room(tid('blue-hq')).data
   if (roomDoc === undefined) throw new Error('no room')
   render(
     <StrictMode>
       <SessionStoreProvider store={h.store}>
         <UnreadProvider>
-          <ChatPanel roomId="blue-hq" room={roomDoc} config={{}} access={access} />
+          <ChatPanel roomId={tid('blue-hq')} room={roomDoc} config={{}} access={access} />
           {extra}
         </UnreadProvider>
       </SessionStoreProvider>
@@ -97,6 +98,35 @@ describe('ChatPanel', () => {
     expect(link.getAttribute('rel')).toContain('noopener')
     expect(within(cards[2]!).getByText('(you)')).toBeTruthy()
     expect(screen.getByText('Start of the room’s history.')).toBeTruthy()
+  })
+
+  it('shows a deleted role’s messages under its last name, marked deleted (ADM-14, §3 rule 1)', async () => {
+    const h = harness()
+    h.docs.set('retired', [
+      {
+        schemaVersion: 1,
+        id: tid('old-co'),
+        kind: 'role',
+        name: 'Old Commander',
+        loginName: 'old-co',
+        colour: '#b91c1c',
+        deletedAt: '2026-11-01T10:00:00.000Z',
+      },
+    ])
+    h.archive.set(HQ, [from('old-co', 'An order from before.'), from('red-co', 'Still here.')])
+    await h.store.ready()
+    const roomDoc = h.store.room(tid('blue-hq')).data
+    if (roomDoc === undefined) throw new Error('no room')
+    render(
+      <SessionStoreProvider store={h.store}>
+        <ChatPanel roomId={tid('blue-hq')} room={roomDoc} config={{}} access="write" />
+      </SessionStoreProvider>,
+    )
+    await act(() => flush())
+    const cards = within(screen.getByRole('feed')).getAllByRole('article')
+    expect(cards[0]?.getAttribute('aria-label')).toMatch(/^.*Old Commander \(deleted\), /)
+    expect(cards[0]?.textContent).toContain('(deleted)')
+    expect(cards[1]?.textContent).not.toContain('(deleted)')
   })
 
   it('labels the admin’s messages as the umpire, in the White Force, by JID only (SC-5, §3 rule 3)', async () => {
@@ -212,7 +242,7 @@ describe('unread counts (PLY-11)', () => {
       <SessionStoreProvider store={h.store}>
         <UnreadProvider>
           <span data-testid="badge">
-            <ChatUnreadBadge roomId="blue-hq" />
+            <ChatUnreadBadge roomId={tid('blue-hq')} />
           </span>
           <Grab />
         </UnreadProvider>
@@ -228,10 +258,10 @@ describe('unread counts (PLY-11)', () => {
       h.session.emitMessage(from('white-1', 'two'))
     })
     expect(badge()).toBe('2')
-    const newest = h.store.roomView('blue-hq').data?.messages.at(-1)
+    const newest = h.store.roomView(tid('blue-hq')).data?.messages.at(-1)
     act(() => {
       if (newest !== undefined) {
-        markers?.mark('blue-hq', { id: newest.id, ms: Date.parse(newest.timestamp) })
+        markers?.mark(tid('blue-hq'), { id: newest.id, ms: Date.parse(newest.timestamp) })
       }
     })
     expect(badge()).toBe('')
@@ -255,7 +285,7 @@ function h3() {
     id,
     roomId: 'r',
     timestamp: `2026-10-24T10:00:0${i}Z`,
-    sender: { nick: 'x', jid: undefined, roleId: 'x', isAdmin: false },
+    sender: { nick: 'x', jid: undefined, loginName: 'x', isAdmin: false },
     body: { type: 'chat' as const, schemaVersion: 1 as const, content: { text: id } },
   }))
 }

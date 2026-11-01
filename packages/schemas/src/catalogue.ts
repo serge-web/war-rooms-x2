@@ -7,6 +7,7 @@ import {
   gameSetupSchema,
   gameStateSchema,
   objectivesSchema,
+  retiredSchema,
   roleSchema,
   roomSchema,
 } from './documents.ts'
@@ -40,7 +41,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   },
   {
     title: 'Role',
-    location: 'PubSub node `roles:<roleId>`',
+    location: 'PubSub node `roles:<roleId>`; the role is the XMPP account `<loginName>@<domain>`',
     access: 'Read: all game users. Publish: admin.',
     schema: roleSchema,
   },
@@ -54,7 +55,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     title: 'Objectives',
     location: 'PubSub node `objectives:<forceId>`',
     access:
-      "Read: the force's roles, the White Force's roles and the admin. Publish: the admin and White Force roles that are not observers.",
+      "Read: the force's roles, every White Force role and the admin. Publish: the admin only, as one item (`admin`) replaced on each edit.",
     schema: objectivesSchema,
   },
   {
@@ -68,6 +69,12 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     location: 'One item of PubSub node `announcements`',
     access: 'Read: every role. Publish: admin.',
     schema: announcementSchema,
+  },
+  {
+    title: 'Deleted force or role',
+    location: 'One item of PubSub node `retired`, the item id the entity’s GUID',
+    access: 'Read: all game users. Publish: admin. Never used to decide access.',
+    schema: retiredSchema,
   },
   {
     title: 'Game state',

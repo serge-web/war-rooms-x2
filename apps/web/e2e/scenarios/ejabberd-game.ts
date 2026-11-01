@@ -124,7 +124,7 @@ async function reset(server: EjabberdServer, transport: XmppTransport, admin: Se
 
 /** Every role id the scenarios use: the demo's, and those SC-1 designs. */
 const SCENARIO_ROLE_IDS = [
-  ...(demoSeed().design as DesignFile).roles.map((r) => r.id),
+  ...(demoSeed().design as DesignFile).roles.map((r) => r.loginName),
   'blue-lead',
   'blue-watch',
   'red-lead',

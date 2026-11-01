@@ -7,7 +7,8 @@
 // is destroyed (R-F), a new joint room makes the observer read-only there (R-B), and a new role
 // gets a per-room read-only entry (§3 rule 5).
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
+import { nodeName } from '@wrx/schemas'
+import { sampleDesignWithWhiteCell, tid } from '../../schemas/src/fixtures.ts'
 import type { DesignFile } from '@wrx/schemas'
 import type {
   Endpoint,
@@ -83,39 +84,40 @@ export function changedDesign(): DesignFile {
     game: { ...base.game, designVersion: 2 },
     roles: [
       ...base.roles
-        .filter((r) => r.id !== 'red-co')
-        .map((r) => (r.id === 'blue-co' ? { ...r, forceId: 'red' } : r)),
+        .filter((r) => r.loginName !== 'red-co')
+        .map((r) => (r.loginName === 'blue-co' ? { ...r, forceId: tid('red') } : r)),
       {
         schemaVersion: 1,
-        id: 'red-liaison',
+        id: tid('red-liaison'),
+        loginName: 'red-liaison',
         name: 'Red Liaison',
-        forceId: 'red',
+        forceId: tid('red'),
         isObserver: false,
         order: 1,
       },
     ],
     rooms: [
       ...base.rooms
-        .filter((r) => r.id !== 'negotiation')
+        .filter((r) => r.id !== tid('negotiation'))
         .map((r) =>
-          r.id === 'red-hq'
+          r.id === tid('red-hq')
             ? {
                 ...r,
                 participants: [
                   ...r.participants,
-                  { kind: 'role' as const, id: 'red-liaison', access: 'read' as const },
+                  { kind: 'role' as const, id: tid('red-liaison'), access: 'read' as const },
                 ],
               }
             : r,
         ),
       {
         schemaVersion: 1,
-        id: 'joint',
+        id: tid('joint'),
         name: 'Joint room',
         roomType: 'chat',
         participants: [
-          { kind: 'force', id: 'blue', access: 'write' },
-          { kind: 'force', id: 'red', access: 'write' },
+          { kind: 'force', id: tid('blue'), access: 'write' },
+          { kind: 'force', id: tid('red'), access: 'write' },
         ],
         config: {},
         order: 3,
@@ -244,67 +246,93 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
       it('nodes are whitelist except game-setup and the theme asset, and all are publishers (§3 rule 15)', async () => {
         for (const node of targetState(first).nodes) {
           const config = must(await theOps().session.pubsub.getNodeConfig(node.node), node.node)
-          const open = node.node === 'game-setup' || node.node === 'assets:game-logo'
+          const open = node.node === 'game-setup' || node.node === nodeName.asset(tid('game-logo'))
           expect(config.accessModel, node.node).toBe(open ? 'open' : 'whitelist')
           expect(config.publishModel, node.node).toBe('publishers')
         }
         const objectives = must(
-          await theOps().session.pubsub.getNodeConfig('objectives:blue'),
+          await theOps().session.pubsub.getNodeConfig(nodeName.objectives(tid('blue'))),
           'cfg',
         )
-        expect(objectives.maxItems).toBeGreaterThanOrEqual(2)
+        // §3 rule 14: one item, the admin's.
+        expect(objectives.maxItems).toBe(1)
       })
 
       it('the observer joins as a visitor and cannot post (R-B, ADM-37)', async () => {
-        await expectReadOnly('blue-observer', 'blue-hq', 'blue-co')
+        await expectReadOnly('blue-observer', tid('blue-hq'), 'blue-co')
       })
 
       it('a writer posts; a role with no access cannot join', async () => {
-        expect(await postResult('blue-co', 'blue-hq')).toMatchObject({
+        expect(await postResult('blue-co', tid('blue-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
-        expect(await postResult('white-cell', 'red-hq')).toMatchObject({
+        expect(await postResult('white-cell', tid('red-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
-        const outsider = await postResult('red-co', 'blue-hq')
+        const outsider = await postResult('red-co', tid('blue-hq'))
         expect(outsider.joined?.condition).toBe('registration-required')
       })
 
-      it('documents are readable by their readers only, and objectives take a White Force item (§3 rule 14)', async () => {
+      it('documents are readable by their readers only, and only the admin publishes objectives (§3 rule 14, D21)', async () => {
         const blue = await login('blue-co')
         const red = await login('red-co')
         const cell = await login('white-cell')
-        expect(must(await blue.pubsub.getItems('objectives:blue'), 'blue reads').length).toBe(1)
-        expect(errorOf(await red.pubsub.getItems('objectives:blue'))?.condition).toBe('not-allowed')
-        must(
-          await cell.pubsub.publish('objectives:blue', 'white-cell', JSON.stringify({ x: 1 })),
-          'White Cell publishes its own item',
-        )
-        expect(must(await blue.pubsub.getItems('objectives:blue'), 'two items').length).toBe(2)
-        expect(errorOf(await blue.pubsub.publish('objectives:blue', 'x', '{}'))?.condition).toBe(
-          'forbidden',
-        )
+        expect(
+          must(await blue.pubsub.getItems(nodeName.objectives(tid('blue'))), 'blue reads').length,
+        ).toBe(1)
+        expect(
+          errorOf(await red.pubsub.getItems(nodeName.objectives(tid('blue'))))?.condition,
+        ).toBe('not-allowed')
+        // A White Force role that is not an observer reads every force's objectives, and
+        // publishes none (WP 3.5; before, it published its own item).
+        expect(
+          must(await cell.pubsub.getItems(nodeName.objectives(tid('red'))), 'White Cell reads')
+            .length,
+        ).toBe(1)
+        for (const itemId of ['white-cell', 'admin']) {
+          expect(
+            errorOf(
+              await cell.pubsub.publish(
+                nodeName.objectives(tid('blue')),
+                itemId,
+                JSON.stringify({ x: 1 }),
+              ),
+            )?.condition,
+            itemId,
+          ).toBe('forbidden')
+        }
+        expect(
+          must(await blue.pubsub.getItems(nodeName.objectives(tid('blue'))), 'one item').length,
+        ).toBe(1)
+        expect(
+          errorOf(await blue.pubsub.publish(nodeName.objectives(tid('blue')), 'x', '{}'))
+            ?.condition,
+        ).toBe('forbidden')
         // F5: a White Force observer reads every force's objectives and publishes none.
         const observer = await login('white-observer')
         expect(
-          must(await observer.pubsub.getItems('objectives:red'), 'observer reads').length,
+          must(await observer.pubsub.getItems(nodeName.objectives(tid('red'))), 'observer reads')
+            .length,
         ).toBe(1)
         expect(
-          errorOf(await observer.pubsub.publish('objectives:red', 'white-observer', '{}'))
-            ?.condition,
+          errorOf(
+            await observer.pubsub.publish(nodeName.objectives(tid('red')), 'white-observer', '{}'),
+          )?.condition,
         ).toBe('forbidden')
-        expect(must(await red.pubsub.getItems('rooms:blue-hq'), 'room doc').length).toBe(1)
+        expect(
+          must(await red.pubsub.getItems(nodeName.room(tid('blue-hq'))), 'room doc').length,
+        ).toBe(1)
       })
 
       it('a node is created before the first publish (never auto-created open)', () => {
         const steps = progress.filter((e) => e.state === 'done')
         const created = steps.findIndex(
-          (e) => e.step === 'create node' && e.target === 'roles:blue-co',
+          (e) => e.step === 'create node' && e.target === nodeName.role(tid('blue-co')),
         )
         const published = steps.findIndex(
-          (e) => e.step === 'publish' && e.target === 'roles:blue-co',
+          (e) => e.step === 'publish' && e.target === nodeName.role(tid('blue-co')),
         )
         expect(created).toBeGreaterThanOrEqual(0)
         expect(published).toBeGreaterThan(created)
@@ -313,20 +341,20 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
       it('a writer made read-only fails closed when the vault has no password for it (F1)', async () => {
         // Blue CO is a voiced member of Blue HQ. The vault has no password for it, so its voice
         // cannot be revoked: its membership is taken away instead, before anything else.
-        const result = await theOps().makeReadOnly('blue-co', ['blue-hq'])
+        const result = await theOps().makeReadOnly('blue-co', [tid('blue-hq')])
         expect(result).toMatchObject({
           ok: false,
           error: { code: 'no-password', rolledBack: true },
         })
-        const locked = await postResult('blue-co', 'blue-hq')
+        const locked = await postResult('blue-co', tid('blue-hq'))
         expect(locked.joined?.condition).toBe('registration-required')
         await closeAll()
         // Put it back as the design has it: a writer.
         mustOps(
-          await theOps().applyRoomAccess('blue-hq', [{ roleId: 'blue-co', access: 'write' }]),
+          await theOps().applyRoomAccess(tid('blue-hq'), [{ roleId: 'blue-co', access: 'write' }]),
           'restore writer',
         )
-        expect(await postResult('blue-co', 'blue-hq')).toMatchObject({
+        expect(await postResult('blue-co', tid('blue-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
@@ -334,10 +362,12 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
       })
 
       it('provisioning again changes nothing', async () => {
-        expect(mustOps(await theOps().ensureRoom('blue-hq', { name: 'Blue HQ' }), 'room')).toBe(
-          'unchanged',
+        expect(
+          mustOps(await theOps().ensureRoom(tid('blue-hq'), { name: 'Blue HQ' }), 'room'),
+        ).toBe('unchanged')
+        const node = targetState(first).nodes.find(
+          (n) => n.node === nodeName.objectives(tid('red')),
         )
-        const node = targetState(first).nodes.find((n) => n.node === 'objectives:red')
         if (node === undefined) throw new Error('no node')
         expect(mustOps(await theOps().ensureNode(node.node, node.config), 'node')).toBe('unchanged')
       })
@@ -356,23 +386,28 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         const a = await login('blue-co')
         const b = await login('blue-co')
         blueSessions = [a, b]
-        for (const s of blueSessions) must(await s.pubsub.subscribe('objectives:blue'), 'subscribe')
+        for (const s of blueSessions)
+          must(await s.pubsub.subscribe(nodeName.objectives(tid('blue'))), 'subscribe')
         notifications = blueSessions.map(
-          (s) => record<ItemsEvent>((l) => s.pubsub.onItems('objectives:blue', l)).events,
+          (s) =>
+            record<ItemsEvent>((l) => s.pubsub.onItems(nodeName.objectives(tid('blue')), l)).events,
         )
-        must(await a.muc.join(room('blue-hq'), 'blue-co'), 'join blue-hq')
-        ejected = record<OccupantEvent>((l) => a.muc.onOccupant(room('blue-hq'), l)).next(
+        must(await a.muc.join(room(tid('blue-hq')), 'blue-co'), 'join blue-hq')
+        ejected = record<OccupantEvent>((l) => a.muc.onOccupant(room(tid('blue-hq')), l)).next(
           (o) => o.self && !o.available,
         )
-        must(await a.muc.join(room('negotiation'), 'blue-co'), 'join negotiation')
+        must(await a.muc.join(room(tid('negotiation')), 'blue-co'), 'join negotiation')
         for (let i = 0; i < 3; i++) {
-          must(await a.muc.send(room('negotiation'), JSON.stringify({ text: `m${i}` })), 'post')
+          must(
+            await a.muc.send(room(tid('negotiation')), JSON.stringify({ text: `m${i}` })),
+            'post',
+          )
           posted++
         }
         // Subscriptions work before the change.
         must(
           await theOps().session.pubsub.publish(
-            'objectives:blue',
+            nodeName.objectives(tid('blue')),
             'admin',
             JSON.stringify({ v: 'before' }),
           ),
@@ -392,23 +427,34 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         if (a === undefined) throw new Error('no session')
         const out = await ejected
         expect(out?.statusCodes).toEqual(expect.arrayContaining([321]))
-        must(await a.muc.join(room('red-hq'), 'blue-co'), 'joins red-hq')
-        must(await a.muc.send(room('red-hq'), JSON.stringify({ text: 'moved' })), 'posts in red-hq')
-        expect(errorOf(await a.muc.join(room('blue-hq'), 'blue-co'))?.condition).toBe(
+        must(await a.muc.join(room(tid('red-hq')), 'blue-co'), 'joins red-hq')
+        must(
+          await a.muc.send(room(tid('red-hq')), JSON.stringify({ text: 'moved' })),
+          'posts in red-hq',
+        )
+        expect(errorOf(await a.muc.join(room(tid('blue-hq')), 'blue-co'))?.condition).toBe(
           'registration-required',
         )
-        must(await a.pubsub.getItems('objectives:red'), 'reads objectives:red')
+        must(
+          await a.pubsub.getItems(nodeName.objectives(tid('red'))),
+          `reads ${nodeName.objectives(tid('red'))}`,
+        )
       })
 
       it('the revoked reader cannot read and gets no further notifications, on every full JID (R-A)', async () => {
         for (const s of blueSessions) {
-          expect(errorOf(await s.pubsub.getItems('objectives:blue'))?.condition).toBe('not-allowed')
+          expect(
+            errorOf(await s.pubsub.getItems(nodeName.objectives(tid('blue'))))?.condition,
+          ).toBe('not-allowed')
         }
-        const subs = must(await theOps().session.pubsub.getSubscriptions('objectives:blue'), 'subs')
+        const subs = must(
+          await theOps().session.pubsub.getSubscriptions(nodeName.objectives(tid('blue'))),
+          'subs',
+        )
         expect(subs.filter((s) => s.jid.startsWith(jid('blue-co')))).toEqual([])
         must(
           await theOps().session.pubsub.publish(
-            'objectives:blue',
+            nodeName.objectives(tid('blue')),
             'admin',
             JSON.stringify({ v: 'after' }),
           ),
@@ -423,16 +469,19 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(errorOf(attempt)?.condition).toBe('not-authorized')
         if (attempt.ok) await attempt.value.disconnect()
         const members = must(
-          await theOps().session.muc.getAffiliations(room('red-hq'), 'member'),
+          await theOps().session.muc.getAffiliations(room(tid('red-hq')), 'member'),
           'members',
         )
         expect(members.map((m) => m.jid)).not.toContain(jid('red-co'))
-        const affs = must(await theOps().session.pubsub.getAffiliations('objectives:red'), 'affs')
+        const affs = must(
+          await theOps().session.pubsub.getAffiliations(nodeName.objectives(tid('red'))),
+          'affs',
+        )
         expect(affs.map((a) => a.jid)).not.toContain(jid('red-co'))
       })
 
       it('the destroyed room reported its message count first, and is gone (R-F)', async () => {
-        expect(destroyed.get('negotiation')).toBe(posted)
+        expect(destroyed.get(tid('negotiation'))).toBe(posted)
         const count = progress.find((e) => e.op === 'destroyRoom' && e.step === 'count messages')
         const done = progress.findIndex(
           (e) => e.op === 'destroyRoom' && e.step === 'destroy room' && e.state === 'done',
@@ -441,17 +490,17 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(count.messageCount).toBe(posted)
         expect(progress.indexOf(count)).toBeLessThan(done)
         const blue = await login('blue-co')
-        expect(errorOf(await blue.muc.join(room('negotiation'), 'blue-co'))).toBeDefined()
+        expect(errorOf(await blue.muc.join(room(tid('negotiation')), 'blue-co'))).toBeDefined()
       })
 
       it('the observer is read-only in the new room, and still in its old one (R-B)', async () => {
-        await expectReadOnly('blue-observer', 'joint', 'blue-co')
-        await expectReadOnly('blue-observer', 'blue-hq', 'white-cell')
+        await expectReadOnly('blue-observer', tid('joint'), 'blue-co')
+        await expectReadOnly('blue-observer', tid('blue-hq'), 'white-cell')
       })
 
       it('a per-room read entry is read-only too (§3 rule 5)', async () => {
-        await expectReadOnly('red-liaison', 'red-hq', 'blue-co')
-        expect(await postResult('red-liaison', 'joint')).toMatchObject({
+        await expectReadOnly('red-liaison', tid('red-hq'), 'blue-co')
+        expect(await postResult('red-liaison', tid('joint'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
@@ -461,8 +510,11 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         const fresh = `pw-${run}-reset`
         mustOps(await theOps().setPassword('blue-observer', fresh), 'reset')
         passwords.set('blue-observer', fresh)
-        mustOps(await theOps().makeReadOnly('blue-observer', ['blue-hq', 'joint']), 're-apply')
-        await expectReadOnly('blue-observer', 'joint', 'white-cell')
+        mustOps(
+          await theOps().makeReadOnly('blue-observer', [tid('blue-hq'), tid('joint')]),
+          're-apply',
+        )
+        await expectReadOnly('blue-observer', tid('joint'), 'white-cell')
       })
 
       it('the vault refuses a wrong passphrase cleanly and opens with the right one', async () => {
@@ -484,7 +536,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           .slice(before)
           .filter((e) => e.state === 'done' && e.step !== 'publish')
         expect(changes).toEqual([])
-        await expectReadOnly('blue-observer', 'blue-hq', 'white-cell')
+        await expectReadOnly('blue-observer', tid('blue-hq'), 'white-cell')
       })
     })
   })

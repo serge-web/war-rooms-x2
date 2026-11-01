@@ -2,7 +2,9 @@ import { z } from 'zod'
 import {
   LIMITS,
   hexColourSchema,
+  idSchema,
   isoDateTimeSchema,
+  loginNameSchema,
   nameSchema,
   orderSchema,
   sha256Schema,
@@ -35,10 +37,10 @@ export const gameSetupSchema = z
 export const forceSchema = z
   .object({
     schemaVersion: z.literal(1),
-    id: slugSchema,
+    id: idSchema,
     name: nameSchema,
     colour: hexColourSchema.describe('Colour for message authors; not a theme token (§3 rule 13)'),
-    iconAssetId: slugSchema.optional().describe('Id of an `assets:<id>` node'),
+    iconAssetId: idSchema.optional().describe('Id of an `assets:<id>` node'),
     isUmpire: z
       .boolean()
       .describe(
@@ -49,13 +51,17 @@ export const forceSchema = z
   })
   .describe('A side in the game')
 
-/** `roles:<roleId>`. The role id is also the XMPP account's localpart. Never holds a password. */
+/**
+ * `roles:<roleId>`. The id is a GUID; the login name, a separate readable field, is the XMPP
+ * account's localpart (§3 rule 1). Never holds a password.
+ */
 export const roleSchema = z
   .object({
     schemaVersion: z.literal(1),
-    id: slugSchema.describe('Role id and login id: the XMPP localpart'),
+    id: idSchema.describe('Role id, a GUID'),
+    loginName: loginNameSchema,
     name: nameSchema,
-    forceId: slugSchema.describe("Id of the role's force"),
+    forceId: idSchema.describe("Id of the role's force"),
     isObserver: z.boolean().describe('Observers read but never post, in all their rooms (D8)'),
     order: orderSchema,
   })
@@ -64,7 +70,7 @@ export const roleSchema = z
 export const participantSchema = z
   .object({
     kind: z.enum(['force', 'role']),
-    id: slugSchema.describe('Force or role id'),
+    id: idSchema.describe('Force or role id'),
     access: z.enum(['write', 'read']).describe('Read-only entries join as MUC visitors'),
   })
   .describe('A room participant entry (§3 rule 4)')
@@ -73,7 +79,7 @@ export const participantSchema = z
 export const roomSchema = z
   .object({
     schemaVersion: z.literal(1),
-    id: slugSchema,
+    id: idSchema,
     name: nameSchema,
     roomType: slugSchema.describe('Room type id from the registry (v1: chat)'),
     participants: z
@@ -97,30 +103,39 @@ export const roomSchema = z
 export const objectivesSchema = z
   .object({
     schemaVersion: z.literal(1),
-    forceId: slugSchema.describe('Id of the force these objectives belong to'),
+    forceId: idSchema.describe('Id of the force these objectives belong to'),
     markdown: z.string().max(LIMITS.objectivesChars).describe('Objectives as Markdown'),
     updatedAt: isoDateTimeSchema.describe(
-      "When this version was written. The node holds one item per author, because a publisher cannot overwrite another publisher's item; readers take the newest (§3 rule 14)",
+      "When the admin wrote this version, by the admin's clock; display only. The node holds one item, the admin's, replaced on each edit; a live notification replaces the copy fetched at login, whatever this says (§3 rule 14)",
     ),
   })
   .describe("A force's objectives; confidential to that force, the White Force and the admin")
 
 export const ASSET_MIME_TYPES = Object.freeze(['image/png', 'image/webp', 'image/svg+xml'] as const)
 
+/** The asset's fields, before the size check; design files before GUIDs extend it. */
+export const assetFieldsSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: idSchema,
+  mimeType: z.enum(ASSET_MIME_TYPES),
+  size: z.int().min(1).max(LIMITS.assetHardBytes).describe('Decoded size in bytes'),
+  sha256: sha256Schema,
+  data: z.base64().describe('The image, base64-encoded'),
+})
+
+/** That an asset's `size` is its decoded data's. */
+export function assetSizeMatches(a: { readonly data: string; readonly size: number }): boolean {
+  return base64DecodedLength(a.data) === a.size
+}
+
+/** The refinement's error, a fresh object each time (zod takes a mutable path). */
+export function assetSizeError(): { message: string; path: string[] } {
+  return { message: 'size does not match the decoded data', path: ['size'] }
+}
+
 /** `assets:<assetId>` (§3 rule 12). SVG is sanitised on upload and shown only via `<img>`. */
-export const assetSchema = z
-  .object({
-    schemaVersion: z.literal(1),
-    id: slugSchema,
-    mimeType: z.enum(ASSET_MIME_TYPES),
-    size: z.int().min(1).max(LIMITS.assetHardBytes).describe('Decoded size in bytes'),
-    sha256: sha256Schema,
-    data: z.base64().describe('The image, base64-encoded'),
-  })
-  .refine((a) => base64DecodedLength(a.data) === a.size, {
-    message: 'size does not match the decoded data',
-    path: ['size'],
-  })
+export const assetSchema = assetFieldsSchema
+  .refine(assetSizeMatches, assetSizeError())
   .describe('An image used by themes')
 
 /** One item of the `announcements` node (PLY-37). */
@@ -131,6 +146,31 @@ export const announcementSchema = z
     postedAt: isoDateTimeSchema.describe("Admin's clock when posted; display only"),
   })
   .describe('An out-of-game announcement from the admin')
+
+/**
+ * One item of the `retired` node, its id the deleted entity's GUID (§3 rule 1, ADM-14): the last
+ * name of a deleted force or role, so old messages still show it, marked as deleted. Nothing
+ * that decides access reads it.
+ */
+export const retiredSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    id: idSchema.describe('The deleted force or role GUID; also the item id'),
+    kind: z.enum(['force', 'role']),
+    name: nameSchema.describe('Its last display name'),
+    loginName: loginNameSchema
+      .optional()
+      .describe('A role’s login name, which no other role may take (§3 rule 1)'),
+    colour: hexColourSchema
+      .optional()
+      .describe('The force’s colour, or a role’s force’s colour when it was deleted'),
+    deletedAt: isoDateTimeSchema.describe("Admin's clock when the deletion was recorded"),
+  })
+  .refine((r) => (r.kind === 'role') === (r.loginName !== undefined), {
+    message: 'a role record has a login name, a force record none',
+    path: ['loginName'],
+  })
+  .describe('The last name of a deleted force or role')
 
 /** `game-state`: reserved for the turn model; created empty in v1 (§8). */
 export const gameStateSchema = z
@@ -149,6 +189,7 @@ export type Asset = z.infer<typeof assetSchema>
 export type AssetMimeType = (typeof ASSET_MIME_TYPES)[number]
 export type Announcement = z.infer<typeof announcementSchema>
 export type GameState = z.infer<typeof gameStateSchema>
+export type Retired = z.infer<typeof retiredSchema>
 
 /** Decoded byte length of valid base64 text. */
 export function base64DecodedLength(data: string): number {

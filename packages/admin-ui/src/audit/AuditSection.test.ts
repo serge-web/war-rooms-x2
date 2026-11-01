@@ -3,6 +3,7 @@
 // confirmation of destructive repairs, the vault prompt, progress), and the section in the admin
 // app against a mock server: audit a published game, unlock the vault when asked, see injected
 // drift, repair it, and see the clean re-audit.
+import { nodeName } from '@wrx/schemas'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import {
@@ -19,7 +20,7 @@ import type { AuditItem, AuditReport } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { MockServer, MockTransport } from '@wrx/mock-server'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesign, tid } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -35,20 +36,20 @@ const PASSPHRASE = 'a long enough vault passphrase'
 
 function auditItem(overrides: Partial<AuditItem> & Pick<AuditItem, 'id' | 'kind'>): AuditItem {
   return {
-    target: 'red-hq',
+    target: tid('red-hq'),
     expected: 'moderated: true',
     found: 'moderated: false',
     severity: 'critical',
     repairable: true,
     destructive: false,
-    repair: [{ type: 'ensure-room', roomId: 'red-hq', name: 'Red HQ', create: false }],
+    repair: [{ type: 'ensure-room', roomId: tid('red-hq'), name: 'Red HQ', create: false }],
     ...overrides,
   }
 }
 
 const REPORT: AuditReport = {
   items: [
-    auditItem({ id: 'room-config:red-hq', kind: 'room-config' }),
+    auditItem({ id: `room-config:${tid('red-hq')}`, kind: 'room-config', targetName: 'Red HQ' }),
     auditItem({
       id: 'account-unknown:ghost',
       kind: 'account-unknown',
@@ -61,9 +62,9 @@ const REPORT: AuditReport = {
       repair: [{ type: 'delete-role', roleId: 'ghost', rooms: [], nodes: [] }],
     }),
     auditItem({
-      id: 'foreign-access:objectives:blue:spy@x',
+      id: `foreign-access:${nodeName.objectives(tid('blue'))}:spy@x`,
       kind: 'foreign-access',
-      target: 'objectives:blue',
+      target: nodeName.objectives(tid('blue')),
       repairable: false,
       repair: [],
     }),
@@ -106,7 +107,7 @@ describe('AuditSectionCore', () => {
     const report = screen.getByRole('region', { name: 'Audit report' })
     expect(within(report).getByText('3 differences: 2 critical, 1 high.')).toBeTruthy()
     const critical = within(report).getByRole('region', { name: 'Critical (2)' })
-    expect(within(critical).getByText('Room settings: red-hq')).toBeTruthy()
+    expect(within(critical).getByText('Room settings: Red HQ')).toBeTruthy()
     expect(within(critical).getAllByText('moderated: false')).toHaveLength(2)
     expect(within(critical).getByText('Not repairable here')).toBeTruthy()
     const info = within(report).getByRole('region', { name: 'Information (1)' })
@@ -117,7 +118,7 @@ describe('AuditSectionCore', () => {
 
   it('repairs the selected items; a destructive one needs its own tick', async () => {
     const { props, user } = core()
-    await user.click(screen.getByRole('checkbox', { name: /Room settings: red-hq/ }))
+    await user.click(screen.getByRole('checkbox', { name: /Room settings: Red HQ/ }))
     await user.click(screen.getByRole('checkbox', { name: /Account with no role: ghost/ }))
     await user.click(screen.getByRole('button', { name: 'Repair selected (2)…' }))
     const dialog = screen.getByRole('alertdialog', { name: 'Repair these differences?' })
@@ -130,7 +131,7 @@ describe('AuditSectionCore', () => {
     )
     await user.click(confirm)
     expect(props.onRepair).toHaveBeenCalledWith(
-      ['room-config:red-hq', 'account-unknown:ghost'],
+      [`room-config:${tid('red-hq')}`, 'account-unknown:ghost'],
       ['account-unknown:ghost'],
     )
   })
@@ -194,7 +195,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
     created.value.lock()
     ops.useVault(undefined)
     // Drift: Red HQ unmoderated, an ordinary admin operation.
-    const configured = await session.value.muc.configureRoom(ops.roomJid('red-hq'), {
+    const configured = await session.value.muc.configureRoom(ops.roomJid(tid('red-hq')), {
       ...gameRoomConfig('Red HQ'),
       moderated: false,
     })
@@ -243,7 +244,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
       },
       { timeout: 20_000 },
     )
-    const config = await session.value.muc.getRoomConfig(ops.roomJid('red-hq'))
+    const config = await session.value.muc.getRoomConfig(ops.roomJid(tid('red-hq')))
     expect(config.ok && config.value.moderated).toBe(true)
   })
 })

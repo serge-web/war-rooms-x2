@@ -244,7 +244,7 @@ function MessageRow({
   const accent = message.colour === undefined ? undefined : { borderLeftColor: message.colour }
   // A feed holds only articles (NFR-14), so the day divider is drawn beside the article but read
   // as the start of its name: "Today, Blue CO, 09:12".
-  const name = `${message.senderName}, ${time}`
+  const name = `${message.senderName}${message.deleted === true ? ' (deleted)' : ''}, ${time}`
   return (
     <>
       {row.divider === undefined ? null : (
@@ -268,6 +268,7 @@ function MessageRow({
               style={message.colour === undefined ? undefined : { background: message.colour }}
             />
             <span className="wrx-chat__sender">{message.senderName}</span>
+            {message.deleted === true ? <span className="wrx-chat__deleted">(deleted)</span> : null}
             {message.forceName === undefined ? null : (
               <span className="wrx-chat__force">{message.forceName}</span>
             )}

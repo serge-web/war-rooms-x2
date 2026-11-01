@@ -233,16 +233,19 @@ function toChatMessage(
   const { sender } = entry
   // The admin is the umpire, labelled in the White Force's colour (SC-5); identity comes from
   // the occupant JID only (§3 rule 3), so no role can post as the umpire.
+  // Authors are found by login name, the occupant JID's local part (§3 rule 6); a deleted role's
+  // last name comes from its `retired` record, marked deleted (§3 rule 1, ADM-14).
   const author = sender.isAdmin
     ? authors.get(ADMIN_AUTHOR_ID)
-    : sender.roleId === undefined
+    : sender.loginName === undefined
       ? undefined
-      : authors.get(sender.roleId)
+      : authors.get(sender.loginName)
   return {
     id: entry.id,
     timestamp: entry.timestamp,
-    senderKey: sender.isAdmin ? 'admin' : (sender.roleId ?? `nick:${sender.nick}`),
+    senderKey: sender.isAdmin ? 'admin' : (sender.loginName ?? `nick:${sender.nick}`),
     senderName: sender.isAdmin ? UMPIRE_NAME : (author?.name ?? sender.nick),
+    deleted: author?.deleted === true,
     forceName: author?.forceName,
     colour: author?.colour,
     self,

@@ -3,6 +3,7 @@
 // stays the default (PLY-21). Tests load it into the running mock with `importDatabase`, and the
 // admin's draft is the same design (`scaleDesign`). Deterministic: the same options give the same
 // state, so measurements are comparable between runs. Every password is a DEMO PASSWORD (NFR-6).
+import { DESIGN_FILE_VERSION } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { stateFromDesign } from './seed.ts'
 import type { SeedMessage } from './seed.ts'
@@ -19,14 +20,27 @@ export interface ScaleOptions {
   readonly messagesPerOtherRoom?: number
 }
 
+/**
+ * A fixed GUID for one of the fixture's entities (§3 rule 1), from its short name, so the
+ * fixture is the same every run: `5`, then the name's bytes in hex, padded.
+ */
+export function scaleId(name: string): string {
+  const hex =
+    `5${[...new TextEncoder().encode(name)].map((b) => b.toString(16).padStart(2, '0')).join('')}`
+      .padEnd(32, '0')
+      .slice(0, 32)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 /** The room that holds the bulk of the history: every role reads and writes it. */
-export const SCALE_BUSY_ROOM = 'plenary'
+export const SCALE_BUSY_ROOM = scaleId('plenary')
 /** The busy room's display name. */
 export const SCALE_BUSY_ROOM_NAME = 'Plenary'
-/** A player role that is in the busy room and several others. */
+/** The login name of a player role that is in the busy room and several others. */
 export const SCALE_PLAYER = 'f1-r01'
 
 const PLAYER_FORCES = 4
+const WHITE = scaleId('white')
 const COLOURS = ['#1d4ed8', '#b91c1c', '#047857', '#7c3aed'] as const
 
 const two = (n: number) => String(n).padStart(2, '0')
@@ -71,7 +85,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
   const forces: DesignFile['forces'] = [
     ...Array.from({ length: PLAYER_FORCES }, (_, i) => ({
       schemaVersion: 1 as const,
-      id: `f${i + 1}`,
+      id: scaleId(`f${i + 1}`),
       name: `Force ${i + 1}`,
       colour: COLOURS[i] ?? '#1d4ed8',
       isUmpire: false,
@@ -79,7 +93,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     })),
     {
       schemaVersion: 1,
-      id: 'white',
+      id: WHITE,
       name: 'White',
       colour: '#4b5563',
       isUmpire: true,
@@ -94,9 +108,10 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     const n = Math.floor(i / PLAYER_FORCES) + 1
     roles.push({
       schemaVersion: 1,
-      id: `f${force}-r${two(n)}`,
+      id: scaleId(`f${force}-r${two(n)}`),
+      loginName: `f${force}-r${two(n)}`,
       name: `Force ${force} role ${n}`,
-      forceId: `f${force}`,
+      forceId: scaleId(`f${force}`),
       isObserver: false,
       order: n,
     })
@@ -104,9 +119,10 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
   for (let i = 0; i < whiteCount; i++) {
     roles.push({
       schemaVersion: 1,
-      id: `white-${two(i + 1)}`,
+      id: scaleId(`white-${two(i + 1)}`),
+      loginName: `white-${two(i + 1)}`,
       name: `White ${i + 1}`,
-      forceId: 'white',
+      forceId: WHITE,
       // Two observers; the rest are White Cell, writing everywhere (§3 rule 4).
       isObserver: i < 2,
       order: i,
@@ -129,15 +145,15 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
   for (let f = 1; f <= PLAYER_FORCES && rooms.length < roomCount; f++) {
     rooms.push({
       schemaVersion: 1,
-      id: `f${f}-hq`,
+      id: scaleId(`f${f}-hq`),
       name: `Force ${f} HQ`,
       roomType: 'chat',
-      participants: [{ kind: 'force', id: `f${f}`, access: 'write' }],
+      participants: [{ kind: 'force', id: scaleId(`f${f}`), access: 'write' }],
       config: {},
       order: rooms.length,
     })
   }
-  const players = roles.filter((r) => r.forceId !== 'white')
+  const players = roles.filter((r) => r.forceId !== WHITE)
   for (let n = 1; rooms.length < roomCount; n++) {
     const a = ((n - 1) % PLAYER_FORCES) + 1
     const b = (a % PLAYER_FORCES) + 1
@@ -145,17 +161,17 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     const participants: DesignFile['rooms'][number]['participants'] =
       n % 2 === 1
         ? [
-            { kind: 'force', id: `f${a}`, access: 'write' },
-            { kind: 'force', id: `f${b}`, access: 'read' },
+            { kind: 'force', id: scaleId(`f${a}`), access: 'write' },
+            { kind: 'force', id: scaleId(`f${b}`), access: 'read' },
           ]
         : [0, 1, 2].map((k) => ({
             kind: 'role' as const,
-            id: players[(n * 3 + k) % players.length]?.id ?? SCALE_PLAYER,
+            id: players[(n * 3 + k) % players.length]?.id ?? scaleId(SCALE_PLAYER),
             access: k === 2 ? ('read' as const) : ('write' as const),
           }))
     rooms.push({
       schemaVersion: 1,
-      id: `room-${two(n)}`,
+      id: scaleId(`room-${two(n)}`),
       name: `Room ${n}`,
       roomType: 'chat',
       participants,
@@ -166,7 +182,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
 
   return {
     format: 'wrx1-design',
-    schemaVersion: 1,
+    schemaVersion: DESIGN_FILE_VERSION,
     exportedAt: '2026-10-24T12:00:00.000Z',
     game: {
       schemaVersion: 1,
@@ -189,6 +205,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
         updatedAt: '2026-10-24T12:00:00.000Z',
       })),
     assets: [],
+    retired: [],
   }
 }
 
@@ -197,7 +214,7 @@ export function scaleHistory(design: DesignFile, options: ScaleOptions = {}): Se
   const total = options.messages ?? 10_000
   const perRoom = options.messagesPerOtherRoom ?? 5
   const random = generator(11)
-  const players = design.roles.filter((r) => r.forceId !== 'white').map((r) => r.id)
+  const players = design.roles.filter((r) => r.forceId !== WHITE).map((r) => r.loginName)
   const writers = [...players, 'admin']
   // Ten seconds apart, ending at 09:00 on the demo's day, so the busy room spans a few days.
   const end = Date.parse('2026-10-24T09:00:00.000Z')

@@ -60,6 +60,7 @@
 }
 
 .wrx-chat__you,
+.wrx-chat__deleted,
 .wrx-chat__force {
   color: var(--wrx-muted);
   font-weight: 400;

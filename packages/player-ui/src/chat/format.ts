@@ -10,10 +10,12 @@ export interface ChatMessage {
   readonly id: string
   /** Server time, ISO 8601. */
   readonly timestamp: string
-  /** Who sent it, for grouping: a role id, `admin`, or `nick:<nick>` for anyone else. */
+  /** Who sent it, for grouping: a login name, `admin`, or `nick:<nick>` for anyone else. */
   readonly senderKey: string
-  /** The role's name, resolved live from the role document (§3 rule 6). */
+  /** The role's name, resolved live from the role document by login name (§3 rule 6). */
   readonly senderName: string
+  /** The role has been deleted: `senderName` is its last name, from `retired` (ADM-14). */
+  readonly deleted?: boolean | undefined
   /** The sender's force name, when known. */
   readonly forceName?: string | undefined
   /** The force colour (PLY-43). */

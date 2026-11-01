@@ -265,6 +265,12 @@ export class XmppPubsub implements PubsubApi {
     })
   }
 
+  purgeNode(node: string): Outcome<void> {
+    return this.core.run(async () => {
+      await this.core.client.purgeNode(this.service, node)
+    })
+  }
+
   getAffiliations(node: string): Outcome<readonly PubsubAffiliationEntry[]> {
     return this.core.run(async () => {
       const result = await this.core.client.getNodeAffiliations(this.service, node)

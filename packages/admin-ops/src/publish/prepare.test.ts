@@ -1,5 +1,5 @@
 // The publish-time server checks (NFR-4): what `checkServer` reports for a server view.
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { rig } from '../fixtures.ts'
 import { emptyView, publishedView } from './fixtures.ts'
@@ -31,13 +31,13 @@ describe('checkServer (NFR-4)', () => {
     const view = {
       ...published,
       rooms: published.rooms.map((r) =>
-        r.roomId === 'negotiation'
+        r.roomId === tid('negotiation')
           ? { ...r, config: { ...r.config, subscriptions: true, visitorNickChange: true } }
           : r,
       ),
     }
     const check = (await checkServer(ops, view)).find((c) => c.id === 'room-defaults')
     expect(check?.status).toBe('warn')
-    expect(check?.detail).toContain('negotiation (visitorNickChange, subscriptions)')
+    expect(check?.detail).toContain('Blue–Red negotiation (visitorNickChange, subscriptions)')
   })
 })

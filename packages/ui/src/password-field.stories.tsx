@@ -12,4 +12,4 @@ type Story = StoryObj<typeof PasswordField>
 
 export const Empty: Story = {}
 export const Filled: Story = { args: { defaultValue: 'demo-blue-co' } }
-export const WithError: Story = { args: { error: 'Wrong role id or password.' } }
+export const WithError: Story = { args: { error: 'Wrong login name or password.' } }

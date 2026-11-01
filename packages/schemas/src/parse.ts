@@ -6,6 +6,7 @@ import {
   gameSetupSchema,
   gameStateSchema,
   objectivesSchema,
+  retiredSchema,
   roleSchema,
   roomSchema,
 } from './documents.ts'
@@ -21,6 +22,7 @@ export const DOCUMENT_SCHEMAS = Object.freeze({
   asset: assetSchema,
   announcement: announcementSchema,
   'game-state': gameStateSchema,
+  retired: retiredSchema,
   message: messageBodySchema,
 })
 
