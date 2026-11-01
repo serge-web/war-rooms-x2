@@ -91,7 +91,7 @@ Raised during the build, not yet given a work package.
 | --- | --- | --- | --- |
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 | FT-2 | **Message templates (SRD Annex A), after v1.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
-| FT-3 | **Force assets and the map channel (SRD Annex B), after v1.** Spike S14 first, then proposed WPs B1 to B4 (asset model, provisioning, map channel, asset picker) in the same record | Annex B | Product owner's revision, Nov 1, 2026 |
+| FT-3 | **Force assets and the map channel (SRD Annex B), after v1.** Spike S14 done (two flat nodes per force, `plan/decisions/S14.md`); then proposed WPs B1 to B4, after the owner answers the writer-model questions, (asset model, provisioning, map channel, asset picker) in the same record | Annex B | Product owner's revision, Nov 1, 2026 |
 
 ## The README plan chart
 
@@ -178,7 +178,7 @@ flowchart TB
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14 todo
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14 todo
     class G0,G1,G2,G3 gate
 ```
 

@@ -1,6 +1,6 @@
 # Annexes A and B: how to build them
 
-Nov 1, 2026. Proposal, written when the product owner's revision was merged into the SRD (`plan/reviews/srd-merge-2026-11-01.md`). Annex A (message templates) and Annex B (force assets and the map channel) are built after v1. What v1 must provide now is WP 3.5; spike S14 can run at any time. Internal: parts of this record describe access control and stay off the site (DOC-2).
+Nov 1, 2026. Proposal, written when the product owner's revision was merged into the SRD (`plan/reviews/srd-merge-2026-11-01.md`). Annex A (message templates) and Annex B (force assets and the map channel) are built after v1. What v1 needed is WP 3.5 (done). Spike S14 is done: collections are not usable on ejabberd 26.09, so Annex B uses option 2 below, two flat nodes per force (`plan/decisions/S14.md`). Internal: parts of this record describe access control and stay off the site (DOC-2).
 
 ## 1. v1 provisions (WP 3.5)
 
@@ -162,7 +162,7 @@ A runnable spike like S13: `spike/s14/` against the pinned ejabberd 26.09 image,
 | Option | Layout | For | Against |
 | --- | --- | --- | --- |
 | 1. Node per asset under per-force collections | Collections `force-assets:<forceId>` (own) and `force-view:<forceId>` (what that force knows of others); one leaf per asset | Per-asset history as items (AD2); per-asset access possible | Needs S14 to pass, and `dag`, which ejabberd calls experimental; 600+ nodes per force to provision and audit |
-| 2. Two nodes per force (the S14 fallback) | `force-assets:<forceId>` and `force-view:<forceId>`, one item per asset, item id the asset GUID (AD2) | Uses only the flat nodes v1 already relies on; access is two whitelists per force | History needs a third node per force; every reader of a force fetches all its assets |
+| 2. Two nodes per force (the S14 fallback; **chosen**, S14 failed) | `force-assets:<forceId>` and `force-view:<forceId>`, one item per asset, item id the asset GUID (AD2) | Uses only the flat nodes v1 already relies on; access is two whitelists per force | History needs a third node per force; every reader of a force fetches all its assets |
 | 3. Changes as messages in a per-force MUC room | Asset deltas posted to a members-only room; current state in a node as option 2 | MAM gives history for free; room membership is the proven access path | Current state must be rebuilt or snapshotted; a delta needs a voice |
 
 The prefix `assets:` is taken by theme images (§3), so force assets need another one; `force-assets:` and `force-view:` are placeholders.
@@ -181,7 +181,7 @@ The prefix `assets:` is taken by theme images (§3), so force assets need anothe
 
 ### Order
 
-WP 3.5 first, before the v1 security review (3.4), since it changes ids and objectives access. S14 can run beside it. After v1: A1, then A2 and A3 together, then A4; Annex B from B1 once S14 and the owner's answers are in; A5 and B4 last.
+WP 3.5 and S14 are done (3.5 landed before the v1 security review, 3.4). After v1: A1, then A2 and A3 together, then A4; Annex B from B1 once the owner answers questions 7 and 8; A5 and B4 last.
 
 ## Open questions for the owner
 
@@ -193,5 +193,5 @@ WP 3.5 first, before the v1 security review (3.4), since it changes ids and obje
 6. Templates: image picker storage, inline or separate assets (Annex A's open question). (Recommended: separate assets, reusing the theme asset rules.)
 7. Assets: who updates a force's asset state (the force's roles, one role per force, or the admin and White Force), and who decides what a force knows about others' assets (the umpire by hand, or rules)?
 8. Assets: how much history per asset, and who reads it?
-9. Login names: fixed once published (merge record N2)?
-10. Real servers: confirm that no provisioned game must keep its history through the GUID change (merge record N3).
+9. ~~Login names: fixed once published?~~ Answered yes (merge record N2); built in WP 3.5.
+10. ~~Real servers: no game must keep its history through the GUID change?~~ Answered (merge record N3): export, import, reset and publish.

@@ -37,7 +37,7 @@ Decided in WP 0.4:
 
 | Browser | Support |
 | --- | --- |
-| Current Google Chrome | Supported (SHALL): every test runs on it |
+| Current Google Chrome | Supported (SHALL): every test runs on its engine (Chromium) |
 | Current Microsoft Edge | Supported (SHALL): same engine as Chrome |
 | Current Firefox | Best effort (SHOULD): the tests run on it and failures are fixed or recorded |
 | Current Safari | Best effort (SHOULD): the tests run on its engine (WebKit) and failures are fixed or recorded |

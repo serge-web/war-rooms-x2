@@ -1,6 +1,6 @@
 # War Rooms X1 — Software Requirements Document
 
-Oct 20, 2026 (revised Oct 24, 2026, see §14) · @Ian Mayo
+Oct 20, 2026 (revised to Nov 1, 2026, see §14) · @Ian Mayo
 
 ## 1. Introduction
 
@@ -432,7 +432,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [ ] Repo visibility: should the spike and WRX1 code repos stay public, given DOC-2 keeps security detail off the site? (R18)
 - [x] Welcome page: before login, via anonymous read access (D20)
 - [x] Objectives: admin-written per force, force read-only, the White Force reads all; only the admin edits (D21)
-- [ ] Spike S14: collection-level access on ejabberd, which decides the asset node layout (Annex B)
+- [x] Spike S14: collection-level access on ejabberd failed (collections need the `dag` plugin, which no longer starts on 26.09), so force assets use two flat whitelist nodes per force (Annex B, `plan/decisions/S14.md`)
 - [ ] Message templates: image storage, inline or a separate asset (Annex A)
 - [x] Concurrent logins per role: allowed silently (D22)
 - [x] Live editing: any change, applied live (D23)
@@ -703,12 +703,16 @@ Changes from the product owner's revision (Nov 1, 2026), merged onto the text ab
 
 - Objectives: only the admin edits them; every White Force role, observer or not, reads every force's objectives (D21, §3 rule 14, PLY-35, R10, glossary, open issues). SC-5 is unchanged: its umpire is the admin, who still amends Red's objectives. This reverses the Phase 2 change that let White Force non-observers edit.
 - §3 rule 14 simplified: with one publisher, objectives are a single item that the admin replaces, so the one-item-per-author rule is gone. `updatedAt` stays, for display. Security review F11's ordering still holds: a live notification replaces the copy fetched at login, whatever the author's clock said.
-- §3 table: new `directory` node (WP 3.4), so a client finds its own role, force and rooms without node listing.
 - §3 rule 1: entity ids are GUIDs, not slugs. A role's login name is a separate readable field and its XMPP account name, and is not reused for another role. A deleted force or role keeps its last name in a new `retired` node (§3 table). Rule 6, ADM-5, ADM-14, ADM-16 (import of slug-id designs), ADM-26, PLY-1 and SC-2 say login name instead of role id or login id. ADM-42: node names now carry only GUIDs, so the "MAY offer opaque node ids" option is met by default. §8: the multiple-wargames row no longer says ids are slugs.
 - §3 table: the `templates` node name is reserved (§8 already said so).
 - New Annex A, message templates (TD1–TD7, TPL-1–TPL-10, T-R1–T-R3), and Annex B, force assets and the map channel (AD1–AD3, spike S14). Fixed on merging: TPL-10 cites §3 rule 14, not rule 11; TD2 says the other White Force roles, not the White Force, since the admin, a White Force member, edits; Annex B notes that force assets are not the theme image assets of §3. The owner's "full sight of every room" for the White Force (glossary, TD2) is left out: White Force observers see only their assigned rooms, if any (§3 rule 4); the merge record asks the owner to confirm.
 - §8 rows for structured form rooms and mapping rooms point to the annexes; §9 open issues list S14 and template image storage; §10 points to S14. The scope line names the annexes. Requirement language: annex ids are not v1 requirements.
 - Built by WP 3.5 (GUID ids, login names, deleted-entity records, objectives by the admin only, and migration of designs and the mock seed) before the v1 security review (WP 3.4); spike S14 can run at any time. The annexes are planned in `plan/decisions/annex-a-b-implementation.md`.
+
+Changes from WP 3.4, the v1 security review (Nov 1, 2026):
+
+- §3 table: new `directory` node, one item listing every force, role and room GUID with each role's login name, so a client finds its own role, force and rooms without node listing. It is a pointer only: a role is the user's own only if its document carries the user's login name.
+- ADM-5 as built: publish and audit refuse a design that changes a published role's login name, or gives a published or deleted role's login name to another role, with the reason and the remedy.
 
 ## Annex A. Message templates (specified now, built after v1)
 

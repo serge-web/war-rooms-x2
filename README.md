@@ -97,13 +97,15 @@ flowchart TB
 - [Software requirements (SRD)](WRX1-SRD.md)
 - [Development plan](WRX1-Dev-Plan.md) and [work package briefs](plan/briefs/)
 - [Data dictionary](docs/data-dictionary.md), generated from the schemas
+- [Release notes](RELEASE-NOTES.md)
+- [Decision records](plan/decisions/) and [reviews](plan/reviews/) (internal)
 
 ## Repo layout
 
 | Path | What |
 | --- | --- |
 | `packages/schemas` | Runtime schemas (zod) for every PubSub document and message body, and the types inferred from them (WP 0.8) |
-| `apps/web` | The web app. A shell for now; the player client and admin backend are built in Phase 2 |
+| `apps/web` | The web app: player client, admin backend and multi-client view, with the e2e scenarios |
 | `deploy` | The reference ejabberd config, the contract-suite stack and the reference deployment (WP 3.3); its README is the setup guide |
 | `ops` | Offline bundle and install, internal CA, checks, backup and restore, and their tests (WP 3.3) |
 | `tools` | CI checks and the local ESLint rules |
