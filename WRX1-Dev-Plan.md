@@ -38,7 +38,7 @@ Each work package (WP) is a written brief that one Claude Code session builds on
 
 ## Phases and work packages
 
-There are 28 work packages. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
+There are 31 work packages, including the spike S14, which is groundwork for after v1. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
 
 | WP | Work package | SRD ids | Depends on |
 | --- | --- | --- | --- |
@@ -74,7 +74,10 @@ There are 28 work packages. Each is sized for one to three Claude Code PRs, and 
 | 3.1 | Playwright scenarios SC-1 to SC-9 on mock and ejabberd | NFR-17, §12 | Phase 2 |
 | 3.2 | Performance and scale (NFR-11, NFR-12), accessibility audit (NFR-14) | NFR-11–14 | Phase 2 |
 | 3.3 | Reference deployment and air-gapped install on real hardware | NFR-2, NFR-4, NFR-10, NFR-22–23 | 0.4, 1.3 |
-| 3.4 | Security review, release notes, v1 milestone blog post | DOC-2, DOC-5 | 3.1–3.3 |
+| 3.4 | Security review, release notes, v1 milestone blog post | DOC-2, DOC-5 | 3.1–3.3, 3.5 |
+| 3.5 | GUID entity ids, readable login names, deleted-entity records, the reserved `templates` name; objectives edited by the admin only; migration of design files, the seed and tests (the product owner's revision, SRD §14) | §3 rules 1, 6, 14; D21, ADM-5, ADM-14, ADM-16, ADM-26, ADM-42, PLY-1, PLY-35 | Phase 2 |
+| **After v1 — Annexes A and B** |  |  |  |
+| S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
 
 **Traceability.** Every live SRD requirement id is assigned to at least one WP above, except four that apply to every PR: ARC-15 (team's choice), DOC-4 and DOC-18 (working model item 5) and DOC-5 (blog posts). CI checks this on every PR (`pnpm check:trace`), so a requirement added to the SRD without a WP fails the build.
 
@@ -87,6 +90,8 @@ Raised during the build, not yet given a work package.
 | Id | Task | SRD ids | Raised |
 | --- | --- | --- | --- |
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
+| FT-2 | **Message templates (SRD Annex A), after v1.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
+| FT-3 | **Force assets and the map channel (SRD Annex B), after v1.** Spike S14 first, then proposed WPs B1 to B4 (asset model, provisioning, map channel, asset picker) in the same record | Annex B | Product owner's revision, Nov 1, 2026 |
 
 ## The README plan chart
 
@@ -134,6 +139,11 @@ flowchart TB
         wp32["3.2 Performance and a11y"]
         wp33["3.3 Air-gapped install"]
         wp34["3.4 Security review and release"]
+        wp35["3.5 GUID ids, login names, admin-only objectives"]
+    end
+    subgraph PX["After v1 — Annexes A and B"]
+        direction LR
+        wps14["S14 Collection access spike"]
     end
     G0{{"Gate G0"}}
     G1{{"Gate G1"}}
@@ -156,17 +166,19 @@ flowchart TB
     wp15 & wp25 --> wp29
     wp04 & wp13 --> wp33
     wp31 & wp32 & wp33 --> wp34
+    wp35 --> wp34
+    wp12 --> wps14
     P0 -.-> G0
     P1 -.-> G1
     P2 -.-> G2
-    G2 --> wp31 & wp32
+    G2 --> wp31 & wp32 & wp35
     P3 -.-> G3
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34 todo
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14 todo
     class G0,G1,G2,G3 gate
 ```
 
@@ -249,4 +261,7 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | The default web build is mock only; `build:server` makes the real-server build, which loads the XMPP transport lazily | Found by 2.4: previews and the site must hold no real-server code (DOC-12), and StanzaJS's own text trips the bundle scan |
 | `@wrx/ui`'s `ThemeScope` delegates to `@wrx/theme`'s: it keeps partial tokens that inherit from the enclosing scope, and takes the default theme, fonts and derived colours from `@wrx/theme`, as does `ui.css`'s page default | 2.4 and 2.8 were built in parallel, each with its own `ThemeScope` and defaults |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
+| 3.5 added, and 3.4 now waits for it: GUID ids, login names, deleted-entity records, the reserved `templates` name, objectives by the admin only, and the migration of designs, the seed and tests | The product owner's SRD revision of Nov 1, 2026 (SRD §14; `plan/reviews/srd-merge-2026-11-01.md`). It changes ids and objectives access, so it lands before the security review |
+| Spike S14 added, after v1, with its own node in the chart; the deny-list gains S14 | SRD Annex B: the force-asset node layout depends on it. It touches access control, so its record stays off the site like S13's |
+| Future tasks FT-2 and FT-3 added for Annexes A and B | Planned in `plan/decisions/annex-a-b-implementation.md`; WPs are numbered once the owner answers its open questions |
 

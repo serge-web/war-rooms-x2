@@ -48,6 +48,11 @@ flowchart TB
         wp32["3.2 Performance and a11y"]
         wp33["3.3 Air-gapped install"]
         wp34["3.4 Security review and release"]
+        wp35["3.5 GUID ids, login names, admin-only objectives"]
+    end
+    subgraph PX["After v1 — Annexes A and B"]
+        direction LR
+        wps14["S14 Collection access spike"]
     end
     G0{{"Gate G0"}}
     G1{{"Gate G1"}}
@@ -70,17 +75,19 @@ flowchart TB
     wp15 & wp25 --> wp29
     wp04 & wp13 --> wp33
     wp31 & wp32 & wp33 --> wp34
+    wp35 --> wp34
+    wp12 --> wps14
     P0 -.-> G0
     P1 -.-> G1
     P2 -.-> G2
-    G2 --> wp31 & wp32
+    G2 --> wp31 & wp32 & wp35
     P3 -.-> G3
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp04,wp34 todo
+    class wp04,wp34,wp35,wps14 todo
     class wp33 active
     class wp01,wp02,wp03,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32 done
     class G0,G1,G2,G3 gate

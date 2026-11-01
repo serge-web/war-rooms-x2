@@ -26,9 +26,9 @@
     },
     {
       "id": "spike-check-ids",
-      "pattern": "\\b(?:S13|S01b?|C01)\\b",
+      "pattern": "\\b(?:S13|S14|S01b?|C01)\\b",
       "flags": "",
-      "why": "Spike checks and contract tests for observer enforcement"
+      "why": "Spike checks and contract tests for observer enforcement, and S14 (collection access control)"
     },
     {
       "id": "voice-revocation",
