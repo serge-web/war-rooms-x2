@@ -79,6 +79,27 @@ export function s06(ctx: Ctx): void {
       expect(events.events.flatMap((e) => e.items.map((i) => i.id))).toEqual(['i1', 'i2', 'i3'])
     })
 
+    // Review F11: readers of objectives (one item per author, §3 rule 14) take a later live event
+    // as the newer edit, because item retrieval gives no such order (ejabberd lists items by
+    // first creation, and carries no publish time). So the order must hold across publishers,
+    // and a re-publish of an existing item must be notified as a new event.
+    it('two publishers’ items, one re-published, arrive in publish order', async () => {
+      const fx = ctx.fx()
+      const node = await freshNode()
+      const umpire = await ctx.login(fx.users.umpire)
+      const blue = await ctx.login(fx.users.blueCo)
+      must(await blue.pubsub.subscribe(node), 'subscribe')
+      const events = record<ItemsEvent>((l) => blue.pubsub.onItems(node, l))
+      must(await ctx.admin().pubsub.publish(node, 'admin', json({ v: 'a1' })), 'admin a1')
+      must(await umpire.pubsub.publish(node, 'umpire', json({ v: 'u1' })), 'umpire u1')
+      must(await ctx.admin().pubsub.publish(node, 'admin', json({ v: 'a2' })), 'admin a2')
+      await events.next((e) => e.items.some((i) => i.payload.includes('a2')))
+      const seen = events.events.flatMap((e) =>
+        e.items.map((i) => `${i.id}:${String((JSON.parse(i.payload) as { v?: unknown }).v)}`),
+      )
+      expect(seen).toEqual(['admin:a1', 'umpire:u1', 'admin:a2'])
+    })
+
     // §7.2.2.1 retract notifications (notify_retract) and §8.4.2 delete notifications.
     it('retracts and node deletion are notified', async () => {
       const fx = ctx.fx()

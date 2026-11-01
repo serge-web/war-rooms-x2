@@ -9,6 +9,7 @@ import { logIn } from './mock.ts'
 import {
   editObjectives,
   forcePanel,
+  paneForce,
   mockStatus,
   openMulti,
   pane,
@@ -87,7 +88,7 @@ test('export the mock database with its history, and import it back (PLY-21, PLY
   await quickLogIn(pane(page, 1), 'Umpire (White, admin)')
   await editObjectives(page, pane(page, 1), 'Red', '1. Something new.')
   await quickLogIn(pane(page, 2), 'Red CO (Red)')
-  await expect(forcePanel(pane(page, 2))).toContainText('Something new.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Something new.')
 
   await page.getByLabel('Mock database file to import').setInputFiles(file)
   await page
@@ -95,8 +96,8 @@ test('export the mock database with its history, and import it back (PLY-21, PLY
     .getByRole('button', { name: 'Import' })
     .click()
   await expect(mockStatus(page).filter({ hasText: 'Imported.' })).toBeVisible()
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue.')
-  await expect(forcePanel(pane(page, 2))).not.toContainText('Something new.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue.')
+  await expect(await paneForce(pane(page, 2))).not.toContainText('Something new.')
 
   // A file that is not a mock database changes nothing and says why.
   await page.getByLabel('Mock database file to import').setInputFiles({

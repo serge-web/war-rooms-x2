@@ -39,7 +39,21 @@ export interface PublishConnection {
    * (NFR-6). Only for `mock`; the host leaves it out of a real-server build.
    */
   readonly demoVaultPassphrase?: string
+  /**
+   * Review F12: the unlocked vault locks itself after this long without admin activity (ms).
+   * Default `VAULT_IDLE_LOCK_MS`; `Infinity` turns it off.
+   */
+  readonly vaultIdleLockMs?: number
 }
+
+/** F12: the default idle time before the unlocked vault locks itself, 15 minutes. */
+export const VAULT_IDLE_LOCK_MS = 15 * 60_000
+
+/** Activity notes closer together than this do not restart the idle timer (ms). */
+const ACTIVITY_THROTTLE_MS = 1_000
+
+/** While a run is using the vault, an idle lock waits and checks again after this long (ms). */
+const BUSY_RECHECK_MS = 5_000
 
 export type VaultState = 'unknown' | 'none' | 'locked' | 'unlocked'
 
@@ -63,6 +77,8 @@ export interface PublishSnapshot {
   /** A failure outside a step: reading the server, the vault. */
   readonly error: string | undefined
   readonly vault: VaultState
+  /** F12: the vault was locked by the idle timer, not by the admin. */
+  readonly vaultIdleLocked?: boolean
   readonly credentials: readonly Credential[]
   /** Role ids online at the last read (ADM-17). */
   readonly online: readonly string[]
@@ -75,7 +91,27 @@ export interface PublishControllerOptions {
   readonly getDraft: () => Draft
   readonly commit: (next: Draft) => void
   readonly now?: () => Date
+  /** The idle lock's timer and clock (F12); tests pass their own. */
+  readonly timers?: IdleTimers
 }
+
+/** What the vault's idle lock needs of the platform. */
+export interface IdleTimers {
+  /** Runs `run` after `ms`; the returned function cancels it. */
+  after(run: () => void, ms: number): () => void
+  /** Milliseconds, for throttling activity notes. */
+  now(): number
+}
+
+const PLATFORM_TIMERS: IdleTimers = Object.freeze({
+  after: (run: () => void, ms: number) => {
+    const handle = setTimeout(run, ms)
+    return () => {
+      clearTimeout(handle)
+    }
+  },
+  now: () => Date.now(),
+})
 
 const INITIAL: PublishSnapshot = Object.freeze({
   busy: undefined,
@@ -101,6 +137,9 @@ export class PublishController {
   private snapshot: PublishSnapshot = INITIAL
   private readonly listeners = new Set<() => void>()
   private vault: ObserverVault | undefined
+  private cancelIdleLock: (() => void) | undefined
+  private readonly timers: IdleTimers
+  private lastActivity = 0
   readonly book: CredentialsBook
   private readonly connection: PublishConnection
   private readonly getDraft: () => Draft
@@ -112,6 +151,7 @@ export class PublishController {
     this.getDraft = options.getDraft
     this.commit = options.commit
     this.now = options.now ?? (() => new Date())
+    this.timers = options.timers ?? PLATFORM_TIMERS
     this.book = new CredentialsBook(this.connection.kind === 'mock' ? 'demo' : 'random', this.now)
     this.book.subscribe(() => {
       this.set({ credentials: this.book.list() })
@@ -323,7 +363,8 @@ export class PublishController {
     this.vault?.lock()
     this.vault = opened.value
     this.connection.ops.useVault(opened.value)
-    this.set({ busy: undefined, vault: 'unlocked' })
+    this.set({ busy: undefined, vault: 'unlocked', vaultIdleLocked: false })
+    this.armIdleLock(this.idleLockMs())
     const kind = this.snapshot.plan?.kind
     if (kind !== undefined) await this.prepare(kind)
     return undefined
@@ -331,15 +372,58 @@ export class PublishController {
 
   /** The vault, while it is unlocked here; the audit (WP 2.10) checks voice with it. */
   currentVault(): ObserverVault | undefined {
-    return this.vault?.unlocked === true ? this.vault : undefined
+    if (this.vault?.unlocked !== true) return undefined
+    this.noteActivity()
+    return this.vault
   }
 
   /** Drops the vault's key and passwords from memory. */
   lockVault(): void {
+    this.clearIdleLock()
     this.vault?.lock()
     this.vault = undefined
     this.connection.ops.useVault(undefined)
-    this.set({ vault: this.snapshot.vault === 'unknown' ? 'unknown' : 'locked' })
+    this.set({
+      vault: this.snapshot.vault === 'unknown' ? 'unknown' : 'locked',
+      vaultIdleLocked: false,
+    })
+  }
+
+  /**
+   * F12: the admin did something (a key or a click in the admin app): the idle lock starts
+   * counting again. Cheap enough to call on every event.
+   */
+  noteActivity(): void {
+    if (this.vault?.unlocked !== true) return
+    const now = this.timers.now()
+    if (now - this.lastActivity < ACTIVITY_THROTTLE_MS) return
+    this.lastActivity = now
+    this.armIdleLock(this.idleLockMs())
+  }
+
+  private idleLockMs(): number {
+    const ms = this.connection.vaultIdleLockMs ?? VAULT_IDLE_LOCK_MS
+    return ms > 0 ? ms : VAULT_IDLE_LOCK_MS
+  }
+
+  private armIdleLock(ms: number): void {
+    this.clearIdleLock()
+    if (!Number.isFinite(ms) || this.vault?.unlocked !== true) return
+    this.cancelIdleLock = this.timers.after(() => {
+      this.cancelIdleLock = undefined
+      // A publish or repair may be using the vault: lock once it has finished.
+      if (this.snapshot.busy !== undefined) {
+        this.armIdleLock(BUSY_RECHECK_MS)
+        return
+      }
+      this.lockVault()
+      this.set({ vaultIdleLocked: true })
+    }, ms)
+  }
+
+  private clearIdleLock(): void {
+    this.cancelIdleLock?.()
+    this.cancelIdleLock = undefined
   }
 
   /**

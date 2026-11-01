@@ -86,40 +86,48 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
   const matrix = useDesignAccess(snapshot.draft.design)
   const publishing = usePublish(publish, store)
   const auditing = useAudit(publish, publishing.controller, store)
+  // F12: any key or click in the admin app (dialogs included: React events bubble through
+  // portals) restarts the vault's idle lock. Scoped to this app, so another multi-client pane's
+  // activity does not keep this vault open.
+  const active = () => {
+    publishing.controller?.noteActivity()
+  }
   return (
-    <AdminAppCore
-      draft={snapshot.draft}
-      loadError={snapshot.loadError}
-      saveError={snapshot.saveError}
-      validation={validation}
-      matrix={matrix}
-      registry={registry}
-      onChange={store.commit}
-      publishPanel={
-        <PublishSection
-          publish={publishing}
-          kind={publish?.kind}
-          {...(publish?.demoVaultPassphrase === undefined
-            ? {}
-            : { demoVaultPassphrase: publish.demoVaultPassphrase })}
-          store={store}
-          draft={snapshot.draft}
-          validation={validation}
-          {...(download === undefined ? {} : { download })}
-          {...(print === undefined ? {} : { print })}
-        />
-      }
-      auditPanel={
-        <AuditSection
-          audit={auditing}
-          design={snapshot.draft.design}
-          {...(publish?.demoVaultPassphrase === undefined
-            ? {}
-            : { demoVaultPassphrase: publish.demoVaultPassphrase })}
-        />
-      }
-      {...rest}
-    />
+    <div className="wrx-admin-activity" onPointerDownCapture={active} onKeyDownCapture={active}>
+      <AdminAppCore
+        draft={snapshot.draft}
+        loadError={snapshot.loadError}
+        saveError={snapshot.saveError}
+        validation={validation}
+        matrix={matrix}
+        registry={registry}
+        onChange={store.commit}
+        publishPanel={
+          <PublishSection
+            publish={publishing}
+            kind={publish?.kind}
+            {...(publish?.demoVaultPassphrase === undefined
+              ? {}
+              : { demoVaultPassphrase: publish.demoVaultPassphrase })}
+            store={store}
+            draft={snapshot.draft}
+            validation={validation}
+            {...(download === undefined ? {} : { download })}
+            {...(print === undefined ? {} : { print })}
+          />
+        }
+        auditPanel={
+          <AuditSection
+            audit={auditing}
+            design={snapshot.draft.design}
+            {...(publish?.demoVaultPassphrase === undefined
+              ? {}
+              : { demoVaultPassphrase: publish.demoVaultPassphrase })}
+          />
+        }
+        {...rest}
+      />
+    </div>
   )
 }
 

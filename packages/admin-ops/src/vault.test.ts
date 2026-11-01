@@ -3,7 +3,15 @@
 import { FakeSession, err } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { FAST, PASSPHRASE, withStorage } from './fixtures.ts'
-import { ObserverVault, VAULT_KDF, VAULT_STORAGE_KEY } from './vault.ts'
+import { DEMO_VAULT_PASSPHRASE } from '@wrx/mock-server'
+import {
+  MIN_PASSPHRASE_BITS,
+  ObserverVault,
+  VAULT_KDF,
+  VAULT_STORAGE_KEY,
+  passphraseBits,
+  passphraseProblem,
+} from './vault.ts'
 
 function storage(): { readonly session: FakeSession; readonly map: Map<string, string> } {
   const session = new FakeSession({ jid: 'admin@wrx.test/v' })
@@ -165,6 +173,53 @@ describe('ObserverVault', () => {
     expect(await ObserverVault.create(session.admin, PASSPHRASE, FAST)).toMatchObject({
       ok: false,
       error: { code: 'vault-exists' },
+    })
+  })
+
+  it('F12: refuses a guessable passphrase on create and change, but not the demo vault’s', async () => {
+    for (const weak of [
+      'aaaaaaaaaaaa',
+      'abababababab',
+      '123456789012',
+      'abcdefghijklmnop',
+      'Password1234',
+      'qwertyuiop12',
+      'passwordpassword',
+      'vault password 1',
+      DEMO_VAULT_PASSPHRASE,
+    ]) {
+      expect(passphraseProblem(weak), weak).toBeDefined()
+    }
+    for (const fine of [
+      PASSPHRASE,
+      'a long enough vault passphrase',
+      'Tr0ub4dor&3x!',
+      'qmzhxkvplwrt',
+      'heron tulip granite 47',
+    ]) {
+      expect(passphraseProblem(fine), fine).toBeUndefined()
+    }
+    expect(passphraseBits('abcdefghijklmnop')).toBeLessThan(MIN_PASSPHRASE_BITS)
+
+    const { session } = storage()
+    expect(await ObserverVault.create(session.admin, 'Password1234', FAST)).toMatchObject({
+      ok: false,
+      error: { code: 'weak-passphrase', message: expect.stringContaining('too easy') as string },
+    })
+    // The mock's demo vault: its passphrase is published, so only the length is checked.
+    const demo = await ObserverVault.create(session.admin, DEMO_VAULT_PASSPHRASE, {
+      ...FAST,
+      demo: true,
+    })
+    expect(demo.ok).toBe(true)
+    if (!demo.ok) return
+    expect(await demo.value.changePassphrase('qwertyqwerty', FAST)).toMatchObject({
+      ok: false,
+      error: { code: 'weak-passphrase' },
+    })
+    expect(await demo.value.changePassphrase('short', { ...FAST, demo: true })).toMatchObject({
+      ok: false,
+      error: { code: 'weak-passphrase' },
     })
   })
 

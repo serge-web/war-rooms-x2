@@ -200,6 +200,24 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
   })
 
+  it('F12: will not create a vault under a guessable passphrase, and says why', async () => {
+    const { user } = await setup()
+    await planAndWait(user, 'Check the server and plan')
+    await user.click(screen.getByRole('button', { name: 'Create the vault' }))
+    const dialog = screen.getByRole('alertdialog', { name: /Create the observer-password vault/ })
+    const create = within(dialog).getByRole('button', { name: 'Create' })
+    await user.type(within(dialog).getByLabelText('Passphrase'), 'Password1234')
+    await user.type(within(dialog).getByLabelText('Passphrase again'), 'Password1234')
+    expect(within(dialog).getByText(/Not yet: the passphrase is too easy to guess/)).toBeTruthy()
+    expect((create as HTMLButtonElement).disabled).toBe(true)
+    await user.clear(within(dialog).getByLabelText('Passphrase'))
+    await user.clear(within(dialog).getByLabelText('Passphrase again'))
+    await user.type(within(dialog).getByLabelText('Passphrase'), PASSPHRASE)
+    await user.type(within(dialog).getByLabelText('Passphrase again'), PASSPHRASE)
+    expect(within(dialog).queryByText(/Not yet/)).toBeNull()
+    expect((create as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('shows the credentials sheet with labelled demo passwords that log in; resets one (ADM-26)', async () => {
     const ctx = await setup()
     await firstPublish(ctx)

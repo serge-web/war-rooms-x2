@@ -3,7 +3,12 @@
 // Importing this module loads its stylesheet.
 import './column.css'
 
-export { AnnouncementsPanel, AnnouncementsPanelCore } from './announcements.tsx'
+export {
+  AnnouncementsPanel,
+  AnnouncementsPanelCore,
+  unseenCount,
+  useUnseenAnnouncements,
+} from './announcements.tsx'
 export type { AnnouncementItem, AnnouncementsPanelCoreProps } from './announcements.tsx'
 export { GameTimeSlot, OutOfGameColumn, OutOfGameColumnCore } from './column.tsx'
 export type { OutOfGameColumnCoreProps } from './column.tsx'

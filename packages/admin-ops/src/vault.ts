@@ -62,6 +62,11 @@ const contentsSchema = z.object({ passwords: z.record(slugSchema, z.string().min
 export interface VaultOptions {
   /** PBKDF2 iterations for a new key; at least `VAULT_KDF.minIterations`. */
   readonly iterations?: number
+  /**
+   * Only for the mock's demo vault (NFR-6), whose passphrase is published next to its unlock
+   * form, so its strength is moot: skips the strength estimate, not the length check.
+   */
+  readonly demo?: boolean
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -168,14 +173,101 @@ function parseEnvelope(text: string): OpsResult<Envelope> {
   return opsOk(parsed.data)
 }
 
-function checkPassphrase(passphrase: string): OpsResult<void> {
-  if (Array.from(passphrase.normalize('NFC')).length < MIN_PASSPHRASE_CHARS) {
-    return opsErr(
-      'weak-passphrase',
-      `the passphrase needs at least ${MIN_PASSPHRASE_CHARS} characters`,
-    )
+/** A new passphrase must be estimated at least this strong (review F12). */
+export const MIN_PASSPHRASE_BITS = 50
+
+/** Common words and keyboard runs that add almost nothing to a passphrase's strength. */
+const COMMON_PARTS = Object.freeze([
+  'password',
+  'passphrase',
+  'passwort',
+  'qwerty',
+  'azerty',
+  'asdf',
+  'zxcv',
+  'letmein',
+  'welcome',
+  'admin',
+  'observer',
+  'vault',
+  'secret',
+  'wargame',
+  'warrooms',
+  'monkey',
+  'dragon',
+  'iloveyou',
+])
+
+/** How many characters a run of neighbours (abcd, 4321, aaaa) of this length is worth. */
+function collapseRuns(chars: readonly string[]): number {
+  let worth = 0
+  let step: number | undefined
+  for (const [i, char] of chars.entries()) {
+    const previous = chars[i - 1]
+    const diff =
+      previous === undefined
+        ? undefined
+        : (char.codePointAt(0) ?? 0) - (previous.codePointAt(0) ?? 0)
+    if (diff !== undefined && Math.abs(diff) <= 1 && (step === undefined || diff === step)) {
+      step = diff
+      continue
+    }
+    step = undefined
+    worth++
   }
-  return opsOk(undefined)
+  return worth
+}
+
+function poolSize(chars: readonly string[]): number {
+  let pool = 0
+  if (chars.some((c) => /[a-z]/.test(c))) pool += 26
+  if (chars.some((c) => /[A-Z]/.test(c))) pool += 26
+  if (chars.some((c) => /[0-9]/.test(c))) pool += 10
+  if (chars.some((c) => c === ' ')) pool += 1
+  if (chars.some((c) => /[^A-Za-z0-9 ]/.test(c))) pool += 33
+  return Math.max(pool, 10)
+}
+
+/**
+ * A rough strength estimate in bits, without a dictionary download: the character pool to the
+ * power of the passphrase's worth in characters, where a common word or keyboard run counts as
+ * one character and so does a run of neighbouring or repeated characters. It errs low, and is a
+ * guard against weak choices, not a measure of strength.
+ */
+export function passphraseBits(passphrase: string): number {
+  const text = passphrase.normalize('NFC')
+  let rest = text.toLowerCase()
+  let common = 0
+  for (const part of COMMON_PARTS) {
+    for (let at = rest.indexOf(part); at >= 0; at = rest.indexOf(part)) {
+      common++
+      rest = `${rest.slice(0, at)}\n${rest.slice(at + part.length)}`
+    }
+  }
+  const chars = Array.from(rest).filter((c) => c !== '\n')
+  const worth = collapseRuns(chars) + common
+  return worth * Math.log2(poolSize(Array.from(text)))
+}
+
+/** Why a new passphrase is refused (review F12), or undefined if it is acceptable. */
+export function passphraseProblem(passphrase: string): string | undefined {
+  const chars = Array.from(passphrase.normalize('NFC'))
+  if (chars.length < MIN_PASSPHRASE_CHARS) {
+    return `the passphrase needs at least ${MIN_PASSPHRASE_CHARS} characters`
+  }
+  if (new Set(chars.map((c) => c.toLowerCase())).size < 5) {
+    return 'the passphrase repeats too few different characters'
+  }
+  if (passphraseBits(passphrase) < MIN_PASSPHRASE_BITS) {
+    return 'the passphrase is too easy to guess: avoid common words, keyboard runs and sequences, or use several unrelated words'
+  }
+  return undefined
+}
+
+function checkPassphrase(passphrase: string, demo: boolean): OpsResult<void> {
+  const tooShort = Array.from(passphrase.normalize('NFC')).length < MIN_PASSPHRASE_CHARS
+  const problem = demo && !tooShort ? undefined : passphraseProblem(passphrase)
+  return problem === undefined ? opsOk(undefined) : opsErr('weak-passphrase', problem)
 }
 
 function checkIterations(iterations: number): OpsResult<void> {
@@ -236,7 +328,7 @@ export class ObserverVault {
     passphrase: string,
     options: VaultOptions = {},
   ): OpsOutcome<ObserverVault> {
-    const strong = checkPassphrase(passphrase)
+    const strong = checkPassphrase(passphrase, options.demo === true)
     if (!strong.ok) return strong
     const iterations = options.iterations ?? VAULT_KDF.defaultIterations
     const bounded = checkIterations(iterations)
@@ -330,7 +422,7 @@ export class ObserverVault {
 
   /** Re-encrypts the vault under a new passphrase, with a new salt. */
   async changePassphrase(passphrase: string, options: VaultOptions = {}): OpsOutcome<void> {
-    const strong = checkPassphrase(passphrase)
+    const strong = checkPassphrase(passphrase, options.demo === true)
     if (!strong.ok) return strong
     const iterations = options.iterations ?? VAULT_KDF.defaultIterations
     const bounded = checkIterations(iterations)

@@ -5,7 +5,7 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import { useId, useState } from 'react'
 import type { ReactNode, SyntheticEvent } from 'react'
-import { MIN_PASSPHRASE_CHARS } from '@wrx/admin-ops'
+import { MIN_PASSPHRASE_CHARS, passphraseProblem } from '@wrx/admin-ops'
 import { Button } from '../components/index.ts'
 import type { ButtonVariant } from '../components/index.ts'
 
@@ -194,7 +194,9 @@ export function VaultDialog({ mode, busy, onSubmit, demoPassphrase }: VaultDialo
     setAgain('')
     setError(undefined)
   }
-  const tooShort = Array.from(passphrase).length < MIN_PASSPHRASE_CHARS
+  // F12: a new passphrase must not be easy to guess; the vault refuses it too.
+  const weakness = mode === 'create' ? passphraseProblem(passphrase) : undefined
+  const tooShort = weakness !== undefined
   const mismatch = mode === 'create' && passphrase !== again
   const submit = (e: SyntheticEvent) => {
     e.preventDefault()
@@ -251,7 +253,11 @@ export function VaultDialog({ mode, busy, onSubmit, demoPassphrase }: VaultDialo
           />
           {mode === 'create' && (
             <div className="wrx-admin-hint" id={`${id}-hint`}>
-              At least {MIN_PASSPHRASE_CHARS} characters.
+              At least {MIN_PASSPHRASE_CHARS} characters, and not easy to guess: several unrelated
+              words work well.
+              {passphrase !== '' && weakness !== undefined && (
+                <span className="wrx-admin-hint-problem"> Not yet: {weakness}.</span>
+              )}
             </div>
           )}
         </div>

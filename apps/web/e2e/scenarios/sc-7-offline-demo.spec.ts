@@ -11,6 +11,7 @@ import { logIn } from '../mock.ts'
 import {
   editObjectives,
   forcePanel,
+  paneForce,
   mockStatus,
   openMulti,
   pane,
@@ -61,8 +62,8 @@ test('SC-7: a stakeholder demo on the mock, offline: three panes and a second wi
 
   // The umpire's change (the admin login, SC-5) reaches Red's pane live.
   await editObjectives(page, pane(page, 3), 'Red', '1. Delay Blue until noon.')
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue until noon.')
-  await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue until noon.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Secure the crossing.')
 
   // A message Blue sends in the shared room arrives in Red's and the umpire's panes (SC-7).
   const talks = 'Blue–Red negotiation'
@@ -89,7 +90,7 @@ test('SC-7: a stakeholder demo on the mock, offline: three panes and a second wi
   await expect(second.getByLabel('Logged in as Blue Observer, Blue')).toBeVisible()
   await editObjectives(page, pane(page, 3), 'Blue', '1. Hold the crossing.')
   await expect(forcePanel(second)).toContainText('Hold the crossing.')
-  await expect(forcePanel(pane(page, 1))).toContainText('Hold the crossing.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Hold the crossing.')
 
   // After the demo: reset to the seed. Every pane and tab reconnects to it (PLY-21, PLY-2).
   await page.getByRole('button', { name: 'Reset to seed…' }).click()
@@ -98,7 +99,7 @@ test('SC-7: a stakeholder demo on the mock, offline: three panes and a second wi
     .getByRole('button', { name: 'Reset' })
     .click()
   await expect(mockStatus(page).filter({ hasText: 'back at its seed' })).toBeVisible()
-  await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Secure the crossing.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue.')
   await expect(forcePanel(second)).toContainText('Secure the crossing.')
 })

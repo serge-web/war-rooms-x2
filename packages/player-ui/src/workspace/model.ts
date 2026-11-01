@@ -38,7 +38,16 @@ export interface TabSpec {
 export interface LayoutSpec {
   readonly rooms: readonly TabSpec[]
   readonly panels: readonly TabSpec[]
+  /**
+   * A tab the host adds and takes away (`special:<id>`), e.g. the out-of-game column in a narrow
+   * client (FT-1). It cannot be closed or popped out, and it is never saved: a saved layout
+   * holds the rooms and panels only, so adding and removing it leaves them where they were.
+   */
+  readonly special?: TabSpec | undefined
 }
+
+/** The tab button class of a special tab, which the workspace styles (FT-1). */
+export const SPECIAL_TAB_CLASS = 'wrx-tab-special'
 
 /** A docked tabset, for tests and announcements. */
 export interface TabsetInfo {
@@ -65,7 +74,23 @@ const GLOBAL: IGlobalAttributes = Object.freeze({
 
 function tabJson(spec: TabSpec, ids: TabIds): IJsonTabNode {
   const kind: TabKind = parseTabId(spec.id)?.kind ?? 'room'
-  return { type: 'tab', id: ids.toModel(spec.id), name: spec.name, component: kind }
+  const tab: IJsonTabNode = {
+    type: 'tab',
+    id: ids.toModel(spec.id),
+    name: spec.name,
+    component: kind,
+  }
+  if (kind !== 'special') return tab
+  // Its content belongs to the host's page (FT-1), so it stays docked in this window.
+  return {
+    ...tab,
+    className: SPECIAL_TAB_CLASS,
+    enableClose: false,
+    enablePopout: false,
+    enablePopoutIcon: false,
+    enableFloat: false,
+    enableRename: false,
+  }
 }
 
 function act(model: Model, action: Action): void {
@@ -194,6 +219,22 @@ export function addToFewest(model: Model, spec: TabSpec, ids: TabIds): void {
   }
 }
 
+/**
+ * FT-1: adds the special tab first in the strip along the bottom, unselected, so no room tab
+ * changes. Not in a tabset: a narrow tabset's strip scrolls, and a tab added there is often out
+ * of sight behind the overflow button, badge and all; the strip along the bottom is as wide as
+ * the workspace and holds only short panel tabs, so the tab and its badge stay in view. The
+ * player can drag it into a tabset like a room.
+ */
+function addSpecial(model: Model, spec: TabSpec, ids: TabIds): void {
+  const border = panelBorder(model)
+  if (border === undefined) {
+    addToFewest(model, spec, ids)
+    return
+  }
+  act(model, Actions.addTab(tabJson(spec, ids), border.getId(), DockLocation.CENTER, 0, false))
+}
+
 /** Moves a tab, wherever it is, into the tabset with the fewest tabs. */
 function moveToFewest(model: Model, tab: TabNode): void {
   const target = fewestTabset(model)
@@ -208,7 +249,11 @@ function moveToFewest(model: Model, tab: TabNode): void {
  */
 export function reconcile(model: Model, spec: LayoutSpec, ids: TabIds): void {
   const present = tabsById(model, ids)
-  const wanted = [...spec.rooms, ...spec.panels]
+  const wanted = [
+    ...spec.rooms,
+    ...spec.panels,
+    ...(spec.special === undefined ? [] : [spec.special]),
+  ]
   const plan = reconcilePlan(
     [...present.keys()],
     wanted.map((t) => t.id),
@@ -232,6 +277,15 @@ export function reconcile(model: Model, spec: LayoutSpec, ids: TabIds): void {
         Actions.addTab(tabJson(panel, ids), border.getId(), DockLocation.CENTER, -1, false),
       )
   }
+  const special = spec.special
+  if (special !== undefined && adding.has(special.id)) addSpecial(model, special, ids)
+}
+
+/** The special tab's node, if the model holds it (FT-1). */
+export function specialTab(model: Model, spec: LayoutSpec, ids: TabIds): TabNode | undefined {
+  if (spec.special === undefined) return undefined
+  const node = model.getNodeById(ids.toModel(spec.special.id))
+  return node instanceof TabNode ? node : undefined
 }
 
 /**
@@ -298,32 +352,64 @@ export function moveTab(
 /** Maps a stored tab id to its logical id and the id to write, or undefined to drop it. */
 type Rename = (id: string) => { readonly logical: string; readonly id: string } | undefined
 
-function mapTab(tab: unknown, rename: Rename): IJsonTabNode | undefined {
+/** A tab to keep; `special` for a special tab, which is never saved or restored (FT-1). */
+function mapTab(tab: unknown, rename: Rename): IJsonTabNode | 'special' | undefined {
   if (!isRecord(tab) || tab.type !== 'tab') return undefined
   const ids = typeof tab.id === 'string' ? rename(tab.id) : undefined
   const name = tab.name
   if (ids === undefined || typeof name !== 'string') return undefined
   const kind = parseTabId(ids.logical)?.kind
+  if (kind === 'special') return 'special'
   return kind === undefined ? undefined : { type: 'tab', id: ids.id, name, component: kind }
 }
 
+interface MappedTabs {
+  readonly tabs: IJsonTabNode[]
+  /** Where the stored selection is among the kept tabs; undefined if that tab was dropped. */
+  readonly selected: number | undefined
+  /** Whether a dropped special tab was the selected one. */
+  readonly specialSelected: boolean
+  /** Only special tabs were there: a tabset made for the special tab, which goes with it. */
+  readonly onlySpecial: boolean
+}
+
 /** A tabset's or border's tabs; any tab groups are flattened (groups are turned off). */
-function mapTabs(children: unknown, rename: Rename, seen: Set<string>): IJsonTabNode[] {
-  if (!Array.isArray(children)) return []
-  const out: IJsonTabNode[] = []
-  for (const child of children) {
-    const flat: unknown[] =
-      isRecord(child) && child.type === 'tabgroup' && Array.isArray(child.children)
-        ? child.children
-        : [child]
-    for (const t of flat) {
-      const tab = mapTab(t, rename)
-      if (tab?.id === undefined || seen.has(tab.id)) continue
-      seen.add(tab.id)
-      out.push(tab)
+function mapTabs(
+  children: unknown,
+  selected: unknown,
+  rename: Rename,
+  seen: Set<string>,
+): MappedTabs {
+  const flat: unknown[] = []
+  for (const child of Array.isArray(children) ? (children as unknown[]) : []) {
+    if (isRecord(child) && child.type === 'tabgroup' && Array.isArray(child.children)) {
+      flat.push(...(child.children as unknown[]))
+    } else {
+      flat.push(child)
     }
   }
-  return out
+  const out: IJsonTabNode[] = []
+  let specials = 0
+  let kept: number | undefined
+  let specialSelected = false
+  for (const [index, t] of flat.entries()) {
+    const tab = mapTab(t, rename)
+    if (tab === 'special') {
+      specials++
+      if (index === selected) specialSelected = true
+      continue
+    }
+    if (tab?.id === undefined || seen.has(tab.id)) continue
+    seen.add(tab.id)
+    if (index === selected) kept = out.length
+    out.push(tab)
+  }
+  return {
+    tabs: out,
+    selected: kept,
+    specialSelected,
+    onlySpecial: specials > 0 && out.length === 0,
+  }
 }
 
 function weight(value: unknown): number | undefined {
@@ -345,19 +431,36 @@ function mapRow(row: unknown, rename: Rename, seen: Set<string>, depth: number):
   for (const child of Array.isArray(row.children) ? (row.children as unknown[]) : []) {
     if (!isRecord(child)) continue
     if (child.type === 'row') {
-      children.push(mapRow(child, rename, seen, depth + 1))
+      const inner = mapRow(child, rename, seen, depth + 1)
+      // A row emptied by dropping a special tab's own tabset goes too.
+      if (inner.children?.length !== 0 || !hadChildren(child)) children.push(inner)
     } else if (child.type === 'tabset') {
-      const tabs = mapTabs(child.children, rename, seen)
+      const mapped = mapTabs(child.children, child.selected, rename, seen)
+      // FT-1: a tabset that held only the special tab was made for it; saving it would leave an
+      // empty column behind once the tab goes.
+      if (mapped.onlySpecial) continue
+      const { tabs } = mapped
       const tabset: IJsonTabSetNode = { type: 'tabset', children: tabs }
       const tw = weight(child.weight)
       if (tw !== undefined) tabset.weight = tw
-      tabset.selected = selectedIndex(child.selected, tabs.length, tabs.length === 0 ? -1 : 0)
+      const selected =
+        mapped.selected ?? (mapped.specialSelected ? tabs.length - 1 : child.selected)
+      tabset.selected = selectedIndex(selected, tabs.length, tabs.length === 0 ? -1 : 0)
       if (child.active === true) tabset.active = true
       children.push(tabset)
     }
   }
   out.children = children
   return out
+}
+
+function hadChildren(row: Readonly<Record<string, unknown>>): boolean {
+  return Array.isArray(row.children) && row.children.length > 0
+}
+
+/** Whether a row holds a tabset anywhere. */
+function hasTabset(row: IJsonRowNode): boolean {
+  return (row.children ?? []).some((c) => c.type === 'tabset' || (c.type === 'row' && hasTabset(c)))
 }
 
 function mapBorders(borders: unknown, rename: Rename, seen: Set<string>): IJsonBorderNode[] {
@@ -369,12 +472,18 @@ function mapBorders(borders: unknown, rename: Rename, seen: Set<string>): IJsonB
     if (location !== 'top' && location !== 'bottom' && location !== 'left' && location !== 'right')
       continue
     if (out.some((b) => b.location === location)) continue
-    const tabs = mapTabs(border.children, rename, seen)
+    const kept = mapTabs(border.children, border.selected, rename, seen)
+    const tabs = kept.tabs
     const mapped: IJsonBorderNode = {
       type: 'border',
       location,
       children: tabs,
-      selected: selectedIndex(border.selected, tabs.length, -1),
+      // An open border showing the special tab is saved closed.
+      selected: selectedIndex(
+        kept.selected ?? (kept.specialSelected ? -1 : border.selected),
+        tabs.length,
+        -1,
+      ),
     }
     const size = weight(border.size)
     if (size !== undefined) mapped.size = size
@@ -396,6 +505,10 @@ function rebuild(json: unknown, rename: Rename): IJsonModel | undefined {
   if (!isRecord(json) || !isRecord(json.layout)) return undefined
   const seen = new Set<string>()
   const layout = mapRow(json.layout, rename, seen, 0)
+  // Dropping the special tab's own tabset can leave no tabset at all: keep one for the rooms.
+  if (!hasTabset(layout)) {
+    layout.children = [...(layout.children ?? []), { type: 'tabset', weight: 1, children: [] }]
+  }
   const borders = mapBorders(json.borders, rename, seen)
   return { global: { ...GLOBAL }, borders, layout }
 }

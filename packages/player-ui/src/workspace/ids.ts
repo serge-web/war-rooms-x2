@@ -1,5 +1,6 @@
-// Tab ids. A tab's *logical* id names what it shows (`room:<roomId>` or `panel:<panelId>`) and
-// is what saved layouts hold. Its *model* id is the logical id behind a per-instance prefix.
+// Tab ids. A tab's *logical* id names what it shows (`room:<roomId>`, `panel:<panelId>`, or
+// `special:<id>` for a tab the host adds and takes away, such as the out-of-game column in a
+// narrow client, FT-1) and is what saved layouts hold; special tabs are never saved. Its *model* id is the logical id behind a per-instance prefix.
 // FlexLayout derives DOM ids from node ids and moves focus with getElementById, so two
 // workspaces showing the same room (two panes, possibly of the same role: D15, D22) would share
 // ids and send focus to the wrong pane (layout-library.md, weakness 1). The prefix is stripped on
@@ -9,6 +10,7 @@
 export type TabRef =
   | { readonly kind: 'room'; readonly roomId: string }
   | { readonly kind: 'panel'; readonly panelId: string }
+  | { readonly kind: 'special'; readonly specialId: string }
 
 export type TabKind = TabRef['kind']
 
@@ -22,6 +24,10 @@ export function panelTabId(panelId: string): string {
   return `panel:${panelId}`
 }
 
+export function specialTabId(specialId: string): string {
+  return `special:${specialId}`
+}
+
 /** A logical id's meaning, or undefined if it is not one of ours (e.g. from bad storage). */
 export function parseTabId(logicalId: string): TabRef | undefined {
   const colon = logicalId.indexOf(':')
@@ -31,6 +37,7 @@ export function parseTabId(logicalId: string): TabRef | undefined {
   if (!SLUG.test(id)) return undefined
   if (kind === 'room') return { kind, roomId: id }
   if (kind === 'panel') return { kind, panelId: id }
+  if (kind === 'special') return { kind, specialId: id }
   return undefined
 }
 
