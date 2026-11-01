@@ -3,7 +3,7 @@
 // severity and repair.
 import { nodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
+import { TEMPLATE, sampleDesignWithWhiteCell, templatedDesign, tid } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, jid, publishedView, withNode } from '../publish/fixtures.ts'
 import type { ServerView } from '../publish/view.ts'
@@ -522,5 +522,53 @@ describe('drift', () => {
     )
     const severities = findings(audit(drifted)).map((i) => i.severity)
     expect(severities).toEqual(['critical', 'low'])
+  })
+})
+
+describe('templates in the audit (Annex A, WP 4.1)', () => {
+  const templated: DesignFile = { ...templatedDesign(), roles: design.roles }
+  const view = publishedView(templated)
+  const run = (v: ServerView) => audit(v, { voice: goodVoice(v) }, templated)
+
+  it('a published templated game audits clean, its locks from the server', () => {
+    expect(findings(run(view))).toEqual([])
+  })
+
+  it('a template the design does not have is a low stray item, repaired by retracting it', () => {
+    const stray = templated.templates[0]!
+    const drifted = withNode(view, 'templates', (n) => ({
+      ...n,
+      items: [
+        ...n.items,
+        {
+          id: tid('old-template'),
+          payload: JSON.stringify({
+            ...stray,
+            id: tid('old-template'),
+            name: 'Old',
+            lockedAt: undefined,
+          }),
+          publisher: jid('admin'),
+        },
+      ],
+    }))
+    expect(item(run(drifted), `stray-items:templates:${tid('old-template')}`)).toMatchObject({
+      kind: 'stray-items',
+      severity: 'low',
+      destructive: true,
+      found: 'the template Old, which the design does not have',
+      repair: [{ type: 'retract-item', node: 'templates', itemId: tid('old-template') }],
+    })
+  })
+
+  it('a missing template is a document item', () => {
+    const drifted = withNode(view, 'templates', (n) => ({
+      ...n,
+      items: n.items.filter((i) => i.id !== TEMPLATE.contact),
+    }))
+    expect(item(run(drifted), `document:templates:${TEMPLATE.contact}`)).toMatchObject({
+      found: 'missing',
+      severity: 'medium',
+    })
   })
 })

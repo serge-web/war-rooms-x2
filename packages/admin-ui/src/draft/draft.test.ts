@@ -3,7 +3,15 @@ import { isId } from '@wrx/schemas'
 import type { DesignFile, Result } from '@wrx/schemas'
 import { describe, expect, it } from 'vitest'
 // The schemas package keeps its sample design with its tests and does not export it.
-import { nameOf, sampleDesign, tid } from '../../../schemas/src/fixtures.ts'
+import {
+  ROOM,
+  blueReportsConfig,
+  nameOf,
+  sampleDesign,
+  sampleTemplates,
+  templatedDesign,
+  tid,
+} from '../../../schemas/src/fixtures.ts'
 import {
   DEFAULT_FORCE_COLOUR,
   addForce,
@@ -20,6 +28,7 @@ import {
   markPublished,
   markRolesPublished,
   mergeRetired,
+  mergeTemplateLocks,
   moveForce,
   moveRole,
   moveRoom,
@@ -335,6 +344,36 @@ describe('deleted forces and roles keep their last names (§3 rule 1, ADM-14)', 
     expect(draft.design.retired).toEqual([record])
     expect(mergeRetired(draft, [record])).toBe(draft)
     expect(takenLoginNames(draft).has('old-co')).toBe(true)
+  })
+})
+
+describe('template entries in room configs (TPL-2, WP 4.1)', () => {
+  it('drops a deleted role’s template entries with its participant entries', () => {
+    const draft = draftFromDesign(templatedDesign())
+    const after = deleteRole(draft, tid('blue-co'), NOW)
+    const reports = after.design.rooms.find((r) => r.id === ROOM.blueReports)
+    expect(reports?.config).toEqual({
+      ...blueReportsConfig(),
+      templates: blueReportsConfig().templates.filter((e) => e.kind !== 'role'),
+    })
+    expect(validateDraft(after.design).publishable).toBe(true)
+  })
+})
+
+describe('template locks from the server (TD6, WP 4.1)', () => {
+  it('takes the server’s locks, never removes one, and keeps the same draft when nothing changes', () => {
+    const [a, b, c] = sampleTemplates()
+    const draft = draftFromDesign({
+      ...sampleDesign(),
+      templates: [a!, { ...b!, lockedAt: 'x' }, c!],
+    })
+    const locked = '2026-10-24T09:00:00.000Z'
+    const merged = mergeTemplateLocks(draft, [
+      { ...a!, lockedAt: locked },
+      { ...b!, lockedAt: undefined },
+    ])
+    expect(merged.design.templates.map((t) => t.lockedAt)).toEqual([locked, 'x', undefined])
+    expect(mergeTemplateLocks(merged, [{ ...a!, lockedAt: locked }])).toBe(merged)
   })
 })
 

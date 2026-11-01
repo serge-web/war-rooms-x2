@@ -8,7 +8,7 @@ import { opsErr, opsOk } from '../errors.ts'
 import type { AdminOps } from '../ops.ts'
 import { newMarker } from './marker.ts'
 import type { MarkerStore } from './marker.ts'
-import { stepConfirmation } from './plan.ts'
+import { planErrorTarget, stepConfirmation } from './plan.ts'
 import type { PlanStep, PublishPlan } from './plan.ts'
 
 /** The step id a failure to set the publish marker is reported under; no step has run. */
@@ -77,7 +77,7 @@ export async function executePlan(
   // A plan with errors (ADM-5) runs nothing, whatever steps it carries.
   const planError = plan.errors[0]
   if (planError !== undefined) {
-    const error = opsErr('invalid', planError.message, { target: planError.roleId }).error
+    const error = opsErr('invalid', planError.message, { target: planErrorTarget(planError) }).error
     return {
       ok: false,
       done,
@@ -193,5 +193,7 @@ async function runStep(
       return none(await ops.deleteNode(action.node))
     case 'purge-node':
       return none(await ops.purgeNode(action.node))
+    case 'retract-item':
+      return none(await ops.retractItem(action.node, action.itemId))
   }
 }

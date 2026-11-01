@@ -1,16 +1,26 @@
 // Unit tests of the publish planner over hand-built server views: what each kind of change plans,
 // the order of steps, idempotency, warnings, the vault, and the design version.
-import { nodeName } from '@wrx/schemas'
-import type { DesignFile } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
+import { TEMPLATE_LIMITS, nodeName } from '@wrx/schemas'
+import type { DesignFile, Template } from '@wrx/schemas'
+import {
+  ROOM,
+  TEMPLATE,
+  sampleDesignWithWhiteCell,
+  templatedDesign,
+  tid,
+} from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, emptyView, jid, publishedView, withNode } from './fixtures.ts'
+import type { ServerView } from './view.ts'
 import {
+  isDestructiveAction,
   needsConfirmation,
+  planErrorTarget,
   planPublish,
   planReset,
   publishedDesign,
   roomsToDestroy,
+  stepConfirmation,
 } from './plan.ts'
 import type { PlanStep, PublishPlan } from './plan.ts'
 
@@ -769,13 +779,6 @@ describe('a server published before GUID ids (merge record N3)', () => {
       ]),
     )
   })
-
-  it('never touches the reserved `templates` node (Annex A)', () => {
-    // The admin tooling never lists it (`isGameNodeName`), so no plan sees it; a view that held
-    // it would still plan nothing for it.
-    const plan = planPublish(sampleDesignWithWhiteCell(), emptyView())
-    expect(ids(plan).some((i) => i.includes('templates'))).toBe(false)
-  })
 })
 
 describe('a published role’s login name is fixed (ADM-5, WP 3.4)', () => {
@@ -927,5 +930,179 @@ describe('a published or deleted role’s login name is not reused (§3 rule 1, 
     expect(planPublish(design, withRecord).errors).toEqual([
       expect.objectContaining({ kind: 'login-name-reused', loginName: 'old-co' }),
     ])
+  })
+})
+
+describe('message templates (Annex A, WP 4.1)', () => {
+  const TEMPLATES = 'templates'
+  const templated = (): DesignFile => {
+    const design = templatedDesign()
+    return { ...design, roles: sampleDesignWithWhiteCell().roles }
+  }
+  const templateOf = (view: ServerView, id: string) =>
+    publishedDesign(view).templates.find((t) => t.id === id)
+
+  it('creates `templates`, read by every role, published by the admin, one item per template', () => {
+    const plan = planPublish(templated(), emptyView())
+    expect(step(plan, `node:${TEMPLATES}`).action).toMatchObject({
+      type: 'ensure-node',
+      config: {
+        accessModel: 'whitelist',
+        publishModel: 'publishers',
+        maxItems: TEMPLATE_LIMITS.templates,
+      },
+    })
+    const grant = step(plan, `grant-node:${TEMPLATES}`).action
+    expect(grant.type === 'node-access' ? grant.changes : []).toEqual(
+      ['blue-co', 'blue-observer', 'red-co', 'white-observer', 'white-cell'].map((roleId) => ({
+        roleId,
+        access: 'read',
+      })),
+    )
+    for (const id of [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support]) {
+      expect(step(plan, `doc:${TEMPLATES}:${id}`).action).toMatchObject({
+        type: 'publish',
+        itemId: id,
+      })
+    }
+  })
+
+  it('publishes templates before the rooms that offer them', () => {
+    const plan = planPublish(templated(), emptyView())
+    expect(index(plan, `doc:${TEMPLATES}:${TEMPLATE.support}`)).toBeLessThan(
+      index(plan, `doc:${nodeName.room(ROOM.blueReports)}:current`),
+    )
+  })
+
+  it('locks every template a room offers, at the design’s export time, and says so (TD6)', () => {
+    const design = templated()
+    const unused = { ...design.templates[0]!, id: tid('unused-template'), name: 'Unused' }
+    const plan = planPublish({ ...design, templates: [...design.templates, unused] }, emptyView())
+    const payload = (id: string) => {
+      const action = step(plan, `doc:${TEMPLATES}:${id}`).action
+      return action.type === 'publish' ? (JSON.parse(action.payload) as Template) : undefined
+    }
+    expect(payload(TEMPLATE.sitrep)?.lockedAt).toBe(design.exportedAt)
+    expect(payload(unused.id)?.lockedAt).toBeUndefined()
+    expect(step(plan, `doc:${TEMPLATES}:${TEMPLATE.sitrep}`).details).toEqual([
+      'A room offers it, so it locks: its fields are fixed from now on (TD6)',
+    ])
+    expect(step(plan, `doc:${TEMPLATES}:${TEMPLATE.sitrep}`).summary).toBe(
+      'Publish the template Situation report',
+    )
+  })
+
+  it('plans nothing more once published, and keeps the server’s lock whatever the draft says', () => {
+    const design = templated()
+    const view = publishedView(design)
+    expect(templateOf(view, TEMPLATE.sitrep)?.lockedAt).toBe(design.exportedAt)
+    expect(planPublish(design, view).steps).toEqual([])
+    // A draft that does not know of the lock (another browser published) still plans nothing.
+    const later = { ...design, exportedAt: '2026-12-01T00:00:00.000Z' }
+    expect(planPublish(later, view).steps).toEqual([])
+  })
+
+  it('republishes a locked template whose name changes, keeping its lock', () => {
+    const design = templated()
+    const view = publishedView(design)
+    const renamed = {
+      ...design,
+      templates: design.templates.map((t) =>
+        t.id === TEMPLATE.sitrep ? { ...t, name: 'SITREP' } : t,
+      ),
+    }
+    const plan = planPublish(renamed, view)
+    expect(plan.errors).toEqual([])
+    const action = step(plan, `doc:${TEMPLATES}:${TEMPLATE.sitrep}`).action
+    const published =
+      action.type === 'publish' ? (JSON.parse(action.payload) as Template) : undefined
+    expect(published?.name).toBe('SITREP')
+    expect(published?.lockedAt).toBe(design.exportedAt)
+  })
+
+  it('refuses a design that changes a locked template’s fields, with the copy remedy', () => {
+    const design = templated()
+    const view = publishedView(design)
+    const changed = {
+      ...design,
+      templates: design.templates.map((t) =>
+        t.id === TEMPLATE.contact
+          ? { ...t, schema: { ...t.schema, required: ['seenAt'] }, lockedAt: undefined }
+          : t,
+      ),
+    }
+    const plan = planPublish(changed, view)
+    expect(plan.steps).toEqual([])
+    expect(plan.errors).toEqual([
+      expect.objectContaining({ kind: 'template-locked-changed', templateId: TEMPLATE.contact }),
+    ])
+    expect(plan.errors[0]?.message).toContain('Copy it to a new template')
+    expect(planErrorTarget(plan.errors[0]!)).toBe(TEMPLATE.contact)
+  })
+
+  it('refuses a design that drops a locked template', () => {
+    const design = templated()
+    const view = publishedView(design)
+    const dropped = {
+      ...design,
+      rooms: design.rooms.filter((r) => r.id !== ROOM.blueReports),
+      templates: design.templates.filter((t) => t.id !== TEMPLATE.support),
+    }
+    expect(planPublish(dropped, view).errors).toEqual([
+      expect.objectContaining({ kind: 'template-locked-removed', templateId: TEMPLATE.support }),
+    ])
+    // Taking it out of every room instead is fine: it stays, locked.
+    const kept = { ...design, rooms: design.rooms.filter((r) => r.id !== ROOM.blueReports) }
+    const plan = planPublish(kept, view)
+    expect(plan.errors).toEqual([])
+    expect(ids(plan).some((id) => id.startsWith(`retract:${TEMPLATES}`))).toBe(false)
+  })
+
+  it('lets an unlocked template change, and removes one the design drops, after the rooms', () => {
+    const design = templated()
+    const draft = { ...design, rooms: design.rooms.filter((r) => r.id !== ROOM.blueReports) }
+    const view = publishedView(draft)
+    expect(templateOf(view, TEMPLATE.sitrep)?.lockedAt).toBeUndefined()
+    const changed = {
+      ...draft,
+      templates: draft.templates
+        .filter((t) => t.id !== TEMPLATE.support)
+        .map((t) =>
+          t.id === TEMPLATE.contact ? { ...t, schema: { ...t.schema, required: ['grid'] } } : t,
+        ),
+    }
+    const plan = planPublish(changed, view)
+    expect(plan.errors).toEqual([])
+    expect(ids(plan)).toContain(`doc:${TEMPLATES}:${TEMPLATE.contact}`)
+    const retract = step(plan, `retract:${TEMPLATES}:${TEMPLATE.support}`)
+    expect(retract).toMatchObject({
+      group: 'removals',
+      summary: 'Remove the template Support request',
+      action: { type: 'retract-item', node: TEMPLATES, itemId: TEMPLATE.support },
+    })
+    expect(isDestructiveAction(retract.action)).toBe(true)
+    expect(stepConfirmation(retract.action)).toBeUndefined()
+  })
+
+  it('removes a stray or unreadable item on `templates`', () => {
+    const view = withNode(publishedView(templated()), TEMPLATES, (n) => ({
+      ...n,
+      items: [
+        ...n.items,
+        { id: 'junk', payload: '{"not": "a template"}', publisher: jid('admin') },
+      ],
+    }))
+    expect(step(planPublish(templated(), view), `retract:${TEMPLATES}:junk`).summary).toBe(
+      'Remove the template junk',
+    )
+  })
+
+  it('never plans anything below `templates`, which stays reserved', () => {
+    const plan = planPublish(templated(), emptyView())
+    const nodes = plan.steps.flatMap((s) => ('node' in s.action ? [s.action.node] : []))
+    expect(nodes).toContain(TEMPLATES)
+    expect(nodes.some((n) => n.startsWith('templates:'))).toBe(false)
+    const reset = planReset(publishedView(templated()))
+    expect(ids(reset)).toContain(`delete-node:${TEMPLATES}`)
   })
 })

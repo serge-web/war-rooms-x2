@@ -836,6 +836,29 @@ export class AdminOps {
     return opsOk(undefined)
   }
 
+  /**
+   * Retracts one item (XEP-0060 §7.2, as the node's owner), then reads the node back: the item
+   * must be gone; already gone is success. Publish uses it on `templates` for a template the
+   * design no longer has (never a locked one: the planner refuses that, TD6).
+   */
+  async retractItem(node: string, itemId: string): OpsOutcome<void> {
+    const op = 'retractItem'
+    const valid = this.checkNode(op, node)
+    if (!valid.ok) return valid
+    const retracted = await this.step(op, 'retract item', node, () =>
+      this.session.pubsub.retract(node, itemId),
+    )
+    if (!retracted.ok && !gone(retracted)) return retracted
+    const left = await this.query(op, 'verify retraction', node, () =>
+      this.session.pubsub.getItems(node),
+    )
+    if (!left.ok) return left
+    if (left.value.some((item) => item.id === itemId)) {
+      return this.fail(op, 'verify retraction', node, 'verify-failed', `item ${itemId} remains`)
+    }
+    return opsOk(undefined)
+  }
+
   setNodeAccess(node: string, roleId: string, access: NodeAccess): OpsOutcome<void> {
     return this.applyNodeAccess(node, [{ roleId, access }])
   }

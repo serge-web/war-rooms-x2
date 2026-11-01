@@ -4,8 +4,13 @@ import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
 import { nodeName, parseDocument } from '@wrx/schemas'
-import { sampleDesign, tid } from '../../schemas/src/fixtures.ts'
-import { OBJECTIVES_MAX_ITEMS, RETIRED_MAX_ITEMS, targetState } from './target.ts'
+import { TEMPLATE, sampleDesign, templatedDesign, tid } from '../../schemas/src/fixtures.ts'
+import {
+  OBJECTIVES_MAX_ITEMS,
+  RETIRED_MAX_ITEMS,
+  TEMPLATES_MAX_ITEMS,
+  targetState,
+} from './target.ts'
 
 /** The sample design with a White Force writer, and a White observer assigned to one room. */
 function withWhiteRoles() {
@@ -114,6 +119,31 @@ describe('targetState(sampleDesign())', () => {
     expect(targetState(design).nodes.some((n) => n.node.includes('blue-co'))).toBe(false)
   })
 
+  it('publishes each template as an item of `templates`, read by every role (Annex A, TPL-1)', () => {
+    const design = templatedDesign()
+    const node = targetState(design).nodes.find((n) => n.node === 'templates')
+    expect(node?.config).toMatchObject({
+      accessModel: 'whitelist',
+      publishModel: 'publishers',
+      maxItems: TEMPLATES_MAX_ITEMS,
+    })
+    expect([...(node?.access.entries() ?? [])].sort()).toEqual(
+      design.roles.map((r) => [r.loginName, 'read']).sort(),
+    )
+    expect(node?.documents.map((d) => d.itemId)).toEqual([
+      TEMPLATE.sitrep,
+      TEMPLATE.contact,
+      TEMPLATE.support,
+    ])
+    const parsed = parseDocument('template', node?.documents[0]?.payload ?? '{}')
+    expect(parsed.ok).toBe(true)
+    // A design without templates still has the node, empty.
+    const empty = targetState(sampleDesign()).nodes.find((n) => n.node === 'templates')
+    expect(empty?.documents).toEqual([])
+    // Nothing below it, which stays reserved.
+    expect(targetState(design).nodes.some((n) => n.node.startsWith('templates:'))).toBe(false)
+  })
+
   it('opens only game-setup and the game theme asset; everything is publishers', () => {
     const open = target.nodes.filter((n) => n.config.accessModel === 'open').map((n) => n.node)
     expect(open).toEqual(['game-setup', nodeName.asset(tid('game-logo'))])
@@ -166,6 +196,7 @@ describe('targetState(sampleDesign())', () => {
   it.each([
     ['the sample design', sampleDesign],
     ['White Force writers and assigned observers', withWhiteRoles],
+    ['the templated design', templatedDesign],
   ])(
     'matches the mock seed for %s: members, stored visitors, node configs and affiliations',
     (_, make) => {

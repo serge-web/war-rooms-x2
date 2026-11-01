@@ -13,6 +13,7 @@ import {
   DESIGN_FILE_VERSION,
   LIMITS,
   RESERVED_LOGIN_NAMES,
+  chatRoomConfigSchema,
   isReservedLoginName,
   newEntityId,
 } from '@wrx/schemas'
@@ -26,6 +27,7 @@ import type {
   Retired,
   Role,
   Room,
+  Template,
 } from '@wrx/schemas'
 import { isSlug, slugify, uniqueSlug } from './slug.ts'
 
@@ -181,6 +183,23 @@ export function markRolesPublished(draft: Draft, loginNames: readonly string[]):
     ...draft,
     meta: { ...draft.meta, publishedRoleIds: [...draft.meta.publishedRoleIds, ...added] },
   }
+}
+
+/**
+ * Takes the server's template locks into the draft (TD6, TPL-4): a template a published room has
+ * offered is locked on the server, whichever browser published it, so the editor shows it read
+ * only and offers a copy (WP 4.3). A lock is never taken away. The same draft is returned when
+ * nothing changes.
+ */
+export function mergeTemplateLocks(draft: Draft, published: readonly Template[]): Draft {
+  const design = draft.design
+  const templates = design.templates.map((template) => {
+    if (template.lockedAt !== undefined) return template
+    const lockedAt = published.find((p) => p.id === template.id)?.lockedAt
+    return lockedAt === undefined ? template : { ...template, lockedAt }
+  })
+  if (templates.every((t, i) => t === design.templates[i])) return draft
+  return { ...draft, design: { ...design, templates } }
 }
 
 /**
@@ -633,15 +652,25 @@ function replaceById<T extends { readonly id: string }>(
   return items.map((item) => (item.id === id ? change(item) : item))
 }
 
+/**
+ * The rooms without a deleted force's or role's entries: its participant entries, and its
+ * template entries in a chat room's config (TPL-2), which would otherwise name an unknown entity.
+ */
 function withoutEntries(rooms: readonly Room[], kind: Participant['kind'], id: string): Room[] {
-  return rooms.map((room) =>
-    room.participants.some((p) => p.kind === kind && p.id === id)
-      ? {
-          ...room,
-          participants: room.participants.filter((p) => !(p.kind === kind && p.id === id)),
-        }
-      : room,
-  )
+  return rooms.map((room) => {
+    const named = (e: { readonly kind: string; readonly id: string }) =>
+      e.kind === kind && e.id === id
+    const config = chatRoomConfigSchema.safeParse(room.config)
+    const inConfig = config.success && config.data.templates.some(named)
+    if (!room.participants.some(named) && !inConfig) return room
+    return {
+      ...room,
+      participants: room.participants.filter((p) => !named(p)),
+      ...(inConfig
+        ? { config: { ...config.data, templates: config.data.templates.filter((e) => !named(e)) } }
+        : {}),
+    }
+  })
 }
 
 function moveInOrder<T extends { readonly id: string; readonly order: number }>(

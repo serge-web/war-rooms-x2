@@ -2,6 +2,7 @@
 // design, built from `targetState` the way the executor provisions it, so tests change one thing
 // at a time.
 import { DOCUMENT_ITEM_ID } from '@wrx/domain'
+import { withTemplateLocks } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { targetState } from '../target.ts'
 import type { NodeView, ServerView } from './view.ts'
@@ -22,9 +23,12 @@ export function emptyView(overrides: Partial<ServerView> = {}): ServerView {
   }
 }
 
-/** The server after publishing `design` completely, at `game.designVersion`. */
+/**
+ * The server after publishing `design` completely, at `game.designVersion`: templates its rooms
+ * offer are locked, as a publish leaves them (TD6).
+ */
 export function publishedView(design: DesignFile, overrides: Partial<ServerView> = {}): ServerView {
-  const target = targetState(design)
+  const target = targetState(withTemplateLocks(design, []))
   const rooms = target.rooms.map((room) => ({
     roomId: room.roomId,
     config: room.config,

@@ -38,8 +38,9 @@ import {
   parseDocument,
   parseNodeName,
   slugSchema,
+  withTemplateLocks,
 } from '@wrx/schemas'
-import type { DesignFile, Force, GameSetup, Retired, Role, Room } from '@wrx/schemas'
+import type { DesignFile, Force, GameSetup, Retired, Role, Room, Template } from '@wrx/schemas'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 import type { NodeAccessChange, RoomAccessChange } from '../ops.ts'
 import { ROOM_SETTINGS, sameRoomConfig, targetState } from '../target.ts'
@@ -101,6 +102,8 @@ export type StepAction =
   | { readonly type: 'delete-node'; readonly node: string }
   /** Every item goes; `stray` names the ones the design does not hold, for the admin. */
   | { readonly type: 'purge-node'; readonly node: string; readonly stray: readonly string[] }
+  /** One item goes: a template the design no longer has, never a locked one (Annex A). */
+  | { readonly type: 'retract-item'; readonly node: string; readonly itemId: string }
 
 export interface StepRisk {
   /** It removes access, an account, a room and its history, a node, or a password. */
@@ -178,6 +181,19 @@ export type PlanError =
       readonly holderName: string
       readonly message: string
     }
+  /**
+   * `template-locked-changed` (TD6, TPL-4): the design changes the schema of a template the
+   * server holds locked, which messages may already use. Copy it to a new template instead.
+   * `template-locked-removed`: the design drops a locked template, whose messages would then
+   * show as plain text. Keep it (take it out of the rooms instead), or reset the game.
+   */
+  | {
+      readonly kind: 'template-locked-changed' | 'template-locked-removed'
+      /** The template's GUID. */
+      readonly templateId: string
+      readonly name: string
+      readonly message: string
+    }
 
 /**
  * Login names the design may not have (ADM-5, §3 rule 1): a published role's changed, and a
@@ -224,6 +240,11 @@ export function loginNameChanges(
     })
   }
   return errors
+}
+
+/** What a planning error is about: the role's or the template's GUID. */
+export function planErrorTarget(error: PlanError): string {
+  return 'roleId' in error ? error.roleId : error.templateId
 }
 
 /** Warnings the admin must confirm one by one before applying (ADM-14, ADM-40, ADM-26). */
@@ -283,7 +304,11 @@ export function stepConfirmation(action: StepAction): string | undefined {
  * or replaces a password. Worked out from the action type, for the audit's repairs (F9).
  */
 export function isDestructiveAction(action: StepAction): boolean {
-  return stepConfirmation(action) !== undefined || action.type === 'delete-node'
+  return (
+    stepConfirmation(action) !== undefined ||
+    action.type === 'delete-node' ||
+    action.type === 'retract-item'
+  )
 }
 
 export type VaultNeed =
@@ -330,6 +355,8 @@ export interface PublishedDesign {
   readonly rooms: readonly Room[]
   /** The `retired` records on the server (§3 rule 1). */
   readonly retired: readonly Retired[]
+  /** The templates on the server (Annex A), with their locks. */
+  readonly templates: readonly Template[]
 }
 
 function documentOf(node: NodeView | undefined, itemId = DOCUMENT_ITEM_ID): string | undefined {
@@ -342,6 +369,7 @@ export function publishedDesign(view: ServerView): PublishedDesign {
   const roles: Role[] = []
   const rooms: Room[] = []
   const retired: Retired[] = []
+  const templates: Template[] = []
   let game: GameSetup | undefined
   for (const node of view.nodes) {
     const ref = parseNodeName(node.node)
@@ -349,6 +377,13 @@ export function publishedDesign(view: ServerView): PublishedDesign {
       for (const item of node.items) {
         const parsed = parseDocument('retired', item.payload)
         if (parsed.ok && parsed.value.id === item.id) retired.push(parsed.value)
+      }
+      continue
+    }
+    if (ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.templates) {
+      for (const item of node.items) {
+        const parsed = parseDocument('template', item.payload)
+        if (parsed.ok && parsed.value.id === item.id) templates.push(parsed.value)
       }
       continue
     }
@@ -368,7 +403,39 @@ export function publishedDesign(view: ServerView): PublishedDesign {
       if (parsed.ok && parsed.value.id === ref.id) rooms.push(parsed.value)
     }
   }
-  return { game, forces, roles, rooms, retired }
+  return { game, forces, roles, rooms, retired, templates }
+}
+
+/**
+ * Template changes the design may not make (TD6, TPL-4, provisional answer 2): a template the
+ * server holds locked keeps its schema, and stays in the design. Locks come from the server,
+ * since a lock set by another browser's publish is not in this draft.
+ */
+export function templateLockErrors(
+  design: Pick<DesignFile, 'templates'>,
+  published: Pick<PublishedDesign, 'templates'>,
+): PlanError[] {
+  const errors: PlanError[] = []
+  for (const before of published.templates) {
+    if (before.lockedAt === undefined) continue
+    const now = design.templates.find((t) => t.id === before.id)
+    if (now === undefined) {
+      errors.push({
+        kind: 'template-locked-removed',
+        templateId: before.id,
+        name: before.name,
+        message: `The template ${before.name} is locked: a published room has offered it, so messages may use it, and the design removes it. Keep it, and take it out of the rooms instead, so old messages still show as cards (TD6); or reset the game.`,
+      })
+    } else if (canonicalJson(now.schema) !== canonicalJson(before.schema)) {
+      errors.push({
+        kind: 'template-locked-changed',
+        templateId: before.id,
+        name: now.name,
+        message: `The template ${before.name} is locked: a published room has offered it, so messages may use it, and the design changes its fields. Copy it to a new template and change the copy, then offer the copy in its rooms (TD6, TPL-4).`,
+      })
+    }
+  }
+  return errors
 }
 
 /** JSON with object keys sorted, so equal documents compare equal however they were written. */
@@ -545,10 +612,14 @@ function scopeOf(view: ServerView, roleId: string): { rooms: string[]; nodes: st
   return { rooms, nodes }
 }
 
-const DOCUMENT_ORDER = ['assets', 'forces', 'roles', 'rooms', 'objectives'] as const
+// Templates before rooms, so a client that reads a room's config finds the templates it names.
+const DOCUMENT_ORDER = ['assets', 'forces', 'roles', 'templates', 'rooms', 'objectives'] as const
 
 function documentRank(node: string): number {
   const ref = parseNodeName(node)
+  if (ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.templates) {
+    return DOCUMENT_ORDER.indexOf('templates')
+  }
   if (ref === undefined || ref.kind === 'singleton') return DOCUMENT_ORDER.length
   return DOCUMENT_ORDER.indexOf(ref.kind)
 }
@@ -568,7 +639,8 @@ export function planPublish(
   // ADM-5: a changed login name of a published role is refused, never planned as a new account
   // and a deleted one (the server cannot rename an account); so is a published or deleted role's
   // login name taken by a role of another GUID (§3 rule 1).
-  const errors = loginNameChanges(given, published)
+  // TD6: a locked template keeps its schema and stays (provisional answer 2).
+  const errors = [...loginNameChanges(given, published), ...templateLockErrors(given, published)]
   if (errors.length > 0) {
     return {
       kind: 'publish',
@@ -584,7 +656,9 @@ export function planPublish(
       roleNames: {},
     }
   }
-  const design = withRetiredRecords(given, published)
+  // A publish locks every template a room offers (TD6): the server's locks are kept, and the
+  // design's export time stamps new ones (planning keeps no clock).
+  const design = withTemplateLocks(withRetiredRecords(given, published), published.templates)
   const target = targetState(design)
   const marker = view.marker
   const pending =
@@ -884,7 +958,9 @@ export function planPublish(
     if (purge !== undefined) documents.push(purge)
     for (const doc of node.documents) {
       if (purge === undefined && samePayload(doc.payload, documentOf(current, doc.itemId))) continue
-      documents.push(documentStep(node, doc.itemId, doc.payload, label(node.node)))
+      documents.push(
+        documentStep(node, doc.itemId, doc.payload, label(node.node), { design, published }),
+      )
     }
   }
 
@@ -893,6 +969,16 @@ export function planPublish(
   const uncounted: string[] = []
   const targetRoomIds = new Set(target.rooms.map((r) => r.roomId))
   const targetNodes = new Set(target.nodes.map((n) => n.node))
+  // Templates the design no longer has: never locked ones, which `templateLockErrors` refused.
+  // After the rooms' documents, which no longer offer them.
+  const templateNode = target.nodes.find((n) => n.node === SINGLETON_NODES.templates)
+  if (templateNode !== undefined) {
+    const wanted = new Set(templateNode.documents.map((d) => d.itemId))
+    for (const item of serverNodes.get(SINGLETON_NODES.templates)?.items ?? []) {
+      if (wanted.has(item.id)) continue
+      removals.push(retractStep(SINGLETON_NODES.templates, item.id, templateName(published, item)))
+    }
+  }
   for (const roleId of [...known].filter((id) => !targetRoles.has(id)).sort()) {
     if (view.vault.exists) vaultUsed = true
     removals.push(deleteRoleStep(view, roleId, roleName(roleId)))
@@ -1007,19 +1093,39 @@ export function planPublish(
   }
 }
 
-function documentStep(node: TargetNode, itemId: string, payload: string, label: string): PlanStep {
+/** A template item's name, from the server's document, else its id. */
+function templateName(published: Pick<PublishedDesign, 'templates'>, item: { id: string }): string {
+  return published.templates.find((t) => t.id === item.id)?.name ?? item.id
+}
+
+function documentStep(
+  node: TargetNode,
+  itemId: string,
+  payload: string,
+  label: string,
+  context?: { readonly design: DesignFile; readonly published: PublishedDesign },
+): PlanStep {
   const ref = parseNodeName(node.node)
+  const isTemplates = ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.templates
+  const template = isTemplates ? context?.design.templates.find((t) => t.id === itemId) : undefined
+  const before = isTemplates ? context?.published.templates.find((t) => t.id === itemId) : undefined
   const what =
     ref?.kind === 'objectives'
       ? `the admin's item on ${label}`
       : ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.retired
         ? `the record of a deleted force or role on ${label}`
-        : label
+        : template !== undefined
+          ? `the template ${template.name}`
+          : label
+  const details =
+    template?.lockedAt !== undefined && before?.lockedAt === undefined
+      ? ['A room offers it, so it locks: its fields are fixed from now on (TD6)']
+      : []
   return {
     id: `doc:${node.node}:${itemId}`,
     group: 'documents',
     summary: `Publish ${what}`,
-    details: [],
+    details,
     risk: { destructive: false, roles: [] },
     action: { type: 'publish', node: node.node, config: node.config, itemId, payload },
   }
@@ -1050,6 +1156,17 @@ function purgeStep(
     ],
     risk: { destructive: true, roles: [] },
     action: { type: 'purge-node', node: node.node, stray },
+  }
+}
+
+function retractStep(node: string, itemId: string, name: string): PlanStep {
+  return {
+    id: `retract:${node}:${itemId}`,
+    group: 'removals',
+    summary: `Remove the template ${name}`,
+    details: ['The design no longer has it, and no published room has offered it'],
+    risk: { destructive: true, roles: [] },
+    action: { type: 'retract-item', node, itemId },
   }
 }
 

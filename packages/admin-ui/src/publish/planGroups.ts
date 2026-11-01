@@ -158,6 +158,12 @@ function kindOf(step: PlanStep): Kind {
         key: 'purge-node',
         summary: (s) => `Remove objectives items not the admin's: ${plural(s.length, 'node')}`,
       }
+    case 'retract-item':
+      return {
+        key: 'retract-item',
+        summary: (s) =>
+          `Remove templates the design no longer has: ${plural(s.length, 'template')}`,
+      }
   }
 }
 

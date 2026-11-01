@@ -224,6 +224,8 @@ export function repairRank(action: StepAction): number {
       return 5
     case 'publish':
       return 6
+    // A template is retracted after the rooms' documents stop offering it, as the planner does.
+    case 'retract-item':
     case 'delete-role':
     case 'destroy-room':
     case 'delete-node':
@@ -767,6 +769,21 @@ function nodeAccessItems(
  */
 function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): void {
   const action = step.action
+  if (action.type === 'retract-item') {
+    // A template the design does not have (Annex A); never a locked one, which the audit
+    // refuses to compare against (TD6).
+    out.add({
+      id: `stray-items:${action.node}:${action.itemId}`,
+      kind: 'stray-items',
+      target: action.node,
+      expected: 'the design’s templates only',
+      found: `${step.summary.replace(/^Remove the template /, 'the template ')}, which the design does not have`,
+      severity: 'low',
+      repair: [action],
+      note: 'No published room has offered it, so no message uses it. Repair removes it.',
+    })
+    return
+  }
   if (action.type !== 'purge-node') return
   const republish = steps
     .map((s) => s.action)

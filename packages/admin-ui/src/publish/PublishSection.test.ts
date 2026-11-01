@@ -9,7 +9,7 @@ import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { DEMO_VAULT_PASSPHRASE, MockServer, MockTransport, demoState } from '@wrx/mock-server'
-import { sampleDesign, tid } from '@wrx/schemas/fixtures'
+import { sampleDesign, templatedDesign, tid } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -146,25 +146,25 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
     expect(stepItems()).toEqual([])
-    expect(groupButton('Access').textContent).toBe('▸Access22 stepsTo do')
-    expect(groupButton('Nodes').textContent).toContain('Create nodes: 19 nodes')
+    expect(groupButton('Access').textContent).toBe('▸Access23 stepsTo do')
+    expect(groupButton('Nodes').textContent).toContain('Create nodes: 20 nodes')
     // Repeated access steps read as one line each kind, expandable to every step.
     await user.click(groupButton('Access'))
     expect(groupButton('Access').getAttribute('aria-expanded')).toBe('true')
     const access = within(plan).getByRole('region', { name: 'Access' })
     const nodeGrants = within(access).getByRole('button', {
-      name: /^Give node access: 17 nodes × roles \(62 grants\)/,
+      name: /^Give node access: 18 nodes × roles \(66 grants\)/,
     })
     expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
     // The two observers' read-only steps read as one line too.
     expect(stepItems()).toEqual([])
     await user.click(nodeGrants)
-    expect(stepItems()).toHaveLength(17)
+    expect(stepItems()).toHaveLength(18)
     expect(access.textContent).toContain('Blue CO: read')
     await user.click(groupButton('Access'))
     expect(stepItems()).toEqual([])
     await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
-    expect(stepItems()).toHaveLength(63)
+    expect(stepItems()).toHaveLength(65)
     await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
     expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
@@ -181,10 +181,10 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const groups = within(planRegion()).getAllByRole('region')
     expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
     expect(groupButton('Access').textContent).toContain('Done')
-    expect(within(planRegion()).getByText(/^All 63 steps done\.$/)).toBeTruthy()
+    expect(within(planRegion()).getByText(/^All 65 steps done\.$/)).toBeTruthy()
     await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     const steps = stepItems()
-    expect(steps).toHaveLength(63)
+    expect(steps).toHaveLength(65)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
@@ -338,7 +338,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     expect(groupButton('Accounts').textContent).toContain('Done')
     expect(groupButton('Nodes').textContent).toContain('Not run')
     expect(
-      within(planRegion()).getByText(/^Stopped at a failure: 5 of 63 steps done\.$/),
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 65 steps done\.$/),
     ).toBeTruthy()
     const failed = stepItems().filter((li) => li.dataset.state === 'failed')
     expect(failed.map((li) => li.dataset.step)).toEqual([`room:${tid('red-hq')}`])
@@ -408,7 +408,7 @@ describe('on the mock’s demo seed, which starts published with its vault', () 
     // A draft saved before the seed was published here: no role recorded as published.
     const store = createDraftStore({
       persistence: memoryDraftPersistence(),
-      initial: () => draftFromDesign(sampleDesign()),
+      initial: () => draftFromDesign(templatedDesign()),
     })
     render(
       createElement(AdminApp, {

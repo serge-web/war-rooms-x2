@@ -8,7 +8,8 @@
 //   the admin as owner and publisher; objectives readable by their force and every White Force
 //   role, published by the admin only, with the design's text as the admin's single item
 //   (§3 rule 14, D21); `retired` holds the design's deleted-entity records; `directory` the
-//   entity GUIDs and each role's GUID by login name (§3 rule 1);
+//   entity GUIDs and each role's GUID by login name (§3 rule 1); `templates` one item per
+//   message template, locked if a room offers it, as a publish leaves it (Annex A, TD6);
 // - optional message history, archived for MAM;
 // - optional private storage of the admin account (the demo seed's observer vault).
 // White Force roles reach rooms through effective access (D8, §3 rule 4).
@@ -20,6 +21,8 @@ import {
   isoDateTimeSchema,
   nodeName,
   publicAssetIds,
+  TEMPLATE_LIMITS,
+  withTemplateLocks,
 } from '@wrx/schemas'
 import type { DesignFile, Result } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
@@ -110,6 +113,9 @@ const ANNOUNCEMENTS_MAX_ITEMS = 100
 /** Items kept on `retired`, as the admin tooling (`RETIRED_MAX_ITEMS` in @wrx/admin-ops). */
 const RETIRED_MAX_ITEMS = 1000
 
+/** Items kept on `templates`, as the admin tooling (`TEMPLATES_MAX_ITEMS` in @wrx/admin-ops). */
+const TEMPLATES_MAX_ITEMS = TEMPLATE_LIMITS.templates
+
 /** One `current` item for single-document nodes (WP 1.6). */
 const CURRENT = 'current'
 
@@ -125,7 +131,8 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
   const parsed = designFileSchema.safeParse(seed.design)
   if (!parsed.success)
     return { ok: false, error: `invalid design: ${z.prettifyError(parsed.error)}` }
-  const design: DesignFile = parsed.data
+  // A seed is a published game, so every template a room offers is locked (TD6).
+  const design: DesignFile = withTemplateLocks(parsed.data, [])
   const errors = checkDesign(design).filter((i) => i.severity === 'error')
   if (errors.length > 0) {
     return { ok: false, error: errors.map((e) => `${e.path}: ${e.message}`).join('; ') }
@@ -233,6 +240,13 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     everyRole,
     [],
     [{ id: CURRENT, doc: directoryOf(design) }],
+  )
+  addNode(
+    SINGLETON_NODES.templates,
+    gameNode('whitelist', TEMPLATES_MAX_ITEMS),
+    everyRole,
+    [],
+    design.templates.map((template) => ({ id: template.id, doc: template })),
   )
   for (const force of design.forces) {
     addNode(

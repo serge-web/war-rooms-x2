@@ -1,11 +1,12 @@
 // The demo scenario (PLY-21, PLY-34): the sample design from @wrx/schemas, "Exercise Northern
-// Gate", with a short morning of message history, provisioned and published as the admin tooling
+// Gate", with its message templates and the Blue Reports room that offers them, free text off
+// (Annex A, `templatedDesign`), a short morning of message history, provisioned and published as the admin tooling
 // would leave it, observer vault included. Every password is a DEMO PASSWORD (NFR-6):
 // `demo-<loginName>`, and `demo-admin` for the admin; the vault opens with the DEMO passphrase
 // DEMO_VAULT_PASSPHRASE.
 import type { DesignFile } from '@wrx/schemas'
 // The schemas package keeps its sample design with its tests and does not export it.
-import { ROOM, sampleDesign } from '../../schemas/src/fixtures.ts'
+import { ROOM, templatedDesign } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
 import type { DesignSeed, SeedMessage } from './seed.ts'
 import type { MockState } from './state.ts'
@@ -94,9 +95,9 @@ const DEMO_VAULT_ENVELOPE = JSON.stringify({
     'xCp+3aHfzTLK1TIxqKWxk7Bl31vo6mwMt+IBvLPHVA2/0R/kLBUi5TQLmF9uEDkmdbgeOhbNhpT4BWm8jjz2pOpA9gOVK2z/tc3yz7g2wNR/a1lKvhR/xrbwzldoPDqe5Sh+kKKTR/EtGhg=',
 })
 
-/** The demo seed: the sample design, its history and its demo passwords. */
+/** The demo seed: the templated sample design, its history and its demo passwords. */
 export function demoSeed(domain?: string): DesignSeed {
-  const design: DesignFile = sampleDesign()
+  const design: DesignFile = templatedDesign()
   return {
     design,
     ...(domain === undefined ? {} : { domain }),

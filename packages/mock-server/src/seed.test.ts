@@ -1,9 +1,15 @@
 // Seeds (PLY-21, PLY-34): a design provisioned as the admin tooling would, checked through the
 // transport as players see it, and the demo scenario.
-import { nodeName } from '@wrx/schemas'
+import { nodeName, parseDocument } from '@wrx/schemas'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
-import { sampleDesign, sampleDesignWithWhiteCell, tid } from '../../schemas/src/fixtures.ts'
+import {
+  TEMPLATE,
+  sampleDesign,
+  sampleDesignWithWhiteCell,
+  templatedDesign,
+  tid,
+} from '../../schemas/src/fixtures.ts'
 import { DEMO_VAULT_PASSPHRASE, demoSeed, demoState } from './demo.ts'
 import { demoPassword, stateFromDesign } from './seed.ts'
 import { MockServer } from './server.ts'
@@ -221,6 +227,24 @@ describe('the demo seed', () => {
     unwrap(await anon.pubsub.getItems(nodeName.asset(tid('game-logo'))))
     const forces = await anon.pubsub.getItems(nodeName.force(tid('blue')))
     expect(forces.ok ? undefined : forces.error.condition).toBe('not-allowed')
+  })
+
+  it('holds the templates, locked as a publish leaves them, read by every role and published by the admin only (Annex A)', async () => {
+    const { login, transport, endpoint } = demo()
+    const red = await login('red-co')
+    const items = unwrap(await red.pubsub.getItems('templates'))
+    expect(items.map((i) => i.id).sort()).toEqual(
+      [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support].sort(),
+    )
+    for (const item of items) {
+      const parsed = parseDocument('template', item.payload)
+      expect(parsed.ok && parsed.value.lockedAt).toBe(templatedDesign().exportedAt)
+    }
+    const post = await red.pubsub.publish('templates', TEMPLATE.sitrep, items[0]!.payload)
+    expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
+    const anon = unwrap(await transport.connect({ endpoint, credentials: { kind: 'anonymous' } }))
+    const read = await anon.pubsub.getItems('templates')
+    expect(read.ok ? undefined : read.error.condition).toBe('not-allowed')
   })
 
   it('lets the White observer read every force’s objectives but not publish them (F5)', async () => {

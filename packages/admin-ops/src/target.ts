@@ -7,7 +7,7 @@
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
 import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, directoryOf, effectiveAccess } from '@wrx/domain'
-import { SINGLETON_NODES, nodeName, publicAssetIds } from '@wrx/schemas'
+import { SINGLETON_NODES, TEMPLATE_LIMITS, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
@@ -26,6 +26,12 @@ export const ANNOUNCEMENTS_MAX_ITEMS = 100
  * `max_items_node` is 1000; a game deletes far fewer.
  */
 export const RETIRED_MAX_ITEMS = 1000
+
+/**
+ * Items kept on `templates`: one per template (Annex A, TPL-1), at most the profile's limit,
+ * which `checkDesign` enforces; within ejabberd's default `max_items_node` of 1000.
+ */
+export const TEMPLATES_MAX_ITEMS = TEMPLATE_LIMITS.templates
 
 /**
  * The admin's item on an objectives node: the only item it holds, since only the admin publishes
@@ -195,6 +201,15 @@ export function targetState(design: DesignFile): TargetState {
       config: whitelist1,
       access: everyRole('read'),
       documents: [doc(directoryOf(design))],
+    },
+    // Annex A: message templates, one item each, item id the template GUID (TPL-1, provisional
+    // answer 1: a leaf, not a collection). Read by every role, published by the admin only
+    // (TD2). The planner sets each `lockedAt` before this is built (`withTemplateLocks`).
+    {
+      node: SINGLETON_NODES.templates,
+      config: gameNodeConfig('whitelist', TEMPLATES_MAX_ITEMS),
+      access: everyRole('read'),
+      documents: design.templates.map((template) => doc(template, template.id)),
     },
     ...design.forces.map((force) => ({
       node: nodeName.force(force.id),

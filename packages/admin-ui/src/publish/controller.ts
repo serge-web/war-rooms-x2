@@ -24,7 +24,12 @@ import type {
   StepState,
 } from '@wrx/admin-ops'
 import type { Draft } from '../draft/index.ts'
-import { markPublished, markRolesPublished, mergeRetired } from '../draft/index.ts'
+import {
+  markPublished,
+  markRolesPublished,
+  mergeRetired,
+  mergeTemplateLocks,
+} from '../draft/index.ts'
 
 /** How the admin UI reaches the server; the host builds it after the admin logs in. */
 export interface PublishConnection {
@@ -232,9 +237,11 @@ export class PublishController {
       // Roles the server already has are published, whichever browser published them (or the
       // mock's demo seed): their login names are fixed (ADM-5) and the sheet lists them. The
       // server's deleted-role records keep their login names from new roles (§3 rule 1).
-      planned = mergeRetired(
-        markRolesPublished(draft, knownRoles(view)),
-        publishedDesign(view).retired,
+      // Templates the server holds locked are locked in the draft too (TD6).
+      const published = publishedDesign(view)
+      planned = mergeTemplateLocks(
+        mergeRetired(markRolesPublished(draft, knownRoles(view)), published.retired),
+        published.templates,
       )
       if (planned !== draft) this.commit(planned)
       this.knowDemoPasswords(publishedLogins(planned))
@@ -320,10 +327,15 @@ export class PublishController {
       this.set({ error: `Reading the server back failed: ${describeError(after.error)}` })
       return
     }
-    // The publish may have recorded deleted entities the draft did not (§3 rule 1).
+    // The publish may have recorded deleted entities the draft did not (§3 rule 1), and locked
+    // the templates its rooms offer (TD6).
     if (plan.kind === 'publish') {
       const current = this.getDraft()
-      const merged = mergeRetired(current, publishedDesign(after.value.view).retired)
+      const published = publishedDesign(after.value.view)
+      const merged = mergeTemplateLocks(
+        mergeRetired(current, published.retired),
+        published.templates,
+      )
       if (merged !== current) this.commit(merged)
     }
     this.set({
