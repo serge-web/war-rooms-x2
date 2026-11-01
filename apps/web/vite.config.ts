@@ -19,6 +19,25 @@ function markedXmppAutolink(): Plugin {
 }
 
 /**
+ * RJSF's widget table maps the `password` string format to its PasswordWidget, text the site's
+ * secret scan (DOC-12, NFR-1, `password-literal`) rightly flags as a password assigned a literal.
+ * Templates never use it (the WRX template profile allows no `password` format or widget, and
+ * the composer registers no PasswordWidget), so the entry is dropped from the table.
+ */
+function rjsfPasswordWidget(): Plugin {
+  const entry = /\n\s*password: 'PasswordWidget',/
+  return {
+    name: 'wrx-rjsf-password-widget',
+    transform(code, id) {
+      if (!/[\\/]@rjsf[\\/]utils[\\/]lib[\\/]getWidget\.js$/.test(id) || !entry.test(code)) {
+        return null
+      }
+      return { code: code.replace(entry, ''), map: null }
+    },
+  }
+}
+
+/**
  * The Content-Security-Policy of a build (security review F7), as a `<meta>` tag in the built
  * index.html; deploy/README.md gives the same policy as a header, with the parts a meta tag
  * cannot carry. Scripts, workers, styles, fonts and images come only from the build itself:
@@ -80,7 +99,7 @@ function cspMeta(server: boolean): Plugin {
 export default defineConfig(({ mode }) => {
   const server = mode === 'server'
   return {
-    plugins: [react(), markedXmppAutolink(), cspMeta(server)],
+    plugins: [react(), markedXmppAutolink(), rjsfPasswordWidget(), cspMeta(server)],
     // Relative asset URLs, so one build runs under any base path: PR previews, the demo and
     // snapshots on GitHub Pages, or a customer's static host (DOC-11, NFR-8).
     base: './',
