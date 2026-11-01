@@ -206,6 +206,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
       })),
     assets: [],
     retired: [],
+    templates: [],
   }
 }
 

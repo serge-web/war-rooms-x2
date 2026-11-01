@@ -23,9 +23,10 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
     })
     expect(nodeSpec(nodeName.asset(tid('logo')))).toEqual({ kind: 'asset', id: tid('logo') })
     expect(nodeSpec('something-else')).toBeUndefined()
-    // Nodes from before GUID ids, and the reserved `templates`, are not WRX1 documents.
+    // Nodes from before GUID ids, and anything below `templates`, are not WRX1 documents.
     expect(nodeSpec('forces:blue')).toBeUndefined()
-    expect(nodeSpec('templates')).toBeUndefined()
+    expect(nodeSpec('templates')).toEqual({ kind: 'template', id: undefined })
+    expect(nodeSpec(`templates:${tid('blue')}`)).toBeUndefined()
   })
 
   it('parses valid items and rejects invalid ones without throwing', () => {

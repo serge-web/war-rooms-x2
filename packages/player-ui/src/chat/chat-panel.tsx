@@ -7,6 +7,7 @@ import { ADMIN_AUTHOR_ID, UMPIRE_NAME } from '@wrx/domain'
 import type { Author, DomainError, RoomView, TimelineEntry } from '@wrx/domain'
 import { useAuthors, useOccupants, useRoomMessages, useSessionStore } from '@wrx/hooks'
 import type { PlayerPanelProps } from '@wrx/hooks'
+import { templatePlainText } from '@wrx/templates'
 import { Banner, Button } from '@wrx/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
@@ -249,8 +250,14 @@ function toChatMessage(
     forceName: author?.forceName,
     colour: author?.colour,
     self,
-    // Chat is the only message type in v1; a new type makes this a type error, as it should.
-    text: entry.kind === 'message' ? entry.body.content.text : undefined,
+    // A templated message shows as plain text until its card (WP 4.2); a new message type makes
+    // this a type error, as it should.
+    text:
+      entry.kind !== 'message'
+        ? undefined
+        : entry.body.type === 'chat'
+          ? entry.body.content.text
+          : templatePlainText(entry.body),
   }
 }
 

@@ -1,4 +1,5 @@
-import { chatMessageBodySchema } from '@wrx/schemas'
+import { messageBodySchema } from '@wrx/schemas'
+import { blueReportsConfig } from '@wrx/schemas/fixtures'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { game, room } from './fixtures.ts'
 import {
@@ -12,12 +13,14 @@ import {
 import type { RoomTypeDefinition, RoomTypeRegistry } from './registry.ts'
 
 describe('room-type registry (ARC-5)', () => {
-  it('registers chat, with an empty config schema and the chat message schema', () => {
+  it('registers chat, with its config version 2 and chat and templated messages', () => {
     const registry = defaultRoomTypes()
     const chat = registry.get('chat')
     expect(registry.list().map((d) => d.type)).toEqual(['chat'])
-    expect(chat?.messageSchema).toBe(chatMessageBodySchema)
+    expect(chat?.messageSchema).toBe(messageBodySchema)
     expect(chat?.configSchema.safeParse({}).success).toBe(true)
+    expect(chat?.configSchema.safeParse(blueReportsConfig()).success).toBe(true)
+    expect(chat?.configSchema.safeParse({ schemaVersion: 2 }).success).toBe(false)
     expect(chat?.playerComponent).toBeUndefined()
     expect(chat?.adminEditor).toBeUndefined()
     expect(chat?.icon).toBe('chat')
@@ -63,15 +66,24 @@ describe('room-type registry (ARC-5)', () => {
   it('resolves a room config from the game defaults and the room', () => {
     const registry = defaultRoomTypes()
     const chat = room('a', [])
-    expect(roomConfig(registry, chat, game())).toEqual({ ok: true, value: {} })
+    // Version 1 (`{}`): free text, no templates (Annex A).
+    expect(roomConfig(registry, chat, game())).toEqual({
+      ok: true,
+      value: { schemaVersion: 2, freeText: true, templates: [] },
+    })
+    expect(roomConfig(registry, { ...chat, config: blueReportsConfig() }, game())).toEqual({
+      ok: true,
+      value: blueReportsConfig(),
+    })
     expect(roomConfig(registry, { ...chat, roomType: 'map' }, undefined)).toEqual({
       ok: false,
       error: 'room type "map" is not supported',
     })
-    const strict = createRoomTypeRegistry([
-      { ...chatRoomType, configSchema: chatConfigSchema.strict() },
-    ])
-    const withDefaults = { ...game(), roomTypeDefaults: { chat: { colour: 'x' } } }
-    expect(roomConfig(strict, chat, withDefaults).ok).toBe(false)
+    const off = { schemaVersion: 2, freeText: false, templates: [] }
+    const withDefaults = { ...game(), roomTypeDefaults: { chat: off } }
+    expect(roomConfig(registry, chat, withDefaults)).toEqual({ ok: true, value: off })
+    const broken = { ...game(), roomTypeDefaults: { chat: { schemaVersion: 2, freeText: 'no' } } }
+    expect(roomConfig(registry, chat, broken).ok).toBe(false)
+    expect(chatConfigSchema.safeParse({ schemaVersion: 3 }).success).toBe(false)
   })
 })

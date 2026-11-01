@@ -13,6 +13,7 @@ import type {
   Retired,
   Role,
   Room,
+  Template,
 } from '@wrx/schemas'
 
 /** The value type of each document kind the store holds. */
@@ -29,6 +30,8 @@ export interface DocumentValues {
   readonly retired: Retired
   /** `directory`: entity GUIDs, and each role's GUID by login name (§3 rule 1). */
   readonly directory: Directory
+  /** An item of `templates`: a message template, its item id its GUID (Annex A, TPL-1). */
+  readonly template: Template
 }
 
 /** A validated document, tagged with its kind. */
@@ -77,6 +80,7 @@ export function nodeSpec(node: string): NodeSpec | undefined {
       announcements: 'announcement',
       retired: 'retired',
       directory: 'directory',
+      templates: 'template',
     } as const
     return { kind: kinds[ref.node], id: undefined }
   }
@@ -162,6 +166,10 @@ function parseAs(kind: LiveDocumentKind, payload: string): Result<LiveDocument> 
     }
     case 'directory': {
       const r = parseDocument('directory', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
+    case 'template': {
+      const r = parseDocument('template', payload)
       return r.ok ? done({ kind, value: r.value }) : fail(r.error)
     }
   }

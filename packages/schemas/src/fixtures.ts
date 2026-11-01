@@ -1,7 +1,8 @@
 import { isId } from './common.ts'
 import { DESIGN_FILE_VERSION } from './design.ts'
 import type { DesignFile } from './design.ts'
-import type { Asset } from './documents.ts'
+import type { Asset, Room } from './documents.ts'
+import type { ChatRoomConfig, Template } from './template.ts'
 import type { DesignFileV1 } from './legacy.ts'
 
 /** A 1×1 transparent PNG, for tests and seeds. */
@@ -19,7 +20,10 @@ export function pixelAsset(id: string): Asset {
   }
 }
 
-/** A fixed GUID: `kind` names the collection (1 forces, 2 roles, 3 rooms, 4 assets), `n` the item. */
+/**
+ * A fixed GUID: `kind` names the collection (1 forces, 2 roles, 3 rooms, 4 assets, 5 templates),
+ * `n` the item.
+ */
 function fixed(kind: number, n: number): string {
   return `${kind}0000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`
 }
@@ -41,6 +45,13 @@ export const ROOM = Object.freeze({
   blueHq: fixed(3, 1),
   redHq: fixed(3, 2),
   negotiation: fixed(3, 3),
+  /** The templated demo room (`templatedDesign`). */
+  blueReports: fixed(3, 4),
+})
+export const TEMPLATE = Object.freeze({
+  sitrep: fixed(5, 1),
+  contact: fixed(5, 2),
+  support: fixed(5, 3),
 })
 export const ASSET = Object.freeze({ gameLogo: fixed(4, 1) })
 
@@ -66,6 +77,10 @@ const KNOWN: Readonly<Record<string, string>> = Object.freeze({
   'blue-hq': ROOM.blueHq,
   'red-hq': ROOM.redHq,
   negotiation: ROOM.negotiation,
+  'blue-reports': ROOM.blueReports,
+  sitrep: TEMPLATE.sitrep,
+  contact: TEMPLATE.contact,
+  support: TEMPLATE.support,
   'game-logo': ASSET.gameLogo,
 })
 const NAMES = new Map(Object.entries(KNOWN).map(([name, id]) => [id, name]))
@@ -232,6 +247,7 @@ export function sampleDesign(): DesignFile {
     ],
     assets: [pixelAsset(ASSET.gameLogo)],
     retired: [],
+    templates: [],
   }
 }
 
@@ -294,4 +310,152 @@ export function sampleDesignV1(): DesignFileV1 {
     objectives: design.objectives.map((o) => ({ ...o, forceId: old(o.forceId) })),
     assets: design.assets.map((a) => ({ ...a, id: old(a.id) })),
   }
+}
+
+/**
+ * Three message templates in the WRX template profile (Annex A), using every field type the
+ * profile has: a situation report (force picker, text, slider, date, drop-down), a contact
+ * report (date and time, text with a safe pattern, integer, yes/no) and a support request
+ * (linked drop-downs, a role picker filtered to Blue).
+ */
+export function sampleTemplates(): Template[] {
+  const createdAt = '2026-10-20T09:00:00.000Z'
+  return [
+    {
+      schemaVersion: 1,
+      id: TEMPLATE.sitrep,
+      name: 'Situation report',
+      description: 'A force’s position and readiness',
+      schema: {
+        type: 'object',
+        properties: {
+          force: {
+            type: 'string',
+            title: 'Reporting force',
+            'x-wrx-picker': 'force',
+            'x-wrx-scope': 'room',
+          },
+          summary: { type: 'string', title: 'Summary', maxLength: 500, minLength: 1 },
+          readiness: {
+            type: 'integer',
+            title: 'Readiness (%)',
+            minimum: 0,
+            maximum: 100,
+            multipleOf: 5,
+          },
+          asOf: { type: 'string', title: 'As of', format: 'date', maxLength: 10 },
+          threat: {
+            type: 'string',
+            title: 'Threat level',
+            oneOf: [
+              { const: 'low', title: 'Low' },
+              { const: 'medium', title: 'Medium' },
+              { const: 'high', title: 'High' },
+            ],
+          },
+        },
+        required: ['force', 'summary', 'readiness', 'asOf'],
+      },
+      uiSchema: {
+        'ui:order': ['force', 'summary', 'readiness', 'threat', 'asOf'],
+        summary: { 'ui:widget': 'textarea', 'ui:options': { rows: 4 } },
+        readiness: { 'ui:widget': 'range' },
+      },
+      createdAt,
+    },
+    {
+      schemaVersion: 1,
+      id: TEMPLATE.contact,
+      name: 'Contact report',
+      schema: {
+        type: 'object',
+        properties: {
+          seenAt: { type: 'string', title: 'Seen at', format: 'date-time', maxLength: 40 },
+          grid: {
+            type: 'string',
+            title: 'Grid reference',
+            maxLength: 12,
+            pattern: '^[A-Z]{2}[0-9]{4,8}$',
+          },
+          strength: { type: 'integer', title: 'Strength', minimum: 1, maximum: 1000 },
+          hostile: { type: 'boolean', title: 'Hostile' },
+        },
+        required: ['seenAt', 'grid'],
+      },
+      uiSchema: { grid: { 'ui:placeholder': 'NV12345678' } },
+      createdAt,
+    },
+    {
+      schemaVersion: 1,
+      id: TEMPLATE.support,
+      name: 'Support request',
+      schema: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', title: 'Support', enum: ['air', 'logistics'] },
+          detail: {
+            type: 'string',
+            title: 'Detail',
+            enum: ['strike', 'recce', 'fuel', 'ammunition'],
+          },
+          to: {
+            type: 'string',
+            title: 'Addressed to',
+            'x-wrx-picker': 'role',
+            'x-wrx-force': FORCE.blue,
+          },
+          urgent: { type: 'boolean', title: 'Urgent', default: false },
+        },
+        required: ['kind', 'detail'],
+        dependencies: {
+          kind: {
+            oneOf: [
+              {
+                properties: { kind: { const: 'air' }, detail: { enum: ['strike', 'recce'] } },
+              },
+              {
+                properties: {
+                  kind: { const: 'logistics' },
+                  detail: { enum: ['fuel', 'ammunition'] },
+                },
+              },
+            ],
+          },
+        },
+      },
+      createdAt,
+    },
+  ]
+}
+
+/** Blue Reports' config: free text off; Blue's two reports, and Blue CO's support request. */
+export function blueReportsConfig(): ChatRoomConfig {
+  return {
+    schemaVersion: 2,
+    freeText: false,
+    templates: [
+      { kind: 'force', id: FORCE.blue, templateIds: [TEMPLATE.sitrep, TEMPLATE.contact] },
+      { kind: 'role', id: ROLE.blueCo, templateIds: [TEMPLATE.support] },
+    ],
+  }
+}
+
+/**
+ * The sample design with templates (Annex A): the three `sampleTemplates`, and a fourth room,
+ * Blue Reports, for Blue, with free text off (`blueReportsConfig`). Blue may use the situation
+ * and contact reports there; Blue CO's role entry adds the support request (provisional answer
+ * 4); the White Force's writers and the admin may use all three.
+ */
+export function templatedDesign(): DesignFile {
+  const design = sampleDesign()
+  const reports: Room = {
+    schemaVersion: 1,
+    id: ROOM.blueReports,
+    name: 'Blue Reports',
+    roomType: 'chat',
+    participants: [{ kind: 'force', id: FORCE.blue, access: 'write' }],
+    config: blueReportsConfig(),
+    order: 3,
+  }
+  return { ...design, rooms: [...design.rooms, reports], templates: sampleTemplates() }
 }

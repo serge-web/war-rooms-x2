@@ -155,6 +155,7 @@ export function convertDesignV1(
     objectives: v1.objectives.map((o) => ({ ...o, forceId: forces.of(o.forceId) })),
     assets: v1.assets.map((a) => ({ ...a, id: assets.of(a.id) })),
     retired: [],
+    templates: [],
   }
   return {
     design,

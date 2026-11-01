@@ -1,0 +1,25 @@
+{
+  "name": "@wrx/templates",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Message templates (Annex A, WP 4.1): the validator the composer and the receiver share, its RJSF ValidatorType adapter, and who may use which template in a room. Interprets schemas, with no code generation, so it runs under the client's CSP (no 'unsafe-eval').",
+  "exports": {
+    ".": "./src/index.ts",
+    "./rjsf": "./src/rjsf.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "4.1.1",
+    "@rjsf/utils": "6.11.0",
+    "@wrx/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.1"
+  }
+}

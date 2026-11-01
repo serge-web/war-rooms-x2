@@ -131,6 +131,7 @@ export function createDraft(options: NewDraftOptions = {}): Draft {
       objectives: [],
       assets: [],
       retired: [],
+      templates: [],
     },
     meta: EMPTY_META,
   }

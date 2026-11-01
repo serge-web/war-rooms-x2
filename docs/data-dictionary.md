@@ -182,6 +182,24 @@ Where each entity document is, by GUID, and each role by login name.
 | `forces` | array of string | yes |  | Every force GUID |
 | `rooms` | array of string | yes |  | Every room GUID |
 
+## Message template
+
+A message template: a JSON Schema form the admin designs.
+
+- **Location:** One item of PubSub node `templates`, the item id the template’s GUID
+- **Access:** Read: every role. Publish: admin. Its schema is fixed once a published room offers it (`lockedAt`).
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The template GUID; also the item id |
+| `name` | string | yes | length ≥ 1; length ≤ 120 | Shown in the composer’s drop-down and on each card (TD7) |
+| `description` | string | no | length ≤ 1000 | For the admin and the composer; plain text (PLY-14) |
+| `schema` | map of any | yes |  | JSON Schema 2020-12 in the WRX template profile |
+| `uiSchema` | map of any | no |  | RJSF UI schema in the WRX template profile: field order, widgets, hints |
+| `createdAt` | string | yes | format date-time | Admin's clock when created; display only |
+| `lockedAt` | string | no | format date-time | Set by the first publish that makes the template available in a room; its schema is then fixed, and changing it means copying it to a new template (TD6, TPL-4) |
+
 ## Game state
 
 Reserved for turns and the game clock.
@@ -226,6 +244,38 @@ A chat room message.
 | `content` | object | yes |  |  |
 | `content.text` | string | yes | length ≥ 1; length ≤ 8000 | Plain text; rendered without HTML (PLY-14) |
 
+## Chat room config
+
+Chat room config: free text and templates.
+
+- **Location:** The `config` field of a `chat` room document, version 2; `{}` (version 1) means free text and no templates
+- **Access:** As the room document.
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 2 |  |
+| `freeText` | boolean | yes |  | Free text allowed beside templates (TD3) |
+| `templates` | array of object | yes |  | Template entries per force or role (TD4) |
+| `templates[]` | object | yes |  | Templates a force or role may use in a room (TD4, TPL-2) |
+| `templates[].kind` | enum | yes | one of "force", "role" |  |
+| `templates[].id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | Force or role GUID |
+| `templates[].templateIds` | array of string | yes |  | Templates this force or role may use here; a role entry adds to its force’s |
+
+## Template message body
+
+A templated message.
+
+- **Location:** Body of a MUC groupchat message in a chat room
+- **Access:** Room participants with write access post; every receiving client checks it against the template and the room config.
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `type` | constant | yes | = "template" |  |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `content` | object | yes |  |  |
+| `content.templateId` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The template used |
+| `content.values` | map of any | yes |  | Field values by field name; pickers hold GUIDs, never names (TPL-8) |
+
 ## Design file
 
 A complete game design, as exported and imported by the admin.
@@ -245,3 +295,4 @@ A complete game design, as exported and imported by the admin.
 | `objectives` | array of object | yes |  | Objectives documents, at most one per force |
 | `assets` | array of object | yes |  | Asset documents |
 | `retired` | array of object | yes |  | The last names of deleted forces and roles that were published, kept so old messages show them (§3 rule 1) |
+| `templates` | array of object | yes |  | Message templates (Annex A); a file from before templates has none. Each locks when a published room makes it available (TPL-4) |

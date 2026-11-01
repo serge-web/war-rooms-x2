@@ -17,6 +17,7 @@
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
     "@wrx/schemas": "workspace:*",
+    "@wrx/templates": "workspace:*",
     "@wrx/theme": "workspace:*",
     "@wrx/transport": "workspace:*",
     "@wrx/ui": "workspace:*",

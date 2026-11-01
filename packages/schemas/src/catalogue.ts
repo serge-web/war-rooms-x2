@@ -13,6 +13,7 @@ import {
   roomSchema,
 } from './documents.ts'
 import { chatMessageBodySchema } from './message.ts'
+import { chatRoomConfigSchema, templateMessageBodySchema, templateSchema } from './template.ts'
 import { themeSchema } from './theme.ts'
 
 export interface CatalogueEntry {
@@ -85,6 +86,14 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     schema: directorySchema,
   },
   {
+    title: 'Message template',
+    location: 'One item of PubSub node `templates`, the item id the template’s GUID',
+    access:
+      'Read: every role. Publish: admin. Its schema is fixed once a published room offers it (`lockedAt`).',
+    schema: templateSchema,
+    maxDepth: 1,
+  },
+  {
     title: 'Game state',
     location: 'PubSub node `game-state` (reserved)',
     access: 'Publish: admin.',
@@ -101,6 +110,20 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     location: 'Body of a MUC groupchat message in a chat room',
     access: 'Room participants with write access post; all participants read.',
     schema: chatMessageBodySchema,
+  },
+  {
+    title: 'Chat room config',
+    location:
+      'The `config` field of a `chat` room document, version 2; `{}` (version 1) means free text and no templates',
+    access: 'As the room document.',
+    schema: chatRoomConfigSchema,
+  },
+  {
+    title: 'Template message body',
+    location: 'Body of a MUC groupchat message in a chat room',
+    access:
+      'Room participants with write access post; every receiving client checks it against the template and the room config.',
+    schema: templateMessageBodySchema,
   },
   {
     title: 'Design file',

@@ -9,6 +9,8 @@ export const SINGLETON_NODES = Object.freeze({
   retired: 'retired',
   /** Entity GUIDs, and each role's GUID by login name (§3 rule 1). */
   directory: 'directory',
+  /** Message templates, one item per template, item id its GUID (Annex A, TPL-1). */
+  templates: 'templates',
 } as const)
 
 /** Prefixes of per-entity PubSub nodes, `<prefix>:<id>`. */
@@ -22,10 +24,17 @@ export const NODE_PREFIXES = Object.freeze([
 
 /**
  * Node names kept for later features: no singleton or prefix may take them, and the tooling
- * neither creates, changes nor deletes a node of that name or below it (`templates:…`).
- * `templates` holds message templates (Annex A, §3 table).
+ * neither creates, changes nor deletes a node of that name or below it. None since WP 4.1, when
+ * `templates` became a managed singleton.
  */
-export const RESERVED_NODE_NAMES: readonly string[] = Object.freeze(['templates'])
+export const RESERVED_NODE_NAMES: readonly string[] = Object.freeze([])
+
+/**
+ * Names below which nothing is the game's: `templates:…`. The `templates` node itself is a
+ * managed singleton (Annex A, provisional answer 1: a leaf, not a collection), but a node below
+ * it is never created, listed, changed or deleted by the tooling, nor read by the client.
+ */
+export const RESERVED_NODE_PREFIXES: readonly string[] = Object.freeze(['templates'])
 
 export type NodePrefix = (typeof NODE_PREFIXES)[number]
 export type SingletonNode = (typeof SINGLETON_NODES)[keyof typeof SINGLETON_NODES]
@@ -68,15 +77,18 @@ export function parseNodeName(node: string): NodeRef | undefined {
   return { kind: prefix, id }
 }
 
-/** Whether a node name is reserved for later (`templates`, or below it). */
+/** Whether a node name is reserved: a reserved name or below it, or below `templates`. */
 export function isReservedNodeName(node: string): boolean {
-  return RESERVED_NODE_NAMES.some((name) => node === name || node.startsWith(`${name}:`))
+  return (
+    RESERVED_NODE_NAMES.some((name) => node === name || node.startsWith(`${name}:`)) ||
+    RESERVED_NODE_PREFIXES.some((name) => node.startsWith(`${name}:`))
+  )
 }
 
 /**
  * Whether the admin tooling treats the node as the game's (one game per server, D11): a
  * singleton, or `<prefix>:<slug>`, so nodes a release before GUID ids published (`forces:blue`)
- * are found too, and a reset (ADM-15) removes them. Reserved names never are.
+ * are found too, and a reset (ADM-15) removes them. Reserved names never are, nor anything below `templates`.
  */
 export function isGameNodeName(node: string): boolean {
   if (isReservedNodeName(node)) return false

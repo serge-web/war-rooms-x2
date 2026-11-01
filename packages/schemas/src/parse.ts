@@ -12,6 +12,7 @@ import {
   roomSchema,
 } from './documents.ts'
 import { messageBodySchema } from './message.ts'
+import { templateSchema } from './template.ts'
 
 /** Every kind of JSON payload WRX1 reads from the network (ARC-6). */
 export const DOCUMENT_SCHEMAS = Object.freeze({
@@ -25,6 +26,7 @@ export const DOCUMENT_SCHEMAS = Object.freeze({
   'game-state': gameStateSchema,
   retired: retiredSchema,
   directory: directorySchema,
+  template: templateSchema,
   message: messageBodySchema,
 })
 
