@@ -86,7 +86,7 @@ Raised during the build, not yet given a work package.
 
 | Id | Task | SRD ids | Raised |
 | --- | --- | --- | --- |
-| FT-1 | **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
+| FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.)** **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 
 ## The README plan chart
 
