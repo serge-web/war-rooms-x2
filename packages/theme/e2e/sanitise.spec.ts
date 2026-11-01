@@ -80,7 +80,7 @@ test('stores sanitised SVG that still renders through <img>', async ({ page }) =
   const out = await page.evaluate(async (text) => {
     const bytes = new TextEncoder().encode(text)
     const result = await window.wrxTheme.createAsset({
-      id: 'logo',
+      id: '6f1d2c3b-4a5e-4f60-9b7a-8c9d0e1f2a3b',
       bytes,
       declaredType: 'image/svg+xml',
     })
