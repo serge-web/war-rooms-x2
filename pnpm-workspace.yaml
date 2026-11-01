@@ -2,3 +2,8 @@ packages:
   - packages/*
   - apps/*
   - site
+
+# Holds a transitive dependency to a release at least 14 days old (the dependency rule):
+# @rjsf/core 6.11.0 asks for markdown-to-jsx ^9.8.2, whose newest release is younger.
+overrides:
+  markdown-to-jsx: 9.10.3

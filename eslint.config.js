@@ -11,6 +11,19 @@ const FLEXLAYOUT = {
     'Import FlexLayout only in the workspace module, packages/player-ui/src/workspace (ARC-9).',
 }
 const FLEXLAYOUT_HOME = 'packages/player-ui/src/workspace/**'
+// WP 4.2 (F7): RJSF's validator compiles schemas with `new Function`, which the CSP refuses; and
+// `@rjsf/core`'s root module imports it (through `getTestRegistry`), so the form is imported from
+// `@rjsf/core/lib/components/Form.js`. Templates are validated by `@wrx/templates/rjsf`.
+const AJV_VALIDATOR = {
+  name: '@rjsf/validator-ajv8',
+  message: 'Use createTemplateFormValidator from @wrx/templates/rjsf: Ajv needs unsafe-eval (F7).',
+}
+const RJSF_CORE_ROOT = {
+  name: '@rjsf/core',
+  subpaths: false,
+  message:
+    "Import Form from '@rjsf/core/lib/components/Form.js': the root module imports @rjsf/validator-ajv8.",
+}
 
 /** `no-restricted-imports` configs: each forbids its libraries and their subpaths. */
 function restrictedImports(sets) {
@@ -22,7 +35,9 @@ function restrictedImports(sets) {
         'error',
         {
           paths: libraries.map(({ name, message }) => ({ name, message })),
-          patterns: libraries.map(({ name, message }) => ({ group: [`${name}/*`], message })),
+          patterns: libraries
+            .filter(({ subpaths }) => subpaths !== false)
+            .map(({ name, message }) => ({ group: [`${name}/*`], message })),
         },
       ],
     },
@@ -78,14 +93,15 @@ export default tseslint.config(
   // earlier one, so each set lists every library it may not import).
   // WP 0.3: StanzaJS stays inside the real transport, so no library type leaks out of it.
   // WP 2.5 (ARC-9): FlexLayout stays inside the workspace module.
+  // WP 4.2 (F7): no Ajv validator, and not RJSF core's root module, anywhere.
   ...restrictedImports([
     {
       files: ['**/*.{ts,tsx,js}'],
       ignores: [STANZA_HOME, FLEXLAYOUT_HOME],
-      libraries: [STANZA, FLEXLAYOUT],
+      libraries: [STANZA, FLEXLAYOUT, AJV_VALIDATOR, RJSF_CORE_ROOT],
     },
-    { files: [STANZA_HOME], libraries: [FLEXLAYOUT] },
-    { files: [FLEXLAYOUT_HOME], libraries: [STANZA] },
+    { files: [STANZA_HOME], libraries: [FLEXLAYOUT, AJV_VALIDATOR, RJSF_CORE_ROOT] },
+    { files: [FLEXLAYOUT_HOME], libraries: [STANZA, AJV_VALIDATOR, RJSF_CORE_ROOT] },
   ]),
   {
     files: ['**/*.test.{ts,tsx}'],

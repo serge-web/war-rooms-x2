@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  markdown-to-jsx: 9.10.3
+
 importers:
 
   .:
@@ -351,6 +354,12 @@ importers:
 
   packages/player-ui:
     dependencies:
+      '@rjsf/core':
+        specifier: 6.11.0
+        version: 6.11.0(@rjsf/utils@6.11.0(react@19.3.1))(react@19.3.1)(vue@3.5.43(typescript@6.0.3))
+      '@rjsf/utils':
+        specifier: 6.11.0
+        version: 6.11.0(react@19.3.1)
       '@tanstack/react-virtual':
         specifier: 3.14.13
         version: 3.14.13(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -1654,6 +1663,13 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  '@rjsf/core@6.11.0':
+    resolution: {integrity: sha512-8Hp3nd2RysjfmxHKy3/1GJtdAaDBt9VkU/c+pSXrs332BvliJM/Tp/QXTTnHYKYUSi1klFTygnvq1ujSefpcug==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@rjsf/utils': ^6.11.0
+      react: '>=18'
 
   '@rjsf/utils@6.11.0':
     resolution: {integrity: sha512-jWYFXmPR5OVehb66Z2RDJFEgI7b7YSXe0FIco5kb7noqaDmjMOMFu4MnDKXPJLLdOW6YRd3MYZCbIPWvJeua4g==}
@@ -3232,6 +3248,24 @@ packages:
 
   mark.js@8.11.1:
     resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
+
+  markdown-to-jsx@9.10.3:
+    resolution: {integrity: sha512-J5/NCmNYQ0ExsnThzvF3F1fSzNYLgROcW2diUqRqoIoiyhoy8DSI06jLuMYk0c86SQd/FiVYJrV6tIgci9S2tQ==}
+    engines: {node: '>= 18'}
+    peerDependencies:
+      react: '>= 16.0.0'
+      react-native: '*'
+      solid-js: '>=1.0.0'
+      vue: '>=3.0.0'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-native:
+        optional: true
+      solid-js:
+        optional: true
+      vue:
+        optional: true
 
   marked@16.4.2:
     resolution: {integrity: sha512-TI3V8YYWvkVf3KJe1dRkpnjs68JUPyEa5vjKrp1XEEJUAOaQc+Qj+L1qWbPd0SJuAdQkFU0h73sXXqwDYxsiDA==}
@@ -4942,6 +4976,16 @@ snapshots:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
+  '@rjsf/core@6.11.0(@rjsf/utils@6.11.0(react@19.3.1))(react@19.3.1)(vue@3.5.43(typescript@6.0.3))':
+    dependencies:
+      '@rjsf/utils': 6.11.0(react@19.3.1)
+      markdown-to-jsx: 9.10.3(react@19.3.1)(vue@3.5.43(typescript@6.0.3))
+      react: 19.3.1
+    transitivePeerDependencies:
+      - react-native
+      - solid-js
+      - vue
+
   '@rjsf/utils@6.11.0(react@19.3.1)':
     dependencies:
       '@x0k/json-schema-merge': 1.1.0
@@ -6519,6 +6563,11 @@ snapshots:
       source-map-js: 1.2.2
 
   mark.js@8.11.1: {}
+
+  markdown-to-jsx@9.10.3(react@19.3.1)(vue@3.5.43(typescript@6.0.3)):
+    optionalDependencies:
+      react: 19.3.1
+      vue: 3.5.43(typescript@6.0.3)
 
   marked@16.4.2: {}
 

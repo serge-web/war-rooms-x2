@@ -6,13 +6,16 @@
   "description": "The player client (WP 2.4 onwards): welcome page, login, session lifecycle and the shell, with *Core presentational components split from their data hooks (NFR-18).",
   "exports": {
     ".": "./src/index.ts",
-    "./chat": "./src/chat/index.ts"
+    "./chat": "./src/chat/index.ts",
+    "./templates": "./src/templates/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit"
   },
   "dependencies": {
+    "@rjsf/core": "6.11.0",
+    "@rjsf/utils": "6.11.0",
     "@tanstack/react-virtual": "3.14.13",
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
