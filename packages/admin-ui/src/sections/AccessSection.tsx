@@ -3,9 +3,12 @@
 // Also lists every design check, since errors block publishing (WP 2.3).
 import type { AccessCell, AccessMatrix as Matrix, AccessReason } from '@wrx/domain'
 import { useDesignAccess } from '@wrx/hooks'
+import { byOrderThenId } from '@wrx/domain'
 import type { DesignFile, DesignIssue } from '@wrx/schemas'
+import { templatesFor } from '@wrx/templates'
 import { IssueList, Notice, SectionFrame } from '../components/index.ts'
 import type { DraftValidation } from '../draft/index.ts'
+import { chatConfigOf } from '../draft/index.ts'
 
 const REASON_LABEL: Readonly<Record<AccessReason, string>> = Object.freeze({
   'force-entry': 'force entry',
@@ -112,6 +115,98 @@ function Cell({ cell }: { readonly cell: AccessCell | undefined }) {
   )
 }
 
+/**
+ * The templates each role may use in each chat room that has templates or no free text (ADM-9,
+ * TD4, TPL-2), by `templatesFor`: the same rule the composer offers and every receiver checks.
+ * Shown only where the role can write; a read-only role sends nothing.
+ */
+export function TemplateMatrixCore({
+  matrix,
+  design,
+}: AccessMatrixCoreProps & {
+  readonly design: Pick<DesignFile, 'forces' | 'roles' | 'rooms' | 'templates'>
+}) {
+  const roles = new Map(design.roles.map((r) => [r.id, r]))
+  const templateName = (id: string) =>
+    design.templates.find((t) => t.id === id)?.name ?? 'Unknown template'
+  const rooms = [...design.rooms].sort(byOrderThenId).flatMap((room) => {
+    const config = chatConfigOf(room)
+    return config !== undefined && (config.templates.length > 0 || !config.freeText)
+      ? [{ room, config }]
+      : []
+  })
+  if (rooms.length === 0 || matrix.roleIds.length === 0) {
+    return <p className="wrx-admin-muted">No room has templates: every room takes free text.</p>
+  }
+  return (
+    <div
+      className="wrx-admin-matrix-scroll"
+      role="region"
+      aria-label="Templates matrix, scrollable"
+      tabIndex={0}
+    >
+      <table className="wrx-admin-matrix wrx-admin-template-matrix">
+        <caption>Templates each role may use: each room (row) for each role (column)</caption>
+        <thead>
+          <tr>
+            <td />
+            {matrix.roleIds.map((roleId) => (
+              <th key={roleId} scope="col">
+                {roles.get(roleId)?.name ?? roleId}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rooms.map(({ room, config }) => (
+            <tr key={room.id}>
+              <th scope="row">
+                {room.name}
+                <span className="wrx-admin-access-why">
+                  {' '}
+                  ({config.freeText ? 'free text too' : 'no free text'})
+                </span>
+              </th>
+              {matrix.roleIds.map((roleId) => {
+                const access = matrix.cells.get(room.id)?.get(roleId)?.access ?? 'none'
+                const ids =
+                  access === 'write'
+                    ? templatesFor(
+                        config,
+                        { isAdmin: false, role: roles.get(roleId) },
+                        design.forces,
+                      )
+                    : []
+                return (
+                  <td key={roleId} data-templates={ids.join(' ')}>
+                    {access !== 'write' ? (
+                      <span className="wrx-admin-muted">
+                        {access === 'read' ? 'Reads only' : '—'}
+                      </span>
+                    ) : ids.length === 0 ? (
+                      config.freeText ? (
+                        'Free text only'
+                      ) : (
+                        'Nothing'
+                      )
+                    ) : (
+                      <ul className="wrx-admin-template-cell">
+                        {ids.map((id) => (
+                          <li key={id}>{templateName(id)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 /** The matrix over a design, through `useDesignAccess` (NFR-18: the hook half). */
 export function AccessMatrix({ design }: { readonly design: DesignFile }) {
   const matrix = useDesignAccess(design)
@@ -144,6 +239,12 @@ export function AccessSectionCore({ matrix, design, validation }: AccessSectionC
       }
     >
       <AccessMatrixCore matrix={matrix} design={design} />
+      <h3>Templates</h3>
+      <p className="wrx-admin-hint">
+        Which templates each role may use where it can write: its force&rsquo;s entry plus its own.
+        White Force roles that are not observers, and you, may use every template a room names.
+      </p>
+      <TemplateMatrixCore matrix={matrix} design={design} />
       <h3>Problems</h3>
       {problems.length === 0 ? (
         <p className="wrx-admin-muted">Every participant entry names a known force or role.</p>

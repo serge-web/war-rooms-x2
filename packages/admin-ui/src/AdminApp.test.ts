@@ -86,6 +86,7 @@ describe('layout (ADM-27, ADM-28)', () => {
       'Forces',
       'Roles',
       'Rooms',
+      'Templates',
       'Themes',
       'Access matrix',
       'Publish',

@@ -14,6 +14,8 @@ import { GameSectionCore } from './sections/GameSection.tsx'
 import { RolesSectionCore } from './sections/RolesSection.tsx'
 import { RoomsSectionCore } from './sections/RoomsSection.tsx'
 import { ThemesSectionCore } from './sections/ThemesSection.tsx'
+import { TemplatesSectionCore } from './templates/TemplatesSection.tsx'
+import type { TemplatePreviewSlot } from './templates/TemplatePreview.tsx'
 import type { ThemesSlot } from './sections/ThemesSection.tsx'
 import type { PublishConnection } from './publish/controller.ts'
 import { PublishSection } from './publish/PublishSection.tsx'
@@ -28,6 +30,7 @@ export const ADMIN_SECTIONS = Object.freeze([
   'forces',
   'roles',
   'rooms',
+  'templates',
   'themes',
   'access',
   'publish',
@@ -40,6 +43,7 @@ const SECTION_LABEL: Readonly<Record<AdminSection, string>> = Object.freeze({
   forces: 'Forces',
   roles: 'Roles',
   rooms: 'Rooms',
+  templates: 'Templates',
   themes: 'Themes',
   access: 'Access matrix',
   publish: 'Publish',
@@ -52,6 +56,7 @@ const SECTION_PATHS: Readonly<Record<AdminSection, readonly string[]>> = Object.
   forces: ['forces', 'objectives'],
   roles: ['roles'],
   rooms: ['rooms'],
+  templates: ['templates'],
   themes: ['assets'],
   access: [],
   publish: [],
@@ -67,6 +72,8 @@ export interface AdminAppProps {
   readonly onSwitchToGame?: () => void
   /** WP 2.8's themes editor; until then the section is an empty slot. */
   readonly themes?: ThemesSlot
+  /** The template preview's form (WP 4.3); the plain RJSF one unless WP 4.2's themed one is given. */
+  readonly templatePreview?: TemplatePreviewSlot
   readonly initialSection?: AdminSection
   /** The clock for objectives' `updatedAt`. */
   readonly now?: () => Date
@@ -157,6 +164,7 @@ export function AdminAppCore({
   saveError,
   onSwitchToGame,
   themes,
+  templatePreview,
   initialSection = 'game',
   now,
   publishPanel,
@@ -223,6 +231,13 @@ export function AdminAppCore({
           {section === 'forces' && <ForcesSectionCore {...props} {...(now ? { now } : {})} />}
           {section === 'roles' && <RolesSectionCore {...props} />}
           {section === 'rooms' && <RoomsSectionCore {...props} registry={registry} />}
+          {section === 'templates' && (
+            <TemplatesSectionCore
+              {...props}
+              {...(now ? { now } : {})}
+              {...(templatePreview ? { preview: templatePreview } : {})}
+            />
+          )}
           {section === 'themes' && <ThemesSectionCore {...props} slot={themes} />}
           {section === 'access' && (
             <AccessSectionCore matrix={matrix} design={draft.design} validation={validation} />

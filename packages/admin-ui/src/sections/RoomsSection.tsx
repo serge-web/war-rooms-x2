@@ -20,15 +20,19 @@ import {
 import {
   DEFAULT_ROOM_TYPE,
   addRoom,
+  chatConfigOf,
   deleteRoom,
   moveRoom,
   removeParticipant,
+  setFreeText,
   setParticipant,
+  setTemplateEntry,
   updateRoom,
 } from '../draft/index.ts'
 import { NodeNamesNotice, IdLine } from './common.tsx'
 import type { SectionProps } from './common.tsx'
 import { ParticipantsEditor } from './ParticipantsEditor.tsx'
+import { RoomTemplatesEditor } from './RoomTemplatesEditor.tsx'
 
 export interface RoomsSectionProps extends SectionProps {
   readonly registry: ReactRoomTypeRegistry
@@ -110,6 +114,7 @@ function RoomForm({
   const definition = registry.get(room.roomType)
   const config = roomConfig(registry, room, design.game)
   const Editor = definition?.adminEditor
+  const chat = chatConfigOf(room)
   return (
     <EditForm
       title={`Room: ${room.name.trim() === '' ? '(unnamed)' : room.name}`}
@@ -167,6 +172,20 @@ function RoomForm({
           onChange(removeParticipant(draft, room.id, kind, id))
         }}
       />
+      {chat !== undefined && (
+        <RoomTemplatesEditor
+          design={design}
+          room={room}
+          config={chat}
+          issues={validation.at(`${at}.config.templates`)}
+          onFreeText={(freeText) => {
+            onChange(setFreeText(draft, room.id, freeText))
+          }}
+          onEntry={(kind, id, templateIds) => {
+            onChange(setTemplateEntry(draft, room.id, kind, id, templateIds))
+          }}
+        />
+      )}
       <fieldset className="wrx-admin-fieldset">
         <legend>{definition?.label ?? room.roomType} settings</legend>
         {definition === undefined ? (
@@ -182,7 +201,11 @@ function RoomForm({
             }}
           />
         )}
-        <IssueList issues={validation.at(`${at}.config`)} />
+        <IssueList
+          issues={validation
+            .at(`${at}.config`)
+            .filter((i) => chat === undefined || !i.path.startsWith(`${at}.config.templates`))}
+        />
       </fieldset>
     </EditForm>
   )

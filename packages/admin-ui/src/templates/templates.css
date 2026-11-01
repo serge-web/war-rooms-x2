@@ -1,0 +1,184 @@
+/* The template editor (WP 4.3): builder, raw editor and preview, on the `--wrx-*` properties. */
+
+.wrx-template-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wrx-admin-gap, 0.75rem);
+  min-width: 0;
+}
+
+.wrx-template-builder {
+  display: grid;
+  grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr);
+  grid-template-areas:
+    'palette fields'
+    'settings settings';
+  gap: 1rem;
+  align-items: start;
+}
+
+.wrx-template-palette {
+  grid-area: palette;
+}
+
+.wrx-template-fields {
+  grid-area: fields;
+  min-width: 0;
+}
+
+.wrx-template-settings {
+  grid-area: settings;
+  min-width: 0;
+}
+
+@media (max-width: 52rem) {
+  .wrx-template-builder {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'palette'
+      'fields'
+      'settings';
+  }
+}
+
+.wrx-template-palette h4,
+.wrx-template-fields h4,
+.wrx-template-preview-frame h4 {
+  margin: 0 0 0.35rem;
+}
+
+.wrx-template-palette ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.wrx-template-palette-item {
+  width: 100%;
+  text-align: left;
+  touch-action: none;
+}
+
+.wrx-template-palette-item.is-dragging {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+}
+
+.wrx-template-drop {
+  min-height: 4rem;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  padding: 0.25rem;
+}
+
+.wrx-template-drop.is-over {
+  border-color: var(--wrx-primary, #1d4ed8);
+}
+
+.wrx-template-field-settings {
+  min-width: 0;
+}
+
+.wrx-template-setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.wrx-template-setting-row > .wrx-admin-field {
+  flex: 1 1 8rem;
+}
+
+.wrx-template-number {
+  max-width: 10rem;
+}
+
+.wrx-template-options-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.wrx-template-options-table th {
+  text-align: left;
+  font-weight: 600;
+  padding: 0 0.25rem 0.25rem;
+}
+
+.wrx-template-options-table td {
+  padding: 0.15rem 0.25rem;
+}
+
+.wrx-template-raw {
+  min-width: 0;
+}
+
+.wrx-template-raw-problems p {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.wrx-template-preview-frame {
+  border: 1px solid var(--wrx-border, #d1d5db);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  background: var(--wrx-background, #ffffff);
+}
+
+/* RJSF's core theme, plainly styled until WP 4.2's theme takes over. */
+.wrx-template-preview fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.wrx-template-preview .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.wrx-template-preview label,
+.wrx-template-preview .control-label {
+  font-weight: 600;
+}
+
+.wrx-template-preview .checkbox label,
+.wrx-template-preview .radio label {
+  font-weight: 400;
+}
+
+.wrx-template-preview input:not([type='checkbox'], [type='radio'], [type='range']),
+.wrx-template-preview select,
+.wrx-template-preview textarea {
+  font: inherit;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--wrx-border, #6b7280);
+  border-radius: 4px;
+  background: var(--wrx-background, #ffffff);
+  color: var(--wrx-text, #111827);
+  max-width: 100%;
+}
+
+.wrx-template-preview .field-description,
+.wrx-template-preview .help-block {
+  color: var(--wrx-muted, #4b5563);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.wrx-template-preview .error-detail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--wrx-danger, #b91c1c);
+  font-size: 0.875rem;
+}
+
+.wrx-template-preview .required {
+  color: var(--wrx-danger, #b91c1c);
+}
