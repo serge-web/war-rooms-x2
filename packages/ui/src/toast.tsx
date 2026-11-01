@@ -80,6 +80,11 @@ export function ToastProvider({ children, label = 'Notifications' }: ToastProvid
   )
 }
 
+/** The enclosing provider's toaster, or undefined outside one: for parts that also run alone. */
+export function useOptionalToast(): Toaster | undefined {
+  return useContext(ToasterContext)
+}
+
 /** The enclosing provider's toaster. Throws outside a {@link ToastProvider}: a wiring bug. */
 export function useToast(): Toaster {
   const toaster = useContext(ToasterContext)

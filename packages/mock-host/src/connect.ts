@@ -2,7 +2,7 @@
 // tab and window of a deployment shares one mock server, which survives reloads and is kept
 // apart from other deployments on the same origin (DOC-10). It never fails to load (DOC-17):
 // whatever goes wrong with storage or sharing, the app gets a working mock and a notice.
-import { MockTransport, demoState } from '@wrx/mock-server'
+import { MockSession, MockTransport, demoState } from '@wrx/mock-server'
 import type { MockState, MockTransportOptions } from '@wrx/mock-server'
 import type { Result } from '@wrx/schemas'
 import type { ConnectOptions, Outcome, Session, Transport, Unsubscribe } from '@wrx/transport'
@@ -71,6 +71,7 @@ export class MockHost implements Transport {
   /** This tab's id among the deployment's tabs. */
   readonly tab: string
   private readonly table = new ConnectionTable()
+  private readonly sessions = new Set<MockSession>()
   private readonly transport: MockTransport
   private readonly env: HostEnvironment
   private readonly log: Log
@@ -252,8 +253,28 @@ export class MockHost implements Transport {
   // ---- Transport --------------------------------------------------------------------------------
 
   /** The endpoint is ignored: every session talks to the deployment's shared mock server. */
-  connect(options: ConnectOptions): Outcome<Session> {
-    return this.transport.connect(options)
+  async connect(options: ConnectOptions): Outcome<Session> {
+    const opened = await this.transport.connect(options)
+    if (opened.ok && opened.value instanceof MockSession) {
+      const session = opened.value
+      this.sessions.add(session)
+      session.onStatus((status) => {
+        if (status.state === 'ended') this.sessions.delete(session)
+      })
+    }
+    return opened
+  }
+
+  /**
+   * Test control (PLY-2): this tab's network goes away, or comes back. The mock runs in the
+   * browser, so a page going offline does not reach it; this does what a dropped network does
+   * to a real server's sessions: each of this tab's sessions loses its connection and the server
+   * forgets it, and they reconnect, with back-off, once the network is back. Other tabs are
+   * unaffected.
+   */
+  setNetworkOnline(online: boolean): void {
+    this.transport.network.set({ online })
+    if (!online) for (const session of this.sessions) session.interrupt('lost')
   }
 
   // ---- status -----------------------------------------------------------------------------------

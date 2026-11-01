@@ -3,7 +3,7 @@
 // confirmation, progress, the result, a second publish that plans nothing, warnings that need
 // ticking, the credentials sheet and password reset, reset with typed confirmation, and design
 // import / export. Server effects are checked through a role's own login.
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
@@ -492,6 +492,50 @@ describe('design export and import (ADM-16)', () => {
     expect(screen.getByText('broken.json was not imported.')).toBeTruthy()
     expect(screen.getByText(/unknown force "nowhere"/)).toBeTruthy()
     expect(store.getSnapshot().draft.design.game.name).toBe('Imported game')
+  })
+})
+
+describe('a re-plan', () => {
+  it('holds Publish back until the new plan is read (found by SC-6 on ejabberd)', async () => {
+    const { user } = await setup()
+    await planAndWait(user, 'Check the server and plan')
+    await user.click(screen.getByRole('button', { name: 'Create the vault' }))
+    const dialog = screen.getByRole('alertdialog', { name: /Create the observer-password vault/ })
+    await user.type(within(dialog).getByLabelText('Passphrase'), PASSPHRASE)
+    await user.type(within(dialog).getByLabelText('Passphrase again'), PASSPHRASE)
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    const publish = () =>
+      within(planRegion()).getByRole('button', { name: /^Publish \d+ changes?…$/ })
+    await waitFor(() => {
+      expect(publish()).toHaveProperty('disabled', false)
+    })
+    // While the server is read again, the plan on screen may be out of date, and applying it
+    // would be ignored: the button says so by being disabled.
+    fireEvent.click(screen.getByRole('button', { name: 'Plan again' }))
+    expect(screen.getByText('Reading the server…')).toBeTruthy()
+    expect(publish()).toHaveProperty('disabled', true)
+    await waitFor(() => {
+      expect(publish()).toHaveProperty('disabled', false)
+    })
+  })
+})
+
+describe('a new design (SC-1)', () => {
+  it('replaces the draft with an empty one after confirmation, keeping the published ids', async () => {
+    const { user, store } = await setup()
+    const before = store.getSnapshot().draft
+    await user.click(screen.getByRole('button', { name: 'Start a new design…' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(store.getSnapshot().draft).toBe(before)
+    await user.click(screen.getByRole('button', { name: 'Start a new design…' }))
+    await user.click(screen.getByRole('button', { name: 'Start a new design' }))
+    expect(screen.getByText('Started a new design.')).toBeTruthy()
+    const after = store.getSnapshot().draft
+    expect(after.design.game.name).toBe('New exercise')
+    expect(after.design.forces.map((f) => f.id)).toEqual(['white'])
+    expect(after.design.roles).toEqual([])
+    expect(after.design.rooms).toEqual([])
+    expect(after.meta).toEqual(before.meta)
   })
 })
 

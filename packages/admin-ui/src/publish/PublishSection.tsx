@@ -23,7 +23,7 @@ import { describeError } from './controller.ts'
 import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
-import { exportDesign, importDesign } from './transfer.ts'
+import { exportDesign, importDesign, newDesign } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
@@ -84,6 +84,9 @@ export function PublishSection({
         store.commit(imported.value.draft)
         return imported.value.warnings
       }}
+      onNewDesign={() => {
+        store.commit(newDesign(store.getSnapshot().draft))
+      }}
     />
   )
 }
@@ -118,6 +121,8 @@ export interface PublishSectionCoreProps {
   readonly onExport: () => void
   /** Imports a file's text; returns the blocking issues, or the warnings when it was imported. */
   readonly onImport: (text: string) => readonly DesignIssue[]
+  /** Replaces the draft with an empty design (SC-1: designing a game from nothing). */
+  readonly onNewDesign?: () => void
   readonly print?: () => void
 }
 
@@ -205,7 +210,11 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
           </section>
         </>
       )}
-      <DesignTransfer onExport={props.onExport} onImport={props.onImport} />
+      <DesignTransfer
+        onExport={props.onExport}
+        onImport={props.onImport}
+        {...(props.onNewDesign === undefined ? {} : { onNewDesign: props.onNewDesign })}
+      />
     </SectionFrame>
   )
 }
@@ -314,7 +323,6 @@ function PlanPanel(
   const { plan, snapshot, draft, stale } = props
   const design = draft.design
   const reset = plan.kind === 'reset'
-  const running = snapshot.busy === 'running'
   const result = snapshot.result
   const acknowledgements = plan.warnings
     .map(acknowledgementOf)
@@ -376,7 +384,8 @@ function PlanPanel(
               triggerLabel={
                 reset ? 'Reset the game…' : `Publish ${plural(plan.steps.length, 'change')}…`
               }
-              triggerDisabled={running || blocked || stale}
+              // Not while anything else runs, a re-plan included: the controller would ignore it.
+              triggerDisabled={snapshot.busy !== undefined || blocked || stale}
               title={reset ? 'Reset the game?' : 'Publish these changes?'}
               acknowledgements={acknowledgements}
               {...(reset ? { typed: gameName } : {})}
@@ -626,21 +635,30 @@ export function CredentialsSheet({
 function DesignTransfer({
   onExport,
   onImport,
+  onNewDesign,
 }: {
   readonly onExport: () => void
   readonly onImport: (text: string) => readonly DesignIssue[]
+  readonly onNewDesign?: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
   const [outcome, setOutcome] = useState<
     | { readonly ok: boolean; readonly issues: readonly DesignIssue[]; readonly name: string }
+    | 'new'
     | undefined
   >()
   const [pending, setPending] = useState<
-    { readonly name: string; readonly text: string } | undefined
+    { readonly name: string; readonly text: string } | 'new' | undefined
   >()
   let body: ReactNode = null
-  if (outcome !== undefined) {
+  if (outcome === 'new') {
+    body = (
+      <Notice title="Started a new design.">
+        The draft is empty but for the White Force; publish to apply it.
+      </Notice>
+    )
+  } else if (outcome !== undefined) {
     body = outcome.ok ? (
       <Notice title={`Imported ${outcome.name}.`}>
         The draft is replaced; publish to apply it.
@@ -680,8 +698,45 @@ function DesignTransfer({
             if (input.current !== null) input.current.value = ''
           }}
         />
+        {onNewDesign === undefined ? null : (
+          <Button
+            onClick={() => {
+              setOutcome(undefined)
+              setPending('new')
+            }}
+          >
+            Start a new design…
+          </Button>
+        )}
       </div>
-      {pending !== undefined && (
+      {pending === 'new' && onNewDesign !== undefined && (
+        <Notice tone="warning" title="Replace the draft with a new, empty design?">
+          <p>
+            The current draft is replaced; export it first to keep it. Nothing on the server changes
+            until you publish.
+          </p>
+          <div className="wrx-publish-toolbar">
+            <Button
+              variant="primary"
+              onClick={() => {
+                onNewDesign()
+                setOutcome('new')
+                setPending(undefined)
+              }}
+            >
+              Start a new design
+            </Button>
+            <Button
+              onClick={() => {
+                setPending(undefined)
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Notice>
+      )}
+      {pending !== undefined && pending !== 'new' && (
         <Notice tone="warning" title={`Replace the draft with ${pending.name}?`}>
           <p>The current draft is replaced. Nothing on the server changes until you publish.</p>
           <div className="wrx-publish-toolbar">
