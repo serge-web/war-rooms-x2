@@ -125,7 +125,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-3 The admin SHALL edit game properties: name, description, theme colour.
 - ADM-4 The admin SHALL create, edit, reorder and delete forces: name, colour, icon, umpire flag. Exactly one force SHALL carry the umpire flag: the White Force, which the admin belongs to as umpire; the editor names it White by default.
-- ADM-5 The admin SHALL create, edit, reorder and delete roles within a force: display name, login name, password, observer flag; and move a role between forces.
+- ADM-5 The admin SHALL create, edit, reorder and delete roles within a force: display name, login name, password, observer flag; and move a role between forces. The login name is the role's XMPP account name: editable until the role is first published, then fixed, since the server cannot rename an account; to change it, delete the role and add a new one.
 - ADM-6 The admin SHALL create, edit, reorder and delete rooms: name, room type (v1: chat), participants as mixed force/role entries each with read or write access (§3 rule 4).
 - ADM-7 Room-type-specific settings SHALL be edited through the editor supplied by that type's registry entry (ARC-5).
 - ADM-8 Reordering of forces, roles and rooms SHALL use drag and drop with keyboard alternatives.
@@ -156,7 +156,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 **Design portability**
 
-- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export. Import SHALL also accept design files from before GUID ids (§3 rule 1), giving each entity a new GUID and keeping each old role id as its login name.
+- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export. Import SHALL also accept design files from before GUID ids (§3 rule 1), giving each entity a new GUID and keeping each old role id as its login name. A game already published with the old ids is moved by export, import, reset (ADM-15) and publish; its room history is not kept.
 
 **Monitoring**
 
