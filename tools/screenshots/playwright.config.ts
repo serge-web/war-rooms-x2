@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 
-const port = 4392
+// WRX_SHOTS_PORT moves the server, e.g. for two checkouts on one machine; the mock host's e2e
+// runs use the same default (WRX_MOCK_HOST_E2E_PORT).
+const port = Number(process.env.WRX_SHOTS_PORT ?? 4392)
 const dist = process.env.WRX_SHOTS_DIST ?? 'site/dist'
 const base = process.env.WRX_SHOTS_BASE ?? '/'
 
