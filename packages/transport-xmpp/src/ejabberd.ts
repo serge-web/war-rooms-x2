@@ -22,9 +22,9 @@
 // - Join history is in memory only and lost on restart (spike S5); history comes from MAM.
 import { isXmppCondition } from '@wrx/transport'
 import type { EndReason, NodeConfig, RoomConfig, TransportError } from '@wrx/transport'
-import { booleanField } from './forms.ts'
+import { booleanField, stringField } from './forms.ts'
 import type { DataForm, FieldValue } from './forms.ts'
-import type { ServerAdapter } from './server-adapter.ts'
+import type { RoomServerFields, ServerAdapter } from './server-adapter.ts'
 
 const ERROR_TYPES = Object.freeze(['auth', 'cancel', 'continue', 'modify', 'wait'] as const)
 type ErrorType = (typeof ERROR_TYPES)[number]
@@ -130,9 +130,10 @@ function isAnonymousAccount(bareJid: string): boolean {
  * Room config (XEP-0045 §10.2). The standard muc#roomconfig fields come from the interface; the
  * rest are ejabberd's own:
  * - `mam`: ejabberd's room archiving switch (XEP-0313 defines no room config field);
- * - the S1b hardening, which closes the observer's side channels in moderated rooms: no private
- *   messages from visitors, no visitor status text, no visitor nick changes, no voice requests,
- *   and no MUC/Sub subscription. All are on by default in ejabberd 26.09.
+ * - the S1b side channels, which game rooms close (no private messages from visitors, no visitor
+ *   status text, no visitor nick changes, no voice requests, no MUC/Sub subscription). All are
+ *   open by default in ejabberd 26.09, so they are written on every configure and read back
+ *   (security review F6).
  */
 function roomConfigFields(config: RoomConfig): readonly FieldValue[] {
   return [
@@ -144,16 +145,41 @@ function roomConfigFields(config: RoomConfig): readonly FieldValue[] {
     { name: 'muc#roomconfig_moderatedroom', value: config.moderated },
     { name: 'muc#roomconfig_whois', value: config.whois },
     { name: 'mam', value: config.archive },
-    { name: 'allow_private_messages_from_visitors', value: 'nobody' },
-    { name: 'allow_visitor_status', value: false },
-    { name: 'allow_visitor_nickchange', value: false },
-    { name: 'allow_voice_requests', value: false },
-    { name: 'allow_subscription', value: false },
+    { name: 'allow_private_messages_from_visitors', value: config.visitorPrivateMessages },
+    { name: 'allow_visitor_status', value: config.visitorStatus },
+    { name: 'allow_visitor_nickchange', value: config.visitorNickChange },
+    { name: 'allow_voice_requests', value: config.voiceRequests },
+    { name: 'allow_subscription', value: config.subscriptions },
   ]
 }
 
-function roomArchive(form: DataForm): boolean | undefined {
-  return booleanField(form, 'mam')
+const PRIVATE_MESSAGES = Object.freeze(['anyone', 'moderators', 'nobody'] as const)
+
+/**
+ * Reads back the fields `roomConfigFields` adds beyond muc#roomconfig. A missing `mam` field
+ * means no archiving. A missing or unknown side-channel field is named, so the read fails rather
+ * than reporting a channel as closed (ejabberd 26.09 offers all five, checked on the stack).
+ */
+function roomServerFields(form: DataForm): RoomServerFields | string {
+  const flag = (name: string): boolean | string => booleanField(form, name) ?? name
+  const pm = stringField(form, 'allow_private_messages_from_visitors')
+  const visitorPrivateMessages = PRIVATE_MESSAGES.find((v) => v === pm)
+  if (visitorPrivateMessages === undefined) return 'allow_private_messages_from_visitors'
+  const visitorStatus = flag('allow_visitor_status')
+  const visitorNickChange = flag('allow_visitor_nickchange')
+  const voiceRequests = flag('allow_voice_requests')
+  const subscriptions = flag('allow_subscription')
+  for (const value of [visitorStatus, visitorNickChange, voiceRequests, subscriptions]) {
+    if (typeof value === 'string') return value
+  }
+  return {
+    archive: booleanField(form, 'mam') ?? false,
+    visitorPrivateMessages,
+    visitorStatus: visitorStatus === true,
+    visitorNickChange: visitorNickChange === true,
+    voiceRequests: voiceRequests === true,
+    subscriptions: subscriptions === true,
+  }
 }
 
 /**
@@ -211,8 +237,19 @@ export const ejabberd: ServerAdapter = Object.freeze({
    */
   registeredUsersField: 'registereduserjids',
   isAnonymousAccount,
+  /**
+   * Quirk (review F10, probed on 26.09 with 130 empty unlisted rooms): mod_muc answers a
+   * disco#items without RSM with only the occupied rooms once the service holds more than
+   * `max_rooms_discoitems` (default 100) rooms, so an idle game past 100 rooms lists none. With
+   * RSM it pages through every room the asker may see, in name order, but caps a page at that
+   * limit, and a `max` above it returns the last rooms of the window instead of the first (130
+   * rooms, max 1000: rooms 31 to 130). 50 stays under the default; the setup guide asks
+   * operators not to lower the limit below it. Online users need no paging: 26.09 answers
+   * get-online-users-list in one step with every session (1,101 seen).
+   */
+  roomListPageSize: 50,
   roomConfigFields,
-  roomArchive,
+  roomServerFields,
   nodeConfigFields,
   liveTimestamp,
   /** Spike S6: a subscribed publisher gets the event for its own publish, before the IQ result. */

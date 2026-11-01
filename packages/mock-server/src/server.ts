@@ -232,7 +232,7 @@ export class MockServer implements ServerLink {
       case 'muc.destroyRoom':
         return { op: request.op, result: muc.destroyRoom(conn, ...request.args) }
       case 'muc.listRooms':
-        return { op: request.op, result: muc.listRooms(conn) }
+        return { op: request.op, result: muc.listRooms(conn, ...request.args) }
       case 'mam.queryRoom':
         return { op: request.op, result: muc.queryArchive(conn, ...request.args) }
       case 'pubsub.getItems':

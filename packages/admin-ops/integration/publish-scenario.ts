@@ -15,6 +15,7 @@
 import type { DesignFile } from '@wrx/schemas'
 import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -281,6 +282,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
             moderated: true,
             whois: 'anyone',
             archive: true,
+            ...CLOSED_SIDE_CHANNELS,
           })
         }
         expect(await postResult('blue-co', 'blue-hq')).toMatchObject({

@@ -18,6 +18,13 @@ const roomConfigSchema = z.object({
   public: z.boolean(),
   whois: z.enum(['anyone', 'moderators']),
   archive: z.boolean(),
+  // Added with security review F6. A state saved before then has none of them; the admin tooling
+  // always wrote them closed, so that is what such a room holds.
+  visitorPrivateMessages: z.enum(['anyone', 'moderators', 'nobody']).default('nobody'),
+  visitorStatus: z.boolean().default(false),
+  visitorNickChange: z.boolean().default(false),
+  voiceRequests: z.boolean().default(false),
+  subscriptions: z.boolean().default(false),
 })
 
 const nodeConfigSchema = z.object({

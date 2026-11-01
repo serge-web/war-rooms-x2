@@ -89,10 +89,14 @@ export class XmppAdmin implements AdminApi {
     return result
   }
 
-  /** §4.18. The list may hold full or bare JIDs; the interface reports accounts. */
+  /**
+   * §4.18. The list may hold full or bare JIDs; the interface reports accounts. A server that
+   * asks for `max_items` is told "none", the form's no-limit option, so the list is never cut at
+   * a page (review F10; ejabberd asks nothing and lists every session, see the adapter).
+   */
   private async listOnline(): Promise<string[]> {
     const result = await this.command('get-online-users-list', [
-      { name: 'max_items', value: '1000' },
+      { name: 'max_items', value: 'none' },
     ])
     const jids = listField(result.form, this.core.adapter.onlineUsersField)
     return [...new Set(jids.map((j) => JID.toBare(j)))]

@@ -3,6 +3,7 @@
 // game's PubSub nodes. Every name carries a
 // per-run tag, so runs never meet each other's state and a failed run leaves nothing that a later
 // run reads. Provisioning itself goes through the admin API under test (spike S4).
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig, Session } from '@wrx/transport'
 import { json, must } from './harness.ts'
 
@@ -15,6 +16,7 @@ export const GAME_ROOM: RoomConfig = Object.freeze({
   public: false,
   whois: 'anyone',
   archive: true,
+  ...CLOSED_SIDE_CHANNELS,
 })
 
 /** NFR-3 and §3 rule 15: whitelist access, publish by publishers. */

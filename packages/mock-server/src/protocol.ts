@@ -39,6 +39,22 @@ export interface ServerNodeConfig extends NodeConfig {
   readonly itemReply: 'publisher' | 'none'
 }
 
+/** An RSM request for one page of the room list (XEP-0059). */
+export interface RoomListPage {
+  readonly max: number
+  /** The `last` of the page before. */
+  readonly after: string | undefined
+}
+
+/** One page of the room list, as ejabberd's disco#items with RSM answers it. */
+export interface RoomList {
+  readonly rooms: readonly string[]
+  /** Every room on the service, visible to the asker or not (ejabberd's RSM count). */
+  readonly count: number
+  /** The last room of this page; undefined for an empty page or a request without RSM. */
+  readonly last: string | undefined
+}
+
 /** Every operation a session can ask of the server, with its arguments and result. */
 export interface OpMap {
   'muc.join': { args: readonly [room: string, nick: string]; result: Joined }
@@ -57,7 +73,7 @@ export interface OpMap {
   'muc.configureRoom': { args: readonly [room: string, config: RoomConfig]; result: undefined }
   'muc.getRoomConfig': { args: readonly [room: string]; result: RoomConfig }
   'muc.destroyRoom': { args: readonly [room: string]; result: undefined }
-  'muc.listRooms': { args: readonly []; result: readonly string[] }
+  'muc.listRooms': { args: readonly [page: RoomListPage | undefined]; result: RoomList }
   'mam.queryRoom': { args: readonly [room: string, query: MamQuery]; result: MamPage }
   'pubsub.getItems': {
     args: readonly [node: string, max: number | undefined]

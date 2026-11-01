@@ -21,6 +21,7 @@ import {
   publicAssetIds,
 } from '@wrx/schemas'
 import type { DesignFile, Result } from '@wrx/schemas'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { RoomConfig } from '@wrx/transport'
 import { z } from 'zod'
 import type { ServerNodeConfig } from './protocol.ts'
@@ -78,6 +79,7 @@ function gameRoom(name: string): RoomConfig {
     public: false,
     whois: 'anyone',
     archive: true,
+    ...CLOSED_SIDE_CHANNELS,
   }
 }
 

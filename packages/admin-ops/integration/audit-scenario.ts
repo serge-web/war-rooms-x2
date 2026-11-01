@@ -14,6 +14,7 @@
 //    hold for players; repairing again changes nothing (idempotent).
 import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -173,6 +174,16 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           }),
           'unmoderate red-hq',
         )
+        // The negotiation room's side channels opened, with every standard field still right
+        // (review F6): before, the audit compared only the standard fields and saw nothing.
+        must(
+          await session.muc.configureRoom(room('negotiation'), {
+            ...gameRoomConfig(design.rooms.find((r) => r.id === 'negotiation')?.name ?? ''),
+            visitorPrivateMessages: 'anyone',
+            subscriptions: true,
+          }),
+          'open the side channels of negotiation',
+        )
         // A revoked reader keeps its subscription: Blue CO reads Red's objectives, subscribes,
         // and only its affiliation is removed (the missed R-A step).
         must(
@@ -233,6 +244,14 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         })
       })
 
+      it('finds the opened side channels of a room that is otherwise right (F6)', () => {
+        expect(item('room-config:negotiation')).toMatchObject({
+          severity: 'critical',
+          expected: 'visitorPrivateMessages: nobody, subscriptions: false',
+          found: 'visitorPrivateMessages: anyone, subscriptions: true',
+        })
+      })
+
       it('finds the leftover subscription, by full JID', () => {
         const jid = blueSubscriber?.jid ?? ''
         expect(jid).toContain('/')
@@ -283,6 +302,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           'document',
           'node-config',
           'room-config',
+          'room-config',
           'subscription',
           'voice',
           'voice',
@@ -325,6 +345,11 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         expect(errorOf(posted)?.condition).toBe('forbidden')
         const config = must(await theOps().session.muc.getRoomConfig(room('red-hq')), 'config')
         expect(config.moderated).toBe(true)
+        const negotiation = must(
+          await theOps().session.muc.getRoomConfig(room('negotiation')),
+          'negotiation config',
+        )
+        expect(negotiation).toMatchObject(CLOSED_SIDE_CHANNELS)
       })
 
       it('Blue CO no longer receives or reads Red’s objectives', async () => {

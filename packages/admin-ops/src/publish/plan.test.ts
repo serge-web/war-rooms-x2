@@ -161,6 +161,20 @@ describe('changes', () => {
     ).toMatchObject({ designVersion: 2 })
   })
 
+  it('a room whose side channels drifted is reconfigured, and says which (review F6)', () => {
+    const drifted = {
+      ...published,
+      rooms: published.rooms.map((r) =>
+        r.roomId === 'blue-hq'
+          ? { ...r, config: { ...r.config, visitorPrivateMessages: 'anyone' as const } }
+          : r,
+      ),
+    }
+    const plan = planPublish(sampleDesignWithWhiteCell(), drifted)
+    expect(ids(plan)).toContain('room:blue-hq')
+    expect(step(plan, 'room:blue-hq').details).toEqual(['visitorPrivateMessages: anyone → nobody'])
+  })
+
   it('a role move grants the new access before revoking the old (R-D) and warns (ADM-13)', () => {
     const design = edit((d) => ({
       ...d,

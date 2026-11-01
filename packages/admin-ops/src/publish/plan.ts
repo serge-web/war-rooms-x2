@@ -25,7 +25,7 @@ import { SINGLETON_NODES, parseDocument, parseNodeName, slugSchema } from '@wrx/
 import type { DesignFile, Force, GameSetup, Role, Room } from '@wrx/schemas'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 import type { NodeAccessChange, RoomAccessChange } from '../ops.ts'
-import { targetState } from '../target.ts'
+import { ROOM_SETTINGS, sameRoomConfig, targetState } from '../target.ts'
 import type { NodeAccess, TargetNode } from '../target.ts'
 import { roleIdOf } from './view.ts'
 import type { NodeView, ServerView } from './view.ts'
@@ -294,19 +294,6 @@ function samePayload(a: string, b: string | undefined): boolean {
   } catch {
     return false
   }
-}
-
-function sameRoomConfig(a: RoomConfig, b: RoomConfig): boolean {
-  return (
-    a.name === b.name &&
-    (a.description ?? '') === (b.description ?? '') &&
-    a.membersOnly === b.membersOnly &&
-    a.moderated === b.moderated &&
-    a.persistent === b.persistent &&
-    a.public === b.public &&
-    a.whois === b.whois &&
-    a.archive === b.archive
-  )
 }
 
 function sameNodeConfig(a: NodeConfig, b: NodeConfig): boolean {
@@ -883,14 +870,7 @@ function roomConfigDiff(a: RoomConfig, b: RoomConfig): string[] {
   const out: string[] = []
   if (a.name !== b.name) out.push(`name: ${a.name} → ${b.name}`)
   if ((a.description ?? '') !== (b.description ?? '')) out.push('description changes')
-  for (const key of [
-    'membersOnly',
-    'moderated',
-    'persistent',
-    'public',
-    'whois',
-    'archive',
-  ] as const) {
+  for (const key of ROOM_SETTINGS) {
     if (a[key] !== b[key]) out.push(`${key}: ${String(a[key])} → ${String(b[key])}`)
   }
   return out

@@ -178,7 +178,11 @@ describe('ServerHost (ARC-7, DOC-17)', () => {
     host.receive(
       't1',
       7,
-      { t: 'request', id: 1, request: { op: 'muc.listRooms', args: [] } },
+      {
+        t: 'request',
+        id: 1,
+        request: { op: 'muc.listRooms', args: [{ max: 50, after: undefined }] },
+      },
       (f) => frames.push(f),
     )
     expect(frames).toEqual([{ t: 'dropped' }])

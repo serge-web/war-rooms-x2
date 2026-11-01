@@ -50,6 +50,11 @@ const roomConfig = z.object({
   public: z.boolean(),
   whois: z.enum(['anyone', 'moderators']),
   archive: z.boolean(),
+  visitorPrivateMessages: z.enum(['anyone', 'moderators', 'nobody']),
+  visitorStatus: z.boolean(),
+  visitorNickChange: z.boolean(),
+  voiceRequests: z.boolean(),
+  subscriptions: z.boolean(),
 })
 const roomMessage = z.object({
   room: jid,
@@ -120,7 +125,10 @@ const OPS = {
   'muc.configureRoom': [z.tuple([s, roomConfig]), none],
   'muc.getRoomConfig': [z.tuple([s]), roomConfig],
   'muc.destroyRoom': [z.tuple([s]), none],
-  'muc.listRooms': [z.tuple([]), z.array(s)],
+  'muc.listRooms': [
+    z.tuple([z.union([z.object({ max: z.number(), after: optionalString }), z.undefined()])]),
+    z.object({ rooms: z.array(s), count: z.number(), last: optionalString }),
+  ],
   'mam.queryRoom': [z.tuple([s, mamQuery]), mamPage],
   'pubsub.getItems': [z.tuple([s, z.union([z.number(), z.undefined()])]), z.array(item)],
   'pubsub.publish': [z.tuple([s, s, s]), none],

@@ -129,6 +129,14 @@ const ROOM_FIELD_SEVERITY: Readonly<Record<keyof RoomConfig, AuditSeverity>> = O
   whois: 'high',
   persistent: 'high',
   archive: 'medium',
+  // The observer's side channels (spike S1b, review F6). Private messages and MUC/Sub let an
+  // observer reach or read players without voice; status text and nick changes are seen by
+  // every occupant; a voice request reaches the moderators only.
+  visitorPrivateMessages: 'critical',
+  subscriptions: 'critical',
+  visitorStatus: 'high',
+  visitorNickChange: 'high',
+  voiceRequests: 'medium',
   name: 'low',
   description: 'low',
 })

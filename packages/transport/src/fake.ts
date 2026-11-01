@@ -5,6 +5,7 @@ import type { AdminApi } from './admin.ts'
 import { ok } from './errors.ts'
 import type { Outcome } from './errors.ts'
 import type { MamApi, MamPage } from './mam.ts'
+import { CLOSED_SIDE_CHANNELS } from './muc.ts'
 import type { Joined, MucApi, OccupantEvent, RoomJid, RoomMessage } from './muc.ts'
 import type { ItemsEvent, PubsubApi } from './pubsub.ts'
 import type { ConnectionStatus, Recovery, Session, Services, Unsubscribe } from './session.ts'
@@ -173,6 +174,7 @@ export class FakeSession implements Session {
         public: false,
         whois: 'anyone',
         archive: true,
+        ...CLOSED_SIDE_CHANNELS,
       }),
     destroyRoom: (room, reason) => this.call('muc', 'destroyRoom', [room, reason], undefined),
     listRooms: () => this.call('muc', 'listRooms', [], []),

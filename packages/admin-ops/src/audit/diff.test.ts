@@ -102,6 +102,38 @@ describe('drift', () => {
     })
   })
 
+  it('open side channels in an otherwise right room are found, critical (review F6)', () => {
+    const drifted = {
+      ...view,
+      rooms: view.rooms.map((r) =>
+        r.roomId === 'red-hq'
+          ? {
+              ...r,
+              config: {
+                ...r.config,
+                visitorPrivateMessages: 'moderators' as const,
+                voiceRequests: true,
+                subscriptions: true,
+              },
+            }
+          : r,
+      ),
+    }
+    expect(item(audit(drifted), 'room-config:red-hq')).toMatchObject({
+      severity: 'critical',
+      expected: 'visitorPrivateMessages: nobody, subscriptions: false, voiceRequests: false',
+      found: 'visitorPrivateMessages: moderators, subscriptions: true, voiceRequests: true',
+      repair: [{ type: 'ensure-room', roomId: 'red-hq', create: false }],
+    })
+    const statusOnly = {
+      ...view,
+      rooms: view.rooms.map((r) =>
+        r.roomId === 'red-hq' ? { ...r, config: { ...r.config, visitorStatus: true } } : r,
+      ),
+    }
+    expect(item(audit(statusOnly), 'room-config:red-hq').severity).toBe('high')
+  })
+
   it('a subscription left on a revoked reader is one item per full JID (R-A)', () => {
     const drifted = withNode(view, 'objectives:red', (n) => ({
       ...n,

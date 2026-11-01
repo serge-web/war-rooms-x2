@@ -5,6 +5,7 @@
 import { DOCUMENT_ITEM_ID, effectiveAccess } from '@wrx/domain'
 import { SINGLETON_NODES, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 
 /** A role's access to a room: a MUC member with voice, a member stored as visitor, or neither. */
@@ -28,9 +29,42 @@ export function objectivesMaxItems(editors: number): number {
   return Math.max(10, editors + 1)
 }
 
+/** A room's settings: every RoomConfig field except the name and description. */
+export type RoomSetting = Exclude<keyof RoomConfig, 'name' | 'description'>
+
+// A record, so adding a field to RoomConfig without listing it here is a type error: the room
+// comparisons once missed the side channels, which let them drift unseen (review F6).
+const SETTING_KEYS: Readonly<Record<RoomSetting, true>> = Object.freeze({
+  membersOnly: true,
+  moderated: true,
+  persistent: true,
+  public: true,
+  whois: true,
+  archive: true,
+  visitorPrivateMessages: true,
+  visitorStatus: true,
+  visitorNickChange: true,
+  voiceRequests: true,
+  subscriptions: true,
+})
+
+export const ROOM_SETTINGS: readonly RoomSetting[] = Object.freeze(
+  Object.keys(SETTING_KEYS) as RoomSetting[],
+)
+
+/** Whether two room configs agree in name, description and every setting. */
+export function sameRoomConfig(a: RoomConfig, b: RoomConfig): boolean {
+  return (
+    a.name === b.name &&
+    (a.description ?? '') === (b.description ?? '') &&
+    ROOM_SETTINGS.every((key) => a[key] === b[key])
+  )
+}
+
 /**
  * NFR-3: members-only, moderated (R-C, ADM-37), non-anonymous, persistent, unlisted, archived
- * (PLY-49). There is deliberately no way to ask for an unmoderated room.
+ * (PLY-49), with the observer's side channels closed (spike S1b, review F6). There is
+ * deliberately no way to ask for an unmoderated room.
  */
 export function gameRoomConfig(name: string, description?: string): RoomConfig {
   return {
@@ -42,6 +76,7 @@ export function gameRoomConfig(name: string, description?: string): RoomConfig {
     public: false,
     whois: 'anyone',
     archive: true,
+    ...CLOSED_SIDE_CHANNELS,
   }
 }
 

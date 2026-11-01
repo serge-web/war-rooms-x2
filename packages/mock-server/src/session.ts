@@ -112,6 +112,9 @@ class Listeners<K, E> {
 const mismatch = (): Result<never, TransportError> =>
   err('invalid-response', 'the reply does not match the request')
 
+/** The room-list page size, as the real transport's ejabberd adapter uses (review F10). */
+const ROOM_LIST_PAGE = 50
+
 /** What the API objects need from their session. */
 interface Caller {
   call(request: Request): Promise<Reply | Failed>
@@ -240,9 +243,26 @@ class MockMuc implements MucApi {
     return result
   }
 
+  /**
+   * Pages through the room list as the real transport does (review F10): the server, like
+   * ejabberd, lists only occupied rooms to a request without paging once it holds more than
+   * its limit.
+   */
   listRooms: MucApi['listRooms'] = async () => {
-    const r = await this.caller.call({ op: 'muc.listRooms', args: [] })
-    return r.op === 'muc.listRooms' || r.op === 'failed' ? r.result : mismatch()
+    const rooms = new Set<string>()
+    let after: string | undefined
+    for (;;) {
+      const r = await this.caller.call({
+        op: 'muc.listRooms',
+        args: [{ max: ROOM_LIST_PAGE, after }],
+      })
+      const page = r.op === 'muc.listRooms' || r.op === 'failed' ? r.result : mismatch()
+      if (!page.ok) return page
+      for (const room of page.value.rooms) rooms.add(room)
+      const { last, count } = page.value
+      if (last === undefined || rooms.size >= count) return ok([...rooms])
+      after = last
+    }
   }
 }
 

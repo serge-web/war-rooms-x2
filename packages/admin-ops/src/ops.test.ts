@@ -360,6 +360,24 @@ describe('R-C: rooms', () => {
     expect(result.ok ? undefined : result.error.code).toBe('verify-failed')
   })
 
+  it('reconfigures a room whose only drift is an open side channel (review F6)', async () => {
+    const { admin, ops: adminOps } = await rig()
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room('blue-hq')])))
+    admin.stub('muc', 'getRoomConfig', () =>
+      Promise.resolve(ok({ ...gameRoomConfig('Blue HQ'), subscriptions: true })),
+    )
+    const result = await adminOps.ensureRoom('blue-hq', { name: 'Blue HQ' })
+    expect(admin.calls.find((c) => c.op === 'configureRoom')?.args[1]).toMatchObject({
+      visitorPrivateMessages: 'nobody',
+      visitorStatus: false,
+      visitorNickChange: false,
+      voiceRequests: false,
+      subscriptions: false,
+    })
+    // The stub still answers with MUC/Sub on, so the read-back check fails.
+    expect(result.ok ? undefined : result.error.code).toBe('verify-failed')
+  })
+
   it('reading a missing room returns undefined without an owner request', async () => {
     const { admin, ops: adminOps } = await rig()
     expect(await adminOps.readRoom('gone')).toEqual({ ok: true, value: undefined })

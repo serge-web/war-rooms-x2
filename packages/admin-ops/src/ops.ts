@@ -38,7 +38,7 @@ import type {
 } from '@wrx/transport'
 import { opsAll, opsErr, opsOk } from './errors.ts'
 import type { AdminOpsError, OpsOutcome, OpsResult, ProgressListener } from './errors.ts'
-import { gameRoomConfig } from './target.ts'
+import { gameRoomConfig, sameRoomConfig } from './target.ts'
 import type { NodeAccess, RoomAccess } from './target.ts'
 import { ObserverVault } from './vault.ts'
 
@@ -134,19 +134,6 @@ const LISTED_AFFILIATIONS: readonly MucAffiliation[] = Object.freeze([
 
 /** Most archive pages read when counting a room's messages (100 each). */
 const MAX_COUNT_PAGES = 10_000
-
-function sameRoomConfig(a: RoomConfig, b: RoomConfig): boolean {
-  return (
-    a.name === b.name &&
-    (a.description ?? '') === (b.description ?? '') &&
-    a.membersOnly === b.membersOnly &&
-    a.moderated === b.moderated &&
-    a.persistent === b.persistent &&
-    a.public === b.public &&
-    a.whois === b.whois &&
-    a.archive === b.archive
-  )
-}
 
 function sameNodeConfig(a: NodeConfig, b: NodeConfig): boolean {
   return (
