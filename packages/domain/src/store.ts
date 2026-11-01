@@ -248,6 +248,10 @@ interface NodeItem {
   readonly id: string
   readonly doc: LiveDocument
   readonly live: boolean
+  /** This client's clock when the item was read or arrived (ms), for F11's clamp. */
+  readonly receivedAt: number
+  /** The live event it came in, numbered in arrival order; 0 for items read by a fetch. */
+  readonly arrival: number
 }
 
 interface NodeEntry {
@@ -328,6 +332,8 @@ class Store implements SessionStore {
   private readonly offSession: Unsubscribe[] = []
   private readonly readyWaiters: ((status: StoreStatus) => void)[] = []
   private listed = new Set<string>()
+  /** Numbers live item events in arrival order (see `latest`). */
+  private arrivals = 0
   private currentStatus: StoreStatus = { state: 'starting' }
   /** The first load has finished; until then, coming back online means `starting` again. */
   private booted = false
@@ -560,10 +566,13 @@ class Store implements SessionStore {
         return
       }
       const next = new Map<string, NodeItem>()
+      const receivedAt = this.clockMs()
       for (const item of fetched.value) {
         if (touched.has(item.id)) continue
         const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
-        if (doc !== undefined) next.set(item.id, { id: item.id, doc, live: false })
+        if (doc !== undefined) {
+          next.set(item.id, { id: item.id, doc, live: false, receivedAt, arrival: 0 })
+        }
       }
       for (const [id, item] of entry.items) if (touched.has(id)) next.set(id, item)
       entry.items = next
@@ -618,13 +627,15 @@ class Store implements SessionStore {
       entry.touched?.add(id)
       changed = entry.items.delete(id) || changed
     }
+    const arrival = ++this.arrivals
+    const receivedAt = this.clockMs()
     for (const item of items) {
       const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
       if (doc === undefined) continue
       entry.touched?.add(item.id)
       // Delete first so the newest item is last in the map's order.
       entry.items.delete(item.id)
-      entry.items.set(item.id, { id: item.id, doc, live: true })
+      entry.items.set(item.id, { id: item.id, doc, live: true, receivedAt, arrival })
       changed = true
     }
     if (!changed) return
@@ -1409,6 +1420,11 @@ class Store implements SessionStore {
     return domainOk(undefined)
   }
 
+  /** This client's clock in ms, or NaN if the injected clock is not a time. */
+  private clockMs(): number {
+    return Date.parse(this.now())
+  }
+
   logout(): Promise<DomainResult<void>> {
     return this.endSession('logout')
   }
@@ -1465,21 +1481,40 @@ function noop(): void {
   return undefined
 }
 
+/**
+ * The document a node shows. Single-document nodes hold one item, so the last one received is
+ * the newest. Objectives hold one item per author (§3 rule 14), so the newest edit has to be
+ * picked, and the server gives no order for that: ejabberd returns items in the order they were
+ * first created, not last published, and carries no publish time (review F11, probed on
+ * ejabberd 26.09). So:
+ * - an item that arrived live is newer than any item read by a fetch, and a later live event is
+ *   newer than an earlier one: the server notifies in publish order (contract S06);
+ * - among items of one fetch (or one event), the author's `updatedAt` decides, clamped to when
+ *   this client received it, so a clock set ahead cannot pin an edit above later live ones.
+ */
 function latest(entry: NodeEntry): LiveDocument | undefined {
-  let doc: LiveDocument | undefined
+  let best: NodeItem | undefined
   for (const item of entry.items.values()) {
-    // Objectives carry their own time, as several authors' items share the node; other
-    // documents have one item, so the last one received is the newest.
-    if (
-      doc?.kind === 'objectives' &&
-      item.doc.kind === 'objectives' &&
-      Date.parse(item.doc.value.updatedAt) < Date.parse(doc.value.updatedAt)
-    ) {
+    if (best === undefined || item.doc.kind !== 'objectives' || best.doc.kind !== 'objectives') {
+      best = item
       continue
     }
-    doc = item.doc
+    if (newerObjectives(item, best)) best = item
   }
-  return doc
+  return best?.doc
+}
+
+/** F11: whether objectives item `a` is a newer edit than `b` (see `latest`). */
+function newerObjectives(a: NodeItem, b: NodeItem): boolean {
+  if (a.arrival !== b.arrival) return a.arrival > b.arrival
+  return effectiveTime(a) >= effectiveTime(b)
+}
+
+/** The author's time, never later than when this client received it; unreadable is oldest. */
+function effectiveTime(item: NodeItem): number {
+  const stamped = item.doc.kind === 'objectives' ? Date.parse(item.doc.value.updatedAt) : NaN
+  if (Number.isNaN(stamped)) return -Infinity
+  return Number.isNaN(item.receivedAt) ? stamped : Math.min(stamped, item.receivedAt)
 }
 
 function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {

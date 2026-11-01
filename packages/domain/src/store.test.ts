@@ -449,6 +449,63 @@ describe('session store: operations', () => {
     expect(h.store.objectives('blue').data?.markdown).toBe('Admin revision')
   })
 
+  describe('F11: an author’s clock cannot hide or pin an objectives edit', () => {
+    const NOW = '2026-10-25T09:00:00.000Z'
+    const item = (id: string, markdown: string, updatedAt: string) => ({
+      id,
+      payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
+      publisher: undefined,
+    })
+    const live = (h: ReturnType<typeof harness>, ...items: ReturnType<typeof item>[]) => {
+      h.session.emitItems({ node: 'objectives:blue', items, retracted: [], deleted: false })
+    }
+    /** Blue's objectives node as read on login: the admin's item and an umpire's. */
+    function stored(admin: string, umpire: string) {
+      const docs = sampleDocuments()
+      docs.set('objectives:blue', [
+        objectives('blue', 'Admin', admin),
+        objectives('blue', 'Umpire', umpire),
+      ])
+      return harness({ docs, now: () => NOW })
+    }
+
+    it('a clock set ahead does not pin an edit above a later one', async () => {
+      // The umpire's clock is years ahead; the admin edits afterwards with a correct clock.
+      const h = stored('2026-10-24T09:00:00.000Z', '2030-01-01T00:00:00.000Z')
+      await h.store.ready()
+      // On a fresh read the future stamp counts as the read time, so it is still the newest...
+      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire')
+      live(h, item('current', 'Admin, later', '2026-10-25T09:00:00.000Z'))
+      // ...but any edit published after it wins. Before F11, 2030 hid it until 2030.
+      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, later')
+    })
+
+    it('a clock set behind does not hide a live edit', async () => {
+      const h = stored('2026-10-25T08:00:00.000Z', '2026-10-24T09:00:00.000Z')
+      await h.store.ready()
+      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
+      // The umpire edits now, but its clock is a day slow.
+      live(h, item('item-1', 'Umpire, now', '2026-10-24T09:05:00.000Z'))
+      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire, now')
+      // Arrival order, not stamps, decides between live edits.
+      live(h, item('current', 'Admin again', '2026-10-25T08:30:00.000Z'))
+      expect(h.store.objectives('blue').data?.markdown).toBe('Admin again')
+    })
+
+    it('within one read, stamps decide, a future one counting as the read time', async () => {
+      const h = stored('2026-10-25T09:00:00.000Z', '2026-10-24T09:00:00.000Z')
+      await h.store.ready()
+      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
+      // In one event, a stamp ahead of the receipt time ties with one at it; the later item wins.
+      live(
+        h,
+        item('item-1', 'Umpire, ahead', '2027-01-01T00:00:00.000Z'),
+        item('current', 'Admin, at receipt', NOW),
+      )
+      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, at receipt')
+    })
+  })
+
   it('refuses objectives from a player, a White Force observer, and invalid ones', async () => {
     const h = harness()
     await h.store.ready()
