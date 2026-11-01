@@ -1,6 +1,6 @@
 # WP 0.4 — Target environment questions (P2)
 
-**SRD ids:** D12, D17, NFR-23 · **Depends on:** — · **Status:** to do (Doc, with the customer)
+**SRD ids:** D12, D17, NFR-23 · **Depends on:** — · **Status:** done (answered by the product owner, Nov 1, 2026: `plan/decisions/target-environment.md`)
 
 ## Goal
 

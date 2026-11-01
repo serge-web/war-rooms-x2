@@ -29,12 +29,21 @@ export async function quickLogIn(scope: Locator, label: string): Promise<void> {
 export async function paneForce(scope: Locator): Promise<Locator> {
   const open = scope.getByRole('region', { name: 'Out of game', exact: true })
   // Wait for the pane to settle on a form: a wide pane keeps the column, a narrow one has the tab.
-  await expect(columnTab(scope).or(forcePanel(scope)).first()).toBeVisible()
-  // The tab opens the strip's panel, and a second click would close it again.
-  if ((await columnTab(scope).count()) > 0 && !(await open.isVisible())) {
-    await columnTab(scope).click()
-    await expect(open).toBeVisible()
-  }
+  // While the game loads, a narrow pane still shows the column (the tab needs a workspace to hold
+  // it), and it moves into the tab once the workspace mounts. Firefox ran the first check below
+  // in that gap, saw the column and no tab, and then lost the column to the closed tab; so wait
+  // for the workspace's room tabs, and retry until the force panel is on screen in the form the
+  // pane settled on.
+  await expect(roomTabs(scope).first()).toBeVisible()
+  await expect(async () => {
+    await expect(columnTab(scope).or(forcePanel(scope)).first()).toBeVisible({ timeout: 1_000 })
+    // The tab opens the strip's panel, and a second click would close it again.
+    if ((await columnTab(scope).count()) > 0 && !(await open.isVisible())) {
+      await columnTab(scope).click()
+      await expect(open).toBeVisible({ timeout: 1_000 })
+    }
+    await expect(forcePanel(scope)).toBeVisible({ timeout: 1_000 })
+  }).toPass({ timeout: 10_000 })
   return forcePanel(scope)
 }
 

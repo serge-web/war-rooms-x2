@@ -249,4 +249,5 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | The default web build is mock only; `build:server` makes the real-server build, which loads the XMPP transport lazily | Found by 2.4: previews and the site must hold no real-server code (DOC-12), and StanzaJS's own text trips the bundle scan |
 | `@wrx/ui`'s `ThemeScope` delegates to `@wrx/theme`'s: it keeps partial tokens that inherit from the enclosing scope, and takes the default theme, fonts and derived colours from `@wrx/theme`, as does `ui.css`'s page default | 2.4 and 2.8 were built in parallel, each with its own `ThemeScope` and defaults |
 | PR titles must avoid deny-listed terms | The site's PR index publishes every PR title, and the deny-list check (DOC-2) fails the build on a match |
+| NFR-13 narrowed to Chrome and Edge as the SHALL, Firefox and Safari as a SHOULD; the Firefox CI job becomes advisory, like WebKit's | WP 0.4: the customer's analysts use Chrome and Edge only (`plan/decisions/target-environment.md`). Firefox and WebKit failures are recorded in `plan/reviews/phase-3-browsers.md` |
 

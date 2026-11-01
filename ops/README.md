@@ -17,7 +17,7 @@ Every script here is POSIX `sh` and prints `--help`. None prints, stores or send
 ## What the host needs
 
 - Linux on x86-64 (the bundle's image is `linux/amd64`; `make-bundle.sh --platform linux/arm64` makes an ARM bundle, untested).
-- Docker Engine with the Compose plugin (`docker compose version`; v2.20 or later for `--wait-timeout`). Approval to run it, and the Erlang inside the ejabberd image, is an open question (WP 0.4).
+- Docker Engine with the Compose plugin (`docker compose version`; v2.20 or later for `--wait-timeout`). No special approval is needed to run it or the Erlang inside the ejabberd image (WP 0.4). A native ejabberd install is the alternative to containers (see the WP 0.4 table below).
 - `sh`, `tar`, `gzip`, `sha256sum` (any Linux has them). `openssl` is optional: the checks use the one in the image if the host has none.
 - One TCP port reachable by the players' browsers, 443 by default.
 - A DNS name for the server, resolving to it on the players' network: this is also the XMPP domain (`WRX_DOMAIN`), since ejabberd serves its pages only under its own domain.
@@ -138,23 +138,23 @@ The contract suite, the admin-ops, publish and audit scenarios, and `pnpm test:d
 
 ## The real-hardware run (NFR-23)
 
-A container is not a host. Before the first deployment, a person installs on the target hardware and records the result in `plan/decisions/target-environment.md`:
+A container is not a host. Before the first deployment, the product owner (Ian) installs on a spare machine, following this checklist, and records the result in `plan/decisions/target-environment.md` (WP 0.4):
 
 1. The host as it will be used: its OS, kernel, CPU, Docker version, disk, and the approval to run Docker and ejabberd (Erlang) on it.
 2. A bundle made on a connected machine, carried by the approved route, its SHA-256 confirmed over a second channel.
 3. `offline-install.sh` with the network physically off or blocked at the host's firewall: it must not try any address (watch with `ss -tnp` or the firewall log).
 4. A certificate from the customer's CA, or the internal CA here, and the CA trusted on at least one analyst machine of each kind in use, by the customer's own means (Group Policy, profile, NSS, Firefox policy). No browser warning.
-5. From analyst machines: `check-deployment.sh --connect <server>:443`; the welcome page; a publish from the admin backend with its server checks passing; a player and an observer logged in, the observer unable to post; the browsers in use, with their SharedWorker, IndexedDB and Web Locks (D17).
+5. From analyst machines: `check-deployment.sh --connect <server>:443`; the welcome page; a publish from the admin backend with its server checks passing; a player and an observer logged in, the observer unable to post; the browsers in use (Chrome and Edge, NFR-13).
 6. A backup, a restore onto a second machine, and a login there.
 7. A reboot of the host: ejabberd comes back by itself (`restart: unless-stopped`).
 
-## Decisions waiting on WP 0.4
+## Decisions from WP 0.4
 
-None is answered yet; each is a setting or a script option, so an answer changes configuration, not code.
+Answered by the product owner on Nov 1, 2026 (`plan/decisions/target-environment.md`), except the CA question. Each is a setting or a script option, so an answer changes configuration, not code.
 
-| Question (WP 0.4) | Today | What an answer changes |
+| Question (WP 0.4) | Answer | What it changes |
 | --- | --- | --- |
-| 1. Which browsers, and do they allow SharedWorker, IndexedDB, Web Locks (D17)? | Chrome, Edge, Firefox current (NFR-13); the client needs those APIs for the multi-client view and layout storage | If Safari or an older or locked-down browser is in use: test it with `browser-check.ts`-style runs; if SharedWorker or Web Locks are blocked, the multi-client view degrades (a client decision, not a deployment one). The CSP header's `connect-src 'self'` relies on CSP Level 3 (`'self'` matches `wss:` on the same origin); a browser without it would need the host spelled out in the header (`ejabberd.yml`, `custom_headers`) |
-| 2. Is approval needed to run ejabberd (Erlang) on internal and air-gapped hosts, and who gives it? | One container: ejabberd 26.09 (Erlang/OTP inside), Docker Engine, nothing else | If Docker is not approved, the same `ejabberd.yml` runs on a native ejabberd 26.09 install (packages or the official installer), with `ejabberdctl` in place of `docker compose exec`; the scripts would need a native mode. If only a vetted image is allowed, `make-bundle.sh` takes the image reference from `deploy/wrx1/compose.yaml`: pin the approved digest there (and in the contract stack, so CI tests it) |
-| 3. Who verifies the air-gapped install on real hardware (NFR-23), and on what hardware? | `linux/amd64` bundles; the checklist above | ARM hosts: `make-bundle.sh --platform linux/arm64`, and the R1 tests run on ARM first. Sizing: the spike's capacity figure (200 players, p95 678 ms) was on a laptop-class machine; the rate limit and disk estimate may need tuning to the hardware |
-| 4. Is there an internal CA, and how are its certificates distributed to browsers (NFR-2)? | Both routes are supported: `issue-server-cert.sh --csr-only` for the customer's CA, `make-internal-ca.sh` otherwise | With the customer's CA: no CA of ours, and the trust step is theirs. Without one: `make-internal-ca.sh --permit <domain>`, and the customer must still push `ca.crt` to browsers (Group Policy, profiles, Firefox policy); if they cannot, every analyst sees a warning, which is not acceptable for v1. Their certificate lifetime and key-size rules replace the 397 days and RSA 2048 defaults (`--days`; the key in `issue-server-cert.sh`) |
+| 1. Which browsers, and do they allow SharedWorker, IndexedDB, Web Locks (D17)? | Chrome and Edge only (NFR-13; Firefox and Safari SHOULD). The mock, which needs those APIs, is not used on customer machines: demos run on our own laptops | Nothing for the deployment. The CSP header's `connect-src 'self'` relies on CSP Level 3 (`'self'` matches `wss:` on the same origin), which current Chrome and Edge have |
+| 2. Is approval needed to run ejabberd (Erlang) on internal and air-gapped hosts? Containers or native? | No special approval. Either route is fine: containers are the primary route, a native install the alternative | Containers (this guide) are what is built and tested. Native: install ejabberd 26.09 from its packages or the official installer, use the same `deploy/ejabberd/ejabberd.yml` (domain, certificate and CA paths set for the host), and use `ejabberdctl` where this guide uses `docker compose exec ejabberd ejabberdctl`; `offline-install.sh`, `backup.sh` and `restore.sh` drive Docker and have no native mode yet; on a native host, back up the same two stores by hand (the SQLite database with its online backup, Mnesia with `ejabberdctl backup`), with the config and certificates. If only a vetted image is allowed, `make-bundle.sh` takes the image reference from `deploy/wrx1/compose.yaml`: pin the approved digest there (and in the contract stack, so CI tests it) |
+| 3. Who verifies the air-gapped install on real hardware (NFR-23), and on what hardware? | The product owner (Ian), on a spare machine, with the checklist in "The real-hardware run" above | `linux/amd64` bundles by default. If the spare machine is ARM: `make-bundle.sh --platform linux/arm64`, and the R1 tests run on ARM first. Sizing: the spike's capacity figure (200 players, p95 678 ms) was on a laptop-class machine; the rate limit and disk estimate may need tuning to the hardware |
+| 4. Is there an internal CA, and how are its certificates distributed to browsers (NFR-2)? | Not known yet, so every route stays supported: `issue-server-cert.sh --csr-only` for the customer's CA, or `make-internal-ca.sh` for our internal CA, made once or per install | With the customer's CA: no CA of ours, and the trust step is theirs. Without one: `make-internal-ca.sh --permit <domain>`, and the customer must still push `ca.crt` to browsers (Group Policy, profiles, Firefox policy); if they cannot, every analyst sees a warning, which is not acceptable for v1. Their certificate lifetime and key-size rules replace the 397 days and RSA 2048 defaults (`--days`; the key in `issue-server-cert.sh`) |

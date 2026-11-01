@@ -57,7 +57,9 @@ No contrast finding: the default theme passes axe on every screen.
   tab strip on every message, and it would change every tab's name in tests and for speech
   input.
 - **The keyboard pass skips WebKit.** WebKit moves Tab between form fields only, as Safari does
-  until the user turns on "Press Tab to highlight each item". axe still runs there.
+  until the user turns on "Press Tab to highlight each item". axe still runs there. In Firefox
+  the keyboard-only logout goes back from the composer with Shift+Tab, because Firefox does not
+  wrap focus from the page's last stop to its first (`phase-3-browsers.md`).
 - **Keyboard tab moves go between columns only.** Alt+Shift+Arrow moves a tab to the
   neighbouring tabset or splits it off at the edge. There is no keyboard way to reorder tabs
   inside a tabset, or to dock a tab into the bottom strip. Pop out, maximise and the hidden-tabs

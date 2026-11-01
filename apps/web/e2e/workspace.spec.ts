@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { columns, drag } from './layout.ts'
 import { asMockAdmin, logIn } from './mock.ts'
+import { isBrowserNotice } from './notices.ts'
 
 const ROOMS = { blue: 'Blue HQ', red: 'Red HQ', talks: 'Blue–Red negotiation' } as const
 
@@ -19,7 +20,9 @@ async function asUmpire(page: Page): Promise<string[]> {
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
   })
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => {
+    if (!isBrowserNotice(e.message)) errors.push(e.message)
+  })
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
   await logIn(page, 'admin', 'demo-admin')
