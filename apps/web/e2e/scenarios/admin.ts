@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { Page, TestInfo } from '@playwright/test'
-import { DEMO_VAULT_PASSPHRASE, demoSeed } from '@wrx/mock-server'
+import { demoSeed } from '@wrx/mock-server'
 import type { Backend } from './backend.ts'
 import { expect, logInAs, test } from './backend.ts'
 
@@ -49,24 +49,24 @@ export async function openAdminOnDemo(
   }
 }
 
-/** Unlocks the observer vault with the demo passphrase, if the page asks for it. */
-export async function unlockVault(page: Page): Promise<void> {
+/** Unlocks the observer vault with `passphrase` (the backend's `vaultPassphrase` for the demo). */
+export async function unlockVault(page: Page, passphrase: string): Promise<void> {
   await page.getByRole('button', { name: 'Unlock the vault' }).click()
   const dialog = page.getByRole('alertdialog', { name: 'Unlock the vault' })
-  await dialog.getByLabel('Passphrase', { exact: true }).fill(DEMO_VAULT_PASSPHRASE)
+  await dialog.getByLabel('Passphrase', { exact: true }).fill(passphrase)
   await dialog.getByRole('button', { name: 'Unlock' }).click()
   await expect(page.getByText('Vault unlocked.')).toBeVisible({ timeout: 30_000 })
 }
 
 /** Plans from the Publish section; unlocks the vault first when the plan needs it. */
-export async function plan(page: Page): Promise<void> {
+export async function plan(page: Page, backend: Backend): Promise<void> {
   await openSection(page, 'Publish')
   const planButton = page.getByRole('button', { name: /Check the server and plan|Plan again/ })
   await planButton.click()
   const region = page.getByRole('region', { name: 'Publish plan' })
   await expect(region).toBeVisible({ timeout: 30_000 })
   if (await page.getByRole('button', { name: 'Unlock the vault' }).isVisible()) {
-    await unlockVault(page)
+    await unlockVault(page, backend.vaultPassphrase)
     await planButton.click()
   }
   await expect(page.getByText('Reading the server…')).toBeHidden({ timeout: 30_000 })

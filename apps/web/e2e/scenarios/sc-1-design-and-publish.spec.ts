@@ -93,7 +93,7 @@ async function planWithVault(page: Page, passphrase: string): Promise<void> {
     await expect(page.getByText('Vault unlocked.')).toBeVisible({ timeout: 30_000 })
     await planButton.click()
   } else if (await page.getByRole('button', { name: 'Unlock the vault' }).isVisible()) {
-    await unlockVault(page)
+    await unlockVault(page, passphrase)
     await planButton.click()
   }
   await expect(page.getByText('Reading the server…')).toBeHidden({ timeout: 30_000 })
