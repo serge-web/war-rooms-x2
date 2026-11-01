@@ -42,6 +42,9 @@ jobs:
       - name: Publish and provisioning on ejabberd (WP 2.3)
         run: pnpm test:publish:ejabberd
 
+      - name: Deployment checks (WP 3.3; headers, TLS versions, per-player rate limit)
+        run: pnpm test:deployment:ejabberd
+
       # Its own server (compose project and port), so nothing the runs above leave behind, such as
       # an account, shows up as drift.
       - name: Start a separate ejabberd for the audit (WP 2.10)

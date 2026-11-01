@@ -1,6 +1,6 @@
 # WP 3.3 — Reference deployment and air-gapped install
 
-**SRD ids:** NFR-2, NFR-4, NFR-10, NFR-22, NFR-23 · **Depends on:** 0.4, 1.3 · **Status:** to do (the real-hardware check needs a person)
+**SRD ids:** NFR-2, NFR-4, NFR-10, NFR-22, NFR-23 · **Depends on:** 0.4, 1.3 · **Status:** active: built and tested in containers (`ops/README.md`, "Testing"); the real-hardware run and the WP 0.4 answers need a person
 
 ## Goal
 

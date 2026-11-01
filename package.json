@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "pnpm -r --parallel typecheck && tsc -p tools/tsconfig.json && tsc -p tsconfig.json",
+    "typecheck": "pnpm -r --parallel typecheck && tsc -p tools/tsconfig.json && tsc -p ops/tsconfig.json && tsc -p tsconfig.json",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -33,6 +33,7 @@
     "test:admin-ops:ejabberd": "pnpm --filter @wrx/admin-ops test:ejabberd",
     "test:publish:ejabberd": "pnpm --filter @wrx/admin-ops test:publish:ejabberd",
     "test:audit:ejabberd": "pnpm --filter @wrx/admin-ops test:audit:ejabberd",
+    "test:deployment:ejabberd": "pnpm --filter @wrx/contract-suite test:deployment",
     "test:contract:mock": "vitest run packages/mock-server/src/mock.contract.test.ts",
     "site:serve": "node tools/site/serve.ts site/dist 4174 /",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm check:trace && pnpm check:dictionary && pnpm check:blog"

@@ -10,9 +10,11 @@
     "ejabberd",
     "ejabberd-publish",
     "ejabberd-audit",
+    "ejabberd-restore",
     "scripts",
     "vitest.ejabberd.config.ts",
     "vitest.publish.ejabberd.config.ts",
-    "vitest.audit.ejabberd.config.ts"
+    "vitest.audit.ejabberd.config.ts",
+    "vitest.restore.ejabberd.config.ts"
   ]
 }
