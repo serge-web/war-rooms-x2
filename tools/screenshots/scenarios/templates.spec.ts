@@ -5,10 +5,14 @@ import type { Page } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
 import { hostMockInLeaderTab, welcomeLoaded } from './mock-app.ts'
 
-/** No focus ring or caret in the shot. */
+/**
+ * No focus ring or caret in the shot, and the form scrolled to its top: filling a field scrolls
+ * the form to it by an amount that varied by a pixel or two from run to run.
+ */
 async function blur(page: Page) {
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    for (const form of document.querySelectorAll('.wrx-composer__form')) form.scrollTop = 0
   })
 }
 
