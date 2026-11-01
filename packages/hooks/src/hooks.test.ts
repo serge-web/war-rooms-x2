@@ -1,10 +1,21 @@
 // @vitest-environment happy-dom
 import { nodeName } from '@wrx/schemas'
-import { nameOf, tid } from '@wrx/schemas/fixtures'
+import { TEMPLATE, blueReportsConfig, nameOf, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { withSlots, defaultRoomTypes } from '@wrx/domain'
 import type { SessionStore } from '@wrx/domain'
-import { force, flush, harness, message, role, room } from '@wrx/domain/fixtures'
+import type { TimelineEntry } from '@wrx/domain'
+import {
+  DOMAIN,
+  MUC,
+  force,
+  flush,
+  harness,
+  message,
+  role,
+  room,
+  sampleDocuments,
+} from '@wrx/domain/fixtures'
 import { StrictMode, createElement } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
@@ -26,8 +37,11 @@ import {
   useRoles,
   useRoom,
   useRoomMessages,
+  useRoomTemplates,
   useRooms,
   useSessionStatus,
+  useTemplateCheck,
+  useTemplates,
 } from './hooks.ts'
 import type { PlayerPanel, PlayerPanelProps, ReactRoomTypeRegistry } from './registry.ts'
 
@@ -221,6 +235,88 @@ describe('hooks under StrictMode (ARC-3)', () => {
 
   it('throws a clear error outside a provider', () => {
     expect(() => renderHook(() => useSessionStore())).toThrow(/SessionStoreProvider/)
+  })
+})
+
+describe('template hooks (Annex A, WP 4.1)', () => {
+  function templatedDocs() {
+    const docs = sampleDocuments()
+    docs.set('templates', sampleTemplates())
+    const reports = room('blue-reports', [{ kind: 'force', id: 'blue', access: 'write' }], {
+      order: 3,
+      config: blueReportsConfig(),
+    })
+    docs.set(nodeName.room(reports.id), [reports])
+    return docs
+  }
+
+  it('gives the templates, and what the role may post in each room, live', async () => {
+    const h = await ready({ docs: templatedDocs() })
+    const { result } = renderHook(
+      () => ({
+        all: useTemplates(),
+        reports: useRoomTemplates(tid('blue-reports')),
+        hq: useRoomTemplates(tid('blue-hq')),
+      }),
+      { wrapper: strictWrapper(h.store) },
+    )
+    await act(() => flush())
+    expect(result.current.all.data.map((t) => t.name)).toEqual([
+      'Contact report',
+      'Situation report',
+      'Support request',
+    ])
+    expect(result.current.reports.data.freeText).toBe(false)
+    expect(result.current.reports.data.templates.map((t) => t.id)).toEqual([
+      TEMPLATE.sitrep,
+      TEMPLATE.contact,
+      TEMPLATE.support,
+    ])
+    expect(result.current.hq.data).toMatchObject({ freeText: true, templates: [] })
+    const before = result.current.all
+    act(() => {
+      h.session.emitItems({
+        node: 'templates',
+        items: [],
+        retracted: [TEMPLATE.contact],
+        deleted: false,
+      })
+    })
+    expect(result.current.all).not.toBe(before)
+    expect(result.current.reports.data.templates.map((t) => t.id)).toEqual([
+      TEMPLATE.sitrep,
+      TEMPLATE.support,
+    ])
+  })
+
+  it('checks a received templated message, and nothing else', async () => {
+    const h = await ready({ docs: templatedDocs() })
+    const body = JSON.stringify({
+      type: 'template',
+      schemaVersion: 1,
+      content: {
+        templateId: TEMPLATE.sitrep,
+        values: { force: tid('blue'), summary: 'ok', readiness: 50, asOf: '2026-10-24' },
+      },
+    })
+    h.archive.set(`${tid('blue-reports')}@${MUC}`, [
+      message('blue-reports', { nick: 'blue-co', from: `blue-co@${DOMAIN}`, body }),
+      message('blue-reports'),
+    ])
+    function Check({ entry }: { entry: TimelineEntry }) {
+      return createElement('span', null, `${useTemplateCheck(entry)?.status ?? 'chat'};`)
+    }
+    function Room() {
+      const view = useRoomMessages(tid('blue-reports'))
+      return createElement(
+        'p',
+        null,
+        (view.data?.messages ?? []).map((entry) => createElement(Check, { key: entry.id, entry })),
+      )
+    }
+    const view = render(createElement(Room), { wrapper: strictWrapper(h.store) })
+    await act(() => flush())
+    expect(view.container.textContent).toBe('valid;chat;')
   })
 })
 

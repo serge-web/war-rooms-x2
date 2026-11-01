@@ -157,9 +157,13 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const items = (node: string): Item[] =>
     (docs.get(node) ?? []).map((doc, i) => ({
-      // `retired` keeps one item per record, its id the entity's GUID (§3 rule 1).
+      // `retired` keeps one item per record, its id the entity's GUID (§3 rule 1); `templates`
+      // one per template, its id the template's GUID (Annex A).
       id:
-        node === 'retired' && typeof doc === 'object' && doc !== null && 'id' in doc
+        (node === 'retired' || node === 'templates') &&
+        typeof doc === 'object' &&
+        doc !== null &&
+        'id' in doc
           ? String(doc.id)
           : i === 0
             ? firstItemId(node)

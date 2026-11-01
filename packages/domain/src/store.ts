@@ -8,10 +8,17 @@
 // - Every payload is validated; invalid items are logged and ignored (NFR-5).
 // - Getters return frozen snapshots that keep their identity until something they depend on
 //   changes, so they can be passed straight to `useSyncExternalStore`.
-import { LIMITS, SINGLETON_NODES, checkItemSize, parseDocument } from '@wrx/schemas'
+import {
+  LIMITS,
+  SINGLETON_NODES,
+  checkItemSize,
+  chatRoomConfigReader,
+  parseDocument,
+} from '@wrx/schemas'
 import type {
   Announcement,
   Asset,
+  ChatRoomConfig,
   Directory,
   Force,
   GameSetup,
@@ -19,7 +26,11 @@ import type {
   Retired,
   Role,
   Room,
+  Template,
+  TemplateValue,
 } from '@wrx/schemas'
+import { checkTemplatedMessage, createTemplateValidator, templatesFor } from '@wrx/templates'
+import type { TemplateCheck, TemplateValidator } from '@wrx/templates'
 import type {
   ConnectionStatus,
   EndReason,
@@ -47,11 +58,11 @@ import type { DomainError, DomainResult } from './errors.ts'
 import { bareJid, domainpart, localpart, roomJid } from './jid.ts'
 import { consoleLogger } from './logger.ts'
 import type { Logger } from './logger.ts'
-import { defaultRoomTypes } from './registry.ts'
+import { defaultRoomTypes, roomConfig } from './registry.ts'
 import type { RoomTypeRegistry } from './registry.ts'
 import { fitsInStanza } from './size.ts'
 import { Timeline, timeKey } from './timeline.ts'
-import type { Sender, TimelineEntry } from './timeline.ts'
+import type { ReadableEntry, Sender, TimelineEntry } from './timeline.ts'
 
 export type Release = () => void
 
@@ -187,6 +198,35 @@ export interface SendError extends DomainError {
   readonly unsentText: string
 }
 
+/** A refused templated message; the values come back so the form can keep them (PLY-33). */
+export interface TemplateSendError extends DomainError {
+  readonly templateId: string
+  readonly unsentValues: Readonly<Record<string, TemplateValue>>
+  /** Why the values do not fit, when that is the reason: each field's problem. */
+  readonly check?: TemplateCheck
+}
+
+/**
+ * What a room offers this session for posting (Annex A, TD3, TD4): free text or not, and the
+ * templates it may use. The composer (WP 4.2) shows these; the receiver checks every templated
+ * message against the same rule (`checkTemplate`).
+ */
+export interface RoomTemplates {
+  /**
+   * The room's chat config, version 2 (a version 1 config reads as free text, no templates);
+   * `undefined` while the room document loads, or for a room type without templates.
+   */
+  readonly config: ChatRoomConfig | undefined
+  /** Free text may be posted here (TD3). True while the config is not known, as in v1. */
+  readonly freeText: boolean
+  /**
+   * The templates this session may use here, in the config's order (TD4, provisional answer 4):
+   * none for observers; every template the room names for the admin and the White Force's
+   * writers. A template not (yet) loaded is left out.
+   */
+  readonly templates: readonly Template[]
+}
+
 export interface RoomWatch {
   readonly joined: Joined
   readonly release: Release
@@ -241,6 +281,15 @@ export interface SessionStore {
   authors(): Snapshot<ReadonlyMap<string, Author>>
   /** The last names of deleted forces and roles (§3 rule 1); never used for access. */
   retired(): Snapshot<readonly Retired[]>
+  /** Every message template in the game, by name (Annex A, TPL-1). */
+  templates(): Snapshot<readonly Template[]>
+  /** What the room offers this session for posting: free text, and its templates (TD3, TD4). */
+  roomTemplates(roomId: string): Snapshot<RoomTemplates>
+  /**
+   * The receiver's check of a templated message (TPL-6): `undefined` for any other message.
+   * Re-run as templates, the room's config and the documents change; cached per entry.
+   */
+  checkTemplate(entry: ReadableEntry): TemplateCheck | undefined
 
   /** Reference-counted room membership: join and load history on first, leave on last. */
   acquireRoom(roomId: string): Release
@@ -256,6 +305,16 @@ export interface SessionStore {
     roomId: string,
     text: string,
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }>
+  /**
+   * Posts a templated message (TPL-3) after the receiver's own check, run on this session as the
+   * sender: the room offers the template to it, the values fit, pickers name known forces and
+   * roles. Refused when any fails, or over the stanza cap (PLY-53); the values come back.
+   */
+  sendTemplateMessage(
+    roomId: string,
+    templateId: string,
+    values: Readonly<Record<string, TemplateValue>>,
+  ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
   /** The admin only (§3 rule 14, D21); refused for every role before anything is sent. */
@@ -351,6 +410,12 @@ class Store implements SessionStore {
   private readonly now: () => string
   private readonly newId: () => string
   private readonly defer: (task: () => void) => void
+  /** One validator for the session: composer and receiver checks share its cache (TPL-6). */
+  private readonly templateValidator: TemplateValidator = createTemplateValidator()
+  private readonly templateChecks = new WeakMap<
+    TimelineEntry,
+    { deps: readonly unknown[]; value: TemplateCheck }
+  >()
 
   private readonly listeners = new Set<() => void>()
   private readonly nodes = new Map<string, NodeEntry>()
@@ -750,6 +815,8 @@ class Store implements SessionStore {
     desired.add(SINGLETON_NODES.retired)
     // Where the documents are, so neither the own role nor the rest needs node listing.
     desired.add(SINGLETON_NODES.directory)
+    // Message templates, read by every role (Annex A, TPL-1).
+    desired.add(SINGLETON_NODES.templates)
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
@@ -986,6 +1053,91 @@ class Store implements SessionStore {
       }
       return Object.freeze(list.sort((a, b) => compareStrings(a.id, b.id)))
     })
+  }
+
+  templates(): Snapshot<readonly Template[]> {
+    const data = this.templateList()
+    return this.memo('templates', [data, this.currentStatus], () => this.collectionStatus(data))
+  }
+
+  private templateList(): readonly Template[] {
+    const entry = this.nodes.get(SINGLETON_NODES.templates)
+    if (entry === undefined) return EMPTY_TEMPLATES
+    return this.memo('template-list', [entry, entry.version], () => {
+      const list: Template[] = []
+      for (const item of entry.items.values()) {
+        // The item id is the template's GUID; a template under another id is ignored.
+        if (item.doc.kind === 'template' && item.doc.value.id === item.id) list.push(item.doc.value)
+      }
+      return Object.freeze(
+        list.sort((a, b) => compareStrings(a.name, b.name) || compareStrings(a.id, b.id)),
+      )
+    })
+  }
+
+  /** A chat room's config, version 2; undefined until its documents load, or for other types. */
+  private chatConfig(roomId: string): ChatRoomConfig | undefined {
+    const room = this.docOf('room', roomId)
+    const game = documentValue(this.document(SINGLETON_NODES.gameSetup).data, 'game-setup')
+    return this.memo(`chat-config:${roomId}`, [room, game], () => {
+      if (room?.roomType !== 'chat') return undefined
+      const config = roomConfig(this.registry, room, game)
+      if (!config.ok) {
+        this.logger.warn('Invalid room config', { room: roomId, error: config.error })
+        return undefined
+      }
+      const parsed = chatRoomConfigReader.safeParse(config.value)
+      return parsed.success ? parsed.data : undefined
+    })
+  }
+
+  roomTemplates(roomId: string): Snapshot<RoomTemplates> {
+    const config = this.chatConfig(roomId)
+    const all = this.templateList()
+    const role = this.ownRole()
+    const forces = this.collection('force')
+    const value = this.memo(
+      `room-templates-value:${roomId}`,
+      [config, all, role, forces],
+      (): RoomTemplates => {
+        if (config === undefined) return Object.freeze({ config, freeText: true, templates: [] })
+        const ids = templatesFor(config, { isAdmin: this.identity.isAdmin, role }, forces)
+        const templates = ids.flatMap((id) => all.filter((t) => t.id === id))
+        return Object.freeze({
+          config,
+          freeText: config.freeText,
+          templates: Object.freeze(templates),
+        })
+      },
+    )
+    return this.memo(`room-templates:${roomId}`, [value, this.currentStatus], () =>
+      this.collectionStatus(value),
+    )
+  }
+
+  checkTemplate(entry: ReadableEntry): TemplateCheck | undefined {
+    const body = entry.body
+    if (body.type !== 'template') return undefined
+    const template = this.templateList().find((t) => t.id === body.content.templateId)
+    const config = this.chatConfig(entry.roomId)
+    const forces = this.collection('force')
+    const roles = this.collection('role')
+    const retired = this.retiredList()
+    const deps = [template, config, forces, roles, retired]
+    const cached = this.templateChecks.get(entry)
+    if (cached !== undefined && sameDeps(cached.deps, deps)) return cached.value
+    // An unknown room config offers nothing, so every templated message is not permitted until
+    // it loads; the schema checks still run.
+    const value = checkTemplatedMessage(
+      body,
+      template,
+      config ?? { schemaVersion: 2, freeText: true, templates: [] },
+      entry.sender,
+      { forces, roles, retired },
+      { validator: this.templateValidator },
+    )
+    this.templateChecks.set(entry, { deps, value })
+    return value
   }
 
   authors(): Snapshot<ReadonlyMap<string, Author>> {
@@ -1436,6 +1588,10 @@ class Store implements SessionStore {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
     if (text.trim() === '') return refuse({ code: 'invalid', message: 'the message is empty' })
+    // TD3: a room may take templates only. Advisory, like every template rule (T-R1).
+    if (!this.roomTemplates(roomId).data.freeText) {
+      return refuse({ code: 'not-permitted', message: 'this room takes templated messages only' })
+    }
     if (text.length > LIMITS.messageTextChars) {
       return refuse({
         code: 'too-large',
@@ -1465,6 +1621,77 @@ class Store implements SessionStore {
     if (entry.unsent !== undefined) {
       entry.unsent = undefined
       this.roomChanged(entry)
+    }
+    return { ok: true, value: { stanzaId: sent.value.stanzaId } }
+  }
+
+  async sendTemplateMessage(
+    roomId: string,
+    templateId: string,
+    values: Readonly<Record<string, TemplateValue>>,
+  ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }> {
+    const entry = this.roomEntries.get(roomId)
+    const refuse = (error: DomainError, check?: TemplateCheck) => ({
+      ok: false as const,
+      error: {
+        ...error,
+        templateId,
+        unsentValues: values,
+        ...(check === undefined ? {} : { check }),
+      },
+    })
+    if (this.isEnded()) return refuse({ code: 'session-ended', message: 'the session has ended' })
+    if (entry?.status !== 'joined' || entry.joined === undefined) {
+      return refuse({ code: 'not-joined', message: 'the room is not joined' })
+    }
+    if (entry.joined.role === 'visitor' || entry.joined.role === 'none') {
+      return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
+    }
+    const candidate = parseDocument('message', {
+      type: 'template',
+      schemaVersion: 1,
+      content: { templateId, values },
+    })
+    if (!candidate.ok || candidate.value.type !== 'template') {
+      return refuse({ code: 'invalid', message: 'not a valid templated message' })
+    }
+    const body = candidate.value
+    const template = this.templateList().find((t) => t.id === templateId)
+    const config = this.chatConfig(roomId)
+    if (template === undefined || config === undefined) {
+      return refuse({ code: 'not-permitted', message: 'this room does not offer that template' })
+    }
+    // The receiver's check, with this session as the sender, so what is sent is what every
+    // receiver accepts (TPL-6, T-R1).
+    const check = checkTemplatedMessage(
+      body,
+      template,
+      config,
+      { loginName: this.identity.loginName, isAdmin: this.identity.isAdmin },
+      {
+        forces: this.collection('force'),
+        roles: this.collection('role'),
+        retired: this.retiredList(),
+      },
+      { validator: this.templateValidator },
+    )
+    if (check.status === 'not-permitted') {
+      return refuse({ code: 'not-permitted', message: check.message }, check)
+    }
+    if (check.status === 'invalid')
+      return refuse({ code: 'invalid', message: check.message }, check)
+    const json = JSON.stringify(body)
+    const size = fitsInStanza(json)
+    if (!size.ok) {
+      return refuse({
+        code: 'too-large',
+        message: `the message is ${size.bytes} bytes; the limit is ${size.limitBytes}`,
+      })
+    }
+    const sent = await this.session.muc.send(entry.jid, json)
+    if (!sent.ok) {
+      const error = fromTransport(sent.error, 'Sending')
+      return refuse(error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error)
     }
     return { ok: true, value: { stanzaId: sent.value.stanzaId } }
   }
@@ -1585,6 +1812,7 @@ function noop(): void {
 }
 
 const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+const EMPTY_TEMPLATES: readonly Template[] = Object.freeze([])
 
 /**
  * Whether the store takes this item at all. An objectives node shows the admin's item only

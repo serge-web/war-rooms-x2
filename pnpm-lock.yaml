@@ -252,6 +252,9 @@ importers:
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@wrx/templates':
+        specifier: workspace:*
+        version: link:../templates
       '@wrx/transport':
         specifier: workspace:*
         version: link:../transport
@@ -267,6 +270,9 @@ importers:
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas
+      '@wrx/templates':
+        specifier: workspace:*
+        version: link:../templates
       '@wrx/transport':
         specifier: workspace:*
         version: link:../transport

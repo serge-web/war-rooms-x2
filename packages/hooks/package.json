@@ -13,6 +13,7 @@
   "dependencies": {
     "@wrx/domain": "workspace:*",
     "@wrx/schemas": "workspace:*",
+    "@wrx/templates": "workspace:*",
     "@wrx/transport": "workspace:*"
   },
   "peerDependencies": {
