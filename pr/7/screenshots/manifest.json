@@ -1,25 +1,25 @@
 {
   "version": 1,
   "shots": {
-    "admin-design-editor": "69b537257a1b46d0489bd9ad236b5f4b28c1edca285d6e10948785ec5296beee",
+    "admin-design-editor": "5df77c370c5e497676f3dd6d9d11501b711ed6c423d4ba94aab5797a1814d112",
     "admin-preview-as-role": "660f167f337eca380005598f02dc0c9bc5e04edbeffdb0ee5d26414072b5f4ca",
-    "admin-publish-plan": "f479ebf1b954636dd71e4717d052c4e83d64110bbd69fbf18b89d54970924ed3",
-    "admin-theme-editor": "439bff2dc507a75d77f92e84c60af2eb1702b75402e35b643f746e957da1fd9f",
-    "app-shell": "e40c6ca1aa6777b6d9d2e19a3f07d61b90a18ae836f0218cb93a0b7c9aa502b3",
+    "admin-publish-plan": "642d9c2de328e14a9b0af0ab897672518a03bd39a8c7f753a233acf5e507b70c",
+    "admin-theme-editor": "aed1f3eb2f53ada8430f512683b74c424c3485aba46b2f8a1e08a31c1238da51",
+    "app-shell": "837fc6ca211cf44249d7c503a0b899e70f538911a1ca4f01029d0baf526e1d28",
     "multi-client-column-tab": "a80951590389861d7816e83c4cf6c76e1a0b3c8fb790f85dc56205843920a182",
     "multi-client-two-panes": "44ba27cd997ebc6dee76570480a0e677f8117b1a91260253a3e23d5ebcea7e41",
     "multi-client-view": "340edf7f93f193abd6a79173a6c8cde76e2777a566e146fa571853a67444696b",
     "page-architecture": "028556882258613d255d7f72191936d17858b0e1fb6a799924ed11211e658aae",
     "page-background": "a8274edbbeb58cded7a52cb412d18f60c901fe411b8e4581cd75d58a010edf1b",
     "page-blog": "fbf9e7cc69800b98c792d595433780fa9344941186f435171e71bfd83c78e0a2",
-    "page-data-dictionary": "9eed7c9f8dc969f7279f8d643726005462d9ceb2857fa9607f3d63026911a922",
-    "page-home": "33af13ee405fb82908abe38efac5941296c85f57ba69d347b2b4d8a232d5db44",
+    "page-data-dictionary": "177b7be3a7afda56fe73d572c38e3b62c35b0d760a51414910ff2259d98e00c9",
+    "page-home": "3d97c594da27dd9a615e19cb47444415fc791449aa5125a7b8760ded431160ba",
     "page-technical": "b1af0d67e52a580a3cfc9246c094499e1919181c0659087fb8157c5f79d98a65",
     "player-chat": "39f4422061fc292420005060e1ea016653de62151c9a6d83debba6f502583488",
     "player-column": "185190f3b7f14d732017e1afae140c54053b78a8c58099994d0d95c9dc8d695b",
     "player-objectives-editor": "9926b9215a00740272f295828066b35d51dd32daebfbfa96761af0e35ab03a95",
     "player-shell": "39f4422061fc292420005060e1ea016653de62151c9a6d83debba6f502583488",
-    "player-welcome": "e40c6ca1aa6777b6d9d2e19a3f07d61b90a18ae836f0218cb93a0b7c9aa502b3",
+    "player-welcome": "837fc6ca211cf44249d7c503a0b899e70f538911a1ca4f01029d0baf526e1d28",
     "player-workspace": "f316d2da4c478d2dcce16c648134618b215ccd786af8f59251101af0b81abde2"
   }
 }

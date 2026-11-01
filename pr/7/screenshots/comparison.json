@@ -1,7 +1,7 @@
 [
   {
     "name": "admin-design-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-preview-as-role",
@@ -13,11 +13,11 @@
   },
   {
     "name": "admin-theme-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "app-shell",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "multi-client-column-tab",
@@ -73,7 +73,7 @@
   },
   {
     "name": "player-welcome",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-workspace",
