@@ -34,6 +34,7 @@ test('the template editor runs under the CSP, with no violation (F7, NFR-14)', a
   const preview = page.getByRole('region', { name: 'Preview of Situation report' })
   await preview.getByLabel(/^Summary/).fill('All quiet')
   await preview.getByLabel(/^Reporting force/).selectOption({ label: 'Blue' })
+  await preview.getByRole('button', { name: 'Check' }).click()
   await expect(preview.getByText('is too long')).toHaveCount(0)
   await expectNoViolations(page, testInfo, 'template builder (locked) and preview')
 
@@ -65,6 +66,7 @@ test('the template editor runs under the CSP, with no violation (F7, NFR-14)', a
   )
   const copyPreview = page.getByRole('region', { name: 'Preview of Copy of Situation report' })
   await copyPreview.getByLabel('note').fill('toolong')
+  await copyPreview.getByRole('button', { name: 'Check' }).click()
   await expect(copyPreview.getByText('is too long')).toBeVisible()
 
   violations.push(

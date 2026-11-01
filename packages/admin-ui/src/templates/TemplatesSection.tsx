@@ -38,7 +38,7 @@ import './templates.css'
 export interface TemplatesSectionProps extends SectionProps {
   /** The clock for `createdAt` (display only). */
   readonly now?: () => Date
-  /** The preview's form; the plain RJSF one by default (WP 4.2's themed one can replace it). */
+  /** The preview; by default the player's own form (`TemplatePreview`). */
   readonly preview?: TemplatePreviewSlot
 }
 

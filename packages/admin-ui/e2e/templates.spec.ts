@@ -165,10 +165,16 @@ test(
     expect(written.schema).toHaveProperty('dependencies.dropDown.oneOf')
     await expect(page.getByText('No problems', { exact: false })).toHaveCount(0)
 
-    // The live preview, checked by the template validator.
+    // The live preview: the player's form, checked by the template validator, its problems
+    // shown once Check is pressed (as Send does in the composer), then live.
     const shown = preview(page, 'Patrol report')
+    await expect(shown.locator('form.wrx-tform')).toBeVisible()
+    await expect(shown.getByLabel(/^Drop-down/)).toHaveValue('')
+    await expect(shown.getByLabel(/^Linked drop-down/)).toHaveValue('')
     await expect(shown.getByLabel(/^Callsign/)).toBeVisible()
     await shown.getByLabel(/^Callsign/).fill('blue')
+    await expect(shown.getByText(/is not in the expected form/)).toHaveCount(0)
+    await shown.getByRole('button', { name: 'Check' }).click()
     await expect(shown.getByText(/is not in the expected form/)).toBeVisible()
     await shown.getByLabel(/^Callsign/).fill('BL12')
     await expect(shown.getByText(/is not in the expected form/)).toBeHidden()
@@ -349,6 +355,7 @@ test('a schema the builder cannot show opens in the raw editor only', async ({
   // The preview follows the raw schema: Detail is required once Armed is ticked.
   const shown = preview(page, 'Conditional')
   await shown.getByLabel('Armed').check()
+  await shown.getByRole('button', { name: 'Check' }).click()
   await expect(shown.getByText(/required/i)).toBeVisible()
   // Not JSON: the draft keeps the last valid text.
   await replaceRaw(editor, '{"schema": ')

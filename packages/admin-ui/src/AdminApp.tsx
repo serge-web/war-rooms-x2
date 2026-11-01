@@ -72,7 +72,7 @@ export interface AdminAppProps {
   readonly onSwitchToGame?: () => void
   /** WP 2.8's themes editor; until then the section is an empty slot. */
   readonly themes?: ThemesSlot
-  /** The template preview's form (WP 4.3); the plain RJSF one unless WP 4.2's themed one is given. */
+  /** The template preview (WP 4.3); by default the player's own form (WP 4.2's `TemplateForm`). */
   readonly templatePreview?: TemplatePreviewSlot
   readonly initialSection?: AdminSection
   /** The clock for objectives' `updatedAt`. */

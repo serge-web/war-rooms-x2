@@ -1,118 +1,39 @@
-// The template's live preview (WP 4.3, TPL-7): the form a player fills, rendered by RJSF and
-// checked as the player's composer and every receiver check it, with `createTemplateFormValidator`
-// (`@wrx/templates/rjsf`) over the interpreting validator. Never `@rjsf/validator-ajv8`: it
-// compiles schemas with `new Function`, which the client's CSP refuses (no 'unsafe-eval', F7).
+// The template's live preview (WP 4.3, TPL-7; themed in WP 4.4): the very form a player fills,
+// WP 4.2's `TemplateForm` from `@wrx/player-ui/templates`, with its theme on the `--wrx-*` tokens,
+// its widgets and the validator every receiver uses (`@wrx/templates/rjsf`, which interprets
+// schemas, so it runs under the client's CSP; never `@rjsf/validator-ajv8`, F7). It starts as the
+// composer starts (`initialValues`: yes/no fields at their default or no; a drop-down with nothing
+// chosen, as RJSF takes no `const` as a default), and shows problems as the composer does: once a
+// send is tried, then live. "Check" stands in for Send; nothing is sent.
 //
-// RJSF's own core theme for now. WP 4.2's theme on Radix and the `--wrx-*` tokens replaces it
-// through the `TemplatePreviewSlot` the Templates section takes; WP 4.4 wires that in.
-import Form from '@rjsf/core/lib/components/Form.js'
-import type { IChangeEvent } from '@rjsf/core/lib/components/Form.js'
-import type { RJSFSchema, UiSchema, WidgetProps } from '@rjsf/utils'
+// Pickers offer the draft's forces and roles. The draft has no deleted entities to show
+// (`retired` is the server's), and no room: a room-scoped picker offers the whole game.
+import type { DesignFile, Template } from '@wrx/schemas'
 import { checkTemplateProfile, templateFields } from '@wrx/schemas'
-import type { DesignFile, Template, TemplateValue } from '@wrx/schemas'
-import { createTemplateFormValidator } from '@wrx/templates/rjsf'
+import { initialValues } from '@wrx/player-ui/chat'
+import { TemplateForm } from '@wrx/player-ui/templates'
+import type { PickerSource } from '@wrx/player-ui/templates'
 import type { FormValues } from '@wrx/templates'
-import { byOrderThenId } from '@wrx/domain'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import type { ComponentType } from 'react'
+import { Button } from '../components/index.ts'
 
 export interface TemplatePreviewProps {
-  readonly template: Pick<Template, 'id' | 'name' | 'schema' | 'uiSchema'>
+  readonly template: Template
   /** The forces and roles the pickers offer. */
   readonly design: Pick<DesignFile, 'forces' | 'roles'>
 }
 
-/** The preview the Templates section draws; WP 4.2's themed form can take its place. */
+/** The preview the Templates section draws; a host may give another (`AdminApp`'s slot). */
 export type TemplatePreviewSlot = ComponentType<TemplatePreviewProps>
 
-interface PickerContext {
-  readonly design: Pick<DesignFile, 'forces' | 'roles'>
-}
-
-/** A force or role picker: a list of names, storing the GUID (TPL-8). */
-function PickerWidget({
-  id,
-  value,
-  required,
-  disabled,
-  readonly,
-  onChange,
-  onBlur,
-  onFocus,
-  schema,
-  registry,
-}: WidgetProps<FormValues, RJSFSchema, PickerContext>) {
-  const design = registry.formContext.design
-  const kind = (schema as Record<string, unknown>)['x-wrx-picker']
-  const filter = (schema as Record<string, unknown>)['x-wrx-force']
-  const forces = [...design.forces].sort(byOrderThenId)
-  const forceIndex = new Map(forces.map((f, i) => [f.id, i]))
-  const choices =
-    kind === 'role'
-      ? [...design.roles]
-          .filter((r) => filter === undefined || r.forceId === filter)
-          .sort(
-            (a, b) =>
-              (forceIndex.get(a.forceId) ?? forces.length) -
-                (forceIndex.get(b.forceId) ?? forces.length) || byOrderThenId(a, b),
-          )
-          .map((r) => ({ id: r.id, name: r.name }))
-      : forces.map((f) => ({ id: f.id, name: f.name }))
-  return (
-    <select
-      id={id}
-      className="form-control"
-      value={typeof value === 'string' ? value : ''}
-      required={required}
-      disabled={disabled === true || readonly === true}
-      onChange={(e) => {
-        onChange(e.target.value === '' ? undefined : e.target.value)
-      }}
-      onBlur={(e) => {
-        onBlur(id, e.target.value)
-      }}
-      onFocus={(e) => {
-        onFocus(id, e.target.value)
-      }}
-    >
-      <option value="">Choose…</option>
-      {choices.map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.name}
-        </option>
-      ))}
-    </select>
-  )
-}
-
-const WIDGETS = Object.freeze({ wrxPicker: PickerWidget })
-
-/** The template's UI schema for the preview: pickers drawn by `PickerWidget`, no submit button. */
-function previewUiSchema(
-  template: TemplatePreviewProps['template'],
-): UiSchema<FormValues, RJSFSchema, PickerContext> {
-  const ui: Record<string, unknown> = { ...(template.uiSchema ?? {}) }
-  for (const field of templateFields(template.schema)) {
-    if (field.picker === undefined) continue
-    const own = ui[field.name]
-    ui[field.name] = {
-      ...(typeof own === 'object' && own !== null ? own : {}),
-      'ui:widget': 'wrxPicker',
-    }
-  }
-  ui['ui:submitButtonOptions'] = { norender: true }
-  return ui as UiSchema<FormValues, RJSFSchema, PickerContext>
-}
+type Outcome = { readonly kind: 'fits' } | { readonly kind: 'problems'; readonly count: number }
 
 export function TemplatePreview({ template, design }: TemplatePreviewProps) {
-  const validator = useMemo(() => createTemplateFormValidator<PickerContext>(), [])
-  const [values, setValues] = useState<FormValues>({})
   const issues = useMemo(
     () => checkTemplateProfile(template.schema, template.uiSchema),
     [template.schema, template.uiSchema],
   )
-  const uiSchema = useMemo(() => previewUiSchema(template), [template])
-  const context = useMemo(() => ({ design }), [design])
   if (issues.length > 0) {
     return (
       <p className="wrx-admin-muted">
@@ -121,26 +42,68 @@ export function TemplatePreview({ template, design }: TemplatePreviewProps) {
       </p>
     )
   }
+  // Another template is another form; edits to this one keep the values typed so far.
+  return <PreviewForm key={template.id} template={template} design={design} />
+}
+
+function PreviewForm({ template, design }: TemplatePreviewProps) {
+  const [values, setValues] = useState<FormValues>(() => initialValues(template))
+  const [outcome, setOutcome] = useState<Outcome | undefined>(undefined)
+  // Only the fields the schema has now: a field removed in the editor takes its value with it.
+  const shown = useMemo(() => {
+    const names = new Set(templateFields(template.schema).map((f) => f.name))
+    return Object.fromEntries(Object.entries(values).filter(([name]) => names.has(name)))
+  }, [template.schema, values])
+  const pickers = useMemo<PickerSource>(
+    () => ({ forces: design.forces, roles: design.roles, retired: [] }),
+    [design.forces, design.roles],
+  )
+  // Unique on the page: the ids of the composer's forms are prefixed differently.
+  const idPrefix = `wrx-preview-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`
+  const statusId = `${idPrefix}-status`
   return (
     <div className="wrx-template-preview">
-      <Form<FormValues, RJSFSchema, PickerContext>
-        key={template.id}
-        tagName="div"
-        idPrefix={`wrx-preview-${template.id}`}
-        schema={template.schema}
-        uiSchema={uiSchema}
-        formData={values}
-        formContext={context}
-        validator={validator}
-        widgets={WIDGETS}
-        liveValidate="onChange"
-        showErrorList={false}
-        noHtml5Validate
-        onChange={(event: IChangeEvent<FormValues>) => {
-          const next: Record<string, TemplateValue | undefined> = { ...(event.formData ?? {}) }
+      <TemplateForm
+        template={template}
+        values={shown}
+        onChange={(next) => {
           setValues(next)
+          setOutcome(undefined)
         }}
-      />
+        onSubmit={() => {
+          setOutcome({ kind: 'fits' })
+        }}
+        onInvalid={(count) => {
+          setOutcome({ kind: 'problems', count })
+        }}
+        pickers={pickers}
+        idPrefix={idPrefix}
+      >
+        <div className="wrx-template-preview__actions">
+          <Button type="submit" variant="secondary" aria-describedby={statusId}>
+            Check
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setValues(initialValues(template))
+              setOutcome(undefined)
+            }}
+          >
+            Clear
+          </Button>
+          <p id={statusId} className="wrx-template-preview__status" role="status">
+            {outcome === undefined
+              ? ''
+              : outcome.kind === 'fits'
+                ? 'These values fit the template: a player could send them.'
+                : outcome.count === 1
+                  ? 'One field needs attention.'
+                  : `${String(outcome.count)} fields need attention.`}
+          </p>
+        </div>
+      </TemplateForm>
     </div>
   )
 }

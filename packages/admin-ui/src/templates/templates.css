@@ -127,58 +127,17 @@
   background: var(--wrx-background, #ffffff);
 }
 
-/* RJSF's core theme, plainly styled until WP 4.2's theme takes over. */
-.wrx-template-preview fieldset {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.wrx-template-preview .form-group {
+/* The form itself is the player's (WP 4.2, `@wrx/player-ui/templates`), styled by its own sheet. */
+.wrx-template-preview__actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.wrx-template-preview label,
-.wrx-template-preview .control-label {
-  font-weight: 600;
-}
-
-.wrx-template-preview .checkbox label,
-.wrx-template-preview .radio label {
-  font-weight: 400;
-}
-
-.wrx-template-preview input:not([type='checkbox'], [type='radio'], [type='range']),
-.wrx-template-preview select,
-.wrx-template-preview textarea {
-  font: inherit;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--wrx-border, #6b7280);
-  border-radius: 4px;
-  background: var(--wrx-background, #ffffff);
-  color: var(--wrx-text, #111827);
-  max-width: 100%;
-}
-
-.wrx-template-preview .field-description,
-.wrx-template-preview .help-block {
+.wrx-template-preview__status {
+  margin: 0;
   color: var(--wrx-muted, #4b5563);
   font-size: 0.875rem;
-  margin: 0;
-}
-
-.wrx-template-preview .error-detail {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  color: var(--wrx-danger, #b91c1c);
-  font-size: 0.875rem;
-}
-
-.wrx-template-preview .required {
-  color: var(--wrx-danger, #b91c1c);
 }
