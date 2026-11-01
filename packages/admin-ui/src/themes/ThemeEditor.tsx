@@ -223,7 +223,7 @@ function TokenField({
       {source === 'own' && (
         <Button
           variant="quiet"
-          aria-label={`${isGame ? 'Use the default' : 'Inherit'} for ${label}`}
+          aria-label={`${isGame ? 'Use default' : 'Inherit'} for ${label}`}
           onClick={() => {
             onChange(undefined)
           }}
