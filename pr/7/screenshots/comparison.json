@@ -1,0 +1,82 @@
+[
+  {
+    "name": "admin-design-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-preview-as-role",
+    "status": "changed"
+  },
+  {
+    "name": "admin-publish-plan",
+    "status": "changed"
+  },
+  {
+    "name": "admin-theme-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "app-shell",
+    "status": "unchanged"
+  },
+  {
+    "name": "multi-client-column-tab",
+    "status": "new"
+  },
+  {
+    "name": "multi-client-two-panes",
+    "status": "new"
+  },
+  {
+    "name": "multi-client-view",
+    "status": "changed"
+  },
+  {
+    "name": "page-architecture",
+    "status": "changed"
+  },
+  {
+    "name": "page-background",
+    "status": "changed"
+  },
+  {
+    "name": "page-blog",
+    "status": "changed"
+  },
+  {
+    "name": "page-data-dictionary",
+    "status": "changed"
+  },
+  {
+    "name": "page-home",
+    "status": "changed"
+  },
+  {
+    "name": "page-technical",
+    "status": "changed"
+  },
+  {
+    "name": "player-chat",
+    "status": "changed"
+  },
+  {
+    "name": "player-column",
+    "status": "changed"
+  },
+  {
+    "name": "player-objectives-editor",
+    "status": "changed"
+  },
+  {
+    "name": "player-shell",
+    "status": "changed"
+  },
+  {
+    "name": "player-welcome",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-workspace",
+    "status": "changed"
+  }
+]
