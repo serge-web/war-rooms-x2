@@ -19,7 +19,16 @@ import type {
   StoreStatus,
   TimelineEntry,
 } from '@wrx/domain'
-import type { Asset, Force, GameSetup, Objectives, Role, Room, Template } from '@wrx/schemas'
+import type {
+  Asset,
+  Force,
+  GameSetup,
+  Objectives,
+  Retired,
+  Role,
+  Room,
+  Template,
+} from '@wrx/schemas'
 import type { TemplateCheck } from '@wrx/templates'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useSessionStore } from './context.ts'
@@ -161,6 +170,14 @@ export function useOccupants(roomId: string): Snapshot<readonly Occupant[]> {
     (s) => s.acquireRoom(roomId),
     `occupants:${roomId}`,
   )
+}
+
+/**
+ * Deleted forces and roles, by their last names (§3 rule 1, TPL-9): so a template card or picker
+ * still names a GUID whose force or role is gone, marked deleted; live.
+ */
+export function useRetired(): Snapshot<readonly Retired[]> {
+  return useStoreSnapshot((s) => s.retired(), undefined, 'retired')
 }
 
 /** Every message template in the game, by name (Annex A, TPL-1); live. */

@@ -3,11 +3,31 @@
 // PLY-45) and the composer (PLY-44, PLY-12, PLY-33). ChatPanel wires it to the pane's store: it
 // joins the room, pages MAM history back on scroll (PLY-49), sends, and marks the room read while
 // the panel is on screen (PLY-11). The workspace wraps it in the room's theme (PLY-24).
-import { ADMIN_AUTHOR_ID, UMPIRE_NAME } from '@wrx/domain'
-import type { Author, DomainError, RoomView, TimelineEntry } from '@wrx/domain'
-import { useAuthors, useOccupants, useRoomMessages, useSessionStore } from '@wrx/hooks'
+import { ADMIN_AUTHOR_ID, UMPIRE_NAME, participantsOf } from '@wrx/domain'
+import type {
+  Author,
+  DomainError,
+  RoomView,
+  SessionStore,
+  TemplateSendError,
+  TimelineEntry,
+} from '@wrx/domain'
+import {
+  useAuthors,
+  useEffectiveAccess,
+  useForces,
+  useOccupants,
+  useRetired,
+  useRoles,
+  useRoomMessages,
+  useRoomTemplates,
+  useSessionStore,
+  useTemplates,
+} from '@wrx/hooks'
 import type { PlayerPanelProps } from '@wrx/hooks'
+import type { Template } from '@wrx/schemas'
 import { templatePlainText } from '@wrx/templates'
+import type { FormValues } from '@wrx/templates'
 import { Banner, Button } from '@wrx/ui'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
@@ -15,7 +35,11 @@ import type { RefObject } from 'react'
 // standalone `@wrx/player-ui/chat` entry must not.
 import { onlineRoles } from '../workspace/panels.tsx'
 import type { OnlineRole } from '../workspace/panels.tsx'
-import { ComposerCore } from './composer.tsx'
+import { templateCard } from '../templates/card.ts'
+import { entityLabel } from '../templates/pickers.ts'
+import type { PickerSource } from '../templates/pickers.ts'
+import { ChatComposerCore } from './chat-composer.tsx'
+import type { TemplateSendOutcome, UnsentTemplate } from './chat-composer.tsx'
 import type { SendOutcome } from './composer.tsx'
 import { chatClock, chatRows } from './format.ts'
 import type { ChatMessage, TimeFormat } from './format.ts'
@@ -41,6 +65,15 @@ export interface ChatPanelCoreProps {
   readonly disabledReason?: string | undefined
   /** A post refused earlier, with why (PLY-33). */
   readonly unsent?: { readonly text: string; readonly reason: string } | undefined
+  /** The templates this role may use here (TD4); with none, the plain composer. */
+  readonly templates?: readonly Template[]
+  /** Free text is allowed here (TD3). Default true. */
+  readonly freeText?: boolean
+  readonly onSendTemplate?: (templateId: string, values: FormValues) => Promise<TemplateSendOutcome>
+  /** Live forces and roles for template pickers (TPL-8). */
+  readonly pickers?: PickerSource
+  /** A templated message refused earlier, with why (PLY-33). */
+  readonly unsentTemplate?: UnsentTemplate | undefined
   /** Shown above the list when the room is unavailable, e.g. closed by the server. */
   readonly problem?:
     { readonly title: string; readonly text: string; readonly onRetry?: () => void } | undefined
@@ -62,6 +95,11 @@ export function ChatPanelCore({
   onSend,
   disabledReason,
   unsent,
+  templates,
+  freeText,
+  onSendTemplate,
+  pickers,
+  unsentTemplate,
   problem,
   announcement = '',
   timeFormat,
@@ -102,12 +140,17 @@ export function ChatPanelCore({
       <p className="wrx-visually-hidden" role="status" aria-live="polite">
         {announcement}
       </p>
-      <ComposerCore
+      <ChatComposerCore
         onSend={onSend}
         disabledReason={disabledReason}
         initialText={unsent?.text}
         initialError={unsent?.reason}
         label={`Message ${roomName}`}
+        templates={templates}
+        freeText={freeText}
+        onSendTemplate={onSendTemplate}
+        pickers={pickers}
+        unsentTemplate={unsentTemplate}
       />
     </div>
   )
@@ -176,6 +219,27 @@ export function refusalText(error: DomainError): string {
   }
 }
 
+/**
+ * Why a templated message was refused, for the composer: the receiver's own check says which
+ * fields do not fit (TPL-6); anything else reads as a refused post does (PLY-33).
+ */
+export function templateRefusal(error: TemplateSendError): {
+  readonly ok: false
+  readonly reason: string
+  readonly fieldErrors?: Readonly<Record<string, readonly string[]>>
+} {
+  const check = error.check
+  if (check === undefined) return { ok: false, reason: refusalText(error) }
+  if (check.status === 'valid') return { ok: false, reason: refusalText(error) }
+  if (check.status === 'not-permitted') return { ok: false, reason: check.message }
+  const fieldErrors: Record<string, string[]> = {}
+  for (const e of check.errors) {
+    if (e.field === undefined) continue
+    ;(fieldErrors[e.field] ??= []).push(e.message)
+  }
+  return { ok: false, reason: check.message, fieldErrors }
+}
+
 /** What to show when the room is unavailable, or `undefined` while it is fine. */
 function roomProblem(
   view: RoomView | undefined,
@@ -216,20 +280,79 @@ function roomProblem(
 
 // ---- Wired ------------------------------------------------------------------------------------
 
-/** The display form of the store's messages, resolved against the live role documents. */
-function useChatMessages(entries: readonly TimelineEntry[] | undefined): readonly ChatMessage[] {
+/** The live documents pickers and cards read, and the roles in this room (`x-wrx-scope`). */
+function usePickerSource(roomId: string): PickerSource {
+  const forces = useForces().data
+  const roles = useRoles().data
+  const retired = useRetired().data
+  const matrix = useEffectiveAccess().data
+  return useMemo(() => {
+    const inRoom = participantsOf(matrix, roomId)
+    return {
+      forces,
+      roles,
+      retired,
+      roomRoleIds: matrix.roomIds.includes(roomId)
+        ? new Set(inRoom.map((p) => p.roleId))
+        : undefined,
+    }
+  }, [forces, roles, retired, matrix, roomId])
+}
+
+/**
+ * The display form of the store's messages, resolved against the live documents: authors by
+ * login name, and each templated message checked (TPL-6) and shown as a card or plain text.
+ */
+function useChatMessages(
+  entries: readonly TimelineEntry[] | undefined,
+  roomId: string,
+  pickers: PickerSource,
+): readonly ChatMessage[] {
+  const store = useSessionStore()
   const authors = useAuthors().data
   const isOwn = useIsOwn()
+  // The check reads the templates and the room's config; these say when to run it again.
+  const templates = useTemplates().data
+  const config = useRoomTemplates(roomId).data.config
   return useMemo(
-    () => (entries ?? []).map((entry) => toChatMessage(entry, authors, isOwn(entry))),
-    [entries, authors, isOwn],
+    () =>
+      (entries ?? []).map((entry) => toChatMessage(entry, authors, isOwn(entry), store, pickers)),
+    [entries, authors, isOwn, store, pickers, templates, config],
   )
+}
+
+/** A templated message's display: a card, plain text, and a warning when it needs one. */
+function templatedDisplay(
+  entry: TimelineEntry,
+  store: SessionStore,
+  pickers: PickerSource,
+): Pick<ChatMessage, 'text' | 'card' | 'warning'> {
+  if (entry.kind !== 'message' || entry.body.type !== 'template') return { text: undefined }
+  const body = entry.body
+  const check = store.checkTemplate(entry)
+  const nameOf = (kind: 'force' | 'role', id: string) => entityLabel(kind, id, pickers)
+  if (check === undefined || check.status === 'invalid') {
+    return {
+      text: templatePlainText(body, check?.template, nameOf),
+      warning:
+        check === undefined
+          ? 'This message could not be checked against its template.'
+          : check.message,
+    }
+  }
+  return {
+    text: templatePlainText(body, check.template, nameOf),
+    card: templateCard(body, check.template, pickers),
+    warning: check.status === 'not-permitted' ? check.message : undefined,
+  }
 }
 
 function toChatMessage(
   entry: TimelineEntry,
   authors: ReadonlyMap<string, Author>,
   self: boolean,
+  store: SessionStore,
+  pickers: PickerSource,
 ): ChatMessage {
   const { sender } = entry
   // The admin is the umpire, labelled in the White Force's colour (SC-5); identity comes from
@@ -250,14 +373,12 @@ function toChatMessage(
     forceName: author?.forceName,
     colour: author?.colour,
     self,
-    // A templated message shows as plain text until its card (WP 4.2); a new message type makes
-    // this a type error, as it should.
-    text:
-      entry.kind !== 'message'
-        ? undefined
-        : entry.body.type === 'chat'
-          ? entry.body.content.text
-          : templatePlainText(entry.body),
+    // A new message type makes this a type error, as it should.
+    ...(entry.kind !== 'message'
+      ? { text: undefined }
+      : entry.body.type === 'chat'
+        ? { text: entry.body.content.text }
+        : templatedDisplay(entry, store, pickers)),
   }
 }
 
@@ -318,7 +439,9 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
   const view = snapshot.data
   const occupants = useOccupants(roomId).data
   const authors = useAuthors().data
-  const messages = useChatMessages(view?.messages)
+  const pickers = usePickerSource(roomId)
+  const messages = useChatMessages(view?.messages, roomId, pickers)
+  const offer = useRoomTemplates(roomId).data
   const online = useMemo(() => onlineRoles(occupants, authors), [occupants, authors])
   const scrollRef = useRef<HTMLDivElement>(null)
   const onScreen = useOnScreen(scrollRef)
@@ -348,6 +471,19 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
     [store, roomId],
   )
 
+  const onSendTemplate = useCallback(
+    async (templateId: string, values: FormValues): Promise<TemplateSendOutcome> => {
+      const clean = Object.fromEntries(
+        Object.entries(values).filter(
+          (e): e is [string, NonNullable<(typeof e)[1]>] => e[1] !== undefined,
+        ),
+      )
+      const sent = await store.sendTemplateMessage(roomId, templateId, clean)
+      return sent.ok ? { ok: true } : templateRefusal(sent.error)
+    },
+    [store, roomId],
+  )
+
   const onRetry = useCallback(() => {
     void store.rejoinRoom(roomId)
   }, [store, roomId])
@@ -368,6 +504,19 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
         view?.unsent === undefined
           ? undefined
           : { text: view.unsent.text, reason: refusalText(view.unsent.error) }
+      }
+      templates={offer.templates}
+      freeText={offer.freeText}
+      onSendTemplate={onSendTemplate}
+      pickers={pickers}
+      unsentTemplate={
+        view?.unsentTemplate === undefined
+          ? undefined
+          : {
+              templateId: view.unsentTemplate.templateId,
+              values: view.unsentTemplate.values,
+              ...templateRefusal(view.unsentTemplate.error),
+            }
       }
       problem={roomProblem(view, snapshot.error, onRetry)}
       announcement={announcement}

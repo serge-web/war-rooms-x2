@@ -116,6 +116,12 @@ describe('templates in the session store (Annex A)', () => {
       expect(bad.error.unsentValues).toMatchObject({ readiness: 101 })
       expect(bad.error.check?.status).toBe('invalid')
     }
+    // Kept on the room for the composer, as refused text is (PLY-33, WP 4.2).
+    expect(blue.roomView(ROOM.blueReports).data?.unsentTemplate).toMatchObject({
+      templateId: TEMPLATE.sitrep,
+      values: { readiness: 101 },
+      error: { code: 'invalid' },
+    })
     const unknownForce = await blue.sendTemplateMessage(ROOM.blueReports, TEMPLATE.sitrep, {
       ...SITREP,
       force: '10000000-0000-4000-8000-0000000000ee',
@@ -125,6 +131,7 @@ describe('templates in the session store (Annex A)', () => {
     expect(elsewhere.ok ? undefined : elsewhere.error.code).toBe('not-joined')
 
     unwrap(await blue.sendTemplateMessage(ROOM.blueReports, TEMPLATE.sitrep, SITREP))
+    expect(blue.roomView(ROOM.blueReports).data?.unsentTemplate).toBeUndefined()
     await vi.waitFor(() => {
       expect(templated(blue, ROOM.blueReports)).toHaveLength(1)
     })
