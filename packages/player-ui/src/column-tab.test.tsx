@@ -117,7 +117,9 @@ describe('the out-of-game column as a tab (FT-1)', () => {
       await act(() => flush())
     }
     expect(badge()).toBe('2')
-    expect(columnTab()?.querySelector('[aria-label="2 unread"]')).not.toBeNull()
+    // The badge describes its tab for screen readers (NFR-14, WP 3.2).
+    const described = columnTab()?.querySelector('[aria-label="2 unread messages"]')
+    expect(described).not.toBeNull()
     fireEvent.click(columnTab() ?? document.body)
     await act(() => flush())
     expect(badge()).toBeUndefined()

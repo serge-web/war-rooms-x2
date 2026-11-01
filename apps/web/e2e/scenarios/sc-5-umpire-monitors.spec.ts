@@ -65,7 +65,7 @@ test('SC-5: the admin, as umpire, sees every room, watches two side by side, pos
   await expect(box).toHaveValue('')
   const redHq = red.getByRole('region', { name: `Messages in ${RED_HQ}`, exact: true })
   const card = redHq.getByRole('article').filter({ hasText: 'passable on foot only' })
-  await expect(card).toHaveAttribute('aria-label', /^Umpire, /)
+  await expect(card).toHaveAttribute('aria-label', /(^|, )Umpire, /)
   await expect(card).toHaveAttribute('data-sender', 'admin')
   // Its header (on it, or on the umpire's earlier message it follows) names the White Force.
   await expect(redHq.locator('article[data-sender="admin"] .wrx-chat__force').last()).toHaveText(

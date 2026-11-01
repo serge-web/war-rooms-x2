@@ -1,6 +1,6 @@
 # WP 3.2 — Performance, scale, browsers and accessibility
 
-**SRD ids:** NFR-11, NFR-12, NFR-13, NFR-14 · **Depends on:** Phase 2 · **Status:** to do
+**SRD ids:** NFR-11, NFR-12, NFR-13, NFR-14 · **Depends on:** Phase 2 · **Status:** done
 
 ## Goal
 

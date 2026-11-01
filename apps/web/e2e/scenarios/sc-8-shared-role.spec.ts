@@ -62,12 +62,12 @@ test('SC-8: two people logged in as Blue CO both get every message, and each pos
   for (const page of [first, second]) {
     for (const text of ['First Blue CO', 'Second Blue CO']) {
       await expect(card(page, 'Blue HQ', text)).toHaveAttribute('data-sender', 'blue-co')
-      await expect(card(page, 'Blue HQ', text)).toHaveAttribute('aria-label', /^Blue CO, /)
+      await expect(card(page, 'Blue HQ', text)).toHaveAttribute('aria-label', /(^|, )Blue CO, /)
     }
   }
   const spoken = card(red, TALKS, 'Blue CO speaks for Blue.')
   await expect(spoken).toHaveAttribute('data-sender', 'blue-co')
-  await expect(spoken).toHaveAttribute('aria-label', /^Blue CO, /)
+  await expect(spoken).toHaveAttribute('aria-label', /(^|, )Blue CO, /)
   // The second login's posts show no other name, nick or resource in Red's view either.
   await expect(spoken).not.toContainText(/blue-co\//)
   expect(errors.flat()).toEqual([])

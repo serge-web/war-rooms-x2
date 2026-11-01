@@ -28,7 +28,9 @@ export async function quickLogIn(scope: Locator, label: string): Promise<void> {
  */
 export async function paneForce(scope: Locator): Promise<Locator> {
   const open = scope.getByRole('region', { name: 'Out of game', exact: true })
-  // A wide pane keeps the column; the tab opens the strip's panel, and a second click closes it.
+  // Wait for the pane to settle on a form: a wide pane keeps the column, a narrow one has the tab.
+  await expect(columnTab(scope).or(forcePanel(scope)).first()).toBeVisible()
+  // The tab opens the strip's panel, and a second click would close it again.
   if ((await columnTab(scope).count()) > 0 && !(await open.isVisible())) {
     await columnTab(scope).click()
     await expect(open).toBeVisible()
