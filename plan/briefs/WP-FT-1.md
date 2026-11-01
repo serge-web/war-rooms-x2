@@ -1,6 +1,6 @@
 # FT-1 — Out-of-game column as a tab in narrow clients
 
-**SRD ids:** PLY-36, PLY-8, PLY-16 · **Depends on:** 2.5, 2.7, 2.9 · **Status:** to do
+**SRD ids:** PLY-36, PLY-8, PLY-16 · **Depends on:** 2.5, 2.7, 2.9 · **Status:** done
 
 ## Goal
 

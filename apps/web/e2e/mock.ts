@@ -87,7 +87,15 @@ export async function logIn(page: Page, roleId: string, password: string): Promi
   await page.getByRole('button', { name: 'Log in' }).click()
 }
 
-/** The tabs in the workspace's docked area, in DOM order (WP 2.5). */
-export function roomTabs(page: Page): Locator {
-  return page.locator('.flexlayout__layout_main').getByRole('tab')
+/**
+ * The room tabs in the workspace's docked area, in DOM order (WP 2.5): every tab but the
+ * out-of-game column's, which a narrow client adds (FT-1).
+ */
+export function roomTabs(scope: Page | Locator): Locator {
+  return scope.locator('.flexlayout__layout_main [role="tab"]:not(.wrx-tab-special)')
+}
+
+/** FT-1: the out-of-game column's tab, present while the client is narrow. */
+export function columnTab(scope: Page | Locator): Locator {
+  return scope.getByRole('tab', { name: 'Out of game', exact: true })
 }

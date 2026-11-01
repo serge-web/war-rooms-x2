@@ -8,6 +8,12 @@ export { Workspace } from './workspace.tsx'
 export type { WorkspaceProps } from './workspace.tsx'
 export { WorkspaceCore } from './workspace-core.tsx'
 export type { WorkspaceCoreProps, WorkspacePanel, WorkspaceRoom } from './workspace-core.tsx'
+export { WorkspaceSpecialProvider } from './special.tsx'
+export type {
+  WorkspaceSpecialProviderProps,
+  WorkspaceSpecialSlot,
+  WorkspaceSpecialTab,
+} from './special.tsx'
 export { UnreadBadge } from './tabs.tsx'
 export type { RoomTabBadge, RoomTabBadgeProps, UnreadBadgeProps } from './tabs.tsx'
 export {

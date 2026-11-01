@@ -49,7 +49,8 @@ export async function welcomeLoaded(app: Page | FrameLocator): Promise<void> {
 
 /** The room tabs in the player's workspace, docked area only, in DOM order (WP 2.5). */
 export function roomTabs(app: Page | FrameLocator | Locator): Locator {
-  return app.locator('.flexlayout__layout_main').getByRole('tab')
+  // Not the out-of-game column's tab, which a narrow client adds (FT-1).
+  return app.locator('.flexlayout__layout_main [role="tab"]:not(.wrx-tab-special)')
 }
 
 /** Logs in on the app's welcome page with a demo login (NFR-6). */

@@ -6,7 +6,7 @@ Oct 20, 2026 (revised Oct 24, 2026, see §14) · @Ian Mayo
 
 War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-designed, chat-based wargames with an ejabberd XMPP server as its only backend service. It combines Serge's domain model with War Rooms X's XMPP transport, and fixes the defects both reviews identified.
 
-**Scope (v1).** An admin backend to design and provision one wargame (forces, roles, chat rooms, themes, objectives), and a player client with a themed welcome page, a dockable chat workspace and a fixed out-of-game column. A browser-only mock backend and a 2–4 pane multi-client view support review and demos, and a public GitHub Pages site documents the project and hosts a live demo of every PR (section 13). Other room types, turns and exports are deferred but must not need re-architecture (section 8).
+**Scope (v1).** An admin backend to design and provision one wargame (forces, roles, chat rooms, themes, objectives), and a player client with a themed welcome page, a dockable chat workspace and an out-of-game column (a workspace tab when the client is narrow). A browser-only mock backend and a 2–4 pane multi-client view support review and demos, and a public GitHub Pages site documents the project and hosts a live demo of every PR (section 13). Other room types, turns and exports are deferred but must not need re-architecture (section 8).
 
 **Sources.** Serge v3.0.0 (`serge-web/serge`), War Rooms X (`serge-web/war-rooms-x`), and the technical summary of both.
 
@@ -202,7 +202,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-5 The layout SHALL be saved to browser storage keyed by server, role and game design version, and restored at login.
 - PLY-6 Rooms added or removed while logged in SHALL be reconciled into the current layout via the layout library's public API, without resetting it.
 - PLY-7 Retired: merged into PLY-42.
-- PLY-8 Other non-room panels (game info, online roles) SHOULD be dockable; the out-of-game column (PLY-36) is fixed.
+- PLY-8 Other non-room panels (game info, online roles) SHOULD be dockable; the out-of-game column (PLY-36) is not one of them: it is fixed, and becomes a special tab only when the client is narrow.
 
 **Themes**
 
@@ -228,8 +228,12 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 **Out-of-game column**
 
-- PLY-36 The player screen SHALL have a permanently visible, fixed-width out-of-game column on the right, outside the dockable workspace. Top to bottom: a reserved area for game time and turn (empty in v1, D7), the admin panel, then the force panel (PLY-25).
-- PLY-37 The admin panel SHALL show announcements from the `announcements` PubSub node, readable by every role and with publish restricted to the admin by the server (`publish_model: publishers`). It carries out-of-game announcements (breaks, delays, reminders) and SHALL NOT appear as a workspace tab.
+- PLY-36 The player screen SHALL have a fixed-width out-of-game column on the right, outside the dockable workspace, always visible while the client is at least 45rem wide. Top to bottom: a reserved area for game time and turn (empty in v1, D7), the admin panel, then the force panel (PLY-25). Below that width, measured on the client itself so that each multi-client pane switches on its own width, the column SHALL become a workspace tab instead. The tab:
+  - is styled as special (a bar in the game's primary colour and an icon) and cannot be closed or popped out;
+  - keeps the column's content and state when it switches between column and tab;
+  - is not saved in layouts (PLY-5), and adding or removing it leaves the room tabs where they were;
+  - shows an unread badge for announcements that arrive while it is hidden (PLY-38).
+- PLY-37 The admin panel SHALL show announcements from the `announcements` PubSub node, readable by every role and with publish restricted to the admin by the server (`publish_model: publishers`). It carries out-of-game announcements (breaks, delays, reminders) and SHALL NOT appear as a workspace tab of its own; in a narrow client it is inside the out-of-game tab (PLY-36).
 - PLY-38 Admin messages SHALL be ordered oldest to newest, with newest at the bottom like a chat, and a newly arrived message SHALL be briefly highlighted.
 - PLY-39 Write control SHALL be enforced by the server. Observer read-only uses ejabberd's stored visitor role in moderated rooms (spike S1, ADM-37); no client-only fallback is needed.
 
@@ -375,8 +379,6 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 | Message export and replay | MAM retains everything; export is a query-and-serialise feature |
 | Multiple wargames per server | Entity ids are slugs; a namespace prefix can be added |
 | Per-person accounts within a role | Role = account in v1; resource or nickname could identify individuals later |
-
-**Backlog:** the out-of-game column becomes a specially styled workspace tab when the client is narrow (Dev Plan FT-1; would relax PLY-36's permanently visible column).
 
 **Backlog:** umpire combined view — one merged, filterable timeline of all rooms, each message labelled with its room, with reply into the source room. Needs no new XMPP mechanism; it reads the rooms umpires already join.
 
@@ -678,3 +680,9 @@ Changes from the Phase 2 gate (Oct 25, 2026), confirmed by the product owner:
 - §3 rule 4: White Force observers are read only (security review F5); one with rooms assigned in role entries sees only those rooms, otherwise every room. White Force roles that are not observers write in every room.
 - D21, §3 rule 14, PLY-15, PLY-35, R10: objectives may be edited by the admin and White Force non-observers; White Force observers read them.
 
+
+Changes from Dev Plan FT-1 (Nov 1, 2026), raised by the product owner from the multi-client view:
+
+- PLY-36 relaxed: the out-of-game column is always visible only while the client is at least 45rem wide; below that it is a special workspace tab. PLY-8 and PLY-37 say so, the scope line no longer calls the column fixed, and the §8 backlog line is removed.
+- Why 45rem and not the 400 px first suggested: the column is 18rem wide (13rem in a pane), so at 400 px the workspace would keep under 7rem, and the case the product owner saw (three panes at 125% zoom, each about 500 to 680 CSS px wide, the column taking about 40%) would not switch at all. At 45rem the column takes at most 40% of a client and the workspace keeps about 27rem, one chat room. The width is the client's own, in rem, so zoom and font size count, and each pane switches on its own.
+- Where the tab goes: first in the strip along the bottom of the workspace, next to the game info and online panels (PLY-8), unselected. In a tabset of a narrow pane the tab strip scrolls, and the new tab, badge included, was out of sight behind the overflow button; the bottom strip is as wide as the client and holds short tabs, so the tab and its badge stay in view. Opening it opens the strip's panel, which can be resized, and the tab can be dragged into a tabset like a room.

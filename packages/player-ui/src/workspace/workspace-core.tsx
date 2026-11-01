@@ -6,9 +6,9 @@
 import { Layout, TabNode } from 'flexlayout-react'
 import type { ITabRenderValues, TabSetNode } from 'flexlayout-react'
 import { Button } from '@wrx/ui'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
-import { panelTabId, parseTabId, roomTabId, tabIds } from './ids.ts'
+import { panelTabId, parseTabId, roomTabId, specialTabId, tabIds } from './ids.ts'
 import type { TabIds } from './ids.ts'
 import {
   Model,
@@ -19,8 +19,11 @@ import {
   reconcile,
   restoreLayout,
   serialiseLayout,
+  specialTab,
 } from './model.ts'
 import type { Action, LayoutSpec } from './model.ts'
+import { WorkspaceSpecialContext } from './special.tsx'
+import type { WorkspaceSpecialTab } from './special.tsx'
 import type { LayoutStorage } from './storage.ts'
 import { TabLabel } from './tabs.tsx'
 import type { RoomTabBadge } from './tabs.tsx'
@@ -57,10 +60,16 @@ export interface WorkspaceCoreProps {
   readonly popoutUrl?: string
 }
 
-function specOf(rooms: readonly WorkspaceRoom[], panels: readonly WorkspacePanel[]): LayoutSpec {
+function specOf(
+  rooms: readonly WorkspaceRoom[],
+  panels: readonly WorkspacePanel[],
+  special: WorkspaceSpecialTab | undefined,
+): LayoutSpec {
   return {
     rooms: rooms.map((r) => ({ id: roomTabId(r.id), name: r.name })),
     panels: panels.map((p) => ({ id: panelTabId(p.id), name: p.name })),
+    special:
+      special === undefined ? undefined : { id: specialTabId(special.id), name: special.name },
   }
 }
 
@@ -91,8 +100,11 @@ export function WorkspaceCore({
   const ids = useMemo(() => tabIds(instance), [instance])
   // A stable spec, new only when a tab id or name changes: `rooms` and `panels` are usually new
   // arrays on every render, so their text stands in for them.
-  const specText = JSON.stringify(specOf(rooms, panels))
-  const spec = useMemo(() => specOf(rooms, panels), [specText])
+  // FT-1: the host's special tab, if it offers one.
+  const slot = useContext(WorkspaceSpecialContext)
+  const special = slot?.tab
+  const specText = JSON.stringify(specOf(rooms, panels, special))
+  const spec = useMemo(() => specOf(rooms, panels, special), [specText])
 
   const [model, setModel] = useState(
     () => initialModel(spec, ids, storage, layoutKey) ?? defaultModel(spec, ids),
@@ -119,6 +131,28 @@ export function WorkspaceCore({
   // PLY-6: reconcile the model on screen with the current tabs, before paint.
   useLayoutEffect(() => {
     reconcile(model, spec, ids)
+  }, [model, spec, ids])
+
+  // FT-1: tell the host this workspace can show its special tab, and whether the tab is on
+  // screen. FlexLayout reports a tab's visibility as it positions the tab panels.
+  const claim = slot?.claim
+  useLayoutEffect(() => claim?.(), [claim])
+  const onShownRef = useRef(slot?.onShownChange)
+  onShownRef.current = slot?.onShownChange
+  useLayoutEffect(() => {
+    const node = specialTab(model, spec, ids)
+    if (node === undefined) return undefined
+    const report = (shown: boolean) => {
+      onShownRef.current?.(shown)
+    }
+    report(node.isVisible())
+    node.setEventListener('visibility', (params: { readonly visible?: unknown }) => {
+      report(params.visible === true)
+    })
+    return () => {
+      node.removeEventListener('visibility')
+      report(false)
+    }
   }, [model, spec, ids])
 
   // Save after every change, and dock a closed popout's tabs back (CLOSE_POPOUT leaves them in
@@ -154,6 +188,7 @@ export function WorkspaceCore({
     const ref = logical === undefined ? undefined : parseTabId(logical)
     if (ref?.kind === 'room') return renderRoom(ref.roomId)
     if (ref?.kind === 'panel') return panels.find((p) => p.id === ref.panelId)?.content ?? null
+    if (ref?.kind === 'special' && ref.specialId === special?.id) return special.content
     return null
   }
 
@@ -161,7 +196,16 @@ export function WorkspaceCore({
   const onRenderTab = (node: TabNode, values: ITabRenderValues) => {
     const logical = ids.toLogical(node.getId())
     if (logical === undefined) return
-    values.content = <TabLabel tabId={logical} name={node.getName()} badge={tabBadge} />
+    const own = parseTabId(logical)?.kind === 'special' ? special : undefined
+    values.content = (
+      <TabLabel
+        tabId={logical}
+        name={node.getName()}
+        badge={tabBadge}
+        icon={own?.icon}
+        after={own?.badge}
+      />
+    )
   }
 
   const onTabSetPlaceHolder = (_node: TabSetNode): ReactNode => (

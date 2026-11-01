@@ -3,7 +3,7 @@
 // to its own data, so an unread count change re-renders one badge and never the layout. The
 // label's `data-wrx-tab` attribute is how the workspace finds a tab button again (focus after a
 // keyboard move) without depending on the library's DOM ids.
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import { parseTabId } from './ids.ts'
 
 export interface RoomTabBadgeProps {
@@ -37,14 +37,23 @@ export interface TabLabelProps {
   readonly tabId: string
   readonly name: string
   readonly badge?: RoomTabBadge | undefined
+  /** A special tab's icon and badge (FT-1). */
+  readonly icon?: ReactNode
+  readonly after?: ReactNode
 }
 
-export function TabLabel({ tabId, name, badge: Badge }: TabLabelProps) {
+export function TabLabel({ tabId, name, badge: Badge, icon, after }: TabLabelProps) {
   const ref = parseTabId(tabId)
   return (
     <span className="wrx-tab" data-wrx-tab={tabId}>
+      {icon === undefined || icon === null ? null : (
+        <span className="wrx-tab__icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
       <span className="wrx-tab__name">{name}</span>
       {ref?.kind === 'room' && Badge !== undefined ? <Badge roomId={ref.roomId} /> : null}
+      {after}
     </span>
   )
 }

@@ -6,10 +6,10 @@
 import { readFileSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
-import { logIn } from './mock.ts'
+import { columnTab, logIn, roomTabs } from './mock.ts'
 
 const pane = (page: Page, n: number) => page.getByRole('region', { name: `Pane ${n}`, exact: true })
-const tabsIn = (scope: Locator) => scope.locator('.flexlayout__layout_main').getByRole('tab')
+const tabsIn = (scope: Locator) => roomTabs(scope)
 const forcePanel = (scope: Locator | Page) => scope.getByRole('region', { name: 'Force panel' })
 const mockStatus = (page: Page) =>
   page.getByRole('group', { name: 'Mock database' }).getByRole('status')
@@ -24,7 +24,21 @@ async function quickLogIn(scope: Locator, label: string): Promise<void> {
   await scope.getByRole('button', { name: `Log in as ${label}`, exact: true }).click()
 }
 
+/**
+ * A pane's force panel. Three panes side by side are narrow, so each pane's out-of-game column is
+ * a workspace tab, in the strip along the bottom, opened here first (FT-1).
+ */
+async function paneForce(scope: Locator): Promise<Locator> {
+  // The tab opens the strip's panel, and a second click would close it again.
+  await expect(columnTab(scope)).toBeVisible()
+  const open = scope.getByRole('region', { name: 'Out of game', exact: true })
+  if (!(await open.isVisible())) await columnTab(scope).click()
+  await expect(open).toBeVisible()
+  return forcePanel(scope)
+}
+
 async function editObjectives(page: Page, scope: Locator, force: string, text: string) {
+  await paneForce(scope)
   await forcePanel(scope).getByLabel('Show objectives for').selectOption({ label: force })
   await forcePanel(scope)
     .getByRole('button', { name: `Edit ${force} objectives` })
@@ -74,8 +88,8 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
 
   // The umpire's change (the admin login, SC-5) reaches Red's pane live.
   await editObjectives(page, pane(page, 3), 'Red', '1. Delay Blue until noon.')
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue until noon.')
-  await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue until noon.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Secure the crossing.')
 
   // A message Blue sends in the shared room arrives in Red's and the umpire's panes (SC-7).
   const talks = 'Blue–Red negotiation'
@@ -98,7 +112,7 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
   await expect(second.getByLabel('Logged in as Blue Observer, Blue')).toBeVisible()
   await editObjectives(page, pane(page, 3), 'Blue', '1. Hold the crossing.')
   await expect(forcePanel(second)).toContainText('Hold the crossing.')
-  await expect(forcePanel(pane(page, 1))).toContainText('Hold the crossing.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Hold the crossing.')
 
   // After the demo: reset to the seed. Every pane and tab reconnects to it (PLY-21, PLY-2).
   await page.getByRole('button', { name: 'Reset to seed…' }).click()
@@ -107,8 +121,8 @@ test('SC-7: three panes and a second window share one offline mock (PLY-16–18,
     .getByRole('button', { name: 'Reset' })
     .click()
   await expect(mockStatus(page).filter({ hasText: 'back at its seed' })).toBeVisible()
-  await expect(forcePanel(pane(page, 1))).toContainText('Secure the crossing.')
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue.')
+  await expect(await paneForce(pane(page, 1))).toContainText('Secure the crossing.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue.')
   await expect(forcePanel(second)).toContainText('Secure the crossing.')
 })
 
@@ -183,7 +197,7 @@ test('export the mock database with its history, and import it back (PLY-21, PLY
   await quickLogIn(pane(page, 1), 'Umpire (White, admin)')
   await editObjectives(page, pane(page, 1), 'Red', '1. Something new.')
   await quickLogIn(pane(page, 2), 'Red CO (Red)')
-  await expect(forcePanel(pane(page, 2))).toContainText('Something new.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Something new.')
 
   await page.getByLabel('Mock database file to import').setInputFiles(file)
   await page
@@ -191,8 +205,8 @@ test('export the mock database with its history, and import it back (PLY-21, PLY
     .getByRole('button', { name: 'Import' })
     .click()
   await expect(mockStatus(page).filter({ hasText: 'Imported.' })).toBeVisible()
-  await expect(forcePanel(pane(page, 2))).toContainText('Delay Blue.')
-  await expect(forcePanel(pane(page, 2))).not.toContainText('Something new.')
+  await expect(await paneForce(pane(page, 2))).toContainText('Delay Blue.')
+  await expect(await paneForce(pane(page, 2))).not.toContainText('Something new.')
 
   // A file that is not a mock database changes nothing and says why.
   await page.getByLabel('Mock database file to import').setInputFiles({
