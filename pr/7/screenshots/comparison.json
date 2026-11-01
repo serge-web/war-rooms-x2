@@ -90,5 +90,13 @@
   {
     "name": "player-workspace",
     "status": "changed"
+  },
+  {
+    "name": "template-card",
+    "status": "new"
+  },
+  {
+    "name": "template-composer",
+    "status": "new"
   }
 ]
