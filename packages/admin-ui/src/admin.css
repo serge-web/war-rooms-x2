@@ -3,6 +3,11 @@
  * (ui-stack.md), with neutral fallbacks until WP 2.8's packages/theme sets them.
  */
 
+/* Listens for activity for the vault's idle lock (F12); adds no box. */
+.wrx-admin-activity {
+  display: contents;
+}
+
 .wrx-admin {
   --wrx-admin-gap: 1rem;
   font-family: var(--wrx-font-family, system-ui, sans-serif);

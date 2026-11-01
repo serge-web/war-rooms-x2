@@ -41,6 +41,7 @@ async function freshEnvelope(): Promise<string | undefined> {
   } as unknown as AdminApi
   const created = await ObserverVault.create(admin, DEMO_VAULT_PASSPHRASE, {
     iterations: VAULT_KDF.minIterations,
+    demo: true,
   })
   if (!created.ok) return undefined
   for (const roleId of readOnly) await created.value.set(roleId, demoRolePassword(roleId))

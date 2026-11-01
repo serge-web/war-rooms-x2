@@ -17,7 +17,15 @@ export type {
   RoomSpec,
   ServerSnapshot,
 } from './ops.ts'
-export { MIN_PASSPHRASE_CHARS, ObserverVault, VAULT_KDF, VAULT_STORAGE_KEY } from './vault.ts'
+export {
+  MIN_PASSPHRASE_BITS,
+  MIN_PASSPHRASE_CHARS,
+  ObserverVault,
+  VAULT_KDF,
+  VAULT_STORAGE_KEY,
+  passphraseBits,
+  passphraseProblem,
+} from './vault.ts'
 export type { VaultOptions } from './vault.ts'
 // WP 2.3: publish planning and execution over these primitives.
 export * from './publish/index.ts'

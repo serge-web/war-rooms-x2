@@ -231,14 +231,21 @@ function VaultStatus({
   }
   if (snapshot.vault === 'locked') {
     return (
-      <VaultDialog
-        mode="unlock"
-        busy={busy}
-        onSubmit={onUnlockVault}
-        {...(connection?.demoVaultPassphrase === undefined
-          ? {}
-          : { demoPassphrase: connection.demoVaultPassphrase })}
-      />
+      <>
+        {snapshot.vaultIdleLocked === true && (
+          <span className="wrx-publish-vault" role="status">
+            The vault locked itself after a time without activity.
+          </span>
+        )}
+        <VaultDialog
+          mode="unlock"
+          busy={busy}
+          onSubmit={onUnlockVault}
+          {...(connection?.demoVaultPassphrase === undefined
+            ? {}
+            : { demoPassphrase: connection.demoVaultPassphrase })}
+        />
+      </>
     )
   }
   if (snapshot.vault === 'none' && need === 'create') {

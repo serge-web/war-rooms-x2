@@ -137,7 +137,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
       passwords.set(roleId, generated)
       return generated
     }
-    const passphrase = `vault passphrase ${run}`
+    const passphrase = `scenario ${run} keeps the read-only passwords`
     const opened: Session[] = []
     const progress: ProgressEvent[] = []
     let admin: Session | undefined
