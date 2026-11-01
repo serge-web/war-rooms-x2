@@ -165,6 +165,36 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       expect(report.items.find((i) => i.kind === 'node-names-public')?.severity).toBe('info')
     })
 
+    it('1b. a design that renames or reuses a published login name is refused, not audited (ADM-5, V2)', async () => {
+      const renamed = {
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'blue-co' ? { ...r, loginName: 'blue-commander' } : r,
+        ),
+      }
+      const run = await runAudit(theOps(), renamed, auditOptions())
+      expect(run.ok).toBe(false)
+      if (!run.ok) expect(run.error).toMatchObject({ code: 'invalid', target: tid('blue-co') })
+      // Blue CO's login name on a role of another GUID (a fresh or converted draft).
+      const reused = {
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'blue-co' ? { ...r, id: tid('blue-co-again') } : r,
+        ),
+        rooms: design.rooms.map((room) => ({
+          ...room,
+          participants: room.participants.map((p) =>
+            p.id === tid('blue-co') ? { ...p, id: tid('blue-co-again') } : p,
+          ),
+        })),
+      }
+      const again = await runAudit(theOps(), reused, auditOptions())
+      expect(again.ok).toBe(false)
+      if (!again.ok) expect(again.error.message).toMatch(/belongs to the published role Blue CO/)
+      // Nothing changed: the design itself still audits clean.
+      expect(describeFindings(await audit())).toEqual([])
+    })
+
     describe('2. drift, injected with ordinary admin and moderator operations', () => {
       beforeAll(async () => {
         const session = theOps().session

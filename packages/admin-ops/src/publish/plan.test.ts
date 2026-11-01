@@ -823,7 +823,11 @@ describe('a published role’s login name is fixed (ADM-5, WP 3.4)', () => {
             : r,
       ),
     }))
-    expect(planPublish(design, published).errors.map((e) => [e.from, e.to])).toEqual([
+    expect(
+      planPublish(design, published).errors.map((e) =>
+        e.kind === 'login-name-changed' ? [e.from, e.to] : [],
+      ),
+    ).toEqual([
       ['blue-co', 'blue-1'],
       ['red-co', 'red-1'],
     ])
@@ -852,5 +856,76 @@ describe('a published role’s login name is fixed (ADM-5, WP 3.4)', () => {
 
   it('an unpublished role’s login name may still change', () => {
     expect(planPublish(renamed('blue-commander'), emptyView()).errors).toEqual([])
+  })
+})
+
+describe('a published or deleted role’s login name is not reused (§3 rule 1, review V3)', () => {
+  const published = publishedView(sampleDesignWithWhiteCell())
+  /** Blue CO under a new GUID: a fresh draft, or a v1 file converted again. */
+  const reissued = () =>
+    edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) =>
+        r.loginName === 'blue-co' ? { ...r, id: tid('blue-co-again') } : r,
+      ),
+      rooms: d.rooms.map((room) => ({
+        ...room,
+        participants: room.participants.map((p) =>
+          p.id === tid('blue-co') ? { ...p, id: tid('blue-co-again') } : p,
+        ),
+      })),
+    }))
+
+  it('refuses a published role’s login name on a role of another GUID', () => {
+    const plan = planPublish(reissued(), published)
+    expect(plan.steps).toEqual([])
+    expect(plan.errors).toEqual([
+      expect.objectContaining({
+        kind: 'login-name-reused',
+        roleId: tid('blue-co-again'),
+        loginName: 'blue-co',
+        holderId: tid('blue-co'),
+      }),
+    ])
+    expect(plan.errors[0]?.message).toMatch(/belongs to the published role Blue CO/)
+  })
+
+  it('refuses a deleted role’s login name, from the server’s records', () => {
+    const base = sampleDesignWithWhiteCell()
+    const withRecord = withNode(published, 'retired', (n) => ({
+      ...n,
+      items: [
+        {
+          id: tid('old-co'),
+          publisher: undefined,
+          payload: JSON.stringify({
+            schemaVersion: 1,
+            id: tid('old-co'),
+            kind: 'role',
+            name: 'Old CO',
+            loginName: 'old-co',
+            deletedAt: '2026-11-01T10:00:00.000Z',
+          }),
+        },
+      ],
+    }))
+    const design = {
+      ...base,
+      roles: [
+        ...base.roles,
+        {
+          schemaVersion: 1 as const,
+          id: tid('new-co'),
+          loginName: 'old-co',
+          name: 'New CO',
+          forceId: tid('blue'),
+          isObserver: false,
+          order: 5,
+        },
+      ],
+    }
+    expect(planPublish(design, withRecord).errors).toEqual([
+      expect.objectContaining({ kind: 'login-name-reused', loginName: 'old-co' }),
+    ])
   })
 })
