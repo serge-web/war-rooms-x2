@@ -14,3 +14,12 @@ export { DEFAULT_SEED_DOMAIN, demoPassword, stateFromDesign } from './seed.ts'
 export type { DesignSeed, SeedMessage } from './seed.ts'
 export { DEMO_VAULT_PASSPHRASE, demoSeed, demoState } from './demo.ts'
 export type * from './protocol.ts'
+export {
+  SCALE_BUSY_ROOM,
+  SCALE_BUSY_ROOM_NAME,
+  SCALE_PLAYER,
+  scaleDesign,
+  scaleHistory,
+  scaleState,
+} from './scale.ts'
+export type { ScaleOptions } from './scale.ts'
