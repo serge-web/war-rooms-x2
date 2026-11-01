@@ -15,6 +15,7 @@ import type { ServerView } from './view.ts'
 import {
   isDestructiveAction,
   needsConfirmation,
+  planConfirmations,
   planErrorTarget,
   planPublish,
   planReset,
@@ -1040,7 +1041,7 @@ describe('message templates (Annex A, WP 4.1)', () => {
     expect(planErrorTarget(plan.errors[0]!)).toBe(TEMPLATE.contact)
   })
 
-  it('refuses a design that drops a locked template', () => {
+  it('removes a locked template the design drops only with a confirmation, saying what it costs', () => {
     const design = templated()
     const view = publishedView(design)
     const dropped = {
@@ -1048,9 +1049,22 @@ describe('message templates (Annex A, WP 4.1)', () => {
       rooms: design.rooms.filter((r) => r.id !== ROOM.blueReports),
       templates: design.templates.filter((t) => t.id !== TEMPLATE.support),
     }
-    expect(planPublish(dropped, view).errors).toEqual([
-      expect.objectContaining({ kind: 'template-locked-removed', templateId: TEMPLATE.support }),
+    const removing = planPublish(dropped, view)
+    expect(removing.errors).toEqual([])
+    const warning = removing.warnings.find((w) => w.kind === 'template-removed')
+    expect(warning).toEqual({
+      kind: 'template-removed',
+      templateId: TEMPLATE.support,
+      name: 'Support request',
+      locked: true,
+    })
+    expect(needsConfirmation(warning!)).toBe(true)
+    const retract = step(removing, `retract:${TEMPLATES}:${TEMPLATE.support}`)
+    expect(retract.details).toEqual([
+      'It is locked: messages that used it show as plain text from now on (TPL-6)',
     ])
+    expect(stepConfirmation(retract.action)).toBe(`template:${TEMPLATE.support}`)
+    expect(planConfirmations(removing)).toContain(`template:${TEMPLATE.support}`)
     // Taking it out of every room instead is fine: it stays, locked.
     const kept = { ...design, rooms: design.rooms.filter((r) => r.id !== ROOM.blueReports) }
     const plan = planPublish(kept, view)
@@ -1081,7 +1095,8 @@ describe('message templates (Annex A, WP 4.1)', () => {
       action: { type: 'retract-item', node: TEMPLATES, itemId: TEMPLATE.support },
     })
     expect(isDestructiveAction(retract.action)).toBe(true)
-    expect(stepConfirmation(retract.action)).toBeUndefined()
+    expect(stepConfirmation(retract.action)).toBe(`template:${TEMPLATE.support}`)
+    expect(retract.details).toEqual(['No published room has offered it, so no message uses it'])
   })
 
   it('removes a stray or unreadable item on `templates`', () => {

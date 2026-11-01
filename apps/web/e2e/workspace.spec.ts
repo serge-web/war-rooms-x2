@@ -4,7 +4,7 @@
 // drive the page as a user would; nothing reaches into the layout library.
 import { expect, test } from '@playwright/test'
 import { nodeName } from '@wrx/schemas'
-import { ASSET, FORCE, tid } from '@wrx/schemas/fixtures'
+import { ASSET, FORCE, ROOM, tid } from '@wrx/schemas/fixtures'
 import type { Page } from '@playwright/test'
 import { columns, drag } from './layout.ts'
 import { asMockAdmin, logIn } from './mock.ts'
@@ -27,6 +27,9 @@ async function asUmpire(page: Page): Promise<string[]> {
   })
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
+  // These checks are about the three-room layout of v1's demo: the templated room (Annex A) is
+  // taken out first.
+  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(ROOM.blueReports) }])
   await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   return errors

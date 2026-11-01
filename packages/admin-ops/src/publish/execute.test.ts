@@ -101,12 +101,18 @@ describe('executePlan', () => {
     action: { type: 'retract-item', node: 'templates', itemId: 't1' },
   }
 
-  it('retracts a template without a confirmation, then checks it is gone (Annex A)', async () => {
+  it('retracts a template only once confirmed, then checks it is gone (Annex A)', async () => {
     const { admin, ops: adminOps, log } = await rig()
     admin.stub('pubsub', 'getItems', () => Promise.resolve(ok([])))
-    const result = await executePlan(adminOps, planOf([retract]), {
+    const unconfirmed = await executePlan(adminOps, planOf([retract]), {
       passwordFor: () => 'pw',
       confirmed: new Set(),
+    })
+    expect(unconfirmed.failed?.error.code).toBe('not-confirmed')
+    expect(log).toEqual([])
+    const result = await executePlan(adminOps, planOf([retract]), {
+      passwordFor: () => 'pw',
+      confirmed: new Set(['template:t1']),
     })
     expect(result.ok).toBe(true)
     expect(ops(log)).toEqual(['admin.pubsub.retract'])
@@ -119,7 +125,7 @@ describe('executePlan', () => {
     )
     const result = await executePlan(adminOps, planOf([retract]), {
       passwordFor: () => 'pw',
-      confirmed: new Set(),
+      confirmed: new Set(['template:t1']),
     })
     expect(result).toMatchObject({ ok: false, failed: { error: { code: 'verify-failed' } } })
   })
@@ -132,7 +138,7 @@ describe('executePlan', () => {
     }
     const result = await executePlan(adminOps, planOf([below]), {
       passwordFor: () => 'pw',
-      confirmed: new Set(),
+      confirmed: new Set(['template:t1']),
     })
     expect(result.ok).toBe(false)
   })

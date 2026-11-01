@@ -27,7 +27,7 @@ test('welcome page, login as blue-co with its demo password, rooms, logout (PLY-
   await logIn(page, 'blue-co', 'demo-blue-co')
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await expect(page.getByLabel('Backend: MOCK')).toBeVisible()
-  await expect(rooms(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
+  await expect(rooms(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(page.getByRole('complementary', { name: 'Out-of-game column' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Log out' }).click()
@@ -76,7 +76,7 @@ for (const { name, op, title } of FORCED) {
   test(`forced logout with an explanation when ${name}`, async ({ page }) => {
     await page.goto('./')
     await logIn(page, 'blue-co', 'demo-blue-co')
-    await expect(rooms(page)).toHaveCount(2)
+    await expect(rooms(page)).toHaveCount(3)
     await asMockAdmin(page, [op])
     const notice = page.getByRole('alert').filter({ hasText: title })
     await expect(notice).toBeVisible()
@@ -107,6 +107,7 @@ test('a role with no rooms sees an empty state (PLY-32)', async ({ page }) => {
   await asMockAdmin(page, [
     { op: 'delete-node', node: nodeName.room(ROOM.blueHq) },
     { op: 'delete-node', node: nodeName.room(ROOM.negotiation) },
+    { op: 'delete-node', node: nodeName.room(ROOM.blueReports) },
   ])
   await logIn(page, 'blue-co', 'demo-blue-co')
   await expect(page.getByText('Your role has no rooms yet.')).toBeVisible()

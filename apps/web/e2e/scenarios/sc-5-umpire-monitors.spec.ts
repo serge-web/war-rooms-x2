@@ -40,12 +40,13 @@ test('SC-5: the admin, as umpire, sees every room, watches two side by side, pos
     'Blue HQ',
     RED_HQ,
     TALKS,
+    'Blue Reports',
   ])
   await expect(forcePanel(umpire).getByRole('heading', { name: 'Umpire' })).toBeVisible()
 
   // 2. Red HQ and the negotiation side by side: Blue HQ goes behind the negotiation's tab.
   await drag(umpire, tab(umpire, 'Blue HQ'), panel(umpire, TALKS))
-  await expect.poll(() => columns(umpire)).toEqual([[RED_HQ], [TALKS, 'Blue HQ']])
+  await expect.poll(() => columns(umpire)).toEqual([[RED_HQ], [TALKS, 'Blue HQ'], ['Blue Reports']])
   await tab(umpire, TALKS).click()
   const left = await panel(umpire, RED_HQ).boundingBox()
   const right = await panel(umpire, TALKS).boundingBox()

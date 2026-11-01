@@ -43,7 +43,7 @@ test('SC-8: two people logged in as Blue CO both get every message, and each pos
   // 1. The same rooms in both, and every message reaches both.
   for (const page of [first, second]) {
     await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
-    await expect(tabs(page)).toHaveText(['Blue HQ', TALKS])
+    await expect(tabs(page)).toHaveText(['Blue HQ', TALKS, 'Blue Reports'])
   }
   await post(red, TALKS, 'Red asks: who speaks for Blue?')
   await post(first, 'Blue HQ', 'First Blue CO: I will take the talks.')

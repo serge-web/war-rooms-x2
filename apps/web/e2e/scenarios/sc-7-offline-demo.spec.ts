@@ -56,9 +56,18 @@ test('SC-7: a stakeholder demo on the mock, offline: three panes and a second wi
   )
   for (const n of [1, 2, 3]) await expect(pane(page, n).getByLabel('Backend: MOCK')).toBeVisible()
   // Each pane its own session, rooms and layout (PLY-17).
-  await expect(tabsIn(pane(page, 1))).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
+  await expect(tabsIn(pane(page, 1))).toHaveText([
+    'Blue HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   await expect(tabsIn(pane(page, 2))).toHaveText(['Red HQ', 'Blue–Red negotiation'])
-  await expect(tabsIn(pane(page, 3))).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(tabsIn(pane(page, 3))).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
 
   // The umpire's change (the admin login, SC-5) reaches Red's pane live.
   await editObjectives(page, pane(page, 3), 'Red', '1. Delay Blue until noon.')

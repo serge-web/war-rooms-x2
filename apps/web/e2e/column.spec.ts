@@ -56,7 +56,12 @@ test('a White Force observer sees every room read only and reads, but cannot edi
   page,
 }) => {
   await player(page, 'white-observer')
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   await expect(page.getByText(/You are observing this game/).first()).toBeVisible()
   await forcePanel(page).getByLabel('Show objectives for').selectOption({ label: 'Blue' })
   await expect(forcePanel(page).getByRole('region', { name: 'Blue objectives' })).toContainText(
@@ -139,7 +144,12 @@ test('the umpire posts in every room; a White observer reads every room and post
 }) => {
   await player(page, 'admin')
   // Every room...
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   // ...and the server, which enforces it (PLY-39), lets the umpire post in each, makes the White
   // observer a visitor in each, and keeps Blue out of Red HQ.
   const posted = await page.evaluate(

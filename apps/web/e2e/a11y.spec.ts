@@ -46,13 +46,13 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
     await logIn(page, 'blue-co', 'demo-blue-co')
-    await expect(roomTabs(page)).toHaveCount(2)
+    await expect(roomTabs(page)).toHaveCount(3)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as Blue CO')
 
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(3)
+    await expect(roomTabs(page)).toHaveCount(4)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the umpire')
 
@@ -66,7 +66,7 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     // A read-only role: the composer is disabled with its reason.
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'white-observer', 'demo-white-observer')
-    await expect(roomTabs(page)).toHaveCount(3)
+    await expect(roomTabs(page)).toHaveCount(4)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the White observer')
   })
@@ -172,7 +172,7 @@ test.describe('keyboard only', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(3)
+    await expect(roomTabs(page)).toHaveCount(4)
     await settled(page)
     // From the first control on the page, in the header.
     await page.getByRole('banner').first().locator('a, button, input, select').first().focus()
@@ -205,7 +205,7 @@ test.describe('keyboard only', () => {
     expect(await focusIsVisible(page)).toBeUndefined()
     await page.keyboard.type('demo-blue-co')
     await page.keyboard.press('Enter')
-    await expect(roomTabs(page)).toHaveCount(2)
+    await expect(roomTabs(page)).toHaveCount(3)
 
     // Room tabs: reachable by Tab, switched with the arrow keys and Enter (the tablist pattern).
     const blue = page.getByRole('tab', { name: 'Blue HQ', exact: true })

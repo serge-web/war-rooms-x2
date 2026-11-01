@@ -56,13 +56,13 @@ test('two panes of one role are independent; four panes make a grid (PLY-16, PLY
 
   await quickLogIn(pane(page, 1), 'Blue CO (Blue)')
   await quickLogIn(pane(page, 2), 'Blue CO (Blue)')
-  await expect(tabsIn(pane(page, 1))).toHaveCount(2)
-  await expect(tabsIn(pane(page, 2))).toHaveCount(2)
+  await expect(tabsIn(pane(page, 1))).toHaveCount(3)
+  await expect(tabsIn(pane(page, 2))).toHaveCount(3)
   // Logging one out leaves the other signed in (D22: one resource per pane).
   await pane(page, 1).getByRole('button', { name: 'Log out' }).click()
   await expect(pane(page, 1).getByText('Not logged in')).toBeVisible()
   await expect(pane(page, 2).getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
-  await expect(tabsIn(pane(page, 2))).toHaveCount(2)
+  await expect(tabsIn(pane(page, 2))).toHaveCount(3)
 
   // A pane can show the admin backend instead.
   await pane(page, 4).getByRole('button', { name: 'Show the admin backend in this pane' }).click()
@@ -118,7 +118,7 @@ test('the admin previews the game as a role, and back (ADM-30, ADM-31)', async (
   await page.goto('./')
   await logIn(page, 'admin', 'demo-admin')
   const tabs = page.locator('.flexlayout__layout_main').getByRole('tab')
-  await expect(tabs).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(tabs).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(page.getByRole('textbox', { name: 'New announcement' })).toBeVisible()
 
   await page.getByLabel('View as').selectOption({ label: 'Red CO (Red)' })
@@ -135,6 +135,6 @@ test('the admin previews the game as a role, and back (ADM-30, ADM-31)', async (
   await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
 
   await page.getByLabel('View as').selectOption({ label: 'Umpire (you)' })
-  await expect(tabs).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(tabs).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(notice).toHaveCount(0)
 })

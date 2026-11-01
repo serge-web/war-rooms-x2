@@ -189,7 +189,9 @@ export function MessageListCore({
       ) : null}
       <div
         ref={innerRef}
-        role="feed"
+        // A feed must hold articles (ARIA `aria-required-children`): an empty room has none,
+        // so the role is set only once there is a message.
+        role={rows.length > 0 ? 'feed' : undefined}
         aria-busy={loadingOlder || loading}
         className="wrx-chat__feed"
         style={{ height: virtualizer.getTotalSize() }}

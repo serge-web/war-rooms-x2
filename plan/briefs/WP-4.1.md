@@ -1,6 +1,6 @@
 # WP 4.1 — Template model (Annex A, A1)
 
-**SRD ids:** TD1, TD2, TD6, TPL-1, TPL-2, TPL-4, TPL-6 (validator), TPL-8, TPL-9, T-R1, T-R2 · **Depends on:** Phase 3 (G3) · **Blocks:** 4.2, 4.3 · **Status:** active · **Security review required**
+**SRD ids:** TD1, TD2, TD6, TPL-1, TPL-2, TPL-4, TPL-6 (validator), TPL-8, TPL-9, T-R1, T-R2 · **Depends on:** Phase 3 (G3) · **Blocks:** 4.2, 4.3 · **Status:** done · **Security review required**
 
 ## Goal
 

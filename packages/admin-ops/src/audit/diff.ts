@@ -770,8 +770,8 @@ function nodeAccessItems(
 function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): void {
   const action = step.action
   if (action.type === 'retract-item') {
-    // A template the design does not have (Annex A); never a locked one, which the audit
-    // refuses to compare against (TD6).
+    // A template the design does not have (Annex A). Removing it is destructive and confirmed:
+    // if it is locked, the messages that used it show as plain text afterwards.
     out.add({
       id: `stray-items:${action.node}:${action.itemId}`,
       kind: 'stray-items',
@@ -780,7 +780,7 @@ function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): v
       found: `${step.summary.replace(/^Remove the template /, 'the template ')}, which the design does not have`,
       severity: 'low',
       repair: [action],
-      note: 'No published room has offered it, so no message uses it. Repair removes it.',
+      note: `${step.details.join(' ')}. Repair removes it.`,
     })
     return
   }

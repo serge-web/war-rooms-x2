@@ -149,6 +149,17 @@ export type PlanWarning =
    * password is not changed; reset it from the credentials sheet if its players need one (F3).
    */
   | { readonly kind: 'account-exists'; readonly roleId: string; readonly name: string }
+  /**
+   * A template the design no longer has is removed from the server (Annex A). If it is locked
+   * (a published room offered it), messages that used it show as plain text with a warning from
+   * then on (TPL-6); the admin confirms each removal.
+   */
+  | {
+      readonly kind: 'template-removed'
+      readonly templateId: string
+      readonly name: string
+      readonly locked: boolean
+    }
 
 /**
  * Why the design cannot be published as it is. A plan with errors has no steps, and the executor
@@ -184,11 +195,9 @@ export type PlanError =
   /**
    * `template-locked-changed` (TD6, TPL-4): the design changes the schema of a template the
    * server holds locked, which messages may already use. Copy it to a new template instead.
-   * `template-locked-removed`: the design drops a locked template, whose messages would then
-   * show as plain text. Keep it (take it out of the rooms instead), or reset the game.
    */
   | {
-      readonly kind: 'template-locked-changed' | 'template-locked-removed'
+      readonly kind: 'template-locked-changed'
       /** The template's GUID. */
       readonly templateId: string
       readonly name: string
@@ -252,7 +261,8 @@ export function needsConfirmation(warning: PlanWarning): boolean {
   return (
     warning.kind === 'role-deleted' ||
     warning.kind === 'room-destroyed' ||
-    warning.kind === 'password-reset'
+    warning.kind === 'password-reset' ||
+    warning.kind === 'template-removed'
   )
 }
 
@@ -268,6 +278,8 @@ export function confirmationKey(warning: PlanWarning): string | undefined {
       return `room:${warning.roomId}`
     case 'password-reset':
       return `password:${warning.roleId}`
+    case 'template-removed':
+      return `template:${warning.templateId}`
     default:
       return undefined
   }
@@ -283,11 +295,13 @@ export function planConfirmations(plan: Pick<PublishPlan, 'warnings'>): Set<stri
 
 /**
  * The confirmation a step needs before the executor runs it, worked out from its action alone,
- * never from a flag the step carries (security review F9): deleting a role, destroying a room
- * and resetting a password.
+ * never from a flag the step carries (security review F9): deleting a role, destroying a room,
+ * resetting a password and removing a template.
  */
 export function stepConfirmation(action: StepAction): string | undefined {
   switch (action.type) {
+    case 'retract-item':
+      return `template:${action.itemId}`
     case 'delete-role':
       return `role:${action.roleId}`
     case 'destroy-room':
@@ -304,11 +318,7 @@ export function stepConfirmation(action: StepAction): string | undefined {
  * or replaces a password. Worked out from the action type, for the audit's repairs (F9).
  */
 export function isDestructiveAction(action: StepAction): boolean {
-  return (
-    stepConfirmation(action) !== undefined ||
-    action.type === 'delete-node' ||
-    action.type === 'retract-item'
-  )
+  return stepConfirmation(action) !== undefined || action.type === 'delete-node'
 }
 
 export type VaultNeed =
@@ -408,8 +418,9 @@ export function publishedDesign(view: ServerView): PublishedDesign {
 
 /**
  * Template changes the design may not make (TD6, TPL-4, provisional answer 2): a template the
- * server holds locked keeps its schema, and stays in the design. Locks come from the server,
- * since a lock set by another browser's publish is not in this draft.
+ * server holds locked keeps its schema. Locks come from the server, since a lock set by another
+ * browser's publish is not in this draft. Removing a locked template is allowed, confirmed one
+ * by one like a destroyed room (`template-removed`).
  */
 export function templateLockErrors(
   design: Pick<DesignFile, 'templates'>,
@@ -419,14 +430,8 @@ export function templateLockErrors(
   for (const before of published.templates) {
     if (before.lockedAt === undefined) continue
     const now = design.templates.find((t) => t.id === before.id)
-    if (now === undefined) {
-      errors.push({
-        kind: 'template-locked-removed',
-        templateId: before.id,
-        name: before.name,
-        message: `The template ${before.name} is locked: a published room has offered it, so messages may use it, and the design removes it. Keep it, and take it out of the rooms instead, so old messages still show as cards (TD6); or reset the game.`,
-      })
-    } else if (canonicalJson(now.schema) !== canonicalJson(before.schema)) {
+    // Dropping it is not refused: it is a confirmed removal (`template-removed`).
+    if (now !== undefined && canonicalJson(now.schema) !== canonicalJson(before.schema)) {
       errors.push({
         kind: 'template-locked-changed',
         templateId: before.id,
@@ -969,14 +974,18 @@ export function planPublish(
   const uncounted: string[] = []
   const targetRoomIds = new Set(target.rooms.map((r) => r.roomId))
   const targetNodes = new Set(target.nodes.map((n) => n.node))
-  // Templates the design no longer has: never locked ones, which `templateLockErrors` refused.
-  // After the rooms' documents, which no longer offer them.
+  // Templates the design no longer has, each confirmed (a locked one's messages then show as
+  // plain text). After the rooms' documents, which no longer offer them.
   const templateNode = target.nodes.find((n) => n.node === SINGLETON_NODES.templates)
   if (templateNode !== undefined) {
     const wanted = new Set(templateNode.documents.map((d) => d.itemId))
     for (const item of serverNodes.get(SINGLETON_NODES.templates)?.items ?? []) {
       if (wanted.has(item.id)) continue
-      removals.push(retractStep(SINGLETON_NODES.templates, item.id, templateName(published, item)))
+      const before = published.templates.find((t) => t.id === item.id)
+      const name = before?.name ?? item.id
+      const locked = before?.lockedAt !== undefined
+      removals.push(retractStep(SINGLETON_NODES.templates, item.id, name, locked))
+      warnings.push({ kind: 'template-removed', templateId: item.id, name, locked })
     }
   }
   for (const roleId of [...known].filter((id) => !targetRoles.has(id)).sort()) {
@@ -1093,11 +1102,6 @@ export function planPublish(
   }
 }
 
-/** A template item's name, from the server's document, else its id. */
-function templateName(published: Pick<PublishedDesign, 'templates'>, item: { id: string }): string {
-  return published.templates.find((t) => t.id === item.id)?.name ?? item.id
-}
-
 function documentStep(
   node: TargetNode,
   itemId: string,
@@ -1159,12 +1163,16 @@ function purgeStep(
   }
 }
 
-function retractStep(node: string, itemId: string, name: string): PlanStep {
+function retractStep(node: string, itemId: string, name: string, locked: boolean): PlanStep {
   return {
     id: `retract:${node}:${itemId}`,
     group: 'removals',
     summary: `Remove the template ${name}`,
-    details: ['The design no longer has it, and no published room has offered it'],
+    details: [
+      locked
+        ? 'It is locked: messages that used it show as plain text from now on (TPL-6)'
+        : 'No published room has offered it, so no message uses it',
+    ],
     risk: { destructive: true, roles: [] },
     action: { type: 'retract-item', node, itemId },
   }

@@ -303,6 +303,10 @@ function warningText(w: PlanWarning): string {
       return `${w.name} gets a new password: the vault must hold it to make the role read-only. Its players need the new password at their next login.`
     case 'account-exists':
       return `The account of ${w.name} (${w.roleId}) already exists, so it is not created and its password is not changed. If its players do not have the password, reset it from the credentials sheet.`
+    case 'template-removed':
+      return w.locked
+        ? `The template ${w.name} is removed. It is locked: messages that used it show as plain text from now on.`
+        : `The template ${w.name} is removed. No published room offered it, so no message uses it.`
   }
 }
 
@@ -317,6 +321,13 @@ function acknowledgementOf(w: PlanWarning): Acknowledgement | undefined {
       return { id, label: `Destroy ${w.name} and its ${plural(w.messageCount, 'message')}` }
     case 'password-reset':
       return { id, label: `Reset the password of ${w.name}` }
+    case 'template-removed':
+      return {
+        id,
+        label: w.locked
+          ? `Remove the template ${w.name}; its messages show as plain text`
+          : `Remove the template ${w.name}`,
+      }
     default:
       return undefined
   }

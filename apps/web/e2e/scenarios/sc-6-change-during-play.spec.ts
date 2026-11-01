@@ -36,7 +36,7 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   }
   const { page: blue, errors: blueErrors } = await player('blue-co')
   const { page: red, errors: redErrors } = await player('red-co')
-  await expect.poll(() => columns(blue)).toEqual([['Blue HQ'], [TALKS]])
+  await expect.poll(() => columns(blue)).toEqual([['Blue HQ'], [TALKS], ['Blue Reports']])
   // A message half written in the negotiation, which the change must not disturb.
   const draft = blue.getByRole('textbox', { name: `Message ${TALKS}`, exact: true })
   await draft.fill('Half-written reply to Red')
@@ -111,13 +111,14 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   await expect(forcePanel(blue).getByRole('region', { name: 'Objectives' })).not.toContainText(
     'Secure the crossing.',
   )
-  // Red HQ and the new room appear (PLY-6); Blue HQ closes with a notice.
+  // Red HQ and the new room appear (PLY-6); Blue HQ and Blue Reports close with one notice.
   await expect(tab(blue, 'Red HQ')).toBeVisible({ timeout: 30_000 })
   await expect(tab(blue, 'Red planning')).toBeVisible({ timeout: 30_000 })
   const toasts = blue.getByRole('region', { name: /^Notifications/ })
-  await expect(toasts).toContainText('Blue HQ closed')
-  await expect(toasts).toContainText('Your role no longer has access to Blue HQ.')
+  await expect(toasts).toContainText('2 rooms closed')
+  await expect(toasts).toContainText('Your role no longer has access to Blue HQ, Blue Reports.')
   await expect(tab(blue, 'Blue HQ')).toHaveCount(0, { timeout: 30_000 })
+  await expect(tab(blue, 'Blue Reports')).toHaveCount(0, { timeout: 30_000 })
   // The rest of the layout is as it was: the negotiation where it was, the half-written reply
   // still there.
   await expect.poll(async () => (await columns(blue)).some((c) => c[0] === TALKS)).toBe(true)
