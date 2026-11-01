@@ -23,7 +23,7 @@ test('player shell, logged in', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await shoot(page, 'player-shell')
 })
@@ -37,7 +37,12 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // PLY-40: one column per room; the game info panel opened from the strip (PLY-8).
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByRole('tab', { name: 'Game info', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Game briefing' })).toContainText('09:00')
