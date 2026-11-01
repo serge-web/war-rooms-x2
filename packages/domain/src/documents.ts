@@ -3,6 +3,7 @@ import { nodeName, parseDocument, parseNodeName } from '@wrx/schemas'
 import type {
   Announcement,
   Asset,
+  Directory,
   Force,
   GameSetup,
   GameState,
@@ -26,6 +27,8 @@ export interface DocumentValues {
   readonly asset: Asset
   /** An item of `retired`: a deleted force's or role's last name (§3 rule 1). */
   readonly retired: Retired
+  /** `directory`: entity GUIDs, and each role's GUID by login name (§3 rule 1). */
+  readonly directory: Directory
 }
 
 /** A validated document, tagged with its kind. */
@@ -73,6 +76,7 @@ export function nodeSpec(node: string): NodeSpec | undefined {
       'game-state': 'game-state',
       announcements: 'announcement',
       retired: 'retired',
+      directory: 'directory',
     } as const
     return { kind: kinds[ref.node], id: undefined }
   }
@@ -156,6 +160,10 @@ function parseAs(kind: LiveDocumentKind, payload: string): Result<LiveDocument> 
       const r = parseDocument('retired', payload)
       return r.ok ? done({ kind, value: r.value }) : fail(r.error)
     }
+    case 'directory': {
+      const r = parseDocument('directory', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
   }
 }
 
@@ -165,5 +173,26 @@ export function safeNodeName(kind: keyof typeof nodeName, id: string): string | 
     return nodeName[kind](id)
   } catch {
     return undefined
+  }
+}
+
+/**
+ * The `directory` document for a design (§3 rule 1): every force, role and room GUID, and each
+ * role's login name, sorted by GUID so the same design always gives the same document. The admin
+ * tooling publishes it and the mock seeds it; a role reads it to find its own role document from
+ * its login name, without listing nodes.
+ */
+export function directoryOf(design: {
+  readonly forces: readonly { readonly id: string }[]
+  readonly roles: readonly { readonly id: string; readonly loginName: string }[]
+  readonly rooms: readonly { readonly id: string }[]
+}): Directory {
+  const byId = (a: { readonly id: string }, b: { readonly id: string }) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  return {
+    schemaVersion: 1,
+    roles: [...design.roles].sort(byId).map((r) => ({ id: r.id, loginName: r.loginName })),
+    forces: [...design.forces].sort(byId).map((f) => f.id),
+    rooms: [...design.rooms].sort(byId).map((r) => r.id),
   }
 }

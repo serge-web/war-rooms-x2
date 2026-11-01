@@ -12,6 +12,7 @@ import { LIMITS, SINGLETON_NODES, checkItemSize, parseDocument } from '@wrx/sche
 import type {
   Announcement,
   Asset,
+  Directory,
   Force,
   GameSetup,
   Objectives,
@@ -705,11 +706,30 @@ class Store implements SessionStore {
     return role !== undefined && node === safeNodeName('role', role.id)
   }
 
-  /** This session's role: the role document whose login name is the session's (§3 rule 1). */
+  /**
+   * This session's role: the role document whose login name is the session's (§3 rule 1). The
+   * `directory` says which document that is, so it is read without listing nodes; it is only a
+   * pointer, and a role document is taken only if it carries this login name (failing closed).
+   * Two documents claiming the login name: the one the directory names, else the first in order.
+   */
   private ownRole(): Role | undefined {
     const login = this.identity.loginName
     if (login === undefined) return undefined
+    const pointed = this.directoryRoleId(login)
+    const pointedRole = pointed === undefined ? undefined : this.docOf('role', pointed)
+    if (pointedRole?.loginName === login) return pointedRole
     return this.collection('role').find((r) => r.loginName === login)
+  }
+
+  /** The `directory` document, if this session has read it. */
+  private directory(): Directory | undefined {
+    const entry = this.nodes.get(SINGLETON_NODES.directory)
+    return documentValue(entry === undefined ? undefined : latest(entry), 'directory')
+  }
+
+  /** The role GUID the `directory` gives for a login name. */
+  private directoryRoleId(login: string): string | undefined {
+    return this.directory()?.roles.find((r) => r.loginName === login)?.id
   }
 
   private async listNodes(): Promise<void> {
@@ -728,6 +748,17 @@ class Store implements SessionStore {
     desired.add(SINGLETON_NODES.announcements)
     // The deleted-entity records, for message authors only; nothing reads them for access.
     desired.add(SINGLETON_NODES.retired)
+    // Where the documents are, so neither the own role nor the rest needs node listing.
+    desired.add(SINGLETON_NODES.directory)
+    const add = (node: string | undefined) => {
+      if (node !== undefined) desired.add(node)
+    }
+    const directory = this.directory()
+    if (directory !== undefined) {
+      for (const f of directory.forces) add(safeNodeName('force', f))
+      for (const r of directory.roles) add(safeNodeName('role', r.id))
+      for (const r of directory.rooms) add(safeNodeName('room', r))
+    }
     const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
@@ -737,8 +768,8 @@ class Store implements SessionStore {
       if (spec.kind === 'force' || spec.kind === 'role' || spec.kind === 'room') desired.add(node)
       if (spec.kind === 'objectives' && allObjectives) desired.add(node)
     }
-    const add = (node: string | undefined) => {
-      if (node !== undefined) desired.add(node)
+    if (allObjectives) {
+      for (const force of this.collection('force')) add(safeNodeName('objectives', force.id))
     }
     if (role !== undefined) {
       add(safeNodeName('role', role.id))

@@ -15,6 +15,8 @@ import {
   tid,
 } from './fixtures.ts'
 import { nodeName } from '@wrx/schemas'
+import type { Directory } from '@wrx/schemas'
+import { directoryOf } from './documents.ts'
 
 const getItemsCalls = (h: ReturnType<typeof harness>, node: string) =>
   h.session.calls.filter((c) => c.op === 'getItems' && c.args[0] === node).length
@@ -256,19 +258,94 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     release()
   })
 
-  it('starts even when nodes cannot be listed', async () => {
-    const h = harness()
+  /** A store for `login` over `docs`, with node listing refused (WP 3.4, fix 1). */
+  async function unlisted(docs: Map<string, unknown[]>, login = 'blue-co') {
+    const h = harness({ docs, roleId: login })
     h.session.stub('pubsub', 'listNodes', () => Promise.resolve(err('forbidden')))
-    // The store was already created by harness(); make a fresh one with the stub in place.
+    // harness() already made a store; make a fresh one with the stub in place.
     const { createSessionStore } = await import('./store.ts')
     const store = createSessionStore({ session: h.session, logger: h.logger })
     await store.ready()
-    // The role is found by its login name among the role documents (§3 rule 1), so with no
-    // listing there is none to find; it starts, with nothing to show.
+    return { h, store }
+  }
+
+  function withDirectory(docs: Map<string, unknown[]>, edit = (d: Directory) => d) {
+    const of = (prefix: string) =>
+      [...docs.entries()].filter(([n]) => n.startsWith(prefix)).map(([, v]) => v[0])
+    const directory = directoryOf({
+      forces: of('forces:') as { id: string }[],
+      roles: of('roles:') as { id: string; loginName: string }[],
+      rooms: of('rooms:') as { id: string }[],
+    })
+    docs.set('directory', [edit(directory)])
+    return docs
+  }
+
+  it('starts when nodes cannot be listed and no directory exists, with nothing to show', async () => {
+    // A server published before the directory: the role is found among listed role documents
+    // only, so with listing refused there is none to find. It starts, failing closed.
+    const { h, store } = await unlisted(sampleDocuments())
     expect(store.me().data.role).toBeUndefined()
     expect(store.rooms().data).toEqual([])
     expect(store.gameSetup().data?.designVersion).toBe(1)
     expect(h.warnings).toContain('Could not list nodes')
+  })
+
+  it('finds its own role, force, objectives and rooms from the directory, without listing (§3 rule 1)', async () => {
+    const { h, store } = await unlisted(withDirectory(sampleDocuments()))
+    const me = store.me().data
+    expect(me.role?.id).toBe(tid('blue-co'))
+    expect(me.force?.id).toBe(tid('blue'))
+    expect(me.rooms.map((r) => nameOf(r.room.id))).toEqual(['blue-hq', 'negotiation'])
+    expect(store.objectives(tid('blue')).data?.markdown).toBe('Secure the crossing.')
+    // Its own force's objectives only: another force's node is never asked for.
+    expect(getItemsCalls(h, nodeName.objectives(tid('red')))).toBe(0)
+    expect(h.warnings).toContain('Could not list nodes')
+  })
+
+  it('an umpire finds every force’s objectives from the directory, without listing', async () => {
+    const { store } = await unlisted(withDirectory(sampleDocuments()), 'white-1')
+    expect(store.me().data.isUmpire).toBe(true)
+    expect(store.objectives(tid('red')).data?.markdown).toBe('Delay Blue.')
+    expect(store.objectives(tid('blue')).data?.markdown).toBe('Secure the crossing.')
+  })
+
+  it('fails closed when the directory points at a role document with another login name', async () => {
+    // The directory is a pointer: the role document decides. Blue CO's login is pointed at Red
+    // CO's document, and Blue CO's own document is not in the directory.
+    const docs = withDirectory(sampleDocuments(), (d) => ({
+      ...d,
+      roles: d.roles
+        .filter((r) => r.loginName !== 'blue-co')
+        .concat({ id: tid('red-co'), loginName: 'blue-co' }),
+    }))
+    const { store } = await unlisted(docs)
+    expect(store.me().data.role).toBeUndefined()
+    expect(store.me().data.rooms).toEqual([])
+  })
+
+  it('takes the role the directory names when two documents claim the login name', async () => {
+    const docs = sampleDocuments()
+    const impostor = role('blue-co', 'red', { id: '00000000-0000-4000-8000-000000000001' })
+    docs.set(nodeName.role(impostor.id), [impostor])
+    // Listed, and first in display order: without the directory the impostor would be taken.
+    const before = harness({ docs: new Map(docs) })
+    await before.store.ready()
+    expect(before.store.me().data.role?.id).toBe(impostor.id)
+    withDirectory(docs, (d) => ({ ...d, roles: d.roles.filter((r) => r.id !== impostor.id) }))
+    const h = harness({ docs })
+    await h.store.ready()
+    expect(h.store.me().data.role?.id).toBe(tid('blue-co'))
+    expect(h.store.me().data.force?.id).toBe(tid('blue'))
+  })
+
+  it('ignores an invalid directory and still uses the listing', async () => {
+    const docs = sampleDocuments()
+    docs.set('directory', [{ schemaVersion: 1, roles: 'not a list' }])
+    const h = harness({ docs })
+    await h.store.ready()
+    expect(h.store.me().data.role?.id).toBe(tid('blue-co'))
+    expect(h.warnings).toContain('Ignoring an invalid item')
   })
 
   it('orders announcements oldest first and marks live arrivals (PLY-38)', async () => {

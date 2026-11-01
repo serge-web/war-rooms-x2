@@ -3,6 +3,7 @@ import { designFileSchema } from './design.ts'
 import {
   announcementSchema,
   assetSchema,
+  directorySchema,
   forceSchema,
   gameSetupSchema,
   gameStateSchema,
@@ -75,6 +76,13 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     location: 'One item of PubSub node `retired`, the item id the entity’s GUID',
     access: 'Read: all game users. Publish: admin. Never used to decide access.',
     schema: retiredSchema,
+  },
+  {
+    title: 'Directory',
+    location: 'PubSub node `directory`, one item `current`',
+    access:
+      'Read: every role. Publish: admin. A role finds its own role document from its login name here; the role document decides.',
+    schema: directorySchema,
   },
   {
     title: 'Game state',

@@ -172,6 +172,28 @@ export const retiredSchema = z
   })
   .describe('The last name of a deleted force or role')
 
+/**
+ * `directory`: the game's entity GUIDs, and each role's login name with its GUID, so a role
+ * finds its own `roles:<guid>` document from its login name alone, without listing nodes
+ * (§3 rule 1). Read by every role; publish: admin. A pointer only: the client takes its role
+ * from the role document, and only if that document carries its login name.
+ */
+export const directorySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    roles: z
+      .array(
+        z.object({
+          id: idSchema.describe('The role GUID'),
+          loginName: loginNameSchema,
+        }),
+      )
+      .describe('Every role: its GUID and its login name'),
+    forces: z.array(idSchema).describe('Every force GUID'),
+    rooms: z.array(idSchema).describe('Every room GUID'),
+  })
+  .describe('Where each entity document is, by GUID, and each role by login name')
+
 /** `game-state`: reserved for the turn model; created empty in v1 (§8). */
 export const gameStateSchema = z
   .object({
@@ -190,6 +212,7 @@ export type AssetMimeType = (typeof ASSET_MIME_TYPES)[number]
 export type Announcement = z.infer<typeof announcementSchema>
 export type GameState = z.infer<typeof gameStateSchema>
 export type Retired = z.infer<typeof retiredSchema>
+export type Directory = z.infer<typeof directorySchema>
 
 /** Decoded byte length of valid base64 text. */
 export function base64DecodedLength(data: string): number {

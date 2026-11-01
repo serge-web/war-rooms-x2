@@ -7,11 +7,12 @@
 // - the §3 nodes: `game-setup` and the game theme's assets open, everything else whitelist with
 //   the admin as owner and publisher; objectives readable by their force and every White Force
 //   role, published by the admin only, with the design's text as the admin's single item
-//   (§3 rule 14, D21); `retired` holds the design's deleted-entity records;
+//   (§3 rule 14, D21); `retired` holds the design's deleted-entity records; `directory` the
+//   entity GUIDs and each role's GUID by login name (§3 rule 1);
 // - optional message history, archived for MAM;
 // - optional private storage of the admin account (the demo seed's observer vault).
 // White Force roles reach rooms through effective access (D8, §3 rule 4).
-import { effectiveAccess } from '@wrx/domain'
+import { directoryOf, effectiveAccess } from '@wrx/domain'
 import {
   SINGLETON_NODES,
   checkDesign,
@@ -225,6 +226,13 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     everyRole,
     [],
     design.retired.map((record) => ({ id: record.id, doc: record })),
+  )
+  addNode(
+    SINGLETON_NODES.directory,
+    gameNode('whitelist', 1),
+    everyRole,
+    [],
+    [{ id: CURRENT, doc: directoryOf(design) }],
   )
   for (const force of design.forces) {
     addNode(

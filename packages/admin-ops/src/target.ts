@@ -6,7 +6,7 @@
 // The server knows a role by its account, so here, and in the planner, the audit and AdminOps,
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
-import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, effectiveAccess } from '@wrx/domain'
+import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, directoryOf, effectiveAccess } from '@wrx/domain'
 import { SINGLETON_NODES, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
@@ -187,6 +187,14 @@ export function targetState(design: DesignFile): TargetState {
       config: gameNodeConfig('whitelist', RETIRED_MAX_ITEMS),
       access: everyRole('read'),
       documents: design.retired.map((record) => doc(record, record.id)),
+    },
+    // §3 rule 1: where each document is, and each role's GUID by login name, so a role finds
+    // its own document without listing nodes (WP 3.4). Read by every role.
+    {
+      node: SINGLETON_NODES.directory,
+      config: whitelist1,
+      access: everyRole('read'),
+      documents: [doc(directoryOf(design))],
     },
     ...design.forces.map((force) => ({
       node: nodeName.force(force.id),

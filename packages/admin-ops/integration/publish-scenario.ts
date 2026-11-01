@@ -18,7 +18,8 @@ import { nodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
-import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
+import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
+import { createSessionStore } from '@wrx/domain'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -71,6 +72,25 @@ function errorOf(
     | { readonly ok: false; readonly error: TransportError },
 ): TransportError | undefined {
   return result.ok ? undefined : result.error
+}
+
+const quiet = { debug: () => undefined, warn: () => undefined }
+
+/** The session, with node listing refused (disco#items), as a server might (WP 3.4, fix 1). */
+function withoutListing(session: Session): Session {
+  const bound = <T extends object>(target: T, override: (p: string | symbol) => unknown) =>
+    new Proxy(target, {
+      get(t, p) {
+        const replaced = override(p)
+        if (replaced !== undefined) return replaced
+        const value: unknown = Reflect.get(t, p, t)
+        return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(t) : value
+      },
+    })
+  const pubsub = bound(session.pubsub, (p) =>
+    p === 'listNodes' ? () => Promise.resolve(err('forbidden')) : undefined,
+  )
+  return bound(session, (p) => (p === 'pubsub' ? pubsub : undefined))
 }
 
 /** The changed design of step 3. */
@@ -311,6 +331,22 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(
           must(await red.pubsub.getItems(nodeName.objectives(tid('red'))), 'own objectives'),
         ).toHaveLength(1)
+      })
+
+      it('a role finds its own role, force, objectives and rooms with node listing refused (§3 rule 1)', async () => {
+        // The directory names each role's GUID by login name, so nothing depends on listing.
+        const session = await login('blue-co')
+        const store = createSessionStore({ session: withoutListing(session), logger: quiet })
+        await store.ready()
+        const me = store.me().data
+        expect(me.role?.id).toBe(tid('blue-co'))
+        expect(me.force?.id).toBe(tid('blue'))
+        expect(me.rooms.map((r) => r.room.id)).toContain(tid('blue-hq'))
+        expect(me.rooms.map((r) => r.room.id)).not.toContain(tid('red-hq'))
+        expect(store.objectives(tid('blue')).data?.forceId).toBe(tid('blue'))
+        // Fails closed: another force's objectives stay unreadable however the role was found.
+        expect(store.objectives(tid('red')).data).toBeUndefined()
+        await closeAll()
       })
 
       it('the game is at design version 1', async () => {
