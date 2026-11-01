@@ -55,3 +55,5 @@ Blog posts that show the app embed a **frozen snapshot**: a build of the exact c
 ## Quality gates
 
 Every pull request runs type checking, lint, formatting, unit tests, a traceability check that every requirement belongs to a work package, a check that every Mermaid diagram parses, and Playwright end-to-end tests. The site build adds a scan for secrets and real-server addresses, a review scan of the published text, and the size report.
+
+The nine user scenarios of the requirements, from the admin designing and publishing a game to two people sharing one role, are Playwright tests too. Each runs on the mock in every pull request and against the reference ejabberd in the server workflow, the same test code on both, including a dropped network connection, a modified client trying to post as an observer, and a game changed while players are online.

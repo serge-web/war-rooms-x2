@@ -1,6 +1,6 @@
 # WP 3.1 — End-to-end scenarios SC-1 to SC-9
 
-**SRD ids:** NFR-17, §12 (SC-1–SC-9), PLY-2, PLY-28–30, ADM-13, ADM-25 · **Depends on:** Phase 2 · **Status:** to do
+**SRD ids:** NFR-17, §12 (SC-1–SC-9), PLY-2, PLY-28–30, ADM-13, ADM-25 · **Depends on:** Phase 2 · **Status:** done
 
 ## Goal
 
@@ -22,3 +22,10 @@ Each of the nine user scenarios in SRD §12 runs as a Playwright test, on the mo
 ## Owns
 
 `apps/web/e2e/scenarios/`, the ejabberd e2e wiring, and fixes to defects the scenarios find (in any package, kept minimal).
+
+## Notes
+
+- **How the two backends are driven.** `apps/web/e2e/scenarios/backend.ts` gives every scenario a `backend` fixture. On ejabberd each scenario starts from the server reset and the demo game published from Node through the real admin tooling, with the demo's known passwords (test set-up only; the admin UI on a real server issues random ones, as SC-1 shows). One game per server, so the ejabberd project runs one worker.
+- **SC-3's drop on ejabberd.** Chromium's offline emulation stops new requests but leaves an open WebSocket up, so the scenario also cuts a TCP relay between Red's browser and the server (`link.ts`). The client sees the connection close at once; a silent loss would be found by the 60 s keep-alive instead. On the mock, which runs in the browser, the tab drops its own mock connections (`MockHost.setNetworkOnline`).
+- **SC-6 on ejabberd** starts with the admin importing the published design: a real server's draft lives in the browser that made it, and the admin backend cannot rebuild it from the server. A deleted online role is told "Your login was removed" rather than "Your role was deleted", as the account goes before its documents; either satisfies PLY-29.
+- **Defects found and fixed:** a room lost during play closed without a notice (PLY-30); Publish stayed enabled while a re-plan read the server, and the confirmation was then silently ignored; the mock's admin could not start a design from nothing (SC-1).

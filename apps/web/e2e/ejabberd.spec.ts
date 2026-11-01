@@ -1,15 +1,22 @@
 // Login against the reference ejabberd (deploy/ejabberd), when one is running: the contract CI
-// job sets WRX_XMPP_WS. The stack has only the bootstrap admin account and no published game,
-// so this checks the real path end to end: anonymous welcome read (D20), password login,
+// job sets WRX_XMPP_WS. The server is reset first, so it has only the bootstrap admin account and
+// no published game (the user scenarios in the same project publish theirs), and this checks the
+// real path end to end: anonymous welcome read (D20), password login,
 // the shell's no-game state (PLY-32), and logout (PLY-3).
 import { expect, test } from '@playwright/test'
 import { logIn } from './mock.ts'
+import { ejabberdServer, resetServer } from './scenarios/ejabberd-game.ts'
 
 const websocketUrl = process.env.WRX_XMPP_WS
 const domain = process.env.WRX_XMPP_DOMAIN ?? 'localhost'
 const adminPassword = process.env.WRX_XMPP_ADMIN_PASSWORD ?? 'spike-password'
 
 test.skip(websocketUrl === undefined, 'needs WRX_XMPP_WS: start the stack with pnpm stack:up')
+
+test.beforeAll(async () => {
+  const server = ejabberdServer()
+  if (server !== undefined) await resetServer(server)
+})
 
 test('logs in to ejabberd from the real-server build, and out again (PLY-1, PLY-3)', async ({
   page,

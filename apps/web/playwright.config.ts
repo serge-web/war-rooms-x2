@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 
 // Two builds (vite.config.ts): the mock-only one that previews and the site use, and the
-// real-server one, which reads config.json. server.spec.ts runs against the second, and so does
-// ejabberd.spec.ts when WRX_XMPP_WS names a running reference ejabberd (the contract CI job);
-// the rest run against the first. The smoke test runs against both.
-const mockPort = 4173
-const serverPort = 4175
+// real-server one, which reads config.json. server.spec.ts runs against the second, and so do
+// ejabberd.spec.ts and the user scenarios (e2e/scenarios, WP 3.1) when WRX_XMPP_WS names a
+// running reference ejabberd (the contract CI job); the rest, scenarios included, run against
+// the first. The smoke test runs against both.
+// WRX_E2E_MOCK_PORT and WRX_E2E_SERVER_PORT move them, e.g. for two checkouts on one machine.
+const mockPort = Number(process.env.WRX_E2E_MOCK_PORT ?? 4173)
+const serverPort = Number(process.env.WRX_E2E_SERVER_PORT ?? 4175)
 
 /**
  * Chromium trusts the reference ejabberd's test certificate by pinning its key, not by ignoring
@@ -47,8 +49,9 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], baseURL: `http://localhost:${serverPort}/` },
     },
     {
+      // One game per server (D11): run with --workers=1, as CI does.
       name: 'ejabberd',
-      testMatch: /ejabberd\.spec\.ts/,
+      testMatch: /(ejabberd\.spec\.ts|scenarios\/.*\.spec\.ts)$/,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: `http://localhost:${serverPort}/`,
@@ -58,12 +61,12 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm build && pnpm preview',
+      command: `pnpm build && pnpm exec vite preview --port ${mockPort} --strictPort`,
       port: mockPort,
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: 'pnpm build:server && pnpm preview:server',
+      command: `pnpm build:server && pnpm exec vite preview --mode server --port ${serverPort} --strictPort`,
       port: serverPort,
       reuseExistingServer: !process.env.CI,
     },

@@ -4,7 +4,7 @@
 import { checkDesign, designFileSchema } from '@wrx/schemas'
 import type { DesignFile, DesignIssue, Result } from '@wrx/schemas'
 import type { Draft } from '../draft/index.ts'
-import { draftFromDesign, toDesignFile } from '../draft/index.ts'
+import { createDraft, draftFromDesign, toDesignFile } from '../draft/index.ts'
 import { formatPath } from '../draft/index.ts'
 
 /** The export file's text and a file name for it. */
@@ -73,4 +73,13 @@ export function importDesign(
       warnings: issues.filter((i) => i.severity === 'warning'),
     },
   }
+}
+
+/**
+ * An empty design (the White Force only) in place of the draft, e.g. to design a game from
+ * nothing on the mock, whose draft starts as its demo game (SC-1). Like an import, it keeps the
+ * current draft's retired and published ids: they describe the server, not the design.
+ */
+export function newDesign(current: Draft, now: Date = new Date()): Draft {
+  return { ...createDraft({ name: 'New exercise', now }), meta: current.meta }
 }

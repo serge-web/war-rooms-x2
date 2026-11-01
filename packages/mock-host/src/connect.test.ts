@@ -102,6 +102,33 @@ describe('connectMockTransport, leader tab (D17, ARC-7, R7)', () => {
     })
   })
 
+  it('drops one tab’s sessions while its network is away, and they catch up when it is back (PLY-2)', async () => {
+    const browser = new FakeBrowser()
+    const one = await tab(browser)
+    const two = await tab(browser)
+    const blue = await player(one.host, 'blue-co')
+    const red = await player(two.host, 'red-co')
+    const states: string[] = []
+    red.session.onStatus((s) => states.push(s.state))
+    two.host.setNetworkOnline(false)
+    await vi.waitFor(() => {
+      expect(red.session.status().state).toBe('reconnecting')
+    })
+    // Blue's tab is unaffected.
+    await blue.send('While Red is away.')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(red.texts()).not.toContain('While Red is away.')
+    expect(red.session.status().state).toBe('reconnecting')
+    two.host.setNetworkOnline(true)
+    await vi.waitFor(() => {
+      expect(red.recoveries()).toBe(1)
+      expect(red.texts()).toContain('While Red is away.')
+    })
+    expect(red.session.status().state).toBe('online')
+    expect(blue.recoveries()).toBe(0)
+    expect(states).toContain('reconnecting')
+  })
+
   it('keeps messages flowing when the leader tab closes mid-conversation', async () => {
     const browser = new FakeBrowser()
     const leader = await tab(browser)

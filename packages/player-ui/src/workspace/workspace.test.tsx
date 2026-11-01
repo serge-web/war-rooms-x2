@@ -4,11 +4,12 @@
 // keyboard move, two instances on one page, and the non-room panels.
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
-import { flush, game, harness, room, selfPresence } from '@wrx/domain/fixtures'
+import { flush, game, harness, role, room, selfPresence } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
 import { SessionStoreProvider } from '@wrx/hooks'
 import type { AdminEditor, PlayerPanel, PlayerPanelProps } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
+import { ToastProvider } from '@wrx/ui'
 import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -152,6 +153,29 @@ describe('Workspace', () => {
       ['blue-hq', 'press'],
       ['Red Main', 'negotiation'],
     ])
+  })
+
+  it('says which rooms closed when the role loses them during play, and not on login (PLY-30)', async () => {
+    const h = harness({ roleId: 'blue-co' })
+    render(
+      <ToastProvider>
+        <SessionStoreProvider store={h.store}>
+          <Workspace />
+        </SessionStoreProvider>
+      </ToastProvider>,
+    )
+    await act(() => h.store.ready())
+    await act(() => flush())
+    expect(columns()).toEqual([['blue-hq'], ['negotiation']])
+    expect(screen.queryByText(/closed$/)).toBeNull()
+    // Blue CO moves to Red: Blue's room goes, Red's comes, the negotiation stays.
+    act(() => {
+      h.publish(nodeName.role('blue-co'), role('blue-co', 'red'))
+    })
+    await act(() => flush())
+    expect(columns().flat().sort()).toEqual(['negotiation', 'red-hq'])
+    expect(screen.getByText('blue-hq closed')).toBeTruthy()
+    expect(screen.getByText('Your role no longer has access to blue-hq.')).toBeTruthy()
   })
 
   it('saves per server, role and design version, and restores on the next login (PLY-5)', async () => {

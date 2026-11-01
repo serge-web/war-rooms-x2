@@ -96,3 +96,55 @@ export function trace(srd: string, plan: string, readme: string): TraceReport {
     missingFromChart: wps.map((wp) => wp.id).filter((id) => !nodes.has(chartNodeId(id))),
   }
 }
+
+export interface Scenario {
+  /** `SC-1` */
+  readonly id: string
+  /** The SRD's "Traces to" list, as written, without the final full stop. */
+  readonly traces: string
+}
+
+/** The user scenarios of SRD §12: `### SC-1 Title` headings and their `**Traces to:**` line. */
+export function srdScenarios(srd: string): Scenario[] {
+  const scenarios: Scenario[] = []
+  for (const block of srd.split(/^### /m).slice(1)) {
+    const id = /^(SC-\d+) /.exec(block)?.[1]
+    const traces = /\*\*Traces to:\*\* (.+?)\.?\s*$/m.exec(block)?.[1]
+    if (id !== undefined && traces !== undefined) scenarios.push({ id, traces })
+  }
+  return scenarios
+}
+
+/**
+ * NFR-17: each scenario has one Playwright spec, `sc-<n>-<name>.spec.ts`, whose header names the
+ * scenario and lists the SRD ids it covers, the same as the SRD's "Traces to" line. Problems,
+ * one per line; `specs` maps file names to their text.
+ */
+export function scenarioProblems(
+  scenarios: readonly Scenario[],
+  specs: ReadonlyMap<string, string>,
+): string[] {
+  const problems: string[] = []
+  for (const { id, traces } of scenarios) {
+    const prefix = `sc-${id.slice(3)}-`
+    const files = [...specs.keys()].filter((f) => f.startsWith(prefix) && f.endsWith('.spec.ts'))
+    if (files.length !== 1) {
+      problems.push(
+        `${id} needs one spec ${prefix}*.spec.ts in the scenarios folder; found ${files.length}`,
+      )
+      continue
+    }
+    const file = files[0] ?? ''
+    // The header comment, joined across its lines.
+    const header = (specs.get(file) ?? '')
+      .split('\n')
+      .filter((line) => line.startsWith('//'))
+      .map((line) => line.replace(/^\/\/ ?/, ''))
+      .join(' ')
+    if (!header.includes(id)) problems.push(`${file} does not name ${id} in its header`)
+    if (!header.replace(/\s+/g, ' ').includes(`Traces to: ${traces}.`)) {
+      problems.push(`${file} must say "Traces to: ${traces}." as SRD §12 does`)
+    }
+  }
+  return problems
+}
