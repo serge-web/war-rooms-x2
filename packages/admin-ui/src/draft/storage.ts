@@ -8,6 +8,7 @@ import {
   forceSchema,
   gameSetupSchema,
   idSchema,
+  isoDateTimeSchema,
   objectivesSchema,
   participantSchema,
   roleSchema,
@@ -36,6 +37,22 @@ const draftDesignSchema = designFileSchema.extend({
   roles: z.array(roleSchema.extend({ name: z.string(), password: z.never().optional() })),
   rooms: z.array(roomSchema.extend({ name: z.string(), participants: z.array(participantSchema) })),
   objectives: z.array(objectivesSchema.extend({ markdown: z.string() })),
+  // A template being edited may be outside the WRX profile (the raw editor, WP 4.3): its
+  // structure only; `validateDraft` reports the profile's issues.
+  templates: z
+    .array(
+      z.object({
+        schemaVersion: z.literal(1),
+        id: idSchema,
+        name: z.string(),
+        description: z.string().optional(),
+        schema: z.record(z.string(), z.unknown()),
+        uiSchema: z.record(z.string(), z.unknown()).optional(),
+        createdAt: isoDateTimeSchema,
+        lockedAt: isoDateTimeSchema.optional(),
+      }),
+    )
+    .default([]),
 })
 
 const idList = z.array(idSchema)

@@ -13,11 +13,13 @@ import {
   DESIGN_FILE_VERSION,
   LIMITS,
   RESERVED_LOGIN_NAMES,
+  chatRoomConfigReader,
   chatRoomConfigSchema,
   isReservedLoginName,
   newEntityId,
 } from '@wrx/schemas'
 import type {
+  ChatRoomConfig,
   DesignFile,
   Force,
   GameSetup,
@@ -28,6 +30,7 @@ import type {
   Role,
   Room,
   Template,
+  TemplateEntry,
 } from '@wrx/schemas'
 import { isSlug, slugify, uniqueSlug } from './slug.ts'
 
@@ -538,6 +541,159 @@ export function moveRoom(draft: Draft, id: string, index: number): Draft {
 export function deleteRoom(draft: Draft, id: string): Draft {
   if (!draft.design.rooms.some((r) => r.id === id)) return draft
   return withDesign(draft, { rooms: draft.design.rooms.filter((r) => r.id !== id) })
+}
+
+// --- Templates (Annex A, WP 4.3) ---------------------------------------------------------------
+
+export interface TemplatePatch {
+  readonly name?: string
+  /** An empty description is left out. */
+  readonly description?: string
+  readonly schema?: Readonly<Record<string, unknown>>
+  /** `null` removes the UI schema. */
+  readonly uiSchema?: Readonly<Record<string, unknown>> | null
+}
+
+/** Whether the template's schema is fixed: a publish made it available in a room (TD6, TPL-4). */
+export function isTemplateLocked(template: Pick<Template, 'lockedAt'>): boolean {
+  return template.lockedAt !== undefined
+}
+
+/** A new template with no fields yet, stamped `now` (display only). */
+export function addTemplate(
+  draft: Draft,
+  name: string,
+  now: Date = new Date(),
+  newId: IdSource = newEntityId,
+): Added {
+  const id = newId()
+  const template: Template = {
+    schemaVersion: 1,
+    id,
+    name,
+    schema: { type: 'object', properties: {} },
+    createdAt: now.toISOString(),
+  }
+  return { draft: withDesign(draft, { templates: [...draft.design.templates, template] }), id }
+}
+
+/**
+ * Changes a template. A locked template keeps its schema: a patch that changes it is ignored
+ * (the planner would refuse it, `template-locked-changed`); copy it to a new template instead.
+ * Its name, description and UI schema may change (WP 4.1: a lock covers the schema only).
+ */
+export function updateTemplate(draft: Draft, id: string, patch: TemplatePatch): Draft {
+  const template = draft.design.templates.find((t) => t.id === id)
+  if (template === undefined) return draft
+  const next: Template = { ...template }
+  if (patch.name !== undefined) next.name = patch.name
+  if (patch.description !== undefined) {
+    if (patch.description === '') delete next.description
+    else next.description = patch.description
+  }
+  if (patch.schema !== undefined && !isTemplateLocked(template)) next.schema = { ...patch.schema }
+  if (patch.uiSchema === null) delete next.uiSchema
+  else if (patch.uiSchema !== undefined) next.uiSchema = { ...patch.uiSchema }
+  return withDesign(draft, {
+    templates: draft.design.templates.map((t) => (t.id === id ? next : t)),
+  })
+}
+
+/**
+ * A copy of a template with a new GUID, unlocked, named "Copy of …" (TPL-4: the way to change a
+ * locked template). Ignored for an unknown id (the draft unchanged, the id empty).
+ */
+export function copyTemplate(
+  draft: Draft,
+  id: string,
+  now: Date = new Date(),
+  newId: IdSource = newEntityId,
+): Added {
+  const template = draft.design.templates.find((t) => t.id === id)
+  if (template === undefined) return { draft, id: '' }
+  const copyId = newId()
+  const names = new Set(draft.design.templates.map((t) => t.name))
+  const base = `Copy of ${template.name}`.slice(0, LIMITS.nameChars - 5)
+  let name = base
+  for (let n = 2; names.has(name); n++) name = `${base} (${n})`
+  const { lockedAt: _locked, ...rest } = template
+  const copy: Template = { ...rest, id: copyId, name, createdAt: now.toISOString() }
+  return { draft: withDesign(draft, { templates: [...draft.design.templates, copy] }), id: copyId }
+}
+
+/** The chat room's config read as version 2 (TPL-2), or undefined for other room types. */
+export function chatConfigOf(room: Room): ChatRoomConfig | undefined {
+  if (room.roomType !== DEFAULT_ROOM_TYPE) return undefined
+  const parsed = chatRoomConfigReader.safeParse(room.config)
+  return parsed.success ? parsed.data : undefined
+}
+
+/** The rooms whose template config names the template, in display order. */
+export function roomsUsingTemplate(design: DesignFile, templateId: string): Room[] {
+  return [...design.rooms]
+    .sort(byOrderThenId)
+    .filter((room) => chatConfigOf(room)?.templates.some((e) => e.templateIds.includes(templateId)))
+}
+
+/**
+ * Deletes a template. Refused while a room's config offers it: take it out of those rooms first,
+ * so no room is left naming an unknown template. A published template the design drops is
+ * removed by the next publish, which asks to confirm it (`template-removed`).
+ */
+export function deleteTemplate(draft: Draft, id: string): Result<Draft, string> {
+  const template = draft.design.templates.find((t) => t.id === id)
+  if (template === undefined) return { ok: true, value: draft }
+  const rooms = roomsUsingTemplate(draft.design, id)
+  if (rooms.length > 0) {
+    return {
+      ok: false,
+      error: `${template.name} is offered in ${rooms.map((r) => r.name).join(', ')}; take it out of ${rooms.length === 1 ? 'that room' : 'those rooms'} first`,
+    }
+  }
+  return {
+    ok: true,
+    value: withDesign(draft, { templates: draft.design.templates.filter((t) => t.id !== id) }),
+  }
+}
+
+function withChatConfig(
+  draft: Draft,
+  roomId: string,
+  change: (config: ChatRoomConfig) => ChatRoomConfig,
+): Draft {
+  const room = draft.design.rooms.find((r) => r.id === roomId)
+  const config = room === undefined ? undefined : chatConfigOf(room)
+  if (config === undefined) return draft
+  return updateRoom(draft, roomId, { config: { ...change(config) } })
+}
+
+/** Whether free text may be posted beside templates in a chat room (TD3). */
+export function setFreeText(draft: Draft, roomId: string, freeText: boolean): Draft {
+  return withChatConfig(draft, roomId, (config) => ({ ...config, freeText }))
+}
+
+/**
+ * The templates a force or role may use in a chat room (TD4, TPL-2): its entry is added,
+ * replaced, or with no templates removed. A role entry adds to its force's (provisional answer 4).
+ */
+export function setTemplateEntry(
+  draft: Draft,
+  roomId: string,
+  kind: TemplateEntry['kind'],
+  id: string,
+  templateIds: readonly string[],
+): Draft {
+  return withChatConfig(draft, roomId, (config) => {
+    const at = config.templates.findIndex((e) => e.kind === kind && e.id === id)
+    const entry: TemplateEntry = { kind, id, templateIds: [...new Set(templateIds)] }
+    const templates =
+      templateIds.length === 0
+        ? config.templates.filter((_, i) => i !== at)
+        : at === -1
+          ? [...config.templates, entry]
+          : config.templates.map((e, i) => (i === at ? entry : e))
+    return { ...config, templates }
+  })
 }
 
 // --- References -------------------------------------------------------------------------------
