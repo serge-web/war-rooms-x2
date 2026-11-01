@@ -1,10 +1,13 @@
 {
   "version": 1,
   "shots": {
-    "admin-design-editor": "e58a06a402a74cc1e7867dc40f0471a76c7b5d9d4c9528c1bc4947f2e65ffc57",
+    "admin-design-editor": "89a1e298254e873c55616512052369fcbcedd5cda86c9fb518d81bcf370f5093",
     "admin-preview-as-role": "0fa5e4ec6211e3cc4d2704a9bcf446aad5a8c70ba575075614712925ac7365f2",
-    "admin-publish-plan": "3ab081f25298fd0ad136614047ff7a6cd94f956fac3d0ddffdcc2256084edc03",
-    "admin-theme-editor": "aed1f3eb2f53ada8430f512683b74c424c3485aba46b2f8a1e08a31c1238da51",
+    "admin-publish-plan": "6d86a0bd783afec4607ca185fef2dbf9c7546239d86b9a74a82cac25bba0031c",
+    "admin-room-templates": "4e0106a5fcb9d136b12fad5ba634a50bd78d6333184155445b140c0a4ebff4c7",
+    "admin-template-builder": "c34bb23e1e1a808d5636d6c3d9922387878b17a69df8b2d0746735a9d96dff20",
+    "admin-template-raw": "a441637bc0d68adc70c8b73983110494d456fcf91dd48b98f80cb288a592fca5",
+    "admin-theme-editor": "5d3b8959e75952759e499d46572a35f8c4a0f5a409ea84607a435aee691939cd",
     "app-shell": "837fc6ca211cf44249d7c503a0b899e70f538911a1ca4f01029d0baf526e1d28",
     "multi-client-column-tab": "737e4f2bc72bb81f68296c6e3722e08942e138f6f7f5821b0ef0fa1a41538dcc",
     "multi-client-two-panes": "0b9b0319aa4bc6bba541fb0e65e765149a46fd07806fe4c2aa8ae9447dc9a110",

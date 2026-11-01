@@ -12,6 +12,18 @@
     "status": "changed"
   },
   {
+    "name": "admin-room-templates",
+    "status": "new"
+  },
+  {
+    "name": "admin-template-builder",
+    "status": "new"
+  },
+  {
+    "name": "admin-template-raw",
+    "status": "new"
+  },
+  {
     "name": "admin-theme-editor",
     "status": "changed"
   },
