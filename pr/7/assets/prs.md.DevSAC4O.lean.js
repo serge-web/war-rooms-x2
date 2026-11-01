@@ -1,0 +1,1 @@
+import{_ as e,o as r,c as a,ah as d}from"./chunks/framework.Xx6Iwo0O.js";const m=JSON.parse('{"title":"PR index","description":"","frontmatter":{},"headers":[],"relativePath":"prs.md","filePath":"prs.md"}'),s={name:"prs.md"};function o(l,t,h,n,i,p){return r(),a("div",null,[...t[0]||(t[0]=[d("",4)])])}const f=e(s,[["render",o]]);export{m as __pageData,f as default};
