@@ -1,21 +1,25 @@
 import { effectiveAccess, accessOf, defaultRoomTypes } from '@wrx/domain'
+import { isId } from '@wrx/schemas'
 import type { DesignFile, Result } from '@wrx/schemas'
 import { describe, expect, it } from 'vitest'
 // The schemas package keeps its sample design with its tests and does not export it.
-import { sampleDesign } from '../../../schemas/src/fixtures.ts'
+import { nameOf, sampleDesign, tid } from '../../../schemas/src/fixtures.ts'
 import {
   DEFAULT_FORCE_COLOUR,
   addForce,
   addRole,
   addRoom,
-  changeRoleId,
+  changeLoginName,
   createDraft,
   deleteForce,
   deleteRole,
   deleteRoom,
   draftFromDesign,
   isRolePublished,
+  loginNameProblem,
   markPublished,
+  markRolesPublished,
+  mergeRetired,
   moveForce,
   moveRole,
   moveRoom,
@@ -23,17 +27,15 @@ import {
   objectivesOf,
   referencesTo,
   removeParticipant,
-  roleIdProblem,
   setObjectives,
   setParticipant,
   sortedRoles,
-  takenIds,
+  takenLoginNames,
   toDesignFile,
   updateForce,
   updateGame,
   updateRole,
   updateRoom,
-  WHITE_FORCE_ID,
 } from './draft.ts'
 import type { Draft } from './draft.ts'
 import { validateDraft } from './validate.ts'
@@ -58,23 +60,35 @@ function ok<T>(result: Result<T, string>): T {
   return result.value
 }
 
+/** Short names for the sample design's GUIDs, so orders read as before. */
+const short = (id: string) => nameOf(id) ?? id
+
+/** A counter of GUIDs, so generated ids are predictable here. */
+function counter(prefix = 'a'): () => string {
+  let n = 0
+  return () => `${prefix}0000000-0000-4000-8000-${(++n).toString(16).padStart(12, '0')}`
+}
+
 function orders(design: DesignFile) {
   return {
-    forces: design.forces.map((f) => `${f.id}:${f.order}`),
-    roles: design.roles.map((r) => `${r.forceId}/${r.id}:${r.order}`),
-    rooms: design.rooms.map((r) => `${r.id}:${r.order}`),
+    forces: design.forces.map((f) => `${short(f.id)}:${f.order}`),
+    roles: design.roles.map((r) => `${short(r.forceId)}/${r.loginName}:${r.order}`),
+    rooms: design.rooms.map((r) => `${short(r.id)}:${r.order}`),
   }
 }
 
+const GREEN = tid('green')
+
 describe('createDraft', () => {
   it('starts a valid design with the White Force only (ADM-4)', () => {
-    const draft = createDraft({ name: 'Exercise', now: NOW })
+    const draft = createDraft({ name: 'Exercise', now: NOW, whiteForceId: tid('white') })
     expect(draft.design.game.name).toBe('Exercise')
     expect(draft.design.exportedAt).toBe(NOW.toISOString())
+    expect(draft.design.schemaVersion).toBe(2)
     expect(draft.design.forces).toEqual([
       {
         schemaVersion: 1,
-        id: WHITE_FORCE_ID,
+        id: tid('white'),
         name: 'White',
         colour: DEFAULT_FORCE_COLOUR,
         isUmpire: true,
@@ -82,46 +96,51 @@ describe('createDraft', () => {
       },
     ])
     expect(draft.design.roles).toEqual([])
-    expect(draft.meta).toEqual({
-      retiredIds: { forces: [], roles: [], rooms: [] },
-      publishedRoleIds: [],
-    })
+    expect(draft.design.retired).toEqual([])
+    expect(draft.meta).toEqual({ publishedRoleIds: [], publishedForceIds: [] })
     expect(validateDraft(draft.design).issues).toEqual([])
   })
 
-  it('names the game by default', () => {
-    expect(createDraft().design.game.name).toBe('Untitled game')
+  it('names the game by default, and gives the White Force a new GUID', () => {
+    const draft = createDraft()
+    expect(draft.design.game.name).toBe('Untitled game')
+    expect(isId(draft.design.forces[0]?.id ?? '')).toBe(true)
+    expect(createDraft().design.forces[0]?.id).not.toBe(draft.design.forces[0]?.id)
   })
 })
 
 describe('immutability', () => {
   it('never mutates its input', () => {
+    const id = counter()
     let draft = frozen(sample())
     draft = frozen(updateGame(draft, { name: 'X' }))
-    draft = frozen(addForce(draft, 'Green').draft)
-    draft = frozen(updateForce(draft, 'green', { colour: '#00ff00', iconAssetId: 'game-logo' }))
-    draft = frozen(updateForce(draft, 'green', { iconAssetId: null }))
-    draft = frozen(addRole(draft, 'green', 'Green CO').draft)
-    draft = frozen(moveRole(draft, 'green-co', 'blue', 0))
-    draft = frozen(updateRole(draft, 'green-co', { isObserver: true }))
-    draft = frozen(ok(changeRoleId(draft, 'green-co', 'g-co')))
-    draft = frozen(addRoom(draft, 'Green room').draft)
+    const green = addForce(draft, 'Green', id)
+    draft = frozen(green.draft)
     draft = frozen(
-      setParticipant(draft, 'green-room', { kind: 'role', id: 'g-co', access: 'read' }),
+      updateForce(draft, green.id, { colour: '#00ff00', iconAssetId: tid('game-logo') }),
     )
-    draft = frozen(removeParticipant(draft, 'green-room', 'role', 'g-co'))
-    draft = frozen(updateRoom(draft, 'green-room', { name: 'G', roomType: 'chat' }))
-    draft = frozen(moveRoom(draft, 'green-room', 0))
-    draft = frozen(moveForce(draft, 'green', 0))
-    draft = frozen(setObjectives(draft, 'green', 'Win', NOW))
-    draft = frozen(deleteRole(draft, 'g-co'))
-    draft = frozen(deleteRoom(draft, 'green-room'))
-    expect(ok(deleteForce(draft, 'green')).design.forces).toHaveLength(3)
+    draft = frozen(updateForce(draft, green.id, { iconAssetId: null }))
+    const co = addRole(draft, green.id, 'Green CO', id)
+    draft = frozen(co.draft)
+    draft = frozen(moveRole(draft, co.id, tid('blue'), 0))
+    draft = frozen(updateRole(draft, co.id, { isObserver: true }))
+    draft = frozen(ok(changeLoginName(draft, co.id, 'g-co')))
+    const room = addRoom(draft, 'Green room', 'chat', id)
+    draft = frozen(room.draft)
+    draft = frozen(setParticipant(draft, room.id, { kind: 'role', id: co.id, access: 'read' }))
+    draft = frozen(removeParticipant(draft, room.id, 'role', co.id))
+    draft = frozen(updateRoom(draft, room.id, { name: 'G', roomType: 'chat' }))
+    draft = frozen(moveRoom(draft, room.id, 0))
+    draft = frozen(moveForce(draft, green.id, 0))
+    draft = frozen(setObjectives(draft, green.id, 'Win', NOW))
+    draft = frozen(deleteRole(draft, co.id))
+    draft = frozen(deleteRoom(draft, room.id))
+    expect(ok(deleteForce(draft, green.id)).design.forces).toHaveLength(3)
   })
 
   it('keeps the identity of unchanged items', () => {
     const draft = sample()
-    const next = updateForce(draft, 'red', { name: 'Crimson' })
+    const next = updateForce(draft, tid('red'), { name: 'Crimson' })
     expect(next.design.forces[0]).toBe(draft.design.forces[0])
     expect(next.design.forces[1]).not.toBe(draft.design.forces[1])
     expect(next.design.roles).toBe(draft.design.roles)
@@ -129,21 +148,21 @@ describe('immutability', () => {
 
   it('returns the same draft for unknown ids', () => {
     const draft = sample()
-    expect(deleteRole(draft, 'nobody')).toBe(draft)
-    expect(deleteRoom(draft, 'nowhere')).toBe(draft)
-    expect(moveRole(draft, 'nobody', 'blue')).toBe(draft)
-    expect(moveRole(draft, 'blue-co', 'no-force')).toBe(draft)
-    expect(setObjectives(draft, 'no-force', 'x')).toBe(draft)
-    expect(deleteForce(draft, 'no-force')).toEqual({ ok: true, value: draft })
-    expect(changeRoleId(draft, 'nobody', 'x')).toEqual({ ok: true, value: draft })
-    expect(changeRoleId(draft, 'blue-co', 'blue-co')).toEqual({ ok: true, value: draft })
+    expect(deleteRole(draft, tid('nobody'))).toBe(draft)
+    expect(deleteRoom(draft, tid('nowhere'))).toBe(draft)
+    expect(moveRole(draft, tid('nobody'), tid('blue'))).toBe(draft)
+    expect(moveRole(draft, tid('blue-co'), tid('no-force'))).toBe(draft)
+    expect(setObjectives(draft, tid('no-force'), 'x')).toBe(draft)
+    expect(deleteForce(draft, tid('no-force'))).toEqual({ ok: true, value: draft })
+    expect(changeLoginName(draft, tid('nobody'), 'x')).toEqual({ ok: true, value: draft })
+    expect(changeLoginName(draft, tid('blue-co'), 'blue-co')).toEqual({ ok: true, value: draft })
   })
 })
 
-describe('generated ids (§3 rule 1)', () => {
-  it('makes slugs from names', () => {
+describe('ids are GUIDs, never derived from names (§3 rule 1)', () => {
+  it('gives a new force, role and room a new GUID', () => {
     const { draft, id } = addForce(createDraft(), 'Blue Force — Écosse')
-    expect(id).toBe('blue-force-ecosse')
+    expect(isId(id)).toBe(true)
     expect(draft.design.forces[1]).toMatchObject({
       id,
       name: 'Blue Force — Écosse',
@@ -151,62 +170,171 @@ describe('generated ids (§3 rule 1)', () => {
       isUmpire: false,
       order: 1,
     })
+    const role = addRole(draft, id, 'Blue CO')
+    const room = addRoom(role.draft, 'Blue CO')
+    expect(isId(role.id) && isId(room.id)).toBe(true)
+    expect(new Set([id, role.id, room.id]).size).toBe(3)
   })
 
-  it('keeps ids unique within a kind', () => {
+  it('gives the same name a different id every time', () => {
     const one = addForce(createDraft(), 'Blue')
     const two = addForce(one.draft, 'Blue')
-    expect([one.id, two.id]).toEqual(['blue', 'blue-2'])
-    // Other kinds have their own ids.
-    expect(addRoom(two.draft, 'Blue').id).toBe('blue')
+    expect(one.id).not.toBe(two.id)
+    expect(two.draft.design.forces.map((f) => f.name)).toEqual(['White', 'Blue', 'Blue'])
   })
 
-  it('never reuses an id after a delete in the same draft', () => {
-    const { draft, id } = addRoom(createDraft(), 'Ops')
-    const deleted = deleteRoom(draft, id)
-    expect(deleted.meta.retiredIds.rooms).toEqual(['ops'])
-    expect(addRoom(deleted, 'Ops').id).toBe('ops-2')
-
-    const withRole = addRole(sample(), 'blue', 'Blue CO')
-    expect(withRole.id).toBe('blue-co-2')
-    const gone = deleteRole(withRole.draft, 'blue-co')
-    expect(addRole(gone, 'red', 'Blue CO').id).toBe('blue-co-3')
+  it('takes ids from the source it is given', () => {
+    const id = counter('b')
+    expect(addRoom(createDraft(), 'Ops', 'chat', id).id).toBe(
+      'b0000000-0000-4000-8000-000000000001',
+    )
   })
 
-  it('does not retire an id twice', () => {
-    const draft = draftFromDesign(sampleDesign(), {
-      retiredIds: { forces: [], roles: ['blue-co'], rooms: [] },
-    })
-    expect(deleteRole(draft, 'blue-co').meta.retiredIds.roles).toEqual(['blue-co'])
+  it('refuses a role for an unknown force', () => {
+    expect(() => addRole(createDraft(), GREEN, 'X')).toThrow(RangeError)
+  })
+})
+
+describe('login names (§3 rule 1, ADM-5)', () => {
+  it('makes a login name from the role name, unique among roles', () => {
+    const blue = addForce(createDraft(), 'Blue')
+    const one = addRole(blue.draft, blue.id, 'Blue Force — Écosse')
+    expect(one.draft.design.roles[0]?.loginName).toBe('blue-force-ecosse')
+    const two = addRole(one.draft, blue.id, 'Blue Force — Écosse')
+    expect(two.draft.design.roles.map((r) => r.loginName)).toEqual([
+      'blue-force-ecosse',
+      'blue-force-ecosse-2',
+    ])
+    const added = addRole(sample(), tid('blue'), 'Blue CO')
+    expect(added.draft.design.roles.find((r) => r.id === added.id)?.loginName).toBe('blue-co-2')
   })
 
-  it('never gives a role a reserved or published id', () => {
-    const force = addForce(createDraft(), 'Blue').draft
-    expect(addRole(force, 'blue', 'Admin').id).toBe('admin-2')
-    expect(addRole(force, 'blue', 'Anonymous').id).toBe('anonymous-2')
-    const published = draftFromDesign(force.design, { publishedRoleIds: ['co'] })
-    expect(addRole(published, 'blue', 'CO').id).toBe('co-2')
-    expect(takenIds(published, 'roles')).toEqual(new Set(['admin', 'anonymous', 'co']))
+  it('falls back to `role` for names without letters or digits', () => {
+    const force = addForce(createDraft(), 'F')
+    expect(addRole(force.draft, force.id, '—').draft.design.roles[0]?.loginName).toBe('role')
   })
 
-  it('never gives a role an id that looks like an anonymous session (security review F4)', () => {
-    const force = addForce(createDraft(), 'Blue').draft
-    expect(addRole(force, 'blue', '1234567890123456').id).toBe('role-1234567890123456')
-    expect(addRole(force, 'blue', '123456789012345').id).toBe('123456789012345')
-    expect(roleIdProblem(sample(), 'blue-co', '1234567890123456')).toBe(
+  it('never gives a role a reserved login name', () => {
+    const force = addForce(createDraft(), 'Blue')
+    const login = (name: string) =>
+      addRole(force.draft, force.id, name).draft.design.roles[0]?.loginName
+    expect(login('Admin')).toBe('admin-2')
+    expect(login('Anonymous')).toBe('anonymous-2')
+    expect(takenLoginNames(force.draft)).toEqual(new Set(['admin', 'anonymous']))
+  })
+
+  it('never gives a role a login name that looks like an anonymous session (security review F4)', () => {
+    const force = addForce(createDraft(), 'Blue')
+    const login = (name: string) =>
+      addRole(force.draft, force.id, name).draft.design.roles[0]?.loginName
+    expect(login('1234567890123456')).toBe('role-1234567890123456')
+    expect(login('123456789012345')).toBe('123456789012345')
+    expect(loginNameProblem(sample(), tid('blue-co'), '1234567890123456')).toBe(
       '"1234567890123456" is reserved',
     )
   })
 
-  it('falls back to the kind for names without letters or digits', () => {
-    expect(addForce(createDraft(), '***').id).toBe('force')
-    expect(addRoom(createDraft(), '').id).toBe('room')
-    const force = addForce(createDraft(), 'F').draft
-    expect(addRole(force, 'f', '—').id).toBe('role')
+  it('changes a login name before the first publish; nothing else changes', () => {
+    const before = sample()
+    const draft = ok(changeLoginName(before, tid('blue-co'), 'blue-commander'))
+    const role = draft.design.roles.find((r) => r.id === tid('blue-co'))
+    expect(role?.loginName).toBe('blue-commander')
+    // Room entries name the role by its GUID, so they do not change.
+    expect(draft.design.rooms).toBe(before.design.rooms)
+    // An unpublished role's old login name is free again.
+    expect(loginNameProblem(draft, tid('blue-observer'), 'blue-co')).toBeUndefined()
   })
 
-  it('refuses a role for an unknown force', () => {
-    expect(() => addRole(createDraft(), 'ghost', 'X')).toThrow(RangeError)
+  it('refuses bad, reserved and taken login names', () => {
+    const draft = sample()
+    const co = tid('blue-co')
+    expect(loginNameProblem(draft, co, 'Blue CO')).toBe(
+      'use lowercase letters, digits and single hyphens',
+    )
+    expect(loginNameProblem(draft, co, 'admin')).toBe('"admin" is reserved')
+    expect(loginNameProblem(draft, co, 'red-co')).toBe('another role is "red-co"')
+    expect(loginNameProblem(draft, co, 'blue-co')).toBeUndefined()
+    expect(changeLoginName(draft, co, 'admin')).toEqual({
+      ok: false,
+      error: '"admin" is reserved',
+    })
+  })
+
+  it('fixes login names once published (merge record N2)', () => {
+    const draft = markPublished(sample())
+    expect(isRolePublished(draft, tid('blue-co'))).toBe(true)
+    expect(loginNameProblem(draft, tid('blue-co'), 'blue-x')).toBe(
+      'the login name cannot change after the role has been published',
+    )
+    // A role added after the publish can still change.
+    const added = addRole(draft, tid('blue'), 'New')
+    expect(isRolePublished(added.draft, added.id)).toBe(false)
+    expect(loginNameProblem(added.draft, added.id, 'fresh')).toBeUndefined()
+    // Publishing twice keeps one entry per role.
+    expect(markPublished(markPublished(draft)).meta.publishedRoleIds).toHaveLength(4)
+    expect(markPublished(draft).meta.publishedForceIds).toHaveLength(3)
+  })
+
+  it('marks roles published by the login names the server has', () => {
+    const draft = markRolesPublished(sample(), ['red-co', 'stranger'])
+    expect(draft.meta.publishedRoleIds).toEqual([tid('red-co')])
+    expect(markRolesPublished(draft, ['red-co'])).toBe(draft)
+  })
+})
+
+describe('deleted forces and roles keep their last names (§3 rule 1, ADM-14)', () => {
+  it('records a published role, and its login name is never given to another role', () => {
+    const draft = deleteRole(markPublished(sample()), tid('red-co'), NOW)
+    expect(draft.design.retired).toEqual([
+      {
+        schemaVersion: 1,
+        id: tid('red-co'),
+        kind: 'role',
+        name: 'Red CO',
+        loginName: 'red-co',
+        colour: '#b91c1c',
+        deletedAt: NOW.toISOString(),
+      },
+    ])
+    const added = addRole(draft, tid('red'), 'Red CO')
+    expect(added.draft.design.roles.find((r) => r.id === added.id)?.loginName).toBe('red-co-2')
+    expect(loginNameProblem(added.draft, added.id, 'red-co')).toBe(
+      '"red-co" was used by a deleted role and cannot be reused',
+    )
+    expect(validateDraft(added.draft.design).publishable).toBe(true)
+  })
+
+  it('records nothing for a role that was never published; its login name is free', () => {
+    const draft = deleteRole(sample(), tid('red-co'))
+    expect(draft.design.retired).toEqual([])
+    const added = addRole(draft, tid('red'), 'Red CO')
+    expect(added.draft.design.roles.find((r) => r.id === added.id)?.loginName).toBe('red-co')
+  })
+
+  it('records a published force when it is deleted', () => {
+    let draft = markPublished(sample())
+    draft = deleteRole(draft, tid('red-co'), NOW)
+    draft = ok(deleteForce(draft, tid('red'), NOW))
+    expect(draft.design.retired.map((r) => [r.kind, r.name, r.colour])).toEqual([
+      ['role', 'Red CO', '#b91c1c'],
+      ['force', 'Red', '#b91c1c'],
+    ])
+    expect(validateDraft(draft.design).publishable).toBe(true)
+  })
+
+  it('takes the server’s records it does not hold, and no record of an entity it has', () => {
+    const record = {
+      schemaVersion: 1 as const,
+      id: tid('old-co'),
+      kind: 'role' as const,
+      name: 'Old CO',
+      loginName: 'old-co',
+      deletedAt: NOW.toISOString(),
+    }
+    const draft = mergeRetired(sample(), [record, { ...record, id: tid('blue-co') }])
+    expect(draft.design.retired).toEqual([record])
+    expect(mergeRetired(draft, [record])).toBe(draft)
+    expect(takenLoginNames(draft).has('old-co')).toBe(true)
   })
 })
 
@@ -223,29 +351,29 @@ describe('game', () => {
 
 describe('forces', () => {
   it('edits name, colour, icon and umpire flag', () => {
-    let draft = updateForce(sample(), 'blue', {
+    let draft = updateForce(sample(), tid('blue'), {
       name: 'Azure',
       colour: '#0000ff',
-      iconAssetId: 'game-logo',
+      iconAssetId: tid('game-logo'),
       isUmpire: true,
     })
     expect(draft.design.forces[0]).toMatchObject({
       name: 'Azure',
       colour: '#0000ff',
-      iconAssetId: 'game-logo',
+      iconAssetId: tid('game-logo'),
       isUmpire: true,
     })
-    draft = updateForce(draft, 'blue', { iconAssetId: null })
+    draft = updateForce(draft, tid('blue'), { iconAssetId: null })
     expect(draft.design.forces[0]).not.toHaveProperty('iconAssetId')
-    draft = updateForce(draft, 'blue', { name: 'Navy' })
+    draft = updateForce(draft, tid('blue'), { name: 'Navy' })
     expect(draft.design.forces[0]).not.toHaveProperty('iconAssetId')
   })
 
   it('keeps exactly one umpire flag: setting it clears it elsewhere (ADM-4)', () => {
-    const draft = updateForce(sample(), 'red', { isUmpire: true })
-    expect(draft.design.forces.filter((f) => f.isUmpire).map((f) => f.id)).toEqual(['red'])
+    const draft = updateForce(sample(), tid('red'), { isUmpire: true })
+    expect(draft.design.forces.filter((f) => f.isUmpire).map((f) => short(f.id))).toEqual(['red'])
     // Clearing it leaves none, which validation warns about.
-    const none = updateForce(draft, 'red', { isUmpire: false })
+    const none = updateForce(draft, tid('red'), { isUmpire: false })
     expect(none.design.forces.some((f) => f.isUmpire)).toBe(false)
     expect(validateDraft(none.design).issues).toContainEqual(
       expect.objectContaining({ severity: 'warning', path: 'forces' }),
@@ -253,39 +381,39 @@ describe('forces', () => {
   })
 
   it('refuses to delete a force that has roles', () => {
-    const result = deleteForce(sample(), 'blue')
+    const result = deleteForce(sample(), tid('blue'))
     expect(result).toEqual({
       ok: false,
       error: 'Blue still has 2 roles; move or delete them first',
     })
-    const one = deleteForce(deleteRole(sample(), 'blue-observer'), 'blue')
+    const one = deleteForce(deleteRole(sample(), tid('blue-observer')), tid('blue'))
     expect(one).toEqual({ ok: false, error: 'Blue still has 1 role; move or delete them first' })
   })
 
   it('deletes a force with its objectives and participant entries', () => {
-    let draft = deleteRole(sample(), 'red-co')
-    draft = ok(deleteForce(draft, 'red'))
-    expect(draft.design.forces.map((f) => f.id)).toEqual(['blue', 'white'])
+    let draft = deleteRole(sample(), tid('red-co'))
+    draft = ok(deleteForce(draft, tid('red')))
+    expect(draft.design.forces.map((f) => short(f.id))).toEqual(['blue', 'white'])
     expect(draft.design.forces.map((f) => f.order)).toEqual([0, 1])
-    expect(objectivesOf(draft.design, 'red')).toBeUndefined()
-    expect(draft.design.rooms.find((r) => r.id === 'red-hq')?.participants).toEqual([])
-    expect(draft.meta.retiredIds.forces).toEqual(['red'])
-    expect(addForce(draft, 'Red').id).toBe('red-2')
+    expect(objectivesOf(draft.design, tid('red'))).toBeUndefined()
+    expect(draft.design.rooms.find((r) => r.id === tid('red-hq'))?.participants).toEqual([])
+    // Never published, so no record is kept.
+    expect(draft.design.retired).toEqual([])
   })
 
   it('reorders and keeps orders 0…n-1 (§3 rule 7)', () => {
-    let draft = moveForce(sample(), 'white', 0)
+    let draft = moveForce(sample(), tid('white'), 0)
     expect(orders(draft.design).forces).toEqual(['white:0', 'blue:1', 'red:2'])
-    draft = moveForce(draft, 'white', 99)
+    draft = moveForce(draft, tid('white'), 99)
     expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'white:2'])
-    draft = moveForce(draft, 'blue', -5)
+    draft = moveForce(draft, tid('blue'), -5)
     expect(orders(draft.design).forces).toEqual(['blue:0', 'red:1', 'white:2'])
-    expect(moveForce(draft, 'ghost', 0).design.forces).toEqual(draft.design.forces)
+    expect(moveForce(draft, tid('ghost'), 0).design.forces).toEqual(draft.design.forces)
   })
 
   it('sorts roles by force order after a force moves', () => {
-    const draft = moveForce(sample(), 'red', 0)
-    expect(sortedRoles(draft.design).map((r) => r.id)).toEqual([
+    const draft = moveForce(sample(), tid('red'), 0)
+    expect(sortedRoles(draft.design).map((r) => r.loginName)).toEqual([
       'red-co',
       'blue-co',
       'blue-observer',
@@ -297,31 +425,31 @@ describe('forces', () => {
 
 describe('objectives (ADM-23)', () => {
   it("stores the admin's item with updatedAt", () => {
-    const draft = setObjectives(sample(), 'blue', '## Hold', NOW)
-    expect(objectivesOf(draft.design, 'blue')).toEqual({
+    const draft = setObjectives(sample(), tid('blue'), '## Hold', NOW)
+    expect(objectivesOf(draft.design, tid('blue'))).toEqual({
       schemaVersion: 1,
-      forceId: 'blue',
+      forceId: tid('blue'),
       markdown: '## Hold',
       updatedAt: NOW.toISOString(),
     })
-    expect(draft.design.objectives.filter((o) => o.forceId === 'blue')).toHaveLength(1)
-    const white = setObjectives(draft, 'white', 'Watch')
-    expect(objectivesOf(white.design, 'white')?.markdown).toBe('Watch')
+    expect(draft.design.objectives.filter((o) => o.forceId === tid('blue'))).toHaveLength(1)
+    const white = setObjectives(draft, tid('white'), 'Watch')
+    expect(objectivesOf(white.design, tid('white'))?.markdown).toBe('Watch')
   })
 })
 
 describe('roles', () => {
   it('edits name and observer flag', () => {
-    const draft = updateRole(sample(), 'red-co', { name: 'Red Commander', isObserver: true })
-    expect(draft.design.roles.find((r) => r.id === 'red-co')).toMatchObject({
+    const draft = updateRole(sample(), tid('red-co'), { name: 'Red Commander', isObserver: true })
+    expect(draft.design.roles.find((r) => r.id === tid('red-co'))).toMatchObject({
       name: 'Red Commander',
       isObserver: true,
     })
   })
 
   it('adds a role at the end of its force', () => {
-    const { draft, id } = addRole(sample(), 'blue', 'Blue Logistics')
-    expect(id).toBe('blue-logistics')
+    const { draft, id } = addRole(sample(), tid('blue'), 'Blue Logistics')
+    expect(draft.design.roles.find((r) => r.id === id)?.loginName).toBe('blue-logistics')
     expect(orders(draft.design).roles).toEqual([
       'blue/blue-co:0',
       'blue/blue-observer:1',
@@ -332,7 +460,7 @@ describe('roles', () => {
   })
 
   it('reorders within a force', () => {
-    const draft = moveRole(sample(), 'blue-observer', 'blue', 0)
+    const draft = moveRole(sample(), tid('blue-observer'), tid('blue'), 0)
     expect(orders(draft.design).roles.slice(0, 2)).toEqual([
       'blue/blue-observer:0',
       'blue/blue-co:1',
@@ -341,9 +469,9 @@ describe('roles', () => {
 
   it('moves between forces and keeps its id (ADM-5)', () => {
     const before = sample()
-    const draft = moveRole(before, 'blue-co', 'red', 0)
-    const moved = draft.design.roles.find((r) => r.id === 'blue-co')
-    expect(moved).toMatchObject({ id: 'blue-co', forceId: 'red', order: 0 })
+    const draft = moveRole(before, tid('blue-co'), tid('red'), 0)
+    const moved = draft.design.roles.find((r) => r.id === tid('blue-co'))
+    expect(moved).toMatchObject({ id: tid('blue-co'), forceId: tid('red'), order: 0 })
     expect(orders(draft.design).roles).toEqual([
       'blue/blue-observer:0',
       'red/blue-co:0',
@@ -351,83 +479,34 @@ describe('roles', () => {
       'white/white-observer:0',
     ])
     // Its room entries still name it.
-    expect(draft.design.rooms.find((r) => r.id === 'negotiation')?.participants).toContainEqual({
+    expect(
+      draft.design.rooms.find((r) => r.id === tid('negotiation'))?.participants,
+    ).toContainEqual({
       kind: 'role',
-      id: 'blue-co',
+      id: tid('blue-co'),
       access: 'write',
     })
     // And it now reads Red HQ through the Red force entry, and not Blue HQ.
     const matrix = effectiveAccess(draft.design)
-    expect(accessOf(matrix, 'red-hq', 'blue-co')).toBe('write')
-    expect(accessOf(matrix, 'blue-hq', 'blue-co')).toBe('none')
+    expect(accessOf(matrix, tid('red-hq'), tid('blue-co'))).toBe('write')
+    expect(accessOf(matrix, tid('blue-hq'), tid('blue-co'))).toBe('none')
   })
 
   it('moves to the end of another force by default', () => {
-    const draft = moveRole(sample(), 'red-co', 'blue')
-    expect(draft.design.roles.find((r) => r.id === 'red-co')).toMatchObject({
-      forceId: 'blue',
+    const draft = moveRole(sample(), tid('red-co'), tid('blue'))
+    expect(draft.design.roles.find((r) => r.id === tid('red-co'))).toMatchObject({
+      forceId: tid('blue'),
       order: 2,
     })
   })
 
-  it('deletes a role, its entries, and retires its id', () => {
-    const draft = deleteRole(sample(), 'blue-co')
-    expect(draft.design.roles.map((r) => r.id)).not.toContain('blue-co')
-    expect(draft.design.roles.find((r) => r.id === 'blue-observer')?.order).toBe(0)
-    expect(draft.design.rooms.find((r) => r.id === 'negotiation')?.participants).toEqual([
-      { kind: 'role', id: 'red-co', access: 'write' },
+  it('deletes a role and its entries', () => {
+    const draft = deleteRole(sample(), tid('blue-co'))
+    expect(draft.design.roles.map((r) => r.id)).not.toContain(tid('blue-co'))
+    expect(draft.design.roles.find((r) => r.id === tid('blue-observer'))?.order).toBe(0)
+    expect(draft.design.rooms.find((r) => r.id === tid('negotiation'))?.participants).toEqual([
+      { kind: 'role', id: tid('red-co'), access: 'write' },
     ])
-    expect(draft.meta.retiredIds.roles).toEqual(['blue-co'])
-  })
-})
-
-describe('login ids', () => {
-  it('changes a login id before the first publish', () => {
-    const before = sample()
-    const draft = ok(changeRoleId(before, 'blue-co', 'blue-commander'))
-    expect(draft.design.roles.map((r) => r.id)).toContain('blue-commander')
-    expect(draft.design.rooms.find((r) => r.id === 'negotiation')?.participants[0]).toEqual({
-      kind: 'role',
-      id: 'blue-commander',
-      access: 'write',
-    })
-    // Unrelated rooms keep their identity.
-    expect(draft.design.rooms[1]).toBe(before.design.rooms[1])
-    expect(draft.meta.retiredIds.roles).toEqual(['blue-co'])
-    expect(roleIdProblem(draft, 'blue-commander', 'blue-co')).toBe(
-      '"blue-co" was used by a deleted role and cannot be reused',
-    )
-  })
-
-  it('refuses bad, reserved and taken ids', () => {
-    const draft = sample()
-    expect(roleIdProblem(draft, 'blue-co', 'Blue CO')).toBe(
-      'use lowercase letters, digits and single hyphens',
-    )
-    expect(roleIdProblem(draft, 'blue-co', 'admin')).toBe('"admin" is reserved')
-    expect(roleIdProblem(draft, 'blue-co', 'red-co')).toBe('another role is "red-co"')
-    expect(roleIdProblem(draft, 'blue-co', 'blue-co')).toBeUndefined()
-    expect(changeRoleId(draft, 'blue-co', 'admin')).toEqual({
-      ok: false,
-      error: '"admin" is reserved',
-    })
-  })
-
-  it('fixes login ids once published', () => {
-    const draft = markPublished(sample())
-    expect(isRolePublished(draft, 'blue-co')).toBe(true)
-    expect(roleIdProblem(draft, 'blue-co', 'blue-x')).toBe(
-      'the login id cannot change after the role has been published',
-    )
-    // A role added after the publish can still change.
-    const added = addRole(draft, 'blue', 'New')
-    expect(isRolePublished(added.draft, added.id)).toBe(false)
-    expect(roleIdProblem(added.draft, added.id, 'fresh')).toBeUndefined()
-    // Publishing twice keeps one entry per role.
-    expect(markPublished(markPublished(draft)).meta.publishedRoleIds).toHaveLength(4)
-    // A published id that is later deleted is never reused.
-    const gone = deleteRole(draft, 'red-co')
-    expect(roleIdProblem(gone, added.id, 'red-co')).toBeDefined()
   })
 })
 
@@ -446,64 +525,71 @@ describe('rooms', () => {
   })
 
   it('edits name, type and config', () => {
-    let draft = updateRoom(sample(), 'blue-hq', { config: { a: 1 } })
+    let draft = updateRoom(sample(), tid('blue-hq'), { config: { a: 1 } })
     expect(draft.design.rooms[0]?.config).toEqual({ a: 1 })
-    draft = updateRoom(draft, 'blue-hq', { name: 'Blue Ops' })
+    draft = updateRoom(draft, tid('blue-hq'), { name: 'Blue Ops' })
     expect(draft.design.rooms[0]).toMatchObject({ name: 'Blue Ops', config: { a: 1 } })
-    draft = updateRoom(draft, 'blue-hq', { roomType: 'chat' })
+    draft = updateRoom(draft, tid('blue-hq'), { roomType: 'chat' })
     expect(draft.design.rooms[0]?.config).toEqual({ a: 1 })
-    draft = updateRoom(draft, 'blue-hq', { roomType: 'map' })
+    draft = updateRoom(draft, tid('blue-hq'), { roomType: 'map' })
     expect(draft.design.rooms[0]).toMatchObject({ roomType: 'map', config: {} })
-    draft = updateRoom(draft, 'blue-hq', { roomType: 'chat', config: { b: 2 } })
+    draft = updateRoom(draft, tid('blue-hq'), { roomType: 'chat', config: { b: 2 } })
     expect(draft.design.rooms[0]).toMatchObject({ roomType: 'chat', config: { b: 2 } })
   })
 
   it('edits participants, one entry per force or role (§3 rule 4)', () => {
-    let draft = setParticipant(sample(), 'blue-hq', { kind: 'role', id: 'red-co', access: 'read' })
-    draft = setParticipant(draft, 'blue-hq', { kind: 'force', id: 'blue', access: 'read' })
+    let draft = setParticipant(sample(), tid('blue-hq'), {
+      kind: 'role',
+      id: tid('red-co'),
+      access: 'read',
+    })
+    draft = setParticipant(draft, tid('blue-hq'), {
+      kind: 'force',
+      id: tid('blue'),
+      access: 'read',
+    })
     expect(draft.design.rooms[0]?.participants).toEqual([
-      { kind: 'force', id: 'blue', access: 'read' },
-      { kind: 'role', id: 'red-co', access: 'read' },
+      { kind: 'force', id: tid('blue'), access: 'read' },
+      { kind: 'role', id: tid('red-co'), access: 'read' },
     ])
-    draft = removeParticipant(draft, 'blue-hq', 'force', 'blue')
+    draft = removeParticipant(draft, tid('blue-hq'), 'force', tid('blue'))
     expect(draft.design.rooms[0]?.participants).toEqual([
-      { kind: 'role', id: 'red-co', access: 'read' },
+      { kind: 'role', id: tid('red-co'), access: 'read' },
     ])
   })
 
   it('reorders rooms', () => {
-    const draft = moveRoom(sample(), 'negotiation', 0)
+    const draft = moveRoom(sample(), tid('negotiation'), 0)
     expect(orders(draft.design).rooms).toEqual(['negotiation:0', 'blue-hq:1', 'red-hq:2'])
   })
 
-  it('deletes a room and retires its id', () => {
-    const draft = deleteRoom(sample(), 'red-hq')
+  it('deletes a room', () => {
+    const draft = deleteRoom(sample(), tid('red-hq'))
     expect(orders(draft.design).rooms).toEqual(['blue-hq:0', 'negotiation:1'])
-    expect(draft.meta.retiredIds.rooms).toEqual(['red-hq'])
   })
 })
 
 describe('referencesTo', () => {
   it('lists roles, rooms and objectives of a force', () => {
-    expect(referencesTo(sample().design, 'forces', 'blue')).toEqual([
-      expect.objectContaining({ kind: 'role', id: 'blue-co', blocks: true }),
-      expect.objectContaining({ kind: 'role', id: 'blue-observer', blocks: true }),
-      expect.objectContaining({ kind: 'objectives', id: 'blue', blocks: false }),
-      expect.objectContaining({ kind: 'room', id: 'blue-hq', name: 'Blue HQ', blocks: false }),
+    expect(referencesTo(sample().design, 'forces', tid('blue'))).toEqual([
+      expect.objectContaining({ kind: 'role', id: tid('blue-co'), blocks: true }),
+      expect.objectContaining({ kind: 'role', id: tid('blue-observer'), blocks: true }),
+      expect.objectContaining({ kind: 'objectives', id: tid('blue'), blocks: false }),
+      expect.objectContaining({ kind: 'room', id: tid('blue-hq'), name: 'Blue HQ', blocks: false }),
     ])
   })
 
   it('lists the rooms naming a role', () => {
-    expect(referencesTo(sample().design, 'roles', 'red-co')).toEqual([
+    expect(referencesTo(sample().design, 'roles', tid('red-co'))).toEqual([
       {
         kind: 'room',
-        id: 'negotiation',
+        id: tid('negotiation'),
         name: 'Blue–Red negotiation',
         effect: 'its participant entry is removed',
         blocks: false,
       },
     ])
-    expect(referencesTo(sample().design, 'rooms', 'red-hq')).toEqual([])
+    expect(referencesTo(sample().design, 'rooms', tid('red-hq'))).toEqual([])
   })
 })
 
@@ -520,7 +606,8 @@ describe('normalise', () => {
     expect(orders(tidy)).toEqual({
       forces: ['white:0', 'blue:1', 'red:2'],
       roles: ['white/white-observer:0', 'blue/blue-co:0', 'blue/blue-observer:1', 'red/red-co:0'],
-      rooms: ['blue-hq:0', 'negotiation:1', 'red-hq:2'],
+      // Ties sort by id: the fixed GUIDs put Blue HQ, then Red HQ, then the negotiation room.
+      rooms: ['blue-hq:0', 'red-hq:1', 'negotiation:2'],
     })
   })
 
@@ -531,9 +618,9 @@ describe('normalise', () => {
 
   it('sorts roles of unknown forces last', () => {
     const design = sampleDesign()
-    const orphan = { ...design.roles[0]!, id: 'orphan', forceId: 'ghost' }
+    const orphan = { ...design.roles[0]!, id: tid('orphan'), forceId: tid('ghost') }
     const tidy = normalise({ ...design, roles: [orphan, ...design.roles] })
-    expect(tidy.roles.at(-1)?.id).toBe('orphan')
+    expect(tidy.roles.at(-1)?.id).toBe(tid('orphan'))
   })
 })
 

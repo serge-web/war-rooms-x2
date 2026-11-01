@@ -21,7 +21,7 @@
 // Operations are primitives for a planner (2.3 publish, 2.10 audit). Each resolves to a Result
 // and never rejects for a refusal (ARC-14), and reports each step to an optional listener.
 import { bareJid, domainpart } from '@wrx/domain'
-import { isReservedRoleId, parseNodeName, slugSchema } from '@wrx/schemas'
+import { isGameNodeName, isReservedLoginName, slugSchema } from '@wrx/schemas'
 import type {
   AffiliationEntry,
   Endpoint,
@@ -247,11 +247,12 @@ export class AdminOps {
     return failed
   }
 
+  /** Roles are named by login name, the account's localpart (§3 rule 1). */
   private checkRole(op: string, roleId: string): OpsResult<void> {
     if (!slugSchema.safeParse(roleId).success) {
-      return opsErr('invalid', `"${roleId}" is not a role id`, { op, target: roleId })
+      return opsErr('invalid', `"${roleId}" is not a login name`, { op, target: roleId })
     }
-    if (isReservedRoleId(roleId)) {
+    if (isReservedLoginName(roleId)) {
       return opsErr('invalid', `"${roleId}" is reserved; the tooling never changes it`, {
         op,
         target: roleId,
@@ -260,6 +261,10 @@ export class AdminOps {
     return opsOk(undefined)
   }
 
+  /**
+   * A room's localpart: a GUID, or a slug from a game published before GUID ids, which a reset
+   * must still be able to destroy (ADM-15).
+   */
   private checkRoom(op: string, roomId: string): OpsResult<void> {
     return slugSchema.safeParse(roomId).success
       ? opsOk(undefined)
@@ -267,7 +272,7 @@ export class AdminOps {
   }
 
   private checkNode(op: string, node: string): OpsResult<void> {
-    return parseNodeName(node) === undefined
+    return !isGameNodeName(node)
       ? opsErr('invalid', `"${node}" is not a WRX1 node`, { op, target: node })
       : opsOk(undefined)
   }
@@ -1018,7 +1023,7 @@ export class AdminOps {
       this.session.pubsub.listNodes(),
     )
     if (!listed.ok) return listed
-    return opsOk(listed.value.filter((n) => parseNodeName(n) !== undefined))
+    return opsOk(listed.value.filter((n) => isGameNodeName(n)))
   }
 
   // ---- accounts -------------------------------------------------------------------------------

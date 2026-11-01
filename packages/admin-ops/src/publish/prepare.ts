@@ -99,7 +99,8 @@ export async function checkServer(ops: AdminOps, view: ServerView): Promise<Serv
   }
   const off = view.rooms.flatMap((room) => {
     const wrong = ROOM_SETTINGS.filter((key) => room.config[key] !== ROOM_DEFAULTS[key])
-    return wrong.length === 0 ? [] : [`${room.roomId} (${wrong.join(', ')})`]
+    const name = room.config.name === '' ? room.roomId : room.config.name
+    return wrong.length === 0 ? [] : [`${name} (${wrong.join(', ')})`]
   })
   checks.push({
     id: 'room-defaults',

@@ -13,8 +13,8 @@ export interface Sender {
   readonly nick: string
   /** The sender's bare JID, as the non-anonymous room reveals it. */
   readonly jid: string | undefined
-  /** The role id: the JID's local part when it is on this game's domain. */
-  readonly roleId: string | undefined
+  /** The role's login name: the JID's local part when it is on this game's domain. */
+  readonly loginName: string | undefined
   /** The sender is the server's `admin` account (D3). */
   readonly isAdmin: boolean
 }

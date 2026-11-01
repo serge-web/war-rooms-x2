@@ -9,6 +9,14 @@ import { z } from 'zod'
 
 export const MOCK_STATE_FORMAT = 'wrx1-mock-state'
 
+/**
+ * The state's version. 2 since GUID entity ids (WP 3.5, §3 rule 1): a version 1 state holds
+ * nodes and rooms named by slug ids, which this release does not read, and is not migrated
+ * (room history is not worth it), so a browser that kept one resets to the seed with a notice
+ * (DOC-17).
+ */
+export const MOCK_STATE_VERSION = 2
+
 const roomConfigSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -42,7 +50,7 @@ const stanzaIdSchema = z.string().regex(/^\d{1,20}$/, 'a stanza-id is a microsec
 
 export const mockStateSchema = z.object({
   format: z.literal(MOCK_STATE_FORMAT),
-  version: z.literal(1),
+  version: z.literal(MOCK_STATE_VERSION),
   domain: z.string().min(1),
   accounts: z.array(
     z.object({
@@ -124,7 +132,7 @@ export function parseMockState(input: unknown): Result<MockState, string> {
 export function emptyState(domain: string, adminPassword: string, demo = true): MockState {
   return {
     format: MOCK_STATE_FORMAT,
-    version: 1,
+    version: MOCK_STATE_VERSION,
     domain,
     accounts: [{ jid: `admin@${domain}`, password: adminPassword, admin: true, demo }],
     rooms: [],

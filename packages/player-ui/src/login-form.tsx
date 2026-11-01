@@ -1,4 +1,4 @@
-// The login form (PLY-1): role id and password. On the mock, the demo logins are listed and
+// The login form (PLY-1): login name and password. On the mock, the demo logins are listed and
 // labelled as demo passwords (NFR-6).
 import { Button, PasswordField, TextField } from '@wrx/ui'
 import { useId, useState } from 'react'
@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 
 /** A mock account with its known demo password (NFR-6). */
 export interface DemoLogin {
+  /** The role's login name (its account), or `admin`. */
   readonly roleId: string
   /** e.g. "Blue CO (Blue)". */
   readonly label: string
@@ -22,7 +23,7 @@ export interface LoginFormCoreProps {
   readonly before?: ReactNode
   /** The form's heading. Default "Log in". */
   readonly title?: string
-  /** The role id to start with, e.g. from a multi-client preset (PLY-19). */
+  /** The login name to start with, e.g. from a multi-client preset (PLY-19). */
   readonly initialRoleId?: string
 }
 
@@ -53,7 +54,7 @@ export function LoginFormCore({
       >
         {before}
         <TextField
-          label="Role id"
+          label="Login name"
           name="role"
           autoComplete="username"
           autoCapitalize="none"
@@ -93,7 +94,7 @@ export function LoginFormCore({
             <thead>
               <tr>
                 <th scope="col">Role</th>
-                <th scope="col">Role id</th>
+                <th scope="col">Login name</th>
                 <th scope="col">Demo password</th>
                 <th scope="col">
                   <span className="wrx-visually-hidden">Fill in</span>

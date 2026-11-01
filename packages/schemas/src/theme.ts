@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { hexColourSchema, slugSchema } from './common.ts'
+import { hexColourSchema, idSchema } from './common.ts'
 
 /**
  * Font families bundled with the client (NFR-7). WP 2.8 maps each id to bundled font files;
@@ -22,8 +22,8 @@ export const themeTokensSchema = z
 export const themeSchema = z
   .object({
     tokens: themeTokensSchema,
-    logoAssetId: slugSchema.optional().describe('Id of an `assets:<id>` node'),
-    iconAssetId: slugSchema.optional().describe('Id of an `assets:<id>` node'),
+    logoAssetId: idSchema.optional().describe('Id of an `assets:<id>` node'),
+    iconAssetId: idSchema.optional().describe('Id of an `assets:<id>` node'),
   })
   .describe('Theme: tokens plus optional logo and icon assets')
 

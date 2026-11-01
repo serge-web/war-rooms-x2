@@ -1,5 +1,6 @@
 // The SharedWorker path in Node: the worker host (worker-host.ts) behind MessageChannels, as
 // FakeBrowser simulates it. Playwright runs the real SharedWorker in Chromium (e2e/).
+import { tid } from '@wrx/schemas/fixtures'
 import type { RoomMessage } from '@wrx/transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connectMockTransport } from './connect.ts'
@@ -7,7 +8,7 @@ import type { MockHost } from './connect.ts'
 import { FakeBrowser } from './fixtures.ts'
 import type { LogEntry } from './wire.ts'
 
-const ROOM = 'negotiation@conference.wrx.mock'
+const ROOM = `${tid('negotiation')}@conference.wrx.mock`
 const endpoint = { websocketUrl: 'mock://test', domain: 'wrx.mock' }
 const open: MockHost[] = []
 const browsers: FakeBrowser[] = []

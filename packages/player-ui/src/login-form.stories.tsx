@@ -38,5 +38,5 @@ export const WithBackendChoice: Story = {
     ),
   },
 }
-export const Refused: Story = { args: { error: 'Wrong role id or password.' } }
+export const Refused: Story = { args: { error: 'Wrong login name or password.' } }
 export const Busy: Story = { args: { busy: true } }

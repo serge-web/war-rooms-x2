@@ -3,6 +3,8 @@
 // reset (PLY-42), the keyboard move (NFR-14) and a popout docking back. Tests read the DOM and
 // drive the page as a user would; nothing reaches into the layout library.
 import { expect, test } from '@playwright/test'
+import { nodeName } from '@wrx/schemas'
+import { ASSET, FORCE, tid } from '@wrx/schemas/fixtures'
 import type { Page } from '@playwright/test'
 import { columns, drag } from './layout.ts'
 import { asMockAdmin, logIn } from './mock.ts'
@@ -43,7 +45,7 @@ function gameSetup(designVersion: number) {
       description: 'A two-sided negotiation exercise.',
       briefing: '## Briefing\n\nThe exercise starts at 09:00.',
       designVersion,
-      theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' }, logoAssetId: 'game-logo' },
+      theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' }, logoAssetId: ASSET.gameLogo },
       roomTypeDefaults: {},
     }),
   } as const
@@ -95,16 +97,16 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   // What a publish does: the node, the new room's document, and a new design version (§3
   // rule 8), since PubSub does not announce new nodes.
   await asMockAdmin(page, [
-    { op: 'create-node', node: 'rooms:press', members: ['blue-co'] },
+    { op: 'create-node', node: nodeName.room(tid('press')), members: ['blue-co'] },
     {
       op: 'publish',
-      node: 'rooms:press',
+      node: nodeName.room(tid('press')),
       payload: JSON.stringify({
         schemaVersion: 1,
-        id: 'press',
+        id: tid('press'),
         name: 'Press room',
         roomType: 'chat',
-        participants: [{ kind: 'force', id: 'blue', access: 'write' }],
+        participants: [{ kind: 'force', id: FORCE.blue, access: 'write' }],
         config: {},
         order: 3,
       }),
@@ -121,7 +123,7 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   await expect(tab(page, ROOMS.red)).toHaveAttribute('aria-selected', 'true')
   // The room is withdrawn again: its tab closes, the rest stays. The node's deletion is
   // announced, so no new design version is needed.
-  await asMockAdmin(page, [{ op: 'delete-node', node: 'rooms:press' }])
+  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(tid('press')) }])
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
   expect(errors).toEqual([])
 })

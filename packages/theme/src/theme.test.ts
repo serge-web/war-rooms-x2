@@ -37,6 +37,8 @@ const WEBP = new Uint8Array([
 ])
 const utf8 = (s: string) => new TextEncoder().encode(s)
 
+const ASSET_ID = '40000000-0000-4000-8000-0000000000aa'
+
 describe('resolveTheme (§3 rule 11)', () => {
   const game: Theme = {
     tokens: { primary: '#112233', text: '#000000', fontFamily: 'serif' },
@@ -206,12 +208,12 @@ describe('assets (§3 rule 12)', () => {
   })
 
   it('builds a valid asset document from a PNG', async () => {
-    const result = await createAsset({ id: 'logo', bytes: PNG, declaredType: 'image/png' })
+    const result = await createAsset({ id: ASSET_ID, bytes: PNG, declaredType: 'image/png' })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.value).toMatchObject({
       schemaVersion: 1,
-      id: 'logo',
+      id: ASSET_ID,
       mimeType: 'image/png',
       size: PNG.length,
       sha256: await sha256Hex(PNG),
@@ -220,23 +222,25 @@ describe('assets (§3 rule 12)', () => {
   })
 
   it('refuses a file whose contents do not match its declared type', async () => {
-    const result = await createAsset({ id: 'x', bytes: PNG, declaredType: 'image/webp' })
+    const result = await createAsset({ id: ASSET_ID, bytes: PNG, declaredType: 'image/webp' })
     expect(result).toMatchObject({ ok: false, error: { code: 'type-mismatch' } })
-    const gif = await createAsset({ id: 'x', bytes: utf8('GIF89a....') })
+    const gif = await createAsset({ id: ASSET_ID, bytes: utf8('GIF89a....') })
     expect(gif).toMatchObject({ ok: false, error: { code: 'type' } })
   })
 
   it('refuses an image over the limit, or one that would not fit a server item', async () => {
     const big = new Uint8Array(5000)
     big.set(PNG)
-    expect(await createAsset({ id: 'x', bytes: big }, { limitBytes: 4000 })).toMatchObject({
+    expect(await createAsset({ id: ASSET_ID, bytes: big }, { limitBytes: 4000 })).toMatchObject({
       ok: false,
       error: { code: 'too-large' },
     })
-    expect(await createAsset({ id: 'x', bytes: big }, { itemLimitBytes: 8000 })).toMatchObject({
-      ok: false,
-      error: { code: 'item-limit' },
-    })
+    expect(await createAsset({ id: ASSET_ID, bytes: big }, { itemLimitBytes: 8000 })).toMatchObject(
+      {
+        ok: false,
+        error: { code: 'item-limit' },
+      },
+    )
   })
 
   it('fails closed where DOMPurify cannot sanitise (no real DOM)', async () => {
@@ -247,7 +251,7 @@ describe('assets (§3 rule 12)', () => {
       error: { code: 'sanitiser-unavailable' },
     })
     const svg = utf8('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>')
-    expect(await createAsset({ id: 'x', bytes: svg })).toMatchObject({ ok: false })
+    expect(await createAsset({ id: ASSET_ID, bytes: svg })).toMatchObject({ ok: false })
   })
 
   it('refuses an asset type it does not show as an image', () => {

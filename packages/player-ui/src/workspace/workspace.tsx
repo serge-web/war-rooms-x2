@@ -69,7 +69,9 @@ export function Workspace({ storage, registry = EMPTY_REGISTRY, tabBadge }: Work
     return <Spinner label="Loading your rooms" />
   }
   const { identity, rooms } = me.data
-  const role = identity.roleId ?? (identity.isAdmin ? 'admin' : undefined)
+  // Keyed by the role's GUID, so a layout saved before GUID ids (keyed by the old role id, with
+  // the old room ids) is not found, and the default layout is used once (PLY-5).
+  const role = me.data.role?.id ?? (identity.isAdmin ? 'admin' : undefined)
   const key =
     role === undefined
       ? undefined

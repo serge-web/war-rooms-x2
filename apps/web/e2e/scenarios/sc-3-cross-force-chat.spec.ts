@@ -8,6 +8,7 @@
 // context goes offline; on the mock, which runs in the browser, Red's tab loses its mock
 // connection instead (backend.ts, `setNetwork`).
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
 
 const TALKS = 'Blue–Red negotiation'
@@ -36,7 +37,7 @@ test('SC-3: Blue and Red chat across forces; Red’s dropped connection loses, r
   const blueErrors = watchErrors(blue)
   await openApp(blue, backend)
   // The negotiation already has more history than one page (PLY-49).
-  await backend.asAdmin(blue, [{ op: 'post', room: 'negotiation', texts: HISTORY }])
+  await backend.asAdmin(blue, [{ op: 'post', room: ROOM.negotiation, texts: HISTORY }])
   await logInAs(blue, backend, 'blue-co')
   await expect(tab(blue, TALKS)).toBeVisible({ timeout: 20_000 })
 

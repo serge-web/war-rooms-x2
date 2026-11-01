@@ -7,6 +7,7 @@
 // context share the mock, as separate tabs do (D17).
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { DOMAIN, logIn, roomTabs } from './mock.ts'
 
 const column = (page: Page) => page.getByRole('complementary', { name: 'Out-of-game column' })
@@ -142,14 +143,20 @@ test('the umpire posts in every room; a White observer reads every room and post
   // ...and the server, which enforces it (PLY-39), lets the umpire post in each, makes the White
   // observer a visitor in each, and keeps Blue out of Red HQ.
   const posted = await page.evaluate(
-    async ({ domain }) => {
+    async ({ domain, room }) => {
       const host = window.wrxMock
       if (host === undefined) return ['no mock host']
       const results: string[] = []
+      // Rooms by GUID (§3 rule 1), with the short names the results use.
+      const every: (readonly [string, string])[] = [
+        [room.blueHq, 'blue-hq'],
+        [room.redHq, 'red-hq'],
+        [room.negotiation, 'negotiation'],
+      ]
       for (const [user, rooms] of [
-        ['admin', ['blue-hq', 'red-hq', 'negotiation']],
-        ['white-observer', ['blue-hq', 'red-hq', 'negotiation']],
-        ['blue-co', ['red-hq']],
+        ['admin', every],
+        ['white-observer', every],
+        ['blue-co', [[room.redHq, 'red-hq'] as const]],
       ] as const) {
         const login = await host.connect({
           endpoint: { websocketUrl: '', domain },
@@ -158,24 +165,24 @@ test('the umpire posts in every room; a White observer reads every room and post
         })
         if (!login.ok) return [`${user} login: ${login.error.condition}`]
         const session = login.value
-        for (const room of rooms) {
-          const jid = `${room}@${session.services.muc}`
+        for (const [id, name] of rooms) {
+          const jid = `${id}@${session.services.muc}`
           const joined = await session.muc.join(jid, `${user}-check`)
           if (!joined.ok) {
-            results.push(`${user} ${room}: ${joined.error.condition}`)
+            results.push(`${user} ${name}: ${joined.error.condition}`)
             continue
           }
           const sent = await session.muc.send(
             jid,
             JSON.stringify({ type: 'chat', schemaVersion: 1, content: { text: 'Access check' } }),
           )
-          results.push(`${user} ${room}: ${joined.value.role} ${sent.ok ? 'posted' : 'refused'}`)
+          results.push(`${user} ${name}: ${joined.value.role} ${sent.ok ? 'posted' : 'refused'}`)
         }
         await session.disconnect()
       }
       return results
     },
-    { domain: DOMAIN },
+    { domain: DOMAIN, room: ROOM },
   )
   expect(posted.slice(0, 6)).toEqual([
     'admin blue-hq: moderator posted',

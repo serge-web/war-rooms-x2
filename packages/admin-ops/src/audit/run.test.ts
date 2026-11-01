@@ -1,7 +1,8 @@
 // Unit tests of reading the audit and repairing it, against FakeSession (the `rig` of the AdminOps
 // tests): what is read, that reading changes nothing, the stored role read through the role's
 // own login, and repairs: order, deduplication, confirmation, failures, and the re-audit.
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+import { nodeName } from '@wrx/schemas'
+import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import { err, ok } from '@wrx/transport'
 import type { AffiliationEntry, MucAffiliation } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
@@ -18,10 +19,10 @@ function blueOnly() {
   const base = sampleDesignWithWhiteCell()
   return {
     ...base,
-    forces: base.forces.filter((f) => f.id === 'blue'),
-    roles: base.roles.filter((r) => r.forceId === 'blue'),
-    rooms: base.rooms.filter((r) => r.id === 'blue-hq'),
-    objectives: base.objectives.filter((o) => o.forceId === 'blue'),
+    forces: base.forces.filter((f) => f.id === tid('blue')),
+    roles: base.roles.filter((r) => r.forceId === tid('blue')),
+    rooms: base.rooms.filter((r) => r.id === tid('blue-hq')),
+    objectives: base.objectives.filter((o) => o.forceId === tid('blue')),
     assets: [],
     game: { ...base.game, theme: { tokens: {} } },
   }
@@ -29,7 +30,7 @@ function blueOnly() {
 
 /** The admin sees Blue HQ, with both Blue roles as members, and these accounts. */
 function serve(r: Rig, accounts: readonly string[]): void {
-  r.admin.stub('muc', 'listRooms', () => Promise.resolve(ok([`blue-hq@${MUC}`])))
+  r.admin.stub('muc', 'listRooms', () => Promise.resolve(ok([`${tid('blue-hq')}@${MUC}`])))
   r.admin.stub('muc', 'getAffiliations', (_room, affiliation) => {
     const lists: Partial<Record<MucAffiliation, AffiliationEntry[]>> = {
       owner: [{ jid: jid('admin'), affiliation: 'owner' }],
@@ -57,7 +58,9 @@ describe('runAudit', () => {
     if (!run.ok) throw new Error(run.error.message)
     const report = run.value.report
     // The rig's role joins as a participant until the admin sets it to visitor.
-    expect(report.items.find((i) => i.id === 'voice:blue-observer:blue-hq')).toMatchObject({
+    expect(
+      report.items.find((i) => i.id === `voice:blue-observer:${tid('blue-hq')}`),
+    ).toMatchObject({
       kind: 'voice',
       severity: 'critical',
     })
@@ -65,8 +68,8 @@ describe('runAudit', () => {
     expect(report.items.some((i) => i.kind === 'node-missing')).toBe(true)
     expect(r.logins).toEqual(['blue-observer:observer-password'])
     expect(r.log.filter((l) => l.startsWith('role.'))).toEqual([
-      `role.muc.join ${JSON.stringify([`blue-hq@${MUC}`, 'blue-observer'])}`,
-      `role.muc.leave ${JSON.stringify([`blue-hq@${MUC}`])}`,
+      `role.muc.join ${JSON.stringify([`${tid('blue-hq')}@${MUC}`, 'blue-observer'])}`,
+      `role.muc.leave ${JSON.stringify([`${tid('blue-hq')}@${MUC}`])}`,
       'role.disconnect',
     ])
     expect(r.log.filter((l) => l.startsWith('admin.') && WRITES.test(l))).toEqual([])
@@ -110,7 +113,10 @@ describe('repair', () => {
     r.log.length = 0
     const result = await repairAndAudit(r.ops, blueOnly(), voice, { passwordFor, audit: vault })
     if (!result.ok) throw new Error(result.error.message)
-    expect(result.value.repair).toMatchObject({ ok: true, done: ['voice:blue-observer:blue-hq'] })
+    expect(result.value.repair).toMatchObject({
+      ok: true,
+      done: [`voice:blue-observer:${tid('blue-hq')}`],
+    })
     expect(ops(r.log)).toContain('admin.muc.setRole')
     expect(result.value.after.items.some((i) => i.kind === 'voice')).toBe(false)
   })
@@ -131,7 +137,7 @@ describe('repair', () => {
         repair: [{ type: 'delete-role', roleId: 'ghost', rooms: [], nodes: [] }],
       },
       ...['pane-1', 'pane-2'].map((pane): AuditItem => ({
-        id: `subscription:objectives:red:${pane}`,
+        id: `subscription:${nodeName.objectives(tid('red'))}:${pane}`,
         kind: 'subscription',
         target: `${jid('blue-co')}/${pane}`,
         roleId: 'blue-co',
@@ -143,21 +149,23 @@ describe('repair', () => {
         repair: [
           {
             type: 'node-access',
-            node: 'objectives:red',
+            node: nodeName.objectives(tid('red')),
             changes: [{ roleId: 'blue-co', access: 'none' }],
           },
         ],
       })),
       {
-        id: 'room-missing:blue-hq',
+        id: `room-missing:${tid('blue-hq')}`,
         kind: 'room-missing',
-        target: 'blue-hq',
+        target: tid('blue-hq'),
         expected: '',
         found: '',
         severity: 'high',
         repairable: true,
         destructive: false,
-        repair: [{ type: 'ensure-room', roomId: 'blue-hq', name: 'Blue HQ', create: true }],
+        repair: [
+          { type: 'ensure-room', roomId: tid(tid('blue-hq')), name: 'Blue HQ', create: true },
+        ],
       },
     ]
     const events: string[] = []
@@ -175,7 +183,7 @@ describe('repair', () => {
       order.indexOf('admin.pubsub.setAffiliations'),
     )
     expect(order.filter((o) => o === 'admin.pubsub.setAffiliations')).toHaveLength(1)
-    expect(events).toContain('subscription:objectives:red:pane-2 done')
+    expect(events).toContain(`subscription:${nodeName.objectives(tid('red'))}:pane-2 done`)
 
     r.log.length = 0
     const confirmed = await repairItems(r.ops, items.slice(0, 1), {
@@ -209,7 +217,7 @@ describe('repair', () => {
     const stray = {
       ...view,
       rooms: view.rooms.map((room) =>
-        room.roomId === 'blue-hq'
+        room.roomId === tid('blue-hq')
           ? {
               ...room,
               affiliations: [
@@ -234,7 +242,7 @@ describe('repair', () => {
     const view = publishedView(design, {
       registered: [
         jid('admin'),
-        ...design.roles.map((r) => jid(r.id)).filter((j) => j !== jid('blue-co')),
+        ...design.roles.map((r) => jid(r.loginName)).filter((j) => j !== jid('blue-co')),
       ],
     })
     const report = diffAudit(design, {
@@ -273,10 +281,14 @@ describe('repair', () => {
       messageCounts: new Map(),
     })
     const pick = report.items.filter(
-      (i) => i.id === 'node-missing:forces:blue' || i.id === 'account-missing:blue-co',
+      (i) =>
+        i.id === `node-missing:${nodeName.force(tid('blue'))}` ||
+        i.id === 'account-missing:blue-co',
     )
     const result = await repairItems(r.ops, pick, { passwordFor })
-    expect(result.failed.map((f) => f.itemId)).toEqual(['node-missing:forces:blue'])
+    expect(result.failed.map((f) => f.itemId)).toEqual([
+      `node-missing:${nodeName.force(tid('blue'))}`,
+    ])
     expect(result.done).toEqual(['account-missing:blue-co'])
     expect(result.passwordsSet).toEqual(['blue-co'])
   })

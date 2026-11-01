@@ -69,6 +69,12 @@ export function AccessMatrixCore({ matrix, design }: AccessMatrixCoreProps) {
               return (
                 <th key={roleId} scope="col">
                   {role?.name ?? roleId}
+                  {role !== undefined && (
+                    <span className="wrx-admin-login">
+                      {' '}
+                      <code>{role.loginName}</code>
+                    </span>
+                  )}
                   {role?.isObserver === true && <span className="wrx-admin-tag">Observer</span>}
                 </th>
               )

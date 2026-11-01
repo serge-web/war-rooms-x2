@@ -1,4 +1,9 @@
 // Test fixtures: a small game served by the 1.1 FakeSession (NFR-15).
+//
+// Entity ids are GUIDs (§3 rule 1). Tests name entities by short names (`blue`, `blue-hq`);
+// `tid` turns a name into its fixed GUID, the same as the sample design's for the names it has,
+// and the builders below accept either. A role's short name is its login name.
+import { nameOf, tid } from '@wrx/schemas/fixtures'
 import { nodeName } from '@wrx/schemas'
 import type { Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
 import { FakeSession, err, ok } from '@wrx/transport'
@@ -7,6 +12,8 @@ import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID } from './documents.ts'
 import type { Logger } from './logger.ts'
 import { createSessionStore } from './store.ts'
 import type { SessionStore, SessionStoreOptions } from './store.ts'
+
+export { nameOf, tid }
 
 export const DOMAIN = 'wrx.test'
 export const MUC = 'conference.wrx.test'
@@ -23,29 +30,39 @@ export function game(designVersion = 1): GameSetup {
   }
 }
 
-export function force(id: string, extra: Partial<Force> = {}): Force {
+export function force(name: string, extra: Partial<Force> = {}): Force {
   return {
     schemaVersion: 1,
-    id,
-    name: id.toUpperCase(),
+    name: (nameOf(tid(name)) ?? name).toUpperCase(),
     colour: '#1d4ed8',
     isUmpire: false,
     order: 0,
     ...extra,
+    id: tid(extra.id ?? name),
   }
 }
 
-export function role(id: string, forceId: string, extra: Partial<Role> = {}): Role {
-  return { schemaVersion: 1, id, name: id, forceId, isObserver: false, order: 0, ...extra }
+/** A role whose login name is `login`, and whose id is `tid(login)`. */
+export function role(login: string, forceId: string, extra: Partial<Role> = {}): Role {
+  return {
+    schemaVersion: 1,
+    loginName: login,
+    name: login,
+    isObserver: false,
+    order: 0,
+    ...extra,
+    id: tid(extra.id ?? login),
+    forceId: tid(extra.forceId ?? forceId),
+  }
 }
 
-export function room(id: string, participants: Room['participants'], extra: Partial<Room> = {}) {
+export function room(name: string, participants: Room['participants'], extra: Partial<Room> = {}) {
   const doc: Room = {
     schemaVersion: 1,
-    id,
-    name: id,
+    id: tid(name),
+    name: nameOf(tid(name)) ?? name,
     roomType: 'chat',
-    participants,
+    participants: participants.map((p) => ({ ...p, id: tid(p.id) })),
     config: {},
     order: 0,
     ...extra,
@@ -58,7 +75,7 @@ export function objectives(
   markdown: string,
   updatedAt = '2026-10-24T09:00:00.000Z',
 ): Objectives {
-  return { schemaVersion: 1, forceId, markdown, updatedAt }
+  return { schemaVersion: 1, forceId: tid(forceId), markdown, updatedAt }
 }
 
 export function chatBody(text: string): string {
@@ -97,8 +114,8 @@ export function sampleDocuments(): Map<string, unknown[]> {
   for (const f of forces) docs.set(nodeName.force(f.id), [f])
   for (const r of roles) docs.set(nodeName.role(r.id), [r])
   for (const r of rooms) docs.set(nodeName.room(r.id), [r])
-  docs.set(nodeName.objectives('blue'), [objectives('blue', 'Secure the crossing.')])
-  docs.set(nodeName.objectives('red'), [objectives('red', 'Delay Blue.')])
+  docs.set(nodeName.objectives(tid('blue')), [objectives('blue', 'Secure the crossing.')])
+  docs.set(nodeName.objectives(tid('red')), [objectives('red', 'Delay Blue.')])
   return docs
 }
 
@@ -140,7 +157,13 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const items = (node: string): Item[] =>
     (docs.get(node) ?? []).map((doc, i) => ({
-      id: i === 0 ? firstItemId(node) : `item-${i}`,
+      // `retired` keeps one item per record, its id the entity's GUID (§3 rule 1).
+      id:
+        node === 'retired' && typeof doc === 'object' && doc !== null && 'id' in doc
+          ? String(doc.id)
+          : i === 0
+            ? firstItemId(node)
+            : `item-${i}`,
       payload: typeof doc === 'string' ? doc : JSON.stringify(doc),
       publisher: undefined,
     }))
@@ -213,7 +236,7 @@ export function message(roomId: string, extra: Partial<RoomMessage> = {}): RoomM
   const seconds = String(counter % 60).padStart(2, '0')
   const minutes = String(Math.floor(counter / 60) % 60).padStart(2, '0')
   return {
-    room: `${roomId}@${MUC}`,
+    room: `${tid(roomId)}@${MUC}`,
     stanzaId: `s-${String(counter).padStart(6, '0')}`,
     nick: 'red-co',
     from: `red-co@${DOMAIN}`,
@@ -229,7 +252,7 @@ export function selfPresence(
   extra: Partial<OccupantEvent> = {},
 ): OccupantEvent {
   return {
-    room: `${roomId}@${MUC}`,
+    room: `${tid(roomId)}@${MUC}`,
     nick,
     jid: `${nick}@${DOMAIN}/pane-1`,
     role: 'participant',

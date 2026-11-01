@@ -1,9 +1,9 @@
-import { LIMITS } from '@wrx/schemas'
+import { LIMITS, nodeName } from '@wrx/schemas'
 import type { TransportError } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { documentValue, nodeSpec, parseItem, safeNodeName } from './documents.ts'
 import { fromTransport } from './errors.ts'
-import { force, objectives } from './fixtures.ts'
+import { force, objectives, tid } from './fixtures.ts'
 import { bareJid, domainpart, localpart } from './jid.ts'
 import { consoleLogger } from './logger.ts'
 import { escapedByteLength, fitsInStanza } from './size.ts'
@@ -13,33 +13,41 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
     expect(nodeSpec('game-setup')).toEqual({ kind: 'game-setup', id: undefined })
     expect(nodeSpec('game-state')).toEqual({ kind: 'game-state', id: undefined })
     expect(nodeSpec('announcements')).toEqual({ kind: 'announcement', id: undefined })
-    expect(nodeSpec('forces:blue')).toEqual({ kind: 'force', id: 'blue' })
-    expect(nodeSpec('roles:blue-co')).toEqual({ kind: 'role', id: 'blue-co' })
-    expect(nodeSpec('rooms:hq')).toEqual({ kind: 'room', id: 'hq' })
-    expect(nodeSpec('objectives:blue')).toEqual({ kind: 'objectives', id: 'blue' })
-    expect(nodeSpec('assets:logo')).toEqual({ kind: 'asset', id: 'logo' })
+    expect(nodeSpec('retired')).toEqual({ kind: 'retired', id: undefined })
+    expect(nodeSpec(nodeName.force(tid('blue')))).toEqual({ kind: 'force', id: tid('blue') })
+    expect(nodeSpec(nodeName.role(tid('blue-co')))).toEqual({ kind: 'role', id: tid('blue-co') })
+    expect(nodeSpec(nodeName.room(tid('hq')))).toEqual({ kind: 'room', id: tid('hq') })
+    expect(nodeSpec(nodeName.objectives(tid('blue')))).toEqual({
+      kind: 'objectives',
+      id: tid('blue'),
+    })
+    expect(nodeSpec(nodeName.asset(tid('logo')))).toEqual({ kind: 'asset', id: tid('logo') })
     expect(nodeSpec('something-else')).toBeUndefined()
+    // Nodes from before GUID ids, and the reserved `templates`, are not WRX1 documents.
+    expect(nodeSpec('forces:blue')).toBeUndefined()
+    expect(nodeSpec('templates')).toBeUndefined()
   })
 
   it('parses valid items and rejects invalid ones without throwing', () => {
-    const spec = { kind: 'force' as const, id: 'blue' }
+    const spec = { kind: 'force' as const, id: tid('blue') }
     const parsed = parseItem(spec, JSON.stringify(force('blue')))
-    expect(parsed.ok && documentValue(parsed.value, 'force')?.id).toBe('blue')
+    expect(parsed.ok && documentValue(parsed.value, 'force')?.id).toBe(tid('blue'))
     expect(parsed.ok && documentValue(parsed.value, 'role')).toBeUndefined()
     expect(parseItem(spec, '{not json').ok).toBe(false)
     expect(parseItem(spec, JSON.stringify({ ...force('blue'), colour: 'blue' })).ok).toBe(false)
   })
 
   it('rejects a document that names a different node', () => {
-    expect(parseItem({ kind: 'force', id: 'blue' }, JSON.stringify(force('red')))).toMatchObject({
+    const blue = tid('blue')
+    expect(parseItem({ kind: 'force', id: blue }, JSON.stringify(force('red')))).toMatchObject({
       ok: false,
       error: { code: 'invalid' },
     })
     expect(
-      parseItem({ kind: 'objectives', id: 'blue' }, JSON.stringify(objectives('red', 'x'))).ok,
+      parseItem({ kind: 'objectives', id: blue }, JSON.stringify(objectives('red', 'x'))).ok,
     ).toBe(false)
     expect(
-      parseItem({ kind: 'objectives', id: 'blue' }, JSON.stringify(objectives('blue', 'x'))).ok,
+      parseItem({ kind: 'objectives', id: blue }, JSON.stringify(objectives('blue', 'x'))).ok,
     ).toBe(true)
   })
 
@@ -51,14 +59,33 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
         { schemaVersion: 1, text: 'Lunch', postedAt: '2026-10-24T12:00:00Z' },
       ],
       [
-        { kind: 'role', id: 'a' },
-        { schemaVersion: 1, id: 'a', name: 'A', forceId: 'b', isObserver: false, order: 0 },
-      ],
-      [
-        { kind: 'room', id: 'r' },
+        { kind: 'role', id: tid('a') },
         {
           schemaVersion: 1,
-          id: 'r',
+          id: tid('a'),
+          loginName: 'a',
+          name: 'A',
+          forceId: tid('b'),
+          isObserver: false,
+          order: 0,
+        },
+      ],
+      [
+        { kind: 'retired', id: undefined },
+        {
+          schemaVersion: 1,
+          id: tid('gone'),
+          kind: 'role',
+          name: 'Gone',
+          loginName: 'gone',
+          deletedAt: '2026-11-01T10:00:00Z',
+        },
+      ],
+      [
+        { kind: 'room', id: tid('r') },
+        {
+          schemaVersion: 1,
+          id: tid('r'),
           name: 'R',
           roomType: 'chat',
           participants: [],
@@ -67,10 +94,10 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
         },
       ],
       [
-        { kind: 'asset', id: 'px' },
+        { kind: 'asset', id: tid('px') },
         {
           schemaVersion: 1,
-          id: 'px',
+          id: tid('px'),
           mimeType: 'image/png',
           size: 3,
           sha256: '0'.repeat(64),
@@ -82,8 +109,9 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
   })
 
   it('builds node names without throwing', () => {
-    expect(safeNodeName('force', 'blue')).toBe('forces:blue')
+    expect(safeNodeName('force', tid('blue'))).toBe(nodeName.force(tid('blue')))
     expect(safeNodeName('force', 'Not Valid')).toBeUndefined()
+    expect(safeNodeName('force', 'blue')).toBeUndefined()
   })
 })
 

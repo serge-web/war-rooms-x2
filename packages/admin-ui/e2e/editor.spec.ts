@@ -86,7 +86,7 @@ test(
     await page.reload()
     await open(page, 'Roles')
     await page.getByRole('button', { name: 'White Cell', exact: true }).click()
-    await expect(page.getByLabel('Login id')).toHaveValue('white-cell')
+    await expect(page.getByLabel('Login name')).toHaveValue('white-cell')
     const stored = await page.evaluate(() => Object.keys(localStorage))
     expect(stored).toEqual(['wrx1-mock:/:admin-draft'])
   },

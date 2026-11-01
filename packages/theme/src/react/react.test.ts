@@ -4,7 +4,7 @@ import type { SessionStore } from '@wrx/domain'
 import { force, game, harness, room } from '@wrx/domain/fixtures'
 import { SessionStoreProvider } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
-import { pixelAsset } from '@wrx/schemas/fixtures'
+import { pixelAsset, tid } from '@wrx/schemas/fixtures'
 import { StrictMode, createElement } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -61,7 +61,7 @@ describe('ThemeScope (PLY-26)', () => {
 describe('live themes from the store (ADM-22, PLY-24)', () => {
   it('restyles a room panel when its room or the game theme is republished', async () => {
     const hs = await ready()
-    render(inStore(hs.store, h(RoomThemeScope, { roomId: 'blue-hq', id: 'room' })))
+    render(inStore(hs.store, h(RoomThemeScope, { roomId: tid(tid('blue-hq')), id: 'room' })))
     const panel = byId('room')
     expect(prop(panel, '--wrx-primary')).toBe(DEFAULT_TOKENS.primary)
 
@@ -70,11 +70,11 @@ describe('live themes from the store (ADM-22, PLY-24)', () => {
     })
     expect(prop(panel, '--wrx-primary')).toBe('#aa0000')
 
-    const blueHq = room('blue-hq', [{ kind: 'force', id: 'blue', access: 'write' }], {
+    const blueHq = room(tid('blue-hq'), [{ kind: 'force', id: tid('blue'), access: 'write' }], {
       theme: { tokens: { primary: '#00aa00', text: '#000000' } },
     })
     act(() => {
-      hs.publish(nodeName.room('blue-hq'), blueHq)
+      hs.publish(nodeName.room(tid(tid('blue-hq'))), blueHq)
     })
     expect(prop(panel, '--wrx-primary')).toBe('#00aa00')
     expect(prop(panel, '--wrx-text')).toBe('#000000')
@@ -89,14 +89,14 @@ describe('live themes from the store (ADM-22, PLY-24)', () => {
           'div',
           null,
           h(GameThemeScope, { id: 'game' }),
-          h(ForceThemeScope, { forceId: 'blue', id: 'force' }),
+          h(ForceThemeScope, { forceId: tid('blue'), id: 'force' }),
         ),
       ),
     )
     act(() => {
       hs.publish('game-setup', { ...game(), theme: { tokens: { surface: '#eeeeee' } } })
       hs.publish(
-        nodeName.force('blue'),
+        nodeName.force(tid('blue')),
         force('blue', { theme: { tokens: { primary: '#0000aa', fontFamily: 'mono' } } }),
       )
     })
@@ -110,16 +110,16 @@ describe('live themes from the store (ADM-22, PLY-24)', () => {
   it('themes each pane from its own store', async () => {
     const one = await ready()
     const two = await ready()
-    two.publish(nodeName.room('blue-hq'), {
-      ...room('blue-hq', [{ kind: 'force', id: 'blue', access: 'write' }]),
+    two.publish(nodeName.room(tid(tid('blue-hq'))), {
+      ...room(tid(tid('blue-hq')), [{ kind: 'force', id: tid('blue'), access: 'write' }]),
       theme: { tokens: { primary: '#654321' } },
     })
     render(
       h(
         'div',
         null,
-        inStore(one.store, h(RoomThemeScope, { roomId: 'blue-hq', id: 'pane-1' })),
-        inStore(two.store, h(RoomThemeScope, { roomId: 'blue-hq', id: 'pane-2' })),
+        inStore(one.store, h(RoomThemeScope, { roomId: tid(tid('blue-hq')), id: 'pane-1' })),
+        inStore(two.store, h(RoomThemeScope, { roomId: tid(tid('blue-hq')), id: 'pane-2' })),
       ),
     )
     await act(async () => {
@@ -141,7 +141,7 @@ describe('AssetImage (§3 rule 12)', () => {
 
   it('fetches the asset from the store, and renders nothing without one', async () => {
     const hs = harness()
-    hs.docs.set(nodeName.asset('logo'), [{ ...pixelAsset('logo') }])
+    hs.docs.set(nodeName.asset(tid('logo')), [{ ...pixelAsset(tid('logo')) }])
     await hs.store.ready()
     const { container } = render(
       inStore(
@@ -149,7 +149,7 @@ describe('AssetImage (§3 rule 12)', () => {
         h(
           'div',
           null,
-          h(AssetImage, { assetId: 'logo', alt: 'Game logo' }),
+          h(AssetImage, { assetId: tid('logo'), alt: 'Game logo' }),
           h(AssetImage, {
             assetId: undefined,
             alt: 'none',

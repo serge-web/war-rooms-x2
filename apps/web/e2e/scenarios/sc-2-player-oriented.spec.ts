@@ -4,6 +4,8 @@
 // exactly its rooms and its force panel in Blue's own theme with Blue's logo; it docks the
 // negotiation room into a second tabset, resizes it, and finds the layout restored after a
 // reload. Both backends: the mock build, and the real-server build on ejabberd.
+import { nodeName } from '@wrx/schemas'
+import { FORCE, tid } from '@wrx/schemas/fixtures'
 import { drag } from '../layout.ts'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
 
@@ -23,13 +25,13 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
   // The published game gives Blue a theme of its own: a logo and a primary colour, as a publish
   // writes them (§3 rules 11 and 12).
   await backend.asAdmin(page, [
-    { op: 'create-node', node: 'assets:blue-logo', readers: ROLES },
+    { op: 'create-node', node: nodeName.asset(tid('blue-logo')), readers: ROLES },
     {
       op: 'publish',
-      node: 'assets:blue-logo',
+      node: nodeName.asset(tid('blue-logo')),
       payload: JSON.stringify({
         schemaVersion: 1,
-        id: 'blue-logo',
+        id: tid('blue-logo'),
         mimeType: 'image/png',
         size: Buffer.from(BLUE_LOGO, 'base64').length,
         sha256: '0'.repeat(64),
@@ -38,15 +40,15 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
     },
     {
       op: 'publish',
-      node: 'forces:blue',
+      node: nodeName.force(FORCE.blue),
       payload: JSON.stringify({
         schemaVersion: 1,
-        id: 'blue',
+        id: FORCE.blue,
         name: 'Blue',
         colour: '#1d4ed8',
         isUmpire: false,
         order: 0,
-        theme: { tokens: { primary: BLUE_PRIMARY }, logoAssetId: 'blue-logo' },
+        theme: { tokens: { primary: BLUE_PRIMARY }, logoAssetId: tid('blue-logo') },
       }),
     },
   ])

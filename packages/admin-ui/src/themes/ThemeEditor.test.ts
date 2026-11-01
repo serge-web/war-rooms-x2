@@ -3,7 +3,8 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import { userEvent } from '@testing-library/user-event'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { isId } from '@wrx/schemas'
+import { sampleDesign, tid } from '@wrx/schemas/fixtures'
 import { base64ToBytes } from '@wrx/theme'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -60,17 +61,17 @@ describe('theme editor (ADM-18, ADM-19)', () => {
 
   it('edits a force theme, shown in the force panel only, and inherits the rest', async () => {
     const { user, design } = setup()
-    await user.selectOptions(screen.getByLabelText('Theme for'), 'force:blue')
+    await user.selectOptions(screen.getByLabelText('Theme for'), `force:${tid('blue')}`)
     expect(screen.queryByText('The game theme is public.')).toBeNull()
     const hex = screen.getByLabelText('Primary')
     await user.clear(hex)
     await user.type(hex, '#7c3aed')
-    const blue = design().forces.find((f) => f.id === 'blue')
+    const blue = design().forces.find((f) => f.id === tid('blue'))
     expect(blue?.theme?.tokens).toEqual({ primary: '#7c3aed' })
     expect(prop(preview(/^Force panel: Blue/), '--wrx-primary')).toBe('#7c3aed')
     expect(prop(preview(/^Welcome page/), '--wrx-primary')).toBe(design().game.theme.tokens.primary)
     await user.click(screen.getByRole('button', { name: 'Inherit for Primary' }))
-    expect(design().forces.find((f) => f.id === 'blue')?.theme).toBeUndefined()
+    expect(design().forces.find((f) => f.id === tid('blue'))?.theme).toBeUndefined()
   })
 
   it('chooses a bundled font', async () => {
@@ -103,12 +104,14 @@ describe('images (§3 rule 12)', () => {
     const file = new File([PNG], 'logo.png', { type: 'image/png' })
     await user.upload(screen.getByLabelText('Logo'), file)
     await waitFor(() => {
-      expect(design().game.theme.logoAssetId).toBe('game-logo-2')
+      expect(design().game.theme.logoAssetId).not.toBe(tid('game-logo'))
     })
-    const asset = design().assets.find((a) => a.id === 'game-logo-2')
+    const id = design().game.theme.logoAssetId
+    expect(isId(id ?? '')).toBe(true)
+    const asset = design().assets.find((a) => a.id === id)
     expect(asset).toMatchObject({ mimeType: 'image/png', size: PNG.length })
     // The seed's old logo is no longer used, so it is removed.
-    expect(design().assets.some((a) => a.id === 'game-logo')).toBe(false)
+    expect(design().assets.some((a) => a.id === tid('game-logo'))).toBe(false)
     const img = within(preview(/^Welcome page/)).getByRole('img')
     expect(img.getAttribute('src')).toMatch(/^data:image\/png;base64,/)
   })
@@ -140,17 +143,17 @@ describe('images (§3 rule 12)', () => {
 describe('copy and reset (ADM-21)', () => {
   it('copies a theme from another force and resets it to inherit', async () => {
     const { user, design } = setup()
-    await user.selectOptions(screen.getByLabelText('Theme for'), 'force:red')
+    await user.selectOptions(screen.getByLabelText('Theme for'), `force:${tid('red')}`)
     expect(screen.getByText('No other force or room has its own theme to copy.')).toBeTruthy()
-    await user.selectOptions(screen.getByLabelText('Theme for'), 'force:blue')
+    await user.selectOptions(screen.getByLabelText('Theme for'), `force:${tid('blue')}`)
     const hex = screen.getByLabelText('Secondary')
     await user.clear(hex)
     await user.type(hex, '#0f766e')
 
-    await user.selectOptions(screen.getByLabelText('Theme for'), 'force:red')
-    await user.selectOptions(screen.getByLabelText('Copy theme from'), 'force:blue')
+    await user.selectOptions(screen.getByLabelText('Theme for'), `force:${tid('red')}`)
+    await user.selectOptions(screen.getByLabelText('Copy theme from'), `force:${tid('blue')}`)
     await user.click(screen.getByRole('button', { name: 'Copy theme' }))
-    const red = { kind: 'force', id: 'red' } as const
+    const red = { kind: 'force', id: tid('red') } as const
     expect(themeOf(design(), red)?.tokens.secondary).toBe('#0f766e')
     expect(prop(preview(/^Force panel: Red/), '--wrx-secondary')).toBe('#0f766e')
 

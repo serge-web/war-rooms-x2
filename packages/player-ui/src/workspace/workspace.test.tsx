@@ -2,6 +2,7 @@
 // The workspace over a store, rendered (happy-dom): tabs per visible room, room panels in their
 // theme, the registry and badge slots, saving and restoring, live reconciliation, reset, the
 // keyboard move, two instances on one page, and the non-room panels.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import { flush, game, harness, role, room, selfPresence } from '@wrx/domain/fixtures'
@@ -34,7 +35,8 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
-const KEY = (role: string) => layoutKey({ server: 'wrx.test', role, designVersion: 1 })
+// Layouts are keyed by the role's GUID (PLY-5), so one saved before GUID ids is not found.
+const KEY = (role: string) => layoutKey({ server: 'wrx.test', role: tid(role), designVersion: 1 })
 
 async function mount(
   props: WorkspaceProps = {},
@@ -109,12 +111,12 @@ describe('Workspace', () => {
     })
     await mount({ registry })
     expect(screen.getByText('Chat for blue-hq')).toBeTruthy()
-    expect(seen.at(-1)).toMatchObject({ roomId: 'negotiation', config: {} })
+    expect(seen.at(-1)).toMatchObject({ roomId: tid('negotiation'), config: {} })
   })
 
   it('fills the unread badge slot on room tabs only (PLY-11)', async () => {
     const Badge = ({ roomId }: RoomTabBadgeProps) => (
-      <UnreadBadge count={roomId === 'red-hq' ? 4 : roomId === 'blue-hq' ? 120 : 0} />
+      <UnreadBadge count={roomId === tid('red-hq') ? 4 : roomId === tid('blue-hq') ? 120 : 0} />
     )
     await mount({ tabBadge: Badge })
     expect(within(tab('red-hq')).getByLabelText('4 unread messages').textContent).toBe('4')
@@ -136,7 +138,7 @@ describe('Workspace', () => {
     // PubSub does not announce new nodes: publishing bumps the design version (§3 rule 8).
     act(() => {
       h.publish(
-        nodeName.room('press'),
+        nodeName.room(tid('press')),
         room('press', [{ kind: 'force', id: 'blue', access: 'write' }], { order: 3 }),
       )
       h.publish('game-setup', game(2))
@@ -148,7 +150,7 @@ describe('Workspace', () => {
     ])
     act(() => {
       h.publish(
-        nodeName.room('red-hq'),
+        nodeName.room(tid('red-hq')),
         room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }], { name: 'Red Main' }),
       )
     })
@@ -174,7 +176,7 @@ describe('Workspace', () => {
     expect(screen.queryByText(/closed$/)).toBeNull()
     // Blue CO moves to Red: Blue's room goes, Red's comes, the negotiation stays.
     act(() => {
-      h.publish(nodeName.role('blue-co'), role('blue-co', 'red'))
+      h.publish(nodeName.role(tid('blue-co')), role('blue-co', 'red'))
     })
     await act(() => flush())
     expect(columns().flat().sort()).toEqual(['negotiation', 'red-hq'])
@@ -207,19 +209,22 @@ describe('Workspace', () => {
       h.publish('game-setup', game(2))
     })
     await act(() => flush())
-    const v2 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 2 })
+    const v2 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 2 })
     expect(storage.entries.get(v2)).toBe(storage.entries.get(KEY('white-1')))
     expect(columns()).toEqual([['blue-hq', 'red-hq'], ['negotiation']])
 
     // Version 3 has a saved layout of its own: it replaces the one on screen.
-    const v3 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 3 })
+    const v3 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 3 })
     storage.save(
       v3,
       JSON.stringify({
         layout: {
           type: 'row',
           children: [
-            { type: 'tabset', children: [{ type: 'tab', id: 'room:negotiation', name: 'n' }] },
+            {
+              type: 'tabset',
+              children: [{ type: 'tab', id: `room:${tid('negotiation')}`, name: 'n' }],
+            },
           ],
         },
       }),
@@ -239,12 +244,15 @@ describe('Workspace', () => {
           {
             type: 'tabset',
             children: [
-              { type: 'tab', id: 'room:gone', name: 'Gone' },
-              { type: 'tab', id: 'room:negotiation', name: 'negotiation' },
+              { type: 'tab', id: `room:${tid('gone')}`, name: 'Gone' },
+              { type: 'tab', id: `room:${tid('negotiation')}`, name: 'negotiation' },
               { type: 'tab', id: 'panel:online', name: 'Online' },
             ],
           },
-          { type: 'tabset', children: [{ type: 'tab', id: 'room:blue-hq', name: 'blue-hq' }] },
+          {
+            type: 'tabset',
+            children: [{ type: 'tab', id: `room:${tid('blue-hq')}`, name: 'blue-hq' }],
+          },
         ],
       },
     })
@@ -304,11 +312,11 @@ describe('Workspace', () => {
     const h = await mount({}, { roleId: 'blue-co' })
     act(() => {
       h.publish(
-        nodeName.room('blue-hq'),
+        nodeName.room(tid('blue-hq')),
         room('blue-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
       )
       h.publish(
-        nodeName.room('negotiation'),
+        nodeName.room(tid('negotiation')),
         room('negotiation', [{ kind: 'role', id: 'red-co', access: 'write' }]),
       )
     })

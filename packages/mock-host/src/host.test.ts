@@ -69,13 +69,24 @@ describe('ServerHost (ARC-7, DOC-17)', () => {
   })
 
   it('migrates older state with a notice, and stores the result', async () => {
-    const old = { ...demoState(), version: 0 }
+    const old = { ...demoState(), version: 1 }
     const { opts, store } = options(new MemoryStore(old), {
-      migrations: { 0: (doc) => ({ ...doc, version: 1 }) },
+      migrations: { 1: (doc) => ({ ...doc, version: 2 }) },
     })
     const host = await ServerHost.start(opts)
-    expect(host.notices).toEqual([expect.objectContaining({ kind: 'migrated', from: 0, to: 1 })])
+    expect(host.notices).toEqual([expect.objectContaining({ kind: 'migrated', from: 1, to: 2 })])
     expect(stored(store)).toEqual(demoState())
+  })
+
+  it('resets a state from before GUID ids to the seed, with a notice (WP 3.5, DOC-17)', async () => {
+    // What a browser kept from a release before GUID ids: version 1, slug-named nodes.
+    const old = { ...demoState(), version: 1, nodes: [] }
+    const { opts, store } = options(new MemoryStore(old))
+    const host = await ServerHost.start(opts)
+    expect(host.notices).toEqual([
+      expect.objectContaining({ kind: 'reset-unreadable', reason: 'no migration from version 1' }),
+    ])
+    expect(stored(store)).toEqual(seed)
   })
 
   it('runs in memory with a notice when storage is unavailable', async () => {

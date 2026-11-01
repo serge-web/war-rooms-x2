@@ -1,25 +1,30 @@
 import { z } from 'zod'
-import { LIMITS, isReservedRoleId, isoDateTimeSchema } from './common.ts'
+import { ANONYMOUS_LIKE_NAME, LIMITS, isReservedLoginName, isoDateTimeSchema } from './common.ts'
 import {
   assetSchema,
   forceSchema,
   gameSetupSchema,
   objectivesSchema,
+  retiredSchema,
   roleSchema,
   roomSchema,
 } from './documents.ts'
 import type { GameSetup } from './documents.ts'
 import type { Theme } from './theme.ts'
 
+/** The design file's current `schemaVersion`: 2 since GUID ids (§3 rule 1, WP 3.5). */
+export const DESIGN_FILE_VERSION = 2
+
 /**
  * The design export file (ADM-16): everything publishing provisions, in one versioned JSON
  * document that moves between mock and real backends. A `password` field on a role is
- * rejected, so a file carrying passwords cannot be imported (§3 rule 9).
+ * rejected, so a file carrying passwords cannot be imported (§3 rule 9). Version 1 files, from
+ * before GUID ids, are read by `readDesignFile` (legacy.ts), which converts them.
  */
 export const designFileSchema = z
   .object({
     format: z.literal('wrx1-design'),
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(DESIGN_FILE_VERSION),
     exportedAt: isoDateTimeSchema,
     game: gameSetupSchema.describe('The game setup document'),
     forces: z.array(forceSchema).describe('Force documents'),
@@ -33,6 +38,11 @@ export const designFileSchema = z
     rooms: z.array(roomSchema).describe('Room documents'),
     objectives: z.array(objectivesSchema).describe('Objectives documents, at most one per force'),
     assets: z.array(assetSchema).describe('Asset documents'),
+    retired: z
+      .array(retiredSchema)
+      .describe(
+        'The last names of deleted forces and roles that were published, kept so old messages show them (§3 rule 1)',
+      ),
   })
   .describe('A complete game design, as exported and imported by the admin')
 
@@ -62,8 +72,18 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
 
   const forceIds = uniqueIds('forces', design.forces, error)
   const roleIds = uniqueIds('roles', design.roles, error)
-  uniqueIds('rooms', design.rooms, error)
+  const roomIds = uniqueIds('rooms', design.rooms, error)
   const assetIds = uniqueIds('assets', design.assets, error)
+
+  // §3 rule 1: ids are never reused, and a retired login name is never given to another role.
+  uniqueIds('retired', design.retired, error)
+  const retiredLogins = new Set<string>()
+  design.retired.forEach((r, i) => {
+    if (forceIds.has(r.id) || roleIds.has(r.id) || roomIds.has(r.id) || assetIds.has(r.id)) {
+      error(`retired[${i}].id`, `"${r.id}" belongs to a deleted ${r.kind} and cannot be reused`)
+    }
+    if (r.loginName !== undefined) retiredLogins.add(r.loginName)
+  })
 
   const assetRef = (path: string, id: string | undefined) => {
     if (id !== undefined && !assetIds.has(id)) error(path, `unknown asset "${id}"`)
@@ -94,9 +114,26 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
     themeRefs(`forces[${i}].theme`, force.theme)
   })
 
+  const logins = new Set<string>()
   design.roles.forEach((role, i) => {
-    if (isReservedRoleId(role.id)) {
-      error(`roles[${i}].id`, `"${role.id}" is reserved and cannot be a role id`)
+    const login = role.loginName
+    if (isReservedLoginName(login)) {
+      error(
+        `roles[${i}].loginName`,
+        ANONYMOUS_LIKE_NAME.test(login)
+          ? `"${login}" looks like an anonymous session and cannot be a login name`
+          : `"${login}" is reserved and cannot be a login name`,
+      )
+    }
+    if (logins.has(login)) {
+      error(`roles[${i}].loginName`, `another role has the login name "${login}"`)
+    }
+    logins.add(login)
+    if (retiredLogins.has(login)) {
+      error(
+        `roles[${i}].loginName`,
+        `"${login}" was a deleted role's login name and cannot be given to another role`,
+      )
     }
     if (!forceIds.has(role.forceId)) error(`roles[${i}].forceId`, `unknown force "${role.forceId}"`)
     // The admin's messages are labelled "Umpire" (SC-5); a role of that name would look the same.

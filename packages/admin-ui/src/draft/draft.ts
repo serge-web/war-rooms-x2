@@ -1,9 +1,21 @@
-// The admin's design draft (WP 2.2): a `DesignFile` being edited, plus the local metadata that
-// keeps generated ids unique and never reused (SRD §3 rule 1). Framework-free and immutable:
-// every operation returns a new draft and leaves its input untouched, and unchanged items keep
-// their identity. Operations on an unknown id return the draft unchanged.
+// The admin's design draft (WP 2.2): a `DesignFile` being edited, plus the local metadata of what
+// has been published. Framework-free and immutable: every operation returns a new draft and
+// leaves its input untouched, and unchanged items keep their identity. Operations on an unknown
+// id return the draft unchanged.
+//
+// Ids are GUIDs, generated at creation and never derived from names, so they are never reused
+// (§3 rule 1). A role's login name is a readable slug, made from its name at creation, editable
+// until the role is first published, then fixed (ADM-5). Deleting a published force or role
+// records its last name in the design's `retired` list, which also holds its login name for good.
 import { byOrderThenId } from '@wrx/domain'
-import { ANONYMOUS_LIKE_ID, LIMITS, RESERVED_ROLE_IDS, isReservedRoleId } from '@wrx/schemas'
+import {
+  ANONYMOUS_LIKE_NAME,
+  DESIGN_FILE_VERSION,
+  LIMITS,
+  RESERVED_LOGIN_NAMES,
+  isReservedLoginName,
+  newEntityId,
+} from '@wrx/schemas'
 import type {
   DesignFile,
   Force,
@@ -11,6 +23,7 @@ import type {
   Objectives,
   Participant,
   Result,
+  Retired,
   Role,
   Room,
 } from '@wrx/schemas'
@@ -21,15 +34,13 @@ export type IdKind = 'forces' | 'roles' | 'rooms'
 
 export interface DraftMeta {
   /**
-   * Ids that were used in this draft and then deleted or renamed, by kind. They are never
-   * generated again (§3 rule 1), even before the draft is published.
-   */
-  readonly retiredIds: Readonly<Record<IdKind, readonly string[]>>
-  /**
-   * Role ids that a publish has provisioned as XMPP accounts (WP 2.3 records them with
-   * {@link markPublished}). A published role's login id can no longer change (ADM-5).
+   * GUIDs of roles that a publish has provisioned as XMPP accounts (WP 2.3 records them with
+   * {@link markPublished}). A published role's login name can no longer change (ADM-5), and
+   * deleting it records its last name (§3 rule 1).
    */
   readonly publishedRoleIds: readonly string[]
+  /** GUIDs of forces a publish has provisioned; deleting one records its last name. */
+  readonly publishedForceIds: readonly string[]
 }
 
 export interface Draft {
@@ -52,6 +63,9 @@ export interface ForcePatch {
   readonly isUmpire?: boolean
 }
 export type RolePatch = Partial<Pick<Role, 'name' | 'isObserver'>>
+
+/** Where new ids come from: `newEntityId()`; tests may pass their own. */
+export type IdSource = () => string
 export interface RoomPatch {
   readonly name?: string
   /** Changing the type resets `config` to `{}` unless a config is given too. */
@@ -74,25 +88,24 @@ export const DEFAULT_FORCE_COLOUR = '#6b7280'
 export const DEFAULT_ROOM_TYPE = 'chat'
 
 const EMPTY_META: DraftMeta = Object.freeze({
-  retiredIds: Object.freeze({ forces: [], roles: [], rooms: [] }),
   publishedRoleIds: Object.freeze([]),
+  publishedForceIds: Object.freeze([]),
 })
 
 export interface NewDraftOptions {
   readonly name?: string
   readonly now?: Date
+  /** The id of the White Force the design starts with; a new GUID by default. */
+  readonly whiteForceId?: string
 }
 
-/** The White Force a new design starts with: the umpire flag, which the admin plays in (ADM-4). */
-export const WHITE_FORCE_ID = 'white'
-
-/** An empty design: a game and the White Force, nothing else. */
+/** An empty design: a game and the White Force (ADM-4: the umpire flag), nothing else. */
 export function createDraft(options: NewDraftOptions = {}): Draft {
   const now = options.now ?? new Date()
   return {
     design: {
       format: 'wrx1-design',
-      schemaVersion: 1,
+      schemaVersion: DESIGN_FILE_VERSION,
       exportedAt: now.toISOString(),
       game: {
         schemaVersion: 1,
@@ -106,7 +119,7 @@ export function createDraft(options: NewDraftOptions = {}): Draft {
       forces: [
         {
           schemaVersion: 1,
-          id: WHITE_FORCE_ID,
+          id: options.whiteForceId ?? newEntityId(),
           name: 'White',
           colour: DEFAULT_FORCE_COLOUR,
           isUmpire: true,
@@ -117,6 +130,7 @@ export function createDraft(options: NewDraftOptions = {}): Draft {
       rooms: [],
       objectives: [],
       assets: [],
+      retired: [],
     },
     meta: EMPTY_META,
   }
@@ -127,8 +141,8 @@ export function draftFromDesign(design: DesignFile, meta: Partial<DraftMeta> = {
   return {
     design: normalise(design),
     meta: {
-      retiredIds: meta.retiredIds ?? EMPTY_META.retiredIds,
       publishedRoleIds: meta.publishedRoleIds ?? EMPTY_META.publishedRoleIds,
+      publishedForceIds: meta.publishedForceIds ?? EMPTY_META.publishedForceIds,
     },
   }
 }
@@ -138,27 +152,52 @@ export function toDesignFile(draft: Draft, now: Date = new Date()): DesignFile {
   return { ...draft.design, exportedAt: now.toISOString() }
 }
 
-/** Records that every current role has been provisioned, so its login id is fixed (ADM-5). */
+/**
+ * Records that every current force and role has been provisioned, so each role's login name is
+ * fixed (ADM-5) and deleting any of them records its last name (§3 rule 1).
+ */
 export function markPublished(draft: Draft): Draft {
-  const ids = new Set([...draft.meta.publishedRoleIds, ...draft.design.roles.map((r) => r.id)])
-  return { ...draft, meta: { ...draft.meta, publishedRoleIds: [...ids] } }
+  const roles = new Set([...draft.meta.publishedRoleIds, ...draft.design.roles.map((r) => r.id)])
+  const forces = new Set([...draft.meta.publishedForceIds, ...draft.design.forces.map((f) => f.id)])
+  return {
+    ...draft,
+    meta: { ...draft.meta, publishedRoleIds: [...roles], publishedForceIds: [...forces] },
+  }
 }
 
 /**
- * Records that these of the draft's roles exist on the server (e.g. the server's plan shows
- * them), so their login ids are fixed (ADM-5). Ids of no current role, and ids already recorded,
- * are ignored; the same draft is returned when nothing changes.
+ * Records that the draft's roles with these login names exist on the server (e.g. the server's
+ * plan shows those accounts), so their login names are fixed (ADM-5). Names of no current role,
+ * and roles already recorded, are ignored; the same draft is returned when nothing changes.
  */
-export function markRolesPublished(draft: Draft, roleIds: readonly string[]): Draft {
-  const known = new Set(roleIds)
+export function markRolesPublished(draft: Draft, loginNames: readonly string[]): Draft {
+  const known = new Set(loginNames)
   const added = draft.design.roles
+    .filter((r) => known.has(r.loginName) && !draft.meta.publishedRoleIds.includes(r.id))
     .map((r) => r.id)
-    .filter((id) => known.has(id) && !draft.meta.publishedRoleIds.includes(id))
   if (added.length === 0) return draft
   return {
     ...draft,
     meta: { ...draft.meta, publishedRoleIds: [...draft.meta.publishedRoleIds, ...added] },
   }
+}
+
+/**
+ * Adds the server's `retired` records the draft does not hold (another browser deleted the
+ * entity, or the publish recorded it as a safety net), so the draft never offers their login
+ * names to a new role (§3 rule 1). Records of entities the draft still has are ignored; the same
+ * draft is returned when nothing changes.
+ */
+export function mergeRetired(draft: Draft, records: readonly Retired[]): Draft {
+  const design = draft.design
+  const has = new Set([
+    ...design.retired.map((r) => r.id),
+    ...design.forces.map((f) => f.id),
+    ...design.roles.map((r) => r.id),
+  ])
+  const added = records.filter((r) => !has.has(r.id))
+  if (added.length === 0) return draft
+  return { ...draft, design: { ...design, retired: [...design.retired, ...added] } }
 }
 
 export function isRolePublished(draft: Draft, roleId: string): boolean {
@@ -173,8 +212,8 @@ export function updateGame(draft: Draft, patch: GamePatch): Draft {
 
 // --- Forces -----------------------------------------------------------------------------------
 
-export function addForce(draft: Draft, name: string): Added {
-  const id = newId(draft, 'forces', name, 'force')
+export function addForce(draft: Draft, name: string, newId: IdSource = newEntityId): Added {
+  const id = newId()
   const force: Force = {
     schemaVersion: 1,
     id,
@@ -204,11 +243,15 @@ export function updateForce(draft: Draft, id: string, patch: ForcePatch): Draft 
 }
 
 /**
- * Deletes a force, its objectives and every participant entry naming it, and retires its id.
- * Refused while the force still has roles: they must be moved or deleted first, so no role is
- * deleted without its own history warning (ADM-14).
+ * Deletes a force, its objectives and every participant entry naming it; a published force's
+ * last name goes into `retired` (§3 rule 1). Refused while the force still has roles: they must
+ * be moved or deleted first, so no role is deleted without its own history warning (ADM-14).
  */
-export function deleteForce(draft: Draft, id: string): Result<Draft, string> {
+export function deleteForce(
+  draft: Draft,
+  id: string,
+  now: Date = new Date(),
+): Result<Draft, string> {
   const force = draft.design.forces.find((f) => f.id === id)
   if (force === undefined) return { ok: true, value: draft }
   const roles = draft.design.roles.filter((r) => r.forceId === id)
@@ -219,17 +262,23 @@ export function deleteForce(draft: Draft, id: string): Result<Draft, string> {
     }
   }
   const design = draft.design
+  const published = draft.meta.publishedForceIds.includes(id)
+  const record: Retired = {
+    schemaVersion: 1,
+    id,
+    kind: 'force',
+    name: force.name,
+    colour: force.colour,
+    deletedAt: now.toISOString(),
+  }
   return {
     ok: true,
-    value: retire(
-      withDesign(draft, {
-        forces: design.forces.filter((f) => f.id !== id),
-        rooms: withoutEntries(design.rooms, 'force', id),
-        objectives: design.objectives.filter((o) => o.forceId !== id),
-      }),
-      'forces',
-      id,
-    ),
+    value: withDesign(draft, {
+      forces: design.forces.filter((f) => f.id !== id),
+      rooms: withoutEntries(design.rooms, 'force', id),
+      objectives: design.objectives.filter((o) => o.forceId !== id),
+      ...(published ? { retired: withRecord(design.retired, record) } : {}),
+    }),
   }
 }
 
@@ -267,15 +316,24 @@ export function setObjectives(
 
 // --- Roles ------------------------------------------------------------------------------------
 
-/** Adds a role at the end of its force. Throws for an unknown force: that is a caller bug. */
-export function addRole(draft: Draft, forceId: string, name: string): Added {
+/**
+ * Adds a role at the end of its force, with a new GUID and a login name made from its name.
+ * Throws for an unknown force: that is a caller bug.
+ */
+export function addRole(
+  draft: Draft,
+  forceId: string,
+  name: string,
+  newId: IdSource = newEntityId,
+): Added {
   if (!draft.design.forces.some((f) => f.id === forceId)) {
     throw new RangeError(`Unknown force "${forceId}"`)
   }
-  const id = newId(draft, 'roles', name, 'role')
+  const id = newId()
   const role: Role = {
     schemaVersion: 1,
     id,
+    loginName: newLoginName(draft, name),
     name,
     forceId,
     isObserver: false,
@@ -291,53 +349,46 @@ export function updateRole(draft: Draft, id: string, patch: RolePatch): Draft {
 }
 
 /**
- * Why `newId` cannot be this role's login id, or undefined if it can. Login ids are XMPP
- * localparts, so they are slugs, unique, not reserved, never reused, and fixed once published.
+ * Why `loginName` cannot be this role's login name, or undefined if it can. Login names are
+ * XMPP localparts, so they are slugs, unique, not reserved, never a deleted role's, and fixed
+ * once published (§3 rule 1, ADM-5).
  */
-export function roleIdProblem(draft: Draft, id: string, newId: string): string | undefined {
-  if (newId === id) return undefined
-  if (isRolePublished(draft, id)) {
-    return 'the login id cannot change after the role has been published'
+export function loginNameProblem(
+  draft: Draft,
+  roleId: string,
+  loginName: string,
+): string | undefined {
+  const role = draft.design.roles.find((r) => r.id === roleId)
+  if (role === undefined || loginName === role.loginName) return undefined
+  if (isRolePublished(draft, roleId)) {
+    return 'the login name cannot change after the role has been published'
   }
-  if (!isSlug(newId)) return 'use lowercase letters, digits and single hyphens'
-  if (isReservedRoleId(newId)) return `"${newId}" is reserved`
-  if (draft.design.roles.some((r) => r.id === newId)) return `another role is "${newId}"`
-  if (draft.meta.retiredIds.roles.includes(newId) || draft.meta.publishedRoleIds.includes(newId)) {
-    return `"${newId}" was used by a deleted role and cannot be reused`
+  if (!isSlug(loginName)) return 'use lowercase letters, digits and single hyphens'
+  if (isReservedLoginName(loginName)) return `"${loginName}" is reserved`
+  if (draft.design.roles.some((r) => r.id !== roleId && r.loginName === loginName)) {
+    return `another role is "${loginName}"`
+  }
+  if (draft.design.retired.some((r) => r.loginName === loginName)) {
+    return `"${loginName}" was used by a deleted role and cannot be reused`
   }
   return undefined
 }
 
-/**
- * Changes a role's id (its login id), before the role is first published. Room entries follow
- * it, and the old id is retired.
- */
-export function changeRoleId(draft: Draft, id: string, newId: string): Result<Draft, string> {
-  if (!draft.design.roles.some((r) => r.id === id) || newId === id)
-    return { ok: true, value: draft }
-  const problem = roleIdProblem(draft, id, newId)
+/** Changes a role's login name, before the role is first published (ADM-5). */
+export function changeLoginName(
+  draft: Draft,
+  roleId: string,
+  loginName: string,
+): Result<Draft, string> {
+  const role = draft.design.roles.find((r) => r.id === roleId)
+  if (role === undefined || loginName === role.loginName) return { ok: true, value: draft }
+  const problem = loginNameProblem(draft, roleId, loginName)
   if (problem !== undefined) return { ok: false, error: problem }
-  const design = draft.design
-  const rooms = design.rooms.map((room) =>
-    room.participants.some((p) => p.kind === 'role' && p.id === id)
-      ? {
-          ...room,
-          participants: room.participants.map((p) =>
-            p.kind === 'role' && p.id === id ? { ...p, id: newId } : p,
-          ),
-        }
-      : room,
-  )
   return {
     ok: true,
-    value: retire(
-      withDesign(draft, {
-        roles: replaceById(design.roles, id, (role) => ({ ...role, id: newId })),
-        rooms,
-      }),
-      'roles',
-      id,
-    ),
+    value: withDesign(draft, {
+      roles: replaceById(draft.design.roles, roleId, (r) => ({ ...r, loginName })),
+    }),
   }
 }
 
@@ -369,25 +420,40 @@ export function moveRole(
 }
 
 /**
- * Deletes a role and its participant entries, and retires its id. The caller warns first that
- * its message history stays attributed to the old JID (ADM-14).
+ * Deletes a role and its participant entries. A published role's last name and login name go
+ * into `retired` (§3 rule 1), so its old messages keep its name and no other role takes its
+ * login. The caller warns first that its message history stays with the old login (ADM-14).
  */
-export function deleteRole(draft: Draft, id: string): Draft {
-  if (!draft.design.roles.some((r) => r.id === id)) return draft
-  return retire(
-    withDesign(draft, {
-      roles: draft.design.roles.filter((r) => r.id !== id),
-      rooms: withoutEntries(draft.design.rooms, 'role', id),
-    }),
-    'roles',
+export function deleteRole(draft: Draft, id: string, now: Date = new Date()): Draft {
+  const role = draft.design.roles.find((r) => r.id === id)
+  if (role === undefined) return draft
+  const published = isRolePublished(draft, id)
+  const colour = draft.design.forces.find((f) => f.id === role.forceId)?.colour
+  const record: Retired = {
+    schemaVersion: 1,
     id,
-  )
+    kind: 'role',
+    name: role.name,
+    loginName: role.loginName,
+    ...(colour === undefined ? {} : { colour }),
+    deletedAt: now.toISOString(),
+  }
+  return withDesign(draft, {
+    roles: draft.design.roles.filter((r) => r.id !== id),
+    rooms: withoutEntries(draft.design.rooms, 'role', id),
+    ...(published ? { retired: withRecord(draft.design.retired, record) } : {}),
+  })
 }
 
 // --- Rooms ------------------------------------------------------------------------------------
 
-export function addRoom(draft: Draft, name: string, roomType: string = DEFAULT_ROOM_TYPE): Added {
-  const id = newId(draft, 'rooms', name, 'room')
+export function addRoom(
+  draft: Draft,
+  name: string,
+  roomType: string = DEFAULT_ROOM_TYPE,
+  newId: IdSource = newEntityId,
+): Added {
+  const id = newId()
   const room: Room = {
     schemaVersion: 1,
     id,
@@ -451,11 +517,7 @@ export function moveRoom(draft: Draft, id: string, index: number): Draft {
 
 export function deleteRoom(draft: Draft, id: string): Draft {
   if (!draft.design.rooms.some((r) => r.id === id)) return draft
-  return retire(
-    withDesign(draft, { rooms: draft.design.rooms.filter((r) => r.id !== id) }),
-    'rooms',
-    id,
-  )
+  return withDesign(draft, { rooms: draft.design.rooms.filter((r) => r.id !== id) })
 }
 
 // --- References -------------------------------------------------------------------------------
@@ -502,16 +564,16 @@ export function referencesTo(design: DesignFile, kind: IdKind, id: string): Refe
 
 // --- Helpers ----------------------------------------------------------------------------------
 
-/** Ids that a new item of `kind` must not take. */
-export function takenIds(draft: Draft, kind: IdKind): Set<string> {
-  const taken = new Set<string>([
-    ...draft.design[kind].map((item) => item.id),
-    ...draft.meta.retiredIds[kind],
+/**
+ * Login names a new role must not take: the other roles', the reserved ones, and those deleted
+ * roles keep (§3 rule 1).
+ */
+export function takenLoginNames(draft: Draft): Set<string> {
+  return new Set<string>([
+    ...draft.design.roles.map((r) => r.loginName),
+    ...RESERVED_LOGIN_NAMES,
+    ...draft.design.retired.flatMap((r) => (r.loginName === undefined ? [] : [r.loginName])),
   ])
-  if (kind === 'roles') {
-    for (const id of [...RESERVED_ROLE_IDS, ...draft.meta.publishedRoleIds]) taken.add(id)
-  }
-  return taken
 }
 
 /** Roles in display order: by force order, then role order, then id (as `effectiveAccess`). */
@@ -549,23 +611,17 @@ function withDesign(draft: Draft, changes: Partial<DesignFile>): Draft {
   return { ...draft, design }
 }
 
-function newId(draft: Draft, kind: IdKind, name: string, fallback: string): string {
-  const base = slugify(name, fallback)
-  // A long all-digit login id would look like an anonymous session (F4): prefix it.
-  const safe =
-    kind === 'roles' && ANONYMOUS_LIKE_ID.test(base)
-      ? `${fallback}-${base}`.slice(0, LIMITS.slugChars)
-      : base
-  return uniqueSlug(safe, takenIds(draft, kind))
+/** A login name from a role's name, unique and never a deleted role's (§3 rule 1). */
+function newLoginName(draft: Draft, name: string): string {
+  const base = slugify(name, 'role')
+  // A long all-digit login name would look like an anonymous session (F4): prefix it.
+  const safe = ANONYMOUS_LIKE_NAME.test(base) ? `role-${base}`.slice(0, LIMITS.slugChars) : base
+  return uniqueSlug(safe, takenLoginNames(draft))
 }
 
-function retire(draft: Draft, kind: IdKind, id: string): Draft {
-  const retired = draft.meta.retiredIds[kind]
-  if (retired.includes(id)) return draft
-  return {
-    ...draft,
-    meta: { ...draft.meta, retiredIds: { ...draft.meta.retiredIds, [kind]: [...retired, id] } },
-  }
+/** `records` with `record`, replacing one with the same id. */
+function withRecord(records: readonly Retired[], record: Retired): Retired[] {
+  return [...records.filter((r) => r.id !== record.id), record]
 }
 
 function replaceById<T extends { readonly id: string }>(

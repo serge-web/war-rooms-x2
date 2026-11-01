@@ -1,4 +1,6 @@
 // The plan's groups, batches and rolled-up status (ADM-10, ADM-11), on hand-made steps.
+import { nodeName } from '@wrx/schemas'
+import { tid } from '@wrx/schemas/fixtures'
 import type { PlanStep, StepAction, StepGroup } from '@wrx/admin-ops'
 import { describe, expect, it } from 'vitest'
 import type { StepProgress } from './controller.ts'
@@ -49,8 +51,8 @@ describe('groupPlan', () => {
     revokeRoom('x'),
     revokeRoom('y'),
     step('read-only-grant:o', 'access', { type: 'read-only', roleId: 'o', roomIds: ['x'] }),
-    publish('rooms:x'),
-    publish('rooms:y'),
+    publish(nodeName.room(tid('x'))),
+    publish(nodeName.room(tid('y'))),
     publish('game-setup'),
     step('delete-node:old', 'removals', { type: 'delete-node', node: 'old' }, true),
   ]

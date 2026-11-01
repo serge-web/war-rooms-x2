@@ -5,6 +5,7 @@
 // message anyway: the server refuses it, and neither Blue CO, the umpire nor the observer ever
 // sees it. Both backends; on ejabberd the modified client is the real transport in Node.
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
 
 const BLUE_HQ = 'Blue HQ'
@@ -48,7 +49,7 @@ test('SC-4: the Blue observer reads Blue’s rooms; the server refuses a modifie
   // 3. A modified client with the observer's credentials posts anyway: the server refuses it.
   const forged = 'Forged order: Blue withdraws from the crossing.'
   const outcome = await backend.raw(observer, 'blue-observer', [
-    { op: 'post', room: 'blue-hq', texts: [forged] },
+    { op: 'post', room: ROOM.blueHq, texts: [forged] },
   ])
   expect(outcome).toHaveLength(1)
   expect(outcome[0]).toMatch(/^(forbidden|not-allowed|not-acceptable)$/)

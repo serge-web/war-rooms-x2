@@ -2,6 +2,10 @@
 // nodes with their configs, each role's access and the documents they hold. Pure; 2.3 diffs it
 // against `AdminOps.readState` and 2.10 audits against it. It provisions the same state as the
 // mock's seed (`@wrx/mock-server` seed.ts), so a seeded mock and a published server agree.
+//
+// The server knows a role by its account, so here, and in the planner, the audit and AdminOps,
+// a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
+// nodes and documents carry GUIDs.
 import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, effectiveAccess } from '@wrx/domain'
 import { SINGLETON_NODES, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
@@ -16,6 +20,12 @@ export type NodeAccess = 'publish' | 'read' | 'none'
 
 /** Items kept on `announcements`; the same as the mock's seed. */
 export const ANNOUNCEMENTS_MAX_ITEMS = 100
+
+/**
+ * Items kept on `retired`: one per deleted force or role (§3 rule 1). ejabberd's default
+ * `max_items_node` is 1000; a game deletes far fewer.
+ */
+export const RETIRED_MAX_ITEMS = 1000
 
 /**
  * The admin's item on an objectives node: the only item it holds, since only the admin publishes
@@ -107,7 +117,7 @@ export interface TargetNode {
 }
 
 export interface TargetState {
-  /** Role ids, which are also the account localparts. */
+  /** Login names of the design's roles: the account localparts (§3 rule 1). */
   readonly roles: readonly string[]
   /**
    * Roles that are read-only in at least one room: observers, and roles with an `access: read`
@@ -116,12 +126,15 @@ export interface TargetState {
   readonly readOnlyRoles: readonly string[]
   readonly rooms: readonly TargetRoom[]
   readonly nodes: readonly TargetNode[]
+  /** Each role's login name, by role GUID. */
+  readonly loginNames: ReadonlyMap<string, string>
 }
 
 /** The state publishing `design` should leave on the server. Assumes a design that passed `checkDesign`. */
 export function targetState(design: DesignFile): TargetState {
   const matrix = effectiveAccess(design)
-  const roles = design.roles.map((r) => r.id)
+  const loginNames = new Map(design.roles.map((r) => [r.id, r.loginName]))
+  const roles = design.roles.map((r) => r.loginName)
   const everyRole = (access: 'read' | 'publish'): Map<string, 'read' | 'publish'> =>
     new Map(roles.map((id) => [id, access]))
   const doc = (value: unknown, itemId = DOCUMENT_ITEM_ID): TargetDocument => ({
@@ -133,9 +146,10 @@ export function targetState(design: DesignFile): TargetState {
   const rooms: TargetRoom[] = design.rooms.map((room) => {
     const access = new Map<string, 'write' | 'read'>()
     for (const [roleId, cell] of matrix.cells.get(room.id) ?? []) {
-      if (cell.access === 'none') continue
-      access.set(roleId, cell.access)
-      if (cell.access === 'read') readOnly.add(roleId)
+      const login = loginNames.get(roleId)
+      if (cell.access === 'none' || login === undefined) continue
+      access.set(login, cell.access)
+      if (cell.access === 'read') readOnly.add(login)
     }
     return { roomId: room.id, config: gameRoomConfig(room.name), access }
   })
@@ -143,7 +157,7 @@ export function targetState(design: DesignFile): TargetState {
   // Every White Force role (the umpire-flag force), observer or not, reads every force's
   // objectives; only the admin, the node's owner, publishes them (§3 rule 14, D21, WP 3.5).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => r.id)
+  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => r.loginName)
   const publicAssets = new Set(publicAssetIds(design.game))
   const whitelist1 = gameNodeConfig('whitelist', 1)
 
@@ -165,6 +179,14 @@ export function targetState(design: DesignFile): TargetState {
       config: whitelist1,
       access: everyRole('read'),
       documents: [],
+    },
+    // §3 rule 1: deleted forces' and roles' last names, read by every role, for message authors.
+    // Published with the other documents, before any removal (ADM-39).
+    {
+      node: SINGLETON_NODES.retired,
+      config: gameNodeConfig('whitelist', RETIRED_MAX_ITEMS),
+      access: everyRole('read'),
+      documents: design.retired.map((record) => doc(record, record.id)),
     },
     ...design.forces.map((force) => ({
       node: nodeName.force(force.id),
@@ -190,7 +212,9 @@ export function targetState(design: DesignFile): TargetState {
       // §3 rule 14, D21: the force's roles and every White Force role read; nobody but the
       // admin, who owns the node, publishes.
       const access = new Map<string, 'publish' | 'read'>()
-      for (const role of design.roles) if (role.forceId === force.id) access.set(role.id, 'read')
+      for (const role of design.roles) {
+        if (role.forceId === force.id) access.set(role.loginName, 'read')
+      }
       for (const id of white) access.set(id, 'read')
       const objectives = design.objectives.find((o) => o.forceId === force.id)
       return {
@@ -211,5 +235,11 @@ export function targetState(design: DesignFile): TargetState {
     }),
   ]
 
-  return { roles, readOnlyRoles: roles.filter((id) => readOnly.has(id)), rooms, nodes }
+  return {
+    roles,
+    readOnlyRoles: roles.filter((id) => readOnly.has(id)),
+    rooms,
+    nodes,
+    loginNames,
+  }
 }

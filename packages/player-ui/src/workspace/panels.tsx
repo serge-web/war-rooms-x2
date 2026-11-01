@@ -168,7 +168,7 @@ export function onlineRoles(
   const byId = new Map<string, OnlineRole>()
   for (const occupant of occupants) {
     // The admin is the umpire, in the White Force (SC-5); known by its JID, not its nick.
-    const id = occupant.isAdmin ? ADMIN_AUTHOR_ID : (occupant.roleId ?? occupant.nick)
+    const id = occupant.isAdmin ? ADMIN_AUTHOR_ID : (occupant.loginName ?? occupant.nick)
     const known = byId.get(id)
     if (known !== undefined) {
       if (occupant.self && !known.self) byId.set(id, { ...known, self: true })
@@ -176,9 +176,9 @@ export function onlineRoles(
     }
     const author = occupant.isAdmin
       ? authors.get(ADMIN_AUTHOR_ID)
-      : occupant.roleId === undefined
+      : occupant.loginName === undefined
         ? undefined
-        : authors.get(occupant.roleId)
+        : authors.get(occupant.loginName)
     byId.set(id, {
       id,
       name: author?.name ?? occupant.nick,

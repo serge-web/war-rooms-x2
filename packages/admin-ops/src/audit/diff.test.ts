@@ -1,8 +1,9 @@
 // Unit tests of the audit's comparison over hand-built server views (the planner's fixtures):
 // a fully published server is clean, and each kind of drift is one item with the right
 // severity and repair.
+import { nodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, jid, publishedView, withNode } from '../publish/fixtures.ts'
 import type { ServerView } from '../publish/view.ts'
@@ -12,7 +13,7 @@ import { findings, isClean } from './types.ts'
 import type { AuditItem, AuditReport } from './types.ts'
 
 const design = sampleDesignWithWhiteCell()
-const ROLES = design.roles.map((r) => jid(r.id))
+const ROLES = design.roles.map((r) => jid(r.loginName))
 
 /** Every voice check answered as the design wants. */
 function goodVoice(view: ServerView): VoiceReading[] {
@@ -58,17 +59,17 @@ describe('a server that matches the design', () => {
   it('reads the observer’s stored role, and writers only when the vault has their password', () => {
     expect(voiceChecks(design, view).checks).toEqual(
       expect.arrayContaining([
-        { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor' },
-        { roleId: 'white-observer', roomId: 'blue-hq', expect: 'visitor' },
-        { roleId: 'white-observer', roomId: 'red-hq', expect: 'visitor' },
-        { roleId: 'white-observer', roomId: 'negotiation', expect: 'visitor' },
+        { roleId: 'blue-observer', roomId: tid(tid('blue-hq')), expect: 'visitor' },
+        { roleId: 'white-observer', roomId: tid(tid('blue-hq')), expect: 'visitor' },
+        { roleId: 'white-observer', roomId: tid(tid('red-hq')), expect: 'visitor' },
+        { roleId: 'white-observer', roomId: tid(tid('negotiation')), expect: 'visitor' },
       ]),
     )
     expect(voiceChecks(design, view).checks).toHaveLength(4)
     const withWriter = { ...view, vault: { exists: true, roles: ['blue-observer', 'blue-co'] } }
     expect(voiceChecks(design, withWriter).checks).toContainEqual({
       roleId: 'blue-co',
-      roomId: 'blue-hq',
+      roomId: tid(tid('blue-hq')),
       expect: 'voice',
     })
   })
@@ -87,10 +88,10 @@ describe('drift', () => {
     const drifted = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'blue-hq' ? { ...r, config: { ...r.config, moderated: false } } : r,
+        r.roomId === tid('blue-hq') ? { ...r, config: { ...r.config, moderated: false } } : r,
       ),
     }
-    const found = item(audit(drifted), 'room-config:blue-hq')
+    const found = item(audit(drifted), `room-config:${tid('blue-hq')}`)
     expect(found).toMatchObject({
       kind: 'room-config',
       severity: 'critical',
@@ -98,7 +99,9 @@ describe('drift', () => {
       found: 'moderated: false',
       repairable: true,
       destructive: false,
-      repair: [{ type: 'ensure-room', roomId: 'blue-hq', name: 'Blue HQ', create: false }],
+      repair: [
+        { type: 'ensure-room', roomId: tid(tid('blue-hq')), name: 'Blue HQ', create: false },
+      ],
     })
   })
 
@@ -106,7 +109,7 @@ describe('drift', () => {
     const drifted = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'red-hq'
+        r.roomId === tid('red-hq')
           ? {
               ...r,
               config: {
@@ -119,23 +122,23 @@ describe('drift', () => {
           : r,
       ),
     }
-    expect(item(audit(drifted), 'room-config:red-hq')).toMatchObject({
+    expect(item(audit(drifted), `room-config:${tid('red-hq')}`)).toMatchObject({
       severity: 'critical',
       expected: 'visitorPrivateMessages: nobody, subscriptions: false, voiceRequests: false',
       found: 'visitorPrivateMessages: moderators, subscriptions: true, voiceRequests: true',
-      repair: [{ type: 'ensure-room', roomId: 'red-hq', create: false }],
+      repair: [{ type: 'ensure-room', roomId: tid(tid('red-hq')), create: false }],
     })
     const statusOnly = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'red-hq' ? { ...r, config: { ...r.config, visitorStatus: true } } : r,
+        r.roomId === tid('red-hq') ? { ...r, config: { ...r.config, visitorStatus: true } } : r,
       ),
     }
-    expect(item(audit(statusOnly), 'room-config:red-hq').severity).toBe('high')
+    expect(item(audit(statusOnly), `room-config:${tid('red-hq')}`).severity).toBe('high')
   })
 
   it('a subscription left on a revoked reader is one item per full JID (R-A)', () => {
-    const drifted = withNode(view, 'objectives:red', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
       subscriptions: [
         { jid: `${jid('blue-co')}/pane-1`, subscription: 'subscribed' },
@@ -155,21 +158,25 @@ describe('drift', () => {
       repair: [
         {
           type: 'node-access',
-          node: 'objectives:red',
+          node: nodeName.objectives(tid('red')),
           changes: [{ roleId: 'blue-co', access: 'none' }],
         },
       ],
     })
     // The affiliation itself is right, so there is no node-access item.
-    expect(report.items.some((i) => i.id === 'node-access:objectives:red:blue-co')).toBe(false)
+    expect(
+      report.items.some((i) => i.id === `node-access:${nodeName.objectives(tid('red'))}:blue-co`),
+    ).toBe(false)
   })
 
   it('a reader left on a whitelist is a node-access item', () => {
-    const drifted = withNode(view, 'objectives:red', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
       affiliations: [...n.affiliations, { jid: jid('blue-co'), affiliation: 'member' }],
     }))
-    expect(item(audit(drifted), 'node-access:objectives:red:blue-co')).toMatchObject({
+    expect(
+      item(audit(drifted), `node-access:${nodeName.objectives(tid('red'))}:blue-co`),
+    ).toMatchObject({
       expected: 'none',
       found: 'member',
       severity: 'critical',
@@ -178,13 +185,15 @@ describe('drift', () => {
 
   it('F5: a White Force observer left as an objectives publisher is a node-access item', () => {
     // What a publish before the fix left on the server.
-    const drifted = withNode(view, 'objectives:red', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
       affiliations: n.affiliations.map((a) =>
         a.jid === jid('white-observer') ? { ...a, affiliation: 'publisher' as const } : a,
       ),
     }))
-    expect(item(audit(drifted), 'node-access:objectives:red:white-observer')).toMatchObject({
+    expect(
+      item(audit(drifted), `node-access:${nodeName.objectives(tid('red'))}:white-observer`),
+    ).toMatchObject({
       expected: 'member',
       found: 'publisher',
       severity: 'critical',
@@ -194,7 +203,7 @@ describe('drift', () => {
 
   it('D21: a White Force editor left as an objectives publisher, and its item, are found', () => {
     // What a publish before WP 3.5 left: White Cell publishing, with its own item.
-    const drifted = withNode(view, 'objectives:red', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
       affiliations: n.affiliations.map((a) =>
         a.jid === jid('white-cell') ? { ...a, affiliation: 'publisher' as const } : a,
@@ -202,13 +211,15 @@ describe('drift', () => {
       items: [...n.items, { id: 'white-cell', payload: '{}', publisher: jid('white-cell') }],
     }))
     const report = audit(drifted)
-    expect(item(report, 'node-access:objectives:red:white-cell')).toMatchObject({
-      expected: 'member',
-      found: 'publisher',
-      severity: 'critical',
-      repair: [{ type: 'node-access', changes: [{ roleId: 'white-cell', access: 'read' }] }],
-    })
-    const stray = item(report, 'stray-items:objectives:red')
+    expect(item(report, `node-access:${nodeName.objectives(tid('red'))}:white-cell`)).toMatchObject(
+      {
+        expected: 'member',
+        found: 'publisher',
+        severity: 'critical',
+        repair: [{ type: 'node-access', changes: [{ roleId: 'white-cell', access: 'read' }] }],
+      },
+    )
+    const stray = item(report, `stray-items:${nodeName.objectives(tid('red'))}`)
     expect(stray).toMatchObject({
       kind: 'stray-items',
       severity: 'medium',
@@ -217,16 +228,23 @@ describe('drift', () => {
     })
     // Purge, then the admin's item again; no separate document item for it.
     expect(stray.repair.map((a) => a.type)).toEqual(['purge-node', 'publish'])
-    expect(stray.repair[1]).toMatchObject({ node: 'objectives:red', itemId: 'admin' })
-    expect(report.items.map((i) => i.id)).not.toContain('document:objectives:red:admin')
+    expect(stray.repair[1]).toMatchObject({
+      node: nodeName.objectives(tid('red')),
+      itemId: 'admin',
+    })
+    expect(report.items.map((i) => i.id)).not.toContain(
+      `document:${nodeName.objectives(tid('red'))}:admin`,
+    )
   })
 
   it('an owner affiliation the planner does not model is still found', () => {
-    const drifted = withNode(view, 'objectives:red', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
       affiliations: [...n.affiliations, { jid: jid('blue-co'), affiliation: 'owner' }],
     }))
-    expect(item(audit(drifted), 'node-access:objectives:red:blue-co')).toMatchObject({
+    expect(
+      item(audit(drifted), `node-access:${nodeName.objectives(tid('red'))}:blue-co`),
+    ).toMatchObject({
       found: 'owner',
       severity: 'critical',
       repair: [{ type: 'node-access', changes: [{ roleId: 'blue-co', access: 'none' }] }],
@@ -235,13 +253,18 @@ describe('drift', () => {
 
   it('an observer that joins with voice is critical, repaired through its own login', () => {
     const voice: VoiceReading[] = [
-      { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor', role: 'participant' },
+      {
+        roleId: 'blue-observer',
+        roomId: tid(tid('blue-hq')),
+        expect: 'visitor',
+        role: 'participant',
+      },
     ]
-    expect(item(audit(view, { voice }), 'voice:blue-observer:blue-hq')).toMatchObject({
+    expect(item(audit(view, { voice }), `voice:blue-observer:${tid('blue-hq')}`)).toMatchObject({
       kind: 'voice',
       severity: 'critical',
       found: 'participant: can post',
-      repair: [{ type: 'read-only', roleId: 'blue-observer', roomIds: ['blue-hq'] }],
+      repair: [{ type: 'read-only', roleId: 'blue-observer', roomIds: [tid('blue-hq')] }],
     })
   })
 
@@ -249,14 +272,14 @@ describe('drift', () => {
     const withWriter = { ...view, vault: { exists: true, roles: ['blue-observer', 'blue-co'] } }
     const voice: VoiceReading[] = [
       ...goodVoice(withWriter).filter((r) => r.roleId !== 'blue-co'),
-      { roleId: 'blue-co', roomId: 'blue-hq', expect: 'voice', role: 'visitor' },
+      { roleId: 'blue-co', roomId: tid(tid('blue-hq')), expect: 'voice', role: 'visitor' },
     ]
-    expect(item(audit(withWriter, { voice }), 'voice:blue-co:blue-hq')).toMatchObject({
+    expect(item(audit(withWriter, { voice }), `voice:blue-co:${tid('blue-hq')}`)).toMatchObject({
       severity: 'medium',
       repair: [
         {
           type: 'room-access',
-          roomId: 'blue-hq',
+          roomId: tid(tid('blue-hq')),
           changes: [{ roleId: 'blue-co', access: 'write', from: 'read' }],
         },
       ],
@@ -266,11 +289,16 @@ describe('drift', () => {
   it('a locked vault leaves the observer unchecked and asks for the unlock', () => {
     const locked = { ...view, vault: { exists: true } }
     const voice: VoiceReading[] = [
-      { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor', problem: 'vault-locked' },
+      {
+        roleId: 'blue-observer',
+        roomId: tid(tid('blue-hq')),
+        expect: 'visitor',
+        problem: 'vault-locked',
+      },
     ]
     const report = audit(locked, { voice })
     expect(report.vault).toBe('locked')
-    expect(item(report, 'voice:blue-observer:blue-hq')).toMatchObject({
+    expect(item(report, `voice:blue-observer:${tid('blue-hq')}`)).toMatchObject({
       kind: 'voice-unchecked',
       severity: 'high',
       repairable: false,
@@ -279,13 +307,18 @@ describe('drift', () => {
 
   it('a refused vault password offers a confirmed password reset, then the revocation', () => {
     const voice: VoiceReading[] = [
-      { roleId: 'blue-observer', roomId: 'blue-hq', expect: 'visitor', problem: 'login-failed' },
+      {
+        roleId: 'blue-observer',
+        roomId: tid(tid('blue-hq')),
+        expect: 'visitor',
+        problem: 'login-failed',
+      },
     ]
-    expect(item(audit(view, { voice }), 'voice:blue-observer:blue-hq')).toMatchObject({
+    expect(item(audit(view, { voice }), `voice:blue-observer:${tid('blue-hq')}`)).toMatchObject({
       destructive: true,
       repair: [
         { type: 'reset-password', roleId: 'blue-observer', readOnly: true },
-        { type: 'read-only', roleId: 'blue-observer', roomIds: ['blue-hq'] },
+        { type: 'read-only', roleId: 'blue-observer', roomIds: [tid('blue-hq')] },
       ],
     })
   })
@@ -316,7 +349,7 @@ describe('drift', () => {
     const drifted = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'red-hq'
+        r.roomId === tid('red-hq')
           ? {
               ...r,
               affiliations: [
@@ -330,7 +363,7 @@ describe('drift', () => {
     expect(item(audit(drifted), 'stray-access:ghost')).toMatchObject({
       severity: 'high',
       destructive: true,
-      repair: [{ type: 'delete-role', roleId: 'ghost', rooms: ['red-hq'], nodes: [] }],
+      repair: [{ type: 'delete-role', roleId: 'ghost', rooms: [tid('red-hq')], nodes: [] }],
     })
   })
 
@@ -338,7 +371,7 @@ describe('drift', () => {
     const drifted = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'red-hq'
+        r.roomId === tid('red-hq')
           ? {
               ...r,
               affiliations: [
@@ -346,25 +379,25 @@ describe('drift', () => {
                 { jid: jid('blue-co'), affiliation: 'member' as const },
               ],
             }
-          : r.roomId === 'blue-hq'
+          : r.roomId === tid('blue-hq')
             ? { ...r, affiliations: r.affiliations.filter((a) => a.jid !== jid('blue-observer')) }
             : r,
       ),
     }
     const report = audit(drifted)
-    expect(item(report, 'room-access:red-hq:blue-co')).toMatchObject({
+    expect(item(report, `room-access:${tid('red-hq')}:blue-co`)).toMatchObject({
       severity: 'critical',
       repair: [
         {
           type: 'room-access',
-          roomId: 'red-hq',
+          roomId: tid(tid('red-hq')),
           changes: [{ roleId: 'blue-co', access: 'none', from: 'none' }],
         },
       ],
     })
-    expect(item(report, 'room-access:blue-hq:blue-observer')).toMatchObject({
+    expect(item(report, `room-access:${tid('blue-hq')}:blue-observer`)).toMatchObject({
       severity: 'medium',
-      repair: [{ type: 'read-only', roleId: 'blue-observer', roomIds: ['blue-hq'] }],
+      repair: [{ type: 'read-only', roleId: 'blue-observer', roomIds: [tid('blue-hq')] }],
     })
   })
 
@@ -372,7 +405,7 @@ describe('drift', () => {
     const drifted = {
       ...view,
       rooms: view.rooms.map((r) =>
-        r.roomId === 'red-hq'
+        r.roomId === tid('red-hq')
           ? {
               ...r,
               affiliations: r.affiliations.map((a) =>
@@ -382,18 +415,18 @@ describe('drift', () => {
           : r,
       ),
     }
-    expect(item(audit(drifted), 'room-access:red-hq:red-co')).toMatchObject({
+    expect(item(audit(drifted), `room-access:${tid('red-hq')}:red-co`)).toMatchObject({
       found: 'admin',
       severity: 'critical',
     })
   })
 
   it('a node opened to `open` access is critical', () => {
-    const drifted = withNode(view, 'objectives:blue', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('blue')), (n) => ({
       ...n,
       config: { ...n.config, accessModel: 'open' },
     }))
-    expect(item(audit(drifted), 'node-config:objectives:blue')).toMatchObject({
+    expect(item(audit(drifted), `node-config:${nodeName.objectives(tid('blue'))}`)).toMatchObject({
       severity: 'critical',
       expected: 'accessModel: whitelist',
       found: 'accessModel: open',
@@ -401,15 +434,15 @@ describe('drift', () => {
   })
 
   it('a changed document is republished as in the design', () => {
-    const drifted = withNode(view, 'forces:blue', (n) => ({
+    const drifted = withNode(view, nodeName.force(tid('blue')), (n) => ({
       ...n,
       items: n.items.map((i) => ({ ...i, payload: JSON.stringify({ tampered: true }) })),
     }))
-    const found = item(audit(drifted), 'document:forces:blue:current')
+    const found = item(audit(drifted), `document:${nodeName.force(tid('blue'))}:current`)
     expect(found).toMatchObject({ severity: 'medium', found: 'differs' })
     expect(found.repair[0]).toMatchObject({
       type: 'publish',
-      node: 'forces:blue',
+      node: nodeName.force(tid('blue')),
       itemId: 'current',
     })
   })
@@ -440,25 +473,31 @@ describe('drift', () => {
       ...view,
       rooms: [
         ...view.rooms,
-        { roomId: 'old-room', config: view.rooms[0]!.config, affiliations: [] },
+        { roomId: tid(tid('old-room')), config: view.rooms[0]!.config, affiliations: [] },
       ],
     }
-    expect(item(audit(extra), 'room-extra:old-room')).toMatchObject({ repairable: false })
+    expect(item(audit(extra), `room-extra:${tid('old-room')}`)).toMatchObject({ repairable: false })
     expect(
-      item(audit(extra, { messageCounts: new Map([['old-room', 7]]) }), 'room-extra:old-room'),
+      item(
+        audit(extra, { messageCounts: new Map([[tid('old-room'), 7]]) }),
+        `room-extra:${tid('old-room')}`,
+      ),
     ).toMatchObject({
       destructive: true,
-      repair: [{ type: 'destroy-room', roomId: 'old-room', messageCount: 7 }],
+      repair: [{ type: 'destroy-room', roomId: tid(tid('old-room')), messageCount: 7 }],
     })
   })
 
   it('a JID that is no role account is critical and left to the server’s tools', () => {
-    const drifted = withNode(view, 'objectives:blue', (n) => ({
+    const drifted = withNode(view, nodeName.objectives(tid('blue')), (n) => ({
       ...n,
       subscriptions: [{ jid: 'spy@elsewhere.example/x', subscription: 'subscribed' }],
     }))
     expect(
-      item(audit(drifted), 'foreign-access:objectives:blue:spy@elsewhere.example/x'),
+      item(
+        audit(drifted),
+        `foreign-access:${nodeName.objectives(tid('blue'))}:spy@elsewhere.example/x`,
+      ),
     ).toMatchObject({ severity: 'critical', repairable: false })
   })
 
@@ -475,10 +514,10 @@ describe('drift', () => {
       {
         ...view,
         rooms: view.rooms.map((r) =>
-          r.roomId === 'blue-hq' ? { ...r, config: { ...r.config, name: 'Renamed' } } : r,
+          r.roomId === tid('blue-hq') ? { ...r, config: { ...r.config, name: 'Renamed' } } : r,
         ),
       },
-      'objectives:blue',
+      nodeName.objectives(tid('blue')),
       (n) => ({ ...n, config: { ...n.config, accessModel: 'open' } }),
     )
     const severities = findings(audit(drifted)).map((i) => i.severity)

@@ -15,7 +15,7 @@ import type {
   ServerPort,
 } from './protocol.ts'
 import { PubsubService } from './pubsub.ts'
-import { MOCK_STATE_FORMAT, emptyState } from './state.ts'
+import { MOCK_STATE_FORMAT, MOCK_STATE_VERSION, emptyState } from './state.ts'
 import type { MockState } from './state.ts'
 import { systemClock } from './time.ts'
 import type { Clock } from './time.ts'
@@ -381,7 +381,7 @@ export class MockServer implements ServerLink {
     const w = this.world
     return {
       format: MOCK_STATE_FORMAT,
-      version: 1,
+      version: MOCK_STATE_VERSION,
       domain: w.domain,
       accounts: [...w.accounts.values()].map((a) => ({ ...a })),
       rooms: [...w.rooms.values()].map((room) => ({

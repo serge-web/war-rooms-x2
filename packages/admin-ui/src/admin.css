@@ -344,6 +344,13 @@
   flex: none;
 }
 
+.wrx-admin-login {
+  display: block;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--wrx-muted, #4b5563);
+}
+
 .wrx-admin-tag {
   font-size: 0.75rem;
   padding: 0 0.35rem;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LIMITS, slugSchema } from './common.ts'
+import { LIMITS, idSchema, isId, newEntityId, slugSchema } from './common.ts'
 import {
   announcementSchema,
   assetSchema,
@@ -8,10 +8,11 @@ import {
   gameSetupSchema,
   gameStateSchema,
   objectivesSchema,
+  retiredSchema,
   roleSchema,
   roomSchema,
 } from './documents.ts'
-import { pixelAsset, sampleDesign } from './fixtures.ts'
+import { ASSET, FORCE, ROLE, pixelAsset, sampleDesign } from './fixtures.ts'
 import { chatMessageBodySchema, messageBodySchema } from './message.ts'
 import { themeSchema } from './theme.ts'
 
@@ -20,7 +21,45 @@ const blue = design.forces[0]!
 const blueCo = design.roles[0]!
 const blueHq = design.rooms[0]!
 
-describe('slugs (§3 rule 1)', () => {
+const A = ASSET.gameLogo
+
+describe('ids are lowercase GUIDs (§3 rule 1)', () => {
+  it.each([FORCE.blue, '0f8fad5b-d9cb-469f-a165-70867728950e'])('accepts %s', (id) => {
+    expect(idSchema.safeParse(id).success).toBe(true)
+  })
+  it.each([
+    'blue',
+    'blue-co',
+    '0F8FAD5B-D9CB-469F-A165-70867728950E',
+    '0f8fad5b-d9cb-469f-a165-70867728950',
+    '{0f8fad5b-d9cb-469f-a165-70867728950e}',
+    '0f8fad5bd9cb469fa16570867728950e',
+  ])('rejects %j', (id) => {
+    expect(idSchema.safeParse(id).success).toBe(false)
+  })
+
+  it('makes new ids with crypto.randomUUID in a secure context', () => {
+    const id = newEntityId()
+    expect(isId(id)).toBe(true)
+    expect(newEntityId()).not.toBe(id)
+  })
+
+  it('makes version 4 ids from getRandomValues where there is no randomUUID (NFR-8)', () => {
+    // A page served over plain http: no randomUUID, getRandomValues only.
+    const insecure = {
+      getRandomValues: (array: Uint8Array<ArrayBuffer>) => globalThis.crypto.getRandomValues(array),
+    }
+    const ids = new Set(Array.from({ length: 200 }, () => newEntityId(insecure)))
+    expect(ids.size).toBe(200)
+    for (const id of ids) {
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    }
+    const zeros = { getRandomValues: (array: Uint8Array<ArrayBuffer>) => array }
+    expect(newEntityId(zeros)).toBe('00000000-0000-4000-8000-000000000000')
+  })
+})
+
+describe('slugs: room types and login names', () => {
   it.each(['blue', 'blue-co', 'a1', 'x'.repeat(64)])('accepts %s', (id) => {
     expect(slugSchema.safeParse(id).success).toBe(true)
   })
@@ -39,7 +78,20 @@ describe('every document carries schemaVersion 1', () => {
     ['role', roleSchema, blueCo],
     ['room', roomSchema, blueHq],
     ['objectives', objectivesSchema, design.objectives[0]!],
-    ['asset', assetSchema, pixelAsset('logo')],
+    ['asset', assetSchema, pixelAsset(A)],
+    [
+      'retired',
+      retiredSchema,
+      {
+        schemaVersion: 1,
+        id: ROLE.redCo,
+        kind: 'role',
+        name: 'Red CO',
+        loginName: 'red-co',
+        colour: '#b91c1c',
+        deletedAt: '2026-11-01T10:00:00Z',
+      },
+    ],
     [
       'announcement',
       announcementSchema,
@@ -79,8 +131,9 @@ describe('themes (§3 rules 10–11)', () => {
     expect(themeSchema.safeParse({ tokens: { fontFamily: 'serif' } }).success).toBe(true)
     expect(themeSchema.safeParse({ tokens: { fontFamily: 'Comic Sans' } }).success).toBe(false)
   })
-  it('references assets by slug', () => {
-    expect(themeSchema.safeParse({ tokens: {}, logoAssetId: 'Logo.png' }).success).toBe(false)
+  it('references assets by GUID', () => {
+    expect(themeSchema.safeParse({ tokens: {}, logoAssetId: 'game-logo' }).success).toBe(false)
+    expect(themeSchema.safeParse({ tokens: {}, logoAssetId: A }).success).toBe(true)
   })
 })
 
@@ -89,13 +142,37 @@ describe('roles', () => {
     const parsed = roleSchema.parse({ ...blueCo, password: 'secret' })
     expect(parsed).not.toHaveProperty('password')
   })
+  it('has a GUID id and a separate, slug-shaped login name (§3 rule 1)', () => {
+    expect(roleSchema.safeParse({ ...blueCo, id: 'blue-co' }).success).toBe(false)
+    expect(roleSchema.safeParse({ ...blueCo, loginName: 'Blue CO' }).success).toBe(false)
+    const { loginName: _l, ...withoutLogin } = blueCo
+    expect(roleSchema.safeParse(withoutLogin).success).toBe(false)
+  })
+})
+
+describe('retired records (§3 rule 1, ADM-14)', () => {
+  const role = {
+    schemaVersion: 1,
+    id: ROLE.redCo,
+    kind: 'role',
+    name: 'Red CO',
+    loginName: 'red-co',
+    deletedAt: '2026-11-01T10:00:00Z',
+  } as const
+  it('needs a login name for a role, and none for a force', () => {
+    expect(retiredSchema.safeParse(role).success).toBe(true)
+    const { loginName: _l, ...noLogin } = role
+    expect(retiredSchema.safeParse(noLogin).success).toBe(false)
+    expect(retiredSchema.safeParse({ ...noLogin, kind: 'force', id: FORCE.red }).success).toBe(true)
+    expect(retiredSchema.safeParse({ ...role, kind: 'force' }).success).toBe(false)
+  })
 })
 
 describe('rooms (§3 rule 4)', () => {
   it('accepts mixed force and role entries', () => {
     const participants = [
-      { kind: 'force', id: 'blue', access: 'write' },
-      { kind: 'role', id: 'red-co', access: 'read' },
+      { kind: 'force', id: FORCE.blue, access: 'write' },
+      { kind: 'role', id: ROLE.redCo, access: 'read' },
     ]
     expect(roomSchema.safeParse({ ...blueHq, participants }).success).toBe(true)
   })
@@ -108,8 +185,8 @@ describe('rooms (§3 rule 4)', () => {
   })
   it('allows a force and a role with the same id', () => {
     const participants = [
-      { kind: 'force', id: 'blue', access: 'write' },
-      { kind: 'role', id: 'blue', access: 'read' },
+      { kind: 'force', id: FORCE.blue, access: 'write' },
+      { kind: 'role', id: FORCE.blue, access: 'read' },
     ]
     expect(roomSchema.safeParse({ ...blueHq, participants }).success).toBe(true)
   })
@@ -121,19 +198,19 @@ describe('rooms (§3 rule 4)', () => {
 
 describe('assets (§3 rule 12)', () => {
   it('accepts PNG, WebP and SVG only', () => {
-    expect(assetSchema.safeParse({ ...pixelAsset('a'), mimeType: 'image/webp' }).success).toBe(true)
-    expect(assetSchema.safeParse({ ...pixelAsset('a'), mimeType: 'image/gif' }).success).toBe(false)
+    expect(assetSchema.safeParse({ ...pixelAsset(A), mimeType: 'image/webp' }).success).toBe(true)
+    expect(assetSchema.safeParse({ ...pixelAsset(A), mimeType: 'image/gif' }).success).toBe(false)
   })
   it('requires size to match the decoded data', () => {
-    expect(assetSchema.safeParse({ ...pixelAsset('a'), size: 69 }).success).toBe(false)
+    expect(assetSchema.safeParse({ ...pixelAsset(A), size: 69 }).success).toBe(false)
   })
   it('rejects data that is not base64', () => {
-    expect(assetSchema.safeParse({ ...pixelAsset('a'), data: 'not base64!' }).success).toBe(false)
+    expect(assetSchema.safeParse({ ...pixelAsset(A), data: 'not base64!' }).success).toBe(false)
   })
   it('rejects assets too large for one PubSub item', () => {
     const size = LIMITS.assetHardBytes + 3
     const data = 'A'.repeat((size / 3) * 4)
-    expect(assetSchema.safeParse({ ...pixelAsset('a'), size, data }).success).toBe(false)
+    expect(assetSchema.safeParse({ ...pixelAsset(A), size, data }).success).toBe(false)
   })
   it('computes decoded length with and without padding', () => {
     expect(base64DecodedLength('AAAA')).toBe(3)

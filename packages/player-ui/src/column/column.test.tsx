@@ -2,6 +2,7 @@
 // The out-of-game column over a store (happy-dom): the three parts in order, announcements oldest
 // first with the newest live one highlighted, the admin's post box, the force panel in the force
 // theme with live objectives, and the umpire's force choice and editor.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { flush, force, harness, objectives, sampleDocuments } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
@@ -139,7 +140,9 @@ describe('the admin panel (PLY-37, PLY-38, ADM-29)', () => {
 describe('the force panel (PLY-25, PLY-35)', () => {
   it('shows the role, its force and the force’s objectives in the force theme', async () => {
     const docs = sampleDocuments()
-    docs.set(nodeName.force('blue'), [force('blue', { theme: { tokens: { primary: '#123456' } } })])
+    docs.set(nodeName.force(tid('blue')), [
+      force('blue', { theme: { tokens: { primary: '#123456' } } }),
+    ])
     await mount('blue-co', docs)
     const panel = forcePanel()
     expect(within(panel).getByRole('heading', { name: 'blue-co' })).toBeTruthy()
@@ -158,7 +161,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     const h = await mount('blue-co')
     act(() => {
       h.publish(
-        nodeName.objectives('blue'),
+        nodeName.objectives(tid('blue')),
         objectives('blue', 'Hold the bridge.', '2026-10-25T09:00:00.000Z'),
       )
     })
@@ -177,7 +180,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
         .getAllByRole('option')
         .map((o) => o.textContent),
     ).toEqual(['BLUE', 'RED', 'WHITE'])
-    fireEvent.change(choice, { target: { value: 'red' } })
+    fireEvent.change(choice, { target: { value: tid('red') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',
@@ -195,9 +198,9 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     await act(() => flush())
     const call = h.session.calls.find((c) => c.op === 'publish')
     // One item, the admin's (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'admin'])
+    expect(call?.args.slice(0, 2)).toEqual([nodeName.objectives(tid('red')), 'admin'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
-      forceId: 'red',
+      forceId: tid('red'),
       markdown: '1. Delay **Blue** until noon.',
     })
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -219,7 +222,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     const h = await mount('white-1')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
-    fireEvent.change(choice, { target: { value: 'red' } })
+    fireEvent.change(choice, { target: { value: tid('red') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',
@@ -234,9 +237,9 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     await mount('admin')
     const panel = forcePanel()
     expect(within(panel).getByRole('heading', { name: 'Umpire' })).toBeTruthy()
-    expect(panel.dataset.force).toBe('white')
+    expect(panel.dataset.force).toBe(tid('white'))
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
-    fireEvent.change(choice, { target: { value: 'blue' } })
+    fireEvent.change(choice, { target: { value: tid('blue') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'BLUE objectives' }).textContent).toContain(
       'Secure the crossing.',
@@ -248,7 +251,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     const h = await mount('white-observer')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
-    fireEvent.change(choice, { target: { value: 'red' } })
+    fireEvent.change(choice, { target: { value: tid('red') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',

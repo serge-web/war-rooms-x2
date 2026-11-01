@@ -1,7 +1,9 @@
 // Named demo presets for the multi-client view (PLY-19): the pane count, arrangement and each
-// pane's login, kept in browser storage under the host's key (DOC-10). A login is the role id
-// only, never a password (NFR-1): on the mock a preset logs back in with the demo password
-// (NFR-6); on a real server it fills in the role id and waits for the password.
+// pane's login, kept in browser storage under the host's key (DOC-10). A login is the role's
+// login name only, never a password (NFR-1): on the mock a preset logs back in with the demo
+// password (NFR-6); on a real server it fills in the login name and waits for the password.
+// Login names are what role ids were before GUID ids (§3 rule 1), so presets saved before then
+// keep working; the stored field is still called `roleId`.
 import type { StorageLike } from '../workspace/storage.ts'
 
 export type PaneCount = 2 | 3 | 4
@@ -10,7 +12,10 @@ export type PaneKind = 'player' | 'admin'
 
 export interface PanePreset {
   readonly kind: PaneKind
-  /** The role id the pane was logged in as, if any (`admin` for the admin's game view). */
+  /**
+   * The login name the pane was logged in as, if any (`admin` for the admin's game view). Named
+   * `roleId` from before GUID ids, when the two were the same.
+   */
   readonly roleId?: string | undefined
 }
 

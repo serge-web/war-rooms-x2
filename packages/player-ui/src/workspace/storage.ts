@@ -12,7 +12,7 @@ export interface LayoutStorage {
 export interface LayoutKeyParts {
   /** The XMPP domain the session is on. */
   readonly server: string
-  /** The role id, or `admin` for the admin account. */
+  /** The role's GUID, or `admin` for the admin account. */
   readonly role: string
   /** `game-setup.designVersion` (§3 rule 8); a new design starts from the default layout. */
   readonly designVersion: number

@@ -9,7 +9,16 @@
 // - Getters return frozen snapshots that keep their identity until something they depend on
 //   changes, so they can be passed straight to `useSyncExternalStore`.
 import { LIMITS, SINGLETON_NODES, checkItemSize, parseDocument } from '@wrx/schemas'
-import type { Announcement, Asset, Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
+import type {
+  Announcement,
+  Asset,
+  Force,
+  GameSetup,
+  Objectives,
+  Retired,
+  Role,
+  Room,
+} from '@wrx/schemas'
 import type {
   ConnectionStatus,
   EndReason,
@@ -69,8 +78,11 @@ export interface Identity {
   readonly jid: string
   readonly bareJid: string
   readonly domain: string
-  /** The role id (the JID's local part), or `undefined` for the admin and anonymous sessions. */
-  readonly roleId: string | undefined
+  /**
+   * The role's login name (the JID's local part), or `undefined` for the admin and anonymous
+   * sessions. The role itself, and its GUID, come from the role documents: `Me.role`.
+   */
+  readonly loginName: string | undefined
   /** The server's `admin` account (D3). The server, not this flag, enforces admin rights. */
   readonly isAdmin: boolean
   readonly anonymous: boolean
@@ -97,15 +109,20 @@ export interface Me {
 }
 
 /**
- * Display data for a message author, resolved live from role and force documents (§3 rule 6).
- * The admin is listed under ADMIN_AUTHOR_ID as the umpire, in the White Force.
+ * Display data for a message author, resolved live from role and force documents by the
+ * author's login name (§3 rule 6). The admin is listed under ADMIN_AUTHOR_ID as the umpire, in
+ * the White Force. A deleted role is listed from its `retired` record, marked `deleted`.
  */
 export interface Author {
+  /** The role's GUID; ADMIN_AUTHOR_ID for the admin. */
   readonly roleId: string
+  readonly loginName: string
   readonly name: string
   readonly forceId: string
   readonly forceName: string | undefined
   readonly colour: string | undefined
+  /** The role was deleted; `name` is its last name, from `retired` (§3 rule 1, ADM-14). */
+  readonly deleted: boolean
 }
 
 export interface AnnouncementEntry {
@@ -155,7 +172,8 @@ export interface RoomView {
 export interface Occupant {
   readonly nick: string
   readonly jid: string | undefined
-  readonly roleId: string | undefined
+  /** The JID's local part on this game's domain: a role's login name. */
+  readonly loginName: string | undefined
   /** The server's `admin` account, the umpire, from the occupant JID (§3 rule 3). */
   readonly isAdmin: boolean
   readonly role: MucRole
@@ -218,7 +236,10 @@ export interface SessionStore {
   announcements(): Snapshot<readonly AnnouncementEntry[]>
   access(): Snapshot<AccessMatrix>
   me(): Snapshot<Me>
+  /** Login names keyed to authors, deleted roles included (§3 rule 6). */
   authors(): Snapshot<ReadonlyMap<string, Author>>
+  /** The last names of deleted forces and roles (§3 rule 1); never used for access. */
+  retired(): Snapshot<readonly Retired[]>
 
   /** Reference-counted room membership: join and load history on first, leave on last. */
   acquireRoom(roomId: string): Release
@@ -369,7 +390,7 @@ class Store implements SessionStore {
       jid: this.session.jid,
       bareJid: bare,
       domain: domainpart(bare),
-      roleId: this.session.anonymous || isAdmin ? undefined : local,
+      loginName: this.session.anonymous || isAdmin ? undefined : local,
       isAdmin,
       anonymous: this.session.anonymous,
     })
@@ -619,13 +640,15 @@ class Store implements SessionStore {
     const spec = entry.spec
     if (!entry.alive || spec === undefined) return
     if (deleted) {
+      // Before the items go: the own role is found from them (by login name).
+      const ownRole = this.isOwnRoleNode(entry.node)
       entry.items.clear()
       entry.touched?.clear()
       entry.touched = undefined
       entry.status = 'error'
       entry.error = { code: 'not-found', message: `${entry.node} was deleted` }
       this.nodeChanged(entry)
-      if (this.isOwnRoleNode(entry.node)) void this.endSession('deleted')
+      if (ownRole) void this.endSession('deleted')
       return
     }
     let changed = false
@@ -678,8 +701,15 @@ class Store implements SessionStore {
   }
 
   private isOwnRoleNode(node: string): boolean {
-    const roleId = this.identity.roleId
-    return roleId !== undefined && node === safeNodeName('role', roleId)
+    const role = this.ownRole()
+    return role !== undefined && node === safeNodeName('role', role.id)
+  }
+
+  /** This session's role: the role document whose login name is the session's (§3 rule 1). */
+  private ownRole(): Role | undefined {
+    const login = this.identity.loginName
+    if (login === undefined) return undefined
+    return this.collection('role').find((r) => r.loginName === login)
   }
 
   private async listNodes(): Promise<void> {
@@ -696,8 +726,9 @@ class Store implements SessionStore {
     const desired = new Set<string>([SINGLETON_NODES.gameSetup])
     if (this.identity.anonymous) return desired
     desired.add(SINGLETON_NODES.announcements)
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    // The deleted-entity records, for message authors only; nothing reads them for access.
+    desired.add(SINGLETON_NODES.retired)
+    const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
     for (const node of this.listed) {
@@ -709,8 +740,8 @@ class Store implements SessionStore {
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
-    if (roleId !== undefined) add(safeNodeName('role', roleId))
     if (role !== undefined) {
+      add(safeNodeName('role', role.id))
       add(safeNodeName('force', role.forceId))
       add(safeNodeName('objectives', role.forceId))
     }
@@ -876,8 +907,8 @@ class Store implements SessionStore {
   me(): Snapshot<Me> {
     const matrix = this.access().data
     const rooms = this.collection('room')
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    const role = this.ownRole()
+    const roleId = role?.id
     const forces = this.collection('force')
     // The admin is the umpire, a member of the White Force (glossary, D8).
     const force = this.identity.isAdmin
@@ -908,31 +939,70 @@ class Store implements SessionStore {
     return this.memo('me', [me, this.currentStatus], () => this.collectionStatus(me))
   }
 
+  retired(): Snapshot<readonly Retired[]> {
+    const data = this.retiredList()
+    return this.memo('retired', [data, this.currentStatus], () => this.collectionStatus(data))
+  }
+
+  private retiredList(): readonly Retired[] {
+    const entry = this.nodes.get(SINGLETON_NODES.retired)
+    if (entry === undefined) return EMPTY_RETIRED
+    return this.memo('retired-list', [entry, entry.version], () => {
+      const list: Retired[] = []
+      for (const item of entry.items.values()) {
+        // The item id is the entity's GUID; a record under another id is ignored.
+        if (item.doc.kind === 'retired' && item.doc.value.id === item.id) list.push(item.doc.value)
+      }
+      return Object.freeze(list.sort((a, b) => compareStrings(a.id, b.id)))
+    })
+  }
+
   authors(): Snapshot<ReadonlyMap<string, Author>> {
     const forces = this.collection('force')
     const roles = this.collection('role')
-    const map = this.memo('authors-value', [forces, roles], () => {
+    const retired = this.retiredList()
+    const map = this.memo('authors-value', [forces, roles, retired], () => {
       const byForce = new Map(forces.map((f) => [f.id, f]))
       const authors = new Map<string, Author>()
+      // Deleted roles first, so a current role's document wins should a login name ever be in
+      // both (the design check and the editor refuse that, §3 rule 1).
+      for (const record of retired) {
+        if (record.kind !== 'role' || record.loginName === undefined) continue
+        if (record.loginName === ADMIN_AUTHOR_ID) continue
+        authors.set(record.loginName, {
+          roleId: record.id,
+          loginName: record.loginName,
+          name: record.name,
+          forceId: '',
+          forceName: undefined,
+          colour: record.colour,
+          deleted: true,
+        })
+      }
       for (const role of roles) {
+        if (role.loginName === ADMIN_AUTHOR_ID) continue
         const force = byForce.get(role.forceId)
-        authors.set(role.id, {
+        authors.set(role.loginName, {
           roleId: role.id,
+          loginName: role.loginName,
           name: role.name,
           forceId: role.forceId,
           forceName: force?.name,
           colour: force?.colour,
+          deleted: false,
         })
       }
-      // The admin is the umpire, in the White Force. Set last: `admin` is a reserved id, so a
-      // role document claiming it cannot take the umpire's label.
+      // The admin is the umpire, in the White Force. `admin` is a reserved login name, so a role
+      // document claiming it cannot take the umpire's label (skipped above).
       const white = whiteForceOf(forces)
       authors.set(ADMIN_AUTHOR_ID, {
         roleId: ADMIN_AUTHOR_ID,
+        loginName: ADMIN_AUTHOR_ID,
         name: UMPIRE_NAME,
         forceId: white?.id ?? '',
         forceName: white?.name,
         colour: white?.colour,
+        deleted: false,
       })
       return authors
     })
@@ -1017,7 +1087,7 @@ class Store implements SessionStore {
     entry.error = undefined
     this.attachRoom(entry)
     this.roomChanged(entry)
-    const nick = this.identity.roleId ?? localpart(this.identity.bareJid) ?? 'admin'
+    const nick = this.identity.loginName ?? localpart(this.identity.bareJid) ?? 'admin'
     const run = async (): Promise<DomainResult<Joined>> => {
       const joined = await this.session.muc.join(entry.jid, nick)
       if (!current()) return domainErr('not-joined', 'superseded')
@@ -1147,7 +1217,7 @@ class Store implements SessionStore {
     const onDomain = bare !== undefined && domainpart(bare) === this.identity.domain
     const local = onDomain ? localpart(bare) : undefined
     const isAdmin = local === 'admin'
-    return { nick, jid: bare, roleId: isAdmin ? undefined : local, isAdmin }
+    return { nick, jid: bare, loginName: isAdmin ? undefined : local, isAdmin }
   }
 
   private toOccupant(event: OccupantEvent): Occupant {
@@ -1155,7 +1225,7 @@ class Store implements SessionStore {
     return {
       nick: event.nick,
       jid: sender.jid,
-      roleId: sender.roleId,
+      loginName: sender.loginName,
       isAdmin: sender.isAdmin,
       role: event.role,
       affiliation: event.affiliation,
@@ -1483,6 +1553,8 @@ function noop(): void {
   return undefined
 }
 
+const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+
 /**
  * Whether the store takes this item at all. An objectives node shows the admin's item only
  * (§3 rule 14): a server published before WP 3.5 can still hold White Force editors' items until
@@ -1552,7 +1624,7 @@ function endedError(reason: SessionEndReason): DomainError {
 /** How the admin's messages are labelled: the umpire, in the White Force (SC-5). */
 export const UMPIRE_NAME = 'Umpire'
 
-/** The admin's key in `authors()`: the reserved account name, never a role id. */
+/** The admin's key in `authors()`: the reserved account name, never a login name. */
 export const ADMIN_AUTHOR_ID = 'admin'
 
 /**

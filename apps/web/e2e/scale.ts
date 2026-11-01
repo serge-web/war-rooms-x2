@@ -37,11 +37,11 @@ export async function storeScaleDraft(page: Page, options: ScaleOptions = {}): P
   const design = scaleDesign(options)
   const draft = JSON.stringify({
     format: 'wrx1-admin-draft',
-    schemaVersion: 1,
+    schemaVersion: 2,
     design,
     meta: {
-      retiredIds: { forces: [], roles: [], rooms: [] },
       publishedRoleIds: design.roles.map((r) => r.id),
+      publishedForceIds: design.forces.map((f) => f.id),
     },
   })
   await page.waitForFunction(() => window.wrxMock !== undefined)

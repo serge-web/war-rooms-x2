@@ -68,7 +68,7 @@ function plural(n: number, word: string): string {
 
 function title(item: AuditItem): string {
   const role = item.roleId !== undefined && item.roleId !== item.target ? ` (${item.roleId})` : ''
-  return `${KIND_LABEL[item.kind]}: ${item.target}${role}`
+  return `${KIND_LABEL[item.kind]}: ${item.targetName ?? item.target}${role}`
 }
 
 /** What the admin ticks to confirm a destructive repair (ADM-14, ADM-40, ADM-26). */
@@ -77,9 +77,9 @@ function acknowledgement(item: AuditItem): Acknowledgement {
     item.kind === 'account-unknown'
       ? `Delete the account ${item.target} and remove its access`
       : item.kind === 'room-extra'
-        ? `Destroy room ${item.target} and its archived messages (${item.found})`
+        ? `Destroy room ${item.targetName ?? item.target} and its archived messages (${item.found})`
         : item.kind === 'node-extra'
-          ? `Delete node ${item.target} and its items`
+          ? `Delete node ${item.targetName ?? item.target} and its items`
           : item.repair.some((a) => a.type === 'reset-password')
             ? `Reset the password of ${item.roleId ?? item.target}: its players need the new one`
             : `${title(item)}: ${item.note ?? 'this cannot be undone'}`

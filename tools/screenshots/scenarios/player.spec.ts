@@ -20,7 +20,7 @@ test('player shell, logged in', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('blue-co')
+  await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
@@ -33,7 +33,7 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // PLY-40: one column per room; the game info panel opened from the strip (PLY-8).
@@ -50,7 +50,7 @@ test('player chat panel', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('blue-co')
+  await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // WP 2.6: the seeded history as cards with shared headers under a date divider (PLY-43,

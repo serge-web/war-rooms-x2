@@ -1,6 +1,7 @@
 // Unit tests for the server's internals where the contract suite does not reach: stanza-ids,
 // archive edges, join history, state export and import, reset, and the behaviour marked "not
 // covered by contract" in muc.ts and pubsub.ts.
+import { tid } from '@wrx/schemas/fixtures'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type {
   RoomConfig,
@@ -21,7 +22,7 @@ import { ManualTime } from './time.ts'
 import { MockTransport } from './transport.ts'
 
 const domain = 'test.mock'
-const ROOM = `ops@conference.${domain}`
+const ROOM = `${tid('ops')}@conference.${domain}`
 const GAME_ROOM: RoomConfig = {
   name: 'Ops',
   membersOnly: true,
@@ -184,7 +185,8 @@ describe('state export, import and reset (PLY-21, PLY-34)', () => {
     expect(copy.exportState()).toEqual(exported)
 
     expect(parseMockState('{').ok).toBe(false)
-    expect(parseMockState({ ...exported, version: 2 }).ok).toBe(false)
+    expect(parseMockState({ ...exported, version: 1 }).ok).toBe(false)
+    expect(parseMockState({ ...exported, version: 3 }).ok).toBe(false)
     expect(parseMockState({ ...exported, lastStanzaId: 'x' }).ok).toBe(false)
   })
 

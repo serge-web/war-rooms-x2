@@ -13,7 +13,7 @@
 //   affiliations other than `member`, node affiliations that grant nothing the planner models
 //   (`owner`, `publish-only`), JIDs that are no role account, and `game-setup` without its version.
 import { DOCUMENT_ITEM_ID } from '@wrx/domain'
-import { RESERVED_ROLE_IDS, SINGLETON_NODES, parseNodeName } from '@wrx/schemas'
+import { RESERVED_LOGIN_NAMES, SINGLETON_NODES, parseNodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import type { MucRole, NodeConfig, RoomConfig } from '@wrx/transport'
 import { bareJid, domainpart, localpart } from '@wrx/domain'
@@ -277,7 +277,7 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     const bare = bareJid(jid)
     if (domainpart(bare) !== domain) continue
     const local = localpart(bare) ?? ''
-    if (RESERVED_ROLE_IDS.includes(local)) continue
+    if (RESERVED_LOGIN_NAMES.includes(local)) continue
     const id = roleIdOf(bare, domain)
     if (id !== undefined) {
       registered.add(id)
@@ -288,7 +288,7 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
       kind: 'account-unknown',
       target: bare,
       expected: 'no account that is not a role',
-      found: 'an account whose name is not a role id',
+      found: 'an account whose name is no role’s login name',
       severity: 'high',
       repair: [],
       note: 'The tooling only deletes role accounts; remove this one with the server’s own tools.',
@@ -540,15 +540,48 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     found: `${view.nodes.length} node names, listable by anyone, even without logging in`,
     severity: 'info',
     repair: [],
-    note: 'Force, role, room and asset ids are part of node names (ADM-42, R17). Node contents stay protected.',
+    note: 'Node names carry only GUIDs (§3 rule 1), so they show how many forces, roles, rooms and assets there are, not their names (ADM-42, R17). Node contents stay protected.',
   })
 
+  const named = nameTargets(design, published)
   return {
-    items: sortItems(out.items()),
+    items: sortItems(out.items()).map((item) => {
+      const name = named(item.target)
+      return name === undefined ? item : { ...item, targetName: name }
+    }),
     vault: vaultState(view, plannedVoice),
     voiceChecked: input.voice.filter((r) => r.role !== undefined).length,
     publishedVersion: published.game?.designVersion,
     online: view.online,
+  }
+}
+
+/**
+ * Readable names for the audit's targets: entity GUIDs mean nothing to the admin (§3 rule 1).
+ * Names come from the design, else from the server's documents.
+ */
+function nameTargets(
+  design: DesignFile,
+  published: ReturnType<typeof publishedDesign>,
+): (target: string) => string | undefined {
+  const names = new Map<string, string>()
+  for (const list of [
+    published.forces,
+    published.rooms,
+    published.roles,
+    design.forces,
+    design.rooms,
+    design.roles,
+  ]) {
+    for (const entity of list) names.set(entity.id, entity.name)
+  }
+  return (target) => {
+    const room = names.get(target)
+    if (room !== undefined) return room
+    const ref = parseNodeName(target)
+    if (ref === undefined || ref.kind === 'singleton') return undefined
+    const name = names.get(ref.id)
+    return name === undefined ? undefined : `${ref.kind}: ${name}`
   }
 }
 
