@@ -258,7 +258,7 @@ export interface SessionStore {
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
-  /** The admin and White Force roles that are not observers only (PLY-35, §3 rule 14). */
+  /** The admin only (§3 rule 14, D21); refused for every role before anything is sent. */
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
