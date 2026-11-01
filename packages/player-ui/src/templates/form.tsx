@@ -7,7 +7,13 @@
 // 'unsafe-eval' and is not installed. The lint rules refuse both (eslint.config.js).
 import Form from '@rjsf/core/lib/components/Form.js'
 import type { IChangeEvent } from '@rjsf/core/lib/components/Form.js'
-import type { ErrorSchema, RJSFSchema, RJSFValidationError, UiSchema } from '@rjsf/utils'
+import type {
+  ErrorSchema,
+  Experimental_DefaultFormStateBehavior,
+  RJSFSchema,
+  RJSFValidationError,
+  UiSchema,
+} from '@rjsf/utils'
 import { templateFields } from '@wrx/schemas'
 import type { Template } from '@wrx/schemas'
 import { createTemplateFormValidator } from '@wrx/templates/rjsf'
@@ -40,6 +46,12 @@ export interface TemplateFormProps {
 }
 
 const validator = createTemplateFormValidator<TemplateFormContext>()
+
+/**
+ * Defaults come from `default` only: RJSF would otherwise take a drop-down's first `oneOf`
+ * `const` as its value, so a field the user never touched would be sent as its first option.
+ */
+const DEFAULTS: Experimental_DefaultFormStateBehavior = Object.freeze({ constAsDefaults: 'never' })
 
 /**
  * The UI schema RJSF is given: the template's own (profile-checked), with every field kept in
@@ -107,6 +119,7 @@ export function TemplateForm({
       idPrefix={idPrefix}
       disabled={disabled}
       noHtml5Validate
+      experimental_defaultFormStateBehavior={DEFAULTS}
       showErrorList={false}
       liveValidate={live ? 'onChange' : undefined}
       focusOnFirstError

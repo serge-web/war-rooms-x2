@@ -72,6 +72,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+  /* The message list keeps at least half the panel, however long the form. */
+  max-height: 50%;
+  min-height: 0;
 }
 
 .wrx-composer__type {
@@ -98,8 +101,17 @@
 }
 
 /* The form scrolls inside the composer, so the message list keeps room above it. */
+.wrx-composer__template {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-height: 0;
+}
+
 .wrx-composer__form {
-  max-height: min(55vh, 28rem);
+  flex: 1 1 auto;
+  min-height: 4rem;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.125rem 0.125rem 0;

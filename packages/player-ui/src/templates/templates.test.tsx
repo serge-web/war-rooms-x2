@@ -127,6 +127,26 @@ describe('TemplateForm', () => {
     })
   })
 
+  it('sends a drop-down left alone as left out, not as its first option', async () => {
+    const onSubmit = vi.fn()
+    render(<Harness id={TEMPLATE.sitrep} onSubmit={onSubmit} />)
+    expect(
+      screen.getByRole<HTMLSelectElement>('combobox', { name: /Threat level/ }).selectedOptions[0]
+        ?.textContent,
+    ).toBe('Choose…')
+    fireEvent.change(screen.getByRole('combobox', { name: /Reporting force/ }), {
+      target: { value: tid('blue') },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: /Summary/ }), { target: { value: 'ok' } })
+    fireEvent.change(screen.getByRole('slider', { name: /Readiness/ }), { target: { value: '50' } })
+    fireEvent.change(screen.getByLabelText(/As of/), { target: { value: '2026-10-24' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+    })
+    expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('threat')
+  })
+
   it('shows each field’s error inline and does not send until it fits', async () => {
     const onSubmit = vi.fn()
     render(<Harness id={TEMPLATE.contact} initial={{ hostile: false }} onSubmit={onSubmit} />)
