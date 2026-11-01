@@ -73,3 +73,46 @@ test('admin publish plan', { tag: '@screenshot' }, async ({ page }) => {
   await page.mouse.move(0, 0)
   await shoot(page, 'admin-publish-plan')
 })
+
+// WP 4.3: the template builder, the raw editor and a room's template settings, on the demo's
+// templates (the support request has linked drop-downs and a role picker).
+async function openTemplate(page: Page, name: string): Promise<void> {
+  await adminLogin(page)
+  await openSection(page, 'Templates')
+  await page
+    .getByRole('list', { name: 'Templates' })
+    .getByRole('button', { name: new RegExp(`^${name}`) })
+    .click()
+  await expect(page.getByRole('heading', { level: 3, name: `Template: ${name}` })).toBeVisible()
+}
+
+test('admin template builder', { tag: '@screenshot' }, async ({ page }) => {
+  await openTemplate(page, 'Support request')
+  await page
+    .getByRole('list', { name: 'Fields' })
+    .getByRole('button', { name: /^Detail/ })
+    .click()
+  await expect(page.getByRole('group', { name: 'When Support is air' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Preview of Support request' })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await shoot(page, 'admin-template-builder')
+})
+
+test('admin template raw editor', { tag: '@screenshot' }, async ({ page }) => {
+  await openTemplate(page, 'Contact report')
+  await page.getByRole('tab', { name: 'Raw JSON Schema' }).click()
+  await expect(page.getByRole('textbox', { name: 'JSON Schema of Contact report' })).toBeVisible()
+  await expect(page.getByText('No problems: the template is inside the profile.')).toBeVisible()
+  await page.mouse.move(0, 0)
+  await shoot(page, 'admin-template-raw')
+})
+
+test('admin room templates', { tag: '@screenshot' }, async ({ page }) => {
+  await adminLogin(page)
+  await openSection(page, 'Rooms')
+  await page.getByRole('button', { name: 'Blue Reports', exact: true }).click()
+  const templates = page.getByRole('group', { name: 'Templates' })
+  await expect(templates.getByLabel('Force: Blue may use Situation report')).toBeChecked()
+  await page.mouse.move(0, 0)
+  await shoot(page, 'admin-room-templates')
+})

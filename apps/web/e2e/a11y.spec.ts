@@ -79,7 +79,15 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     await page.goto('./#/admin')
     await logIn(page, 'admin', 'demo-admin')
     await expect(adminNav(page)).toBeVisible()
-    for (const section of ['Game', 'Forces', 'Roles', 'Rooms', 'Themes', 'Access matrix']) {
+    for (const section of [
+      'Game',
+      'Forces',
+      'Roles',
+      'Rooms',
+      'Templates',
+      'Themes',
+      'Access matrix',
+    ]) {
       await openSection(page, section)
       await settled(page)
       await expectNoViolations(page, testInfo, `admin: ${section}`)
