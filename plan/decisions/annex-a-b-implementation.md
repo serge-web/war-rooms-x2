@@ -195,3 +195,16 @@ WP 3.5 and S14 are done (3.5 landed before the v1 security review, 3.4). After v
 8. Assets: how much history per asset, and who reads it?
 9. ~~Login names: fixed once published?~~ Answered yes (merge record N2); built in WP 3.5.
 10. ~~Real servers: no game must keep its history through the GUID change?~~ Answered (merge record N3): export, import, reset and publish.
+
+## Provisional answers for Phase 4
+
+Nov 1, 2026: the product owner started Annex A (Phase 4, WPs 4.1 to 4.4) and deferred questions 1 to 8. Phase 4 builds on the recommended answers below; each can be changed later, and the gate post lists them for confirmation.
+
+1. `templates` is a single leaf with one item per template.
+2. A template locks when a published room makes it available.
+3. A message whose template is no longer allowed in the room shows as a card with a warning; a message that fails the schema, or names an unknown template, shows as plain text with a warning (TPL-6).
+4. A role entry adds to its force's entry; the admin and White Force non-observers may use every template configured in the room; observers none.
+5. Templates are not confidential between forces.
+6. The image picker is not built in Phase 4 (A5 waits for the image-storage answer and Annex B).
+
+Questions 7 and 8 (assets) wait for Annex B.

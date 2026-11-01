@@ -76,6 +76,11 @@ There are 31 work packages, including the spike S14, which is groundwork for aft
 | 3.3 | Reference deployment and air-gapped install on real hardware | NFR-2, NFR-4, NFR-10, NFR-22–23 | 0.4, 1.3 |
 | 3.4 | Security review, release notes, v1 milestone blog post | DOC-2, DOC-5 | 3.1–3.3, 3.5 |
 | 3.5 | GUID entity ids, readable login names, deleted-entity records, the reserved `templates` name; objectives edited by the admin only; migration of design files, the seed and tests (the product owner's revision, SRD §14) | §3 rules 1, 6, 14; D21, ADM-5, ADM-14, ADM-16, ADM-26, ADM-42, PLY-1, PLY-35 | Phase 2 |
+| **Phase 4 — Message templates (SRD Annex A)** |  |  |  |
+| 4.1 | Template model: schemas and the WRX template profile, room config v2, the CSP-safe validator, the `templates` node in publish, audit, reset and the mock, store hooks, seed | TD1, TD2, TD6, TPL-1, TPL-2, TPL-4, TPL-6, TPL-8, TPL-9 | G3 |
+| 4.2 | Composer and card: RJSF theme on our tokens, special fields, send, card, TPL-6 checks | TD3, TD7, TPL-3, TPL-5, TPL-6 | 4.1 |
+| 4.3 | Template editor: builder, raw editor, live preview, room template config, lock and copy | TD4, TD5, TPL-2, TPL-4, TPL-7 | 4.1 |
+| 4.4 | Acceptance: scenario SC-10, performance, accessibility, security review, docs and gate post | Annex A, T-R1, T-R2 | 4.2, 4.3 |
 | **After v1 — Annexes A and B** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
 
@@ -90,7 +95,7 @@ Raised during the build, not yet given a work package.
 | Id | Task | SRD ids | Raised |
 | --- | --- | --- | --- |
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
-| FT-2 | **Message templates (SRD Annex A), after v1.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
+| FT-2 | **Message templates (SRD Annex A), after v1. A1 to A4 became Phase 4 (WPs 4.1 to 4.4); A5, the image and asset pickers, stays here.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
 | FT-3 | **Force assets and the map channel (SRD Annex B), after v1.** Spike S14 done (two flat nodes per force, `plan/decisions/S14.md`); then proposed WPs B1 to B4, after the owner answers the writer-model questions, (asset model, provisioning, map channel, asset picker) in the same record | Annex B | Product owner's revision, Nov 1, 2026 |
 
 ## The README plan chart
@@ -141,6 +146,13 @@ flowchart TB
         wp34["3.4 Security review and release"]
         wp35["3.5 GUID ids, login names, admin-only objectives"]
     end
+    subgraph P4["Phase 4 — Message templates"]
+        direction LR
+        wp41["4.1 Template model"]
+        wp42["4.2 Composer and card"]
+        wp43["4.3 Template editor"]
+        wp44["4.4 Acceptance and review"]
+    end
     subgraph PX["After v1 — Annexes A and B"]
         direction LR
         wps14["S14 Collection access spike"]
@@ -149,6 +161,7 @@ flowchart TB
     G1{{"Gate G1"}}
     G2{{"Gate G2"}}
     G3{{"Gate G3 — v1"}}
+    G4{{"Gate G4 — templates"}}
 
     wp05 --> wp06 --> wp07
     wp05 --> wp08
@@ -173,13 +186,17 @@ flowchart TB
     P2 -.-> G2
     G2 --> wp31 & wp32 & wp35
     P3 -.-> G3
+    G3 --> wp41
+    wp41 --> wp42 & wp43
+    wp42 & wp43 --> wp44
+    P4 -.-> G4
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14 todo
-    class G0,G1,G2,G3 gate
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44 todo
+    class G0,G1,G2,G3,G4 gate
 ```
 
 **How PRs update the chart**
@@ -190,6 +207,7 @@ flowchart TB
 - Node ids (`wp05` and so on) never change, because the arrows and class lines refer to them.
 - CI renders the chart on every PR and fails if the Mermaid doesn't parse. The PR checklist asks whether the chart reflects the PR.
 - At each gate, the chart is compared with this baseline, and the differences are recorded in the gate's blog post.
+| Phase 4 added: WPs 4.1 to 4.4 for message templates (Annex A A1 to A4), one phase PR, gate G4 | The product owner started Annex A on Nov 1, 2026 and deferred its open questions; Phase 4 builds on the recommended answers (`plan/decisions/annex-a-b-implementation.md`, "Provisional answers") |
 
 ## CI gates and human checkpoints
 
