@@ -1,0 +1,23 @@
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m3i-t'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='result' id='s14-mvy24m3i-t'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item></items></pubsub></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24m3p-u'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN:l1' jid='RUN-red@localhost'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='result' id='s14-mvy24m3p-u'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='70186977497B' node='RUN:l1' jid='RUN-red@localhost'/></pubsub></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m4g-v'><query xmlns='http://jabber.org/protocol/disco#items' node='RUN:c1'/></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='result' id='s14-mvy24m4g-v'><query node='RUN:c1' xmlns='http://jabber.org/protocol/disco#items'/></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m4i-w'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='error' id='s14-mvy24m4i-w'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>

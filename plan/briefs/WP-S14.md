@@ -1,6 +1,6 @@
 # WP S14 — Spike: collection-level access control on ejabberd
 
-**SRD ids:** Annex B (AD2, AD3, spike S14), TPL-10 · **Depends on:** 1.2 (contract suite harness) · **Status:** to do · **After v1:** it does not gate v1 and can run at any time
+**SRD ids:** Annex B (AD2, AD3, spike S14), TPL-10 · **Depends on:** 1.2 (contract suite harness) · **Status:** done · **After v1:** it does not gate v1 and can run at any time
 
 ## Goal
 

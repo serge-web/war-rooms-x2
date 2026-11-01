@@ -782,7 +782,7 @@ These force assets are not the theme image assets of §3 (`assets:<assetId>`); t
 **Open**
 
 - [ ] History of past states: a per-force history node of versioned items, or a node per asset with recent versions kept as items.
-- [ ] Node layout: two nodes per force, or a node per asset, depending on spike S14.
+- [x] Node layout: two nodes per force. Spike S14 (1 November 2026) found that ejabberd 26.09 has no collection nodes: its `dag` plugin is gone, and a config that asks for it does not start. So a node per asset under a collection is not possible with standard controls. The full record is internal (`plan/decisions/S14.md`).
 
 **Spike S14 — collection-level access control (ejabberd)**
 

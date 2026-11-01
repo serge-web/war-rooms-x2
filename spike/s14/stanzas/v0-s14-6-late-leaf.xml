@@ -1,0 +1,23 @@
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24m4s-y'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN:c1' jid='RUN-blue@localhost'/><options><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#subscribe_options</value></field><field var='pubsub#subscription_type'><value>items</value></field><field var='pubsub#subscription_depth'><value>all</value></field></x></options></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='result' id='s14-mvy24m4s-y'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='70186977E32A' node='RUN:c1' jid='RUN-blue@localhost'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24m53-z'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:late'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#collection'><value>RUN:c1</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24m53-z'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:late'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24m5d-10'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a2'><asset xmlns='urn:wrx:s14' id='a2' t='1793551287073'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24m5d-10'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a2'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24m5p-11'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:late'><item id='late1'><asset xmlns='urn:wrx:s14' id='late1' t='1793551287085'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24m5p-11'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:late'><item id='late1'/></publish></pubsub></iq>
