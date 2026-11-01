@@ -165,6 +165,23 @@ The last name of a deleted force or role.
 | `colour` | string | no | pattern `^#[0-9a-fA-F]{6}$` | The force’s colour, or a role’s force’s colour when it was deleted |
 | `deletedAt` | string | yes | format date-time | Admin's clock when the deletion was recorded |
 
+## Directory
+
+Where each entity document is, by GUID, and each role by login name.
+
+- **Location:** PubSub node `directory`, one item `current`
+- **Access:** Read: every role. Publish: admin. A role finds its own role document from its login name here; the role document decides.
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `roles` | array of object | yes |  | Every role: its GUID and its login name |
+| `roles[]` | object | yes |  |  |
+| `roles[].id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The role GUID |
+| `roles[].loginName` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Login name: the role's XMPP account name, readable, fixed once published (§3 rule 1, ADM-5) |
+| `forces` | array of string | yes |  | Every force GUID |
+| `rooms` | array of string | yes |  | Every room GUID |
+
 ## Game state
 
 Reserved for turns and the game clock.

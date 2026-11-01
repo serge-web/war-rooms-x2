@@ -1,6 +1,6 @@
 # WP 3.4 — v1 security review, release notes and v1 blog post
 
-**SRD ids:** DOC-2, DOC-5, DOC-26, R13–R17 · **Depends on:** 3.1–3.3, 3.5 · **Status:** active · **Security review required**
+**SRD ids:** DOC-2, DOC-5, DOC-26, R13–R17 · **Depends on:** 3.1–3.3, 3.5 · **Status:** done except release (waits for WP 3.3 hardware check) · **Security review required**
 
 ## Goal
 

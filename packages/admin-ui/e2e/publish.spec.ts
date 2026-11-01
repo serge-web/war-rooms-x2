@@ -66,13 +66,13 @@ test(
       await expect(groupButton(region, group)).toHaveAttribute('aria-expanded', 'false')
     }
     await expect(region.locator('li[data-step]')).toHaveCount(0)
-    await expect(groupButton(region, 'Access')).toHaveText(/Access\s*21 steps\s*To do/)
+    await expect(groupButton(region, 'Access')).toHaveText(/Access\s*22 steps\s*To do/)
     await expect(region.getByText(/the game becomes design version 1/)).toBeVisible()
     // The access steps summarised per kind, expandable from the keyboard.
     await groupButton(region, 'Access').focus()
     await page.keyboard.press('Enter')
     await expect(groupButton(region, 'Access')).toHaveAttribute('aria-expanded', 'true')
-    const nodeGrants = region.getByRole('button', { name: /^Give node access: 16 nodes × roles/ })
+    const nodeGrants = region.getByRole('button', { name: /^Give node access: 17 nodes × roles/ })
     await expect(nodeGrants).toHaveAttribute('aria-expanded', 'false')
     await nodeGrants.click()
     await expect(region.getByText('Give access to node game-state')).toBeVisible()
@@ -80,10 +80,10 @@ test(
     await groupButton(region, 'Access').click()
 
     await firstPublish(page)
-    await expect(region.getByRole('status').filter({ hasText: 'All 60 steps done.' })).toBeVisible()
+    await expect(region.getByRole('status').filter({ hasText: 'All 63 steps done.' })).toBeVisible()
     await expect(region.locator('section[data-group]:not([data-state="done"])')).toHaveCount(0)
     await region.getByRole('button', { name: 'Show every step' }).click()
-    await expect(region.locator('li[data-step][data-state="done"]')).toHaveCount(60)
+    await expect(region.locator('li[data-step][data-state="done"]')).toHaveCount(63)
     await expect(region.locator('li[data-step]:not([data-state="done"])')).toHaveCount(0)
     await expect(page.getByText(/All 3 rooms are members-only/)).toBeVisible()
     await page.screenshot({ path: testInfo.outputPath('publish-done.png'), fullPage: true })

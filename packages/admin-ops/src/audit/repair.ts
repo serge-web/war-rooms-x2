@@ -88,6 +88,7 @@ function jobsFor(items: readonly AuditItem[]): Job[] {
 function onePlan(step: PlanStep): PublishPlan {
   return {
     kind: 'publish',
+    errors: [],
     steps: [step],
     designVersion: undefined,
     publishedVersion: undefined,

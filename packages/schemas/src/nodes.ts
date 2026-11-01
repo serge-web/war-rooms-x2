@@ -7,6 +7,8 @@ export const SINGLETON_NODES = Object.freeze({
   announcements: 'announcements',
   /** The last names of deleted forces and roles, one item each (§3 rule 1). */
   retired: 'retired',
+  /** Entity GUIDs, and each role's GUID by login name (§3 rule 1). */
+  directory: 'directory',
 } as const)
 
 /** Prefixes of per-entity PubSub nodes, `<prefix>:<id>`. */

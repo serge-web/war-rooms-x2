@@ -3,7 +3,7 @@
 import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { nodeName } from '@wrx/schemas'
+import { nodeName, parseDocument } from '@wrx/schemas'
 import { sampleDesign, tid } from '../../schemas/src/fixtures.ts'
 import { OBJECTIVES_MAX_ITEMS, RETIRED_MAX_ITEMS, targetState } from './target.ts'
 
@@ -94,6 +94,24 @@ describe('targetState(sampleDesign())', () => {
     expect(target.roles).not.toContain('old-co')
     expect(target.rooms.some((r) => r.access.has('old-co'))).toBe(false)
     expect(target.nodes.some((n) => n.access.has('old-co'))).toBe(false)
+  })
+
+  it('publishes the directory: every role reads each role’s GUID by login name (§3 rule 1)', () => {
+    const design = sampleDesign()
+    const directory = targetState(design).nodes.find((n) => n.node === 'directory')
+    expect(directory?.config).toMatchObject({ accessModel: 'whitelist', maxItems: 1 })
+    expect([...(directory?.access.entries() ?? [])].sort()).toEqual(
+      design.roles.map((r) => [r.loginName, 'read']).sort(),
+    )
+    expect(directory?.documents).toHaveLength(1)
+    const parsed = parseDocument('directory', directory?.documents[0]?.payload ?? '{}')
+    if (!parsed.ok) throw new Error(parsed.error.message)
+    expect(parsed.value.roles).toContainEqual({ id: tid('blue-co'), loginName: 'blue-co' })
+    expect(parsed.value.roles).toHaveLength(design.roles.length)
+    expect(parsed.value.forces).toEqual(design.forces.map((f) => f.id).sort())
+    expect(parsed.value.rooms).toEqual(design.rooms.map((r) => r.id).sort())
+    // A role's own name for its node is its GUID, never its login name (ADM-42).
+    expect(targetState(design).nodes.some((n) => n.node.includes('blue-co'))).toBe(false)
   })
 
   it('opens only game-setup and the game theme asset; everything is publishers', () => {

@@ -10,7 +10,7 @@ import type { DesignFile } from '@wrx/schemas'
 import { opsErr, opsOk } from '../errors.ts'
 import type { AdminOpsErrorCode, OpsOutcome } from '../errors.ts'
 import type { AdminOps } from '../ops.ts'
-import { planPublish, roomsToDestroy } from '../publish/plan.ts'
+import { loginNameChanges, planPublish, publishedDesign, roomsToDestroy } from '../publish/plan.ts'
 import { readServerView } from '../publish/view.ts'
 import type { ServerView } from '../publish/view.ts'
 import type { ObserverVault } from '../vault.ts'
@@ -60,6 +60,13 @@ export async function runAudit(
   if (!read.ok) return read
   const view = read.value
   progress({ phase: 'server', done: 1, total: 1 })
+  // A design the planner refuses (ADM-5, §3 rule 1) is not audited either: its repairs would
+  // create the new account and offer the old one for deletion, the rename the planner refuses
+  // (review V2).
+  const refused = loginNameChanges(design, publishedDesign(view))[0]
+  if (refused !== undefined) {
+    return opsErr('invalid', refused.message, { op: 'runAudit', target: refused.roleId })
+  }
 
   progress({ phase: 'accounts', done: 0, total: 1 })
   const registered = await ops.session.admin.registeredUsers()

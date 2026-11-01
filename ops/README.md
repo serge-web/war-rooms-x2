@@ -99,6 +99,8 @@ Run `offline-install.sh` again with the new bundle and the same `--home`. It kee
 - **New certificate:** the same command with `--cert`, `--key`, `--ca` (any bundle; the current one is fine).
 - **Admin password:** the same command with `--reset-admin-password` (asked for, or `--admin-password-file`). Role passwords are the admin backend's job (credentials sheet).
 
+**The admin login is also the umpire's.** The umpire plays in the White Force with the server's admin account, so wherever the umpire plays, that browser holds the login that can change or delete the whole game. Choose a long admin password (the install asks for at least 12 characters; use more), play the umpire on a machine only the umpire uses, not on a shared or projected screen, lock it when away, and log out at the end of a session. The server does not lock an account after failed logins, so the password's length is the protection against guessing on the exercise network.
+
 ## 6. Backup and restore
 
 ```sh
@@ -112,7 +114,7 @@ sudo sh /opt/wrx1/ops/restore.sh <backup.tar.gz>   # asks you to type RESTORE
 
 The two stores are copied a second or so apart; an account created in that second may be in one and not the other. Back up when nothing is being provisioned. A backup holds the game's messages and password hashes (mode 600): keep it as you keep the game.
 
-**Restore** replaces everything on the server with the backup's contents and restarts ejabberd (about a minute), after backing up the current state (`--no-backup` to skip). On a new host, install the same or a later bundle first, with the same `WRX_DOMAIN` (accounts are stored per domain), then restore. The admin password is the one in the backup.
+**Restore** replaces everything on the server with the backup's contents and restarts ejabberd (about a minute), after backing up the current state (`--no-backup` to skip). While it runs, the unpacked backup sits in a temporary directory readable by the host's other users (ejabberd's container user must read it), so restore on a host with no other users logged in, as the install expects. On a new host, install the same or a later bundle first, with the same `WRX_DOMAIN` (accounts are stored per domain), then restore. The admin password is the one in the backup.
 
 Back up before and after each exercise, and before an upgrade (the install does that one); copy backups off the host. Test a restore before you need one: install a bundle on a spare machine and restore onto it (what `test/backup-restore.sh` does).
 

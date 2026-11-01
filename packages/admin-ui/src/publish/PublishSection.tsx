@@ -339,7 +339,17 @@ function PlanPanel(
   return (
     <section className="wrx-publish-panel" aria-labelledby={headingId}>
       <h3 id={headingId}>{reset ? 'Reset plan' : 'Publish plan'}</h3>
-      {plan.steps.length === 0 ? (
+      {plan.errors.length > 0 ? (
+        <Notice tone="error" title="This design cannot be published.">
+          <ul className="wrx-publish-errors">
+            {plan.errors.map((e, i) => (
+              <li key={i} data-kind={e.kind}>
+                {e.message}
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      ) : plan.steps.length === 0 ? (
         <p role="status">
           {reset
             ? 'Nothing to reset: the server holds no game.'

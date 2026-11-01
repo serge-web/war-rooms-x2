@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   announcementSchema,
   assetSchema,
+  directorySchema,
   forceSchema,
   gameSetupSchema,
   gameStateSchema,
@@ -23,6 +24,7 @@ export const DOCUMENT_SCHEMAS = Object.freeze({
   announcement: announcementSchema,
   'game-state': gameStateSchema,
   retired: retiredSchema,
+  directory: directorySchema,
   message: messageBodySchema,
 })
 

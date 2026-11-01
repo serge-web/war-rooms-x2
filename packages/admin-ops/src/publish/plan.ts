@@ -147,6 +147,85 @@ export type PlanWarning =
    */
   | { readonly kind: 'account-exists'; readonly roleId: string; readonly name: string }
 
+/**
+ * Why the design cannot be published as it is. A plan with errors has no steps, and the executor
+ * refuses it. A role's login name is its XMPP account, which the server cannot rename:
+ * - `login-name-changed` (ADM-5): a published role's login name is fixed after the first
+ *   publish. To change it, delete the role and add a new one.
+ * - `login-name-reused` (§3 rule 1, review V3): a role of another GUID takes the login name of
+ *   a published or deleted role, so the old role's messages would show as the new role's.
+ */
+export type PlanError =
+  | {
+      readonly kind: 'login-name-changed'
+      /** The role's GUID. */
+      readonly roleId: string
+      readonly name: string
+      /** The published login name. */
+      readonly from: string
+      /** The design's login name. */
+      readonly to: string
+      readonly message: string
+    }
+  | {
+      readonly kind: 'login-name-reused'
+      /** The design role's GUID. */
+      readonly roleId: string
+      readonly name: string
+      readonly loginName: string
+      /** The GUID of the published or deleted role that holds the login name. */
+      readonly holderId: string
+      readonly holderName: string
+      readonly message: string
+    }
+
+/**
+ * Login names the design may not have (ADM-5, §3 rule 1): a published role's changed, and a
+ * published or deleted role's taken by a role of another GUID. An imported design, or a draft
+ * from another browser, can carry either; the editor prevents both in its own draft.
+ */
+export function loginNameChanges(
+  design: Pick<DesignFile, 'roles'>,
+  published: Pick<PublishedDesign, 'roles' | 'retired'>,
+): PlanError[] {
+  const errors: PlanError[] = []
+  const holders = new Map<string, { id: string; name: string; deleted: boolean }>()
+  for (const r of published.retired) {
+    if (r.kind === 'role' && r.loginName !== undefined) {
+      holders.set(r.loginName, { id: r.id, name: r.name, deleted: true })
+    }
+  }
+  for (const r of published.roles) {
+    holders.set(r.loginName, { id: r.id, name: r.name, deleted: false })
+  }
+  for (const role of design.roles) {
+    const before = published.roles.find((r) => r.id === role.id)
+    if (before !== undefined && before.loginName !== role.loginName) {
+      errors.push({
+        kind: 'login-name-changed',
+        roleId: role.id,
+        name: role.name,
+        from: before.loginName,
+        to: role.loginName,
+        message: `${role.name}'s login name is ${before.loginName} on the server, and the design changes it to ${role.loginName}. A published role's login name is fixed (ADM-5): to change it, delete the role and add a new one with the new login name, or keep ${before.loginName}.`,
+      })
+      continue
+    }
+    const holder = holders.get(role.loginName)
+    if (holder === undefined || holder.id === role.id) continue
+    errors.push({
+      kind: 'login-name-reused',
+      roleId: role.id,
+      name: role.name,
+      loginName: role.loginName,
+      holderId: holder.id,
+      holderName: holder.name,
+      message: `${role.name}'s login name ${role.loginName} belongs to ${holder.deleted ? 'the deleted role' : 'the published role'} ${holder.name}, a different role on the server, and is not given to another role (§3 rule 1). Give ${role.name} a new login name; to keep editing the published game, import an export of its published design rather than a new or converted one, or reset the game first.`,
+    })
+  }
+  return errors
+}
+
 /** Warnings the admin must confirm one by one before applying (ADM-14, ADM-40, ADM-26). */
 export function needsConfirmation(warning: PlanWarning): boolean {
   return (
@@ -219,6 +298,8 @@ export type VaultNeed =
 
 export interface PublishPlan {
   readonly kind: 'publish' | 'reset'
+  /** Why the design cannot be published; when any, `steps` is empty and nothing may run. */
+  readonly errors: readonly PlanError[]
   readonly steps: readonly PlanStep[]
   /** The version `game-setup` gets, when the plan publishes it; else undefined. */
   readonly designVersion: number | undefined
@@ -483,9 +564,28 @@ export function planPublish(
   options: PlanOptions = {},
 ): PublishPlan {
   const published = publishedDesign(view)
+  const publishedVersion = published.game?.designVersion
+  // ADM-5: a changed login name of a published role is refused, never planned as a new account
+  // and a deleted one (the server cannot rename an account); so is a published or deleted role's
+  // login name taken by a role of another GUID (§3 rule 1).
+  const errors = loginNameChanges(given, published)
+  if (errors.length > 0) {
+    return {
+      kind: 'publish',
+      errors,
+      steps: [],
+      designVersion: undefined,
+      publishedVersion,
+      warnings: [],
+      affectedOnline: [],
+      documentsChange: false,
+      vault: 'none',
+      uncounted: [],
+      roleNames: {},
+    }
+  }
   const design = withRetiredRecords(given, published)
   const target = targetState(design)
-  const publishedVersion = published.game?.designVersion
   const marker = view.marker
   const pending =
     marker !== undefined &&
@@ -822,17 +922,7 @@ export function planPublish(
   for (const role of design.roles) {
     const before = published.roles.find((r) => r.id === role.id)
     if (before === undefined) continue
-    if (before.loginName !== role.loginName) {
-      // The editor fixes a login name once published (ADM-5); an imported design can still
-      // change one. The server cannot rename an account: the new one is created, the old one
-      // deleted, and the old messages stay under the old login.
-      warnings.push({
-        kind: 'resync',
-        subject: 'role',
-        id: role.id,
-        message: `${role.name}'s login name changes from ${before.loginName} to ${role.loginName}: a new account is created and ${before.loginName} is deleted; its messages keep the old login (ADM-5, ADM-14)`,
-      })
-    }
+    // A changed login name never gets here: `loginNameChanges` refused the design (ADM-5).
     if (before.forceId !== role.forceId) {
       const from = published.forces.find((f) => f.id === before.forceId)?.name ?? before.forceId
       const to = design.forces.find((f) => f.id === role.forceId)?.name ?? role.forceId
@@ -902,6 +992,7 @@ export function planPublish(
   const affected = new Set(changes.flatMap((s) => s.risk.roles))
   return {
     kind: 'publish',
+    errors: [],
     steps: changes,
     designVersion,
     publishedVersion,
@@ -1069,6 +1160,7 @@ export function planReset(view: ServerView, options: PlanOptions = {}): PublishP
   const affected = new Set(steps.flatMap((s) => s.risk.roles))
   return {
     kind: 'reset',
+    errors: [],
     steps,
     designVersion: undefined,
     publishedVersion: published.game?.designVersion,

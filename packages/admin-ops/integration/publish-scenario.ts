@@ -18,7 +18,8 @@ import { nodeName } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
-import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
+import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
+import { createSessionStore } from '@wrx/domain'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -71,6 +72,25 @@ function errorOf(
     | { readonly ok: false; readonly error: TransportError },
 ): TransportError | undefined {
   return result.ok ? undefined : result.error
+}
+
+const quiet = { debug: () => undefined, warn: () => undefined }
+
+/** The session, with node listing refused (disco#items), as a server might (WP 3.4, fix 1). */
+function withoutListing(session: Session): Session {
+  const bound = <T extends object>(target: T, override: (p: string | symbol) => unknown) =>
+    new Proxy(target, {
+      get(t, p) {
+        const replaced = override(p)
+        if (replaced !== undefined) return replaced
+        const value: unknown = Reflect.get(t, p, t)
+        return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(t) : value
+      },
+    })
+  const pubsub = bound(session.pubsub, (p) =>
+    p === 'listNodes' ? () => Promise.resolve(err('forbidden')) : undefined,
+  )
+  return bound(session, (p) => (p === 'pubsub' ? pubsub : undefined))
 }
 
 /** The changed design of step 3. */
@@ -313,6 +333,22 @@ export function definePublishIntegration(backend: PublishBackend): void {
         ).toHaveLength(1)
       })
 
+      it('a role finds its own role, force, objectives and rooms with node listing refused (§3 rule 1)', async () => {
+        // The directory names each role's GUID by login name, so nothing depends on listing.
+        const session = await login('blue-co')
+        const store = createSessionStore({ session: withoutListing(session), logger: quiet })
+        await store.ready()
+        const me = store.me().data
+        expect(me.role?.id).toBe(tid('blue-co'))
+        expect(me.force?.id).toBe(tid('blue'))
+        expect(me.rooms.map((r) => r.room.id)).toContain(tid('blue-hq'))
+        expect(me.rooms.map((r) => r.room.id)).not.toContain(tid('red-hq'))
+        expect(store.objectives(tid('blue')).data?.forceId).toBe(tid('blue'))
+        // Fails closed: another force's objectives stay unreadable however the role was found.
+        expect(store.objectives(tid('red')).data).toBeUndefined()
+        await closeAll()
+      })
+
       it('the game is at design version 1', async () => {
         expect(await gameVersion()).toBe(1)
       })
@@ -399,6 +435,43 @@ export function definePublishIntegration(backend: PublishBackend): void {
 
       it('publishing again plans nothing', async () => {
         expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+      })
+    })
+
+    describe('2b. a design that changes a published role’s login name is refused (ADM-5)', () => {
+      const renamed = (): DesignFile => {
+        const base = sampleDesignWithWhiteCell()
+        return {
+          ...base,
+          roles: base.roles.map((r) =>
+            r.loginName === 'blue-co' ? { ...r, loginName: 'blue-commander' } : r,
+          ),
+        }
+      }
+
+      it('plans an error naming the role, both login names and the remedy, and no step', async () => {
+        const refused = await plan(renamed())
+        expect(refused.steps).toEqual([])
+        expect(refused.errors).toHaveLength(1)
+        expect(refused.errors[0]).toMatchObject({
+          kind: 'login-name-changed',
+          roleId: tid('blue-co'),
+          from: 'blue-co',
+          to: 'blue-commander',
+        })
+        expect(refused.errors[0]?.message).toMatch(/delete the role and add a new one/)
+        const result = await apply(refused)
+        expect(result).toMatchObject({ ok: false, done: [] })
+      })
+
+      it('the server is unchanged: the old account works, no new one exists', async () => {
+        const blue = await login('blue-co')
+        expect(blue.jid.startsWith('blue-co@')).toBe(true)
+        const attempt = await connect('blue-commander', 'any-password-at-all')
+        if (attempt.ok) await attempt.value.disconnect()
+        expect(attempt.ok).toBe(false)
+        expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+        await closeAll()
       })
     })
 
