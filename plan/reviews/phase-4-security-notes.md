@@ -60,3 +60,27 @@ In order: the template is known (else **invalid**, shown as plain text with a wa
 - **Lock granularity.** Lock-on-publish is stricter than "used in a message" (TD6) but cannot miss a use. A template offered once and never used is still locked for good, short of a reset.
 - **Retracting is irreversible.** Removing a locked template turns its messages into plain text with a warning, for good; it is confirmed one by one, and the warning says so. A template item that does not parse is reported as unlocked; it cannot render as a card anyway.
 - **Library age.** `@rjsf/utils` 6.11.0 resolves `fast-uri` 4.2.3, released 13 days before adoption (the rule is 14). 4.2.3 is a security release (four advisories fixed); 4.2.2 is older but vulnerable. Kept, and recorded for the gate. `@rjsf/utils` is imported only by the RJSF adapter entry (`@wrx/templates/rjsf`); nothing in WP 4.1 resolves URIs at run time (templates hold no `$ref`).
+
+## WP 4.2, the composer and the card
+
+### The form under the CSP (F7)
+
+- RJSF's `Form` (`@rjsf/core` 6.11.0) renders the template, validated by `createTemplateFormValidator` (the receiver's interpreter); `@rjsf/validator-ajv8` is not installed. `@rjsf/core`'s root module imports it (for `getTestRegistry`, a packaging slip in 6.11.0), so the form is imported from `@rjsf/core/lib/components/Form.js`; ESLint refuses `@rjsf/validator-ajv8` and the `@rjsf/core` root everywhere (`eslint.config.js`). The built form chunk holds no `new Function` or `eval`; the e2e spec `templates.spec.ts` sends every field type in the built app under its CSP meta tag and fails on any CSP violation or page error.
+- The form is a lazily loaded chunk (`templates/lazy.tsx`, about 250 kB): a room without templates loads no RJSF code. Its styles load with the chat panel, so a popout has them.
+
+### Plain text only (PLY-14)
+
+- Template names, descriptions, field titles, `ui:title`, `ui:description`, `ui:help`, placeholders and option titles are React text in our own RJSF templates and widgets (`templates/theme.tsx`); RJSF's Markdown descriptions (`markdown-to-jsx`, `RichDescription`) are never rendered, and the profile refuses `ui:enableMarkdownInDescription` and every other UI option it does not list. Card values are React text (`TemplateCard`). Tests: a hostile title and description render as text (unit), and a hostile client's markup stays text in the browser (e2e).
+- `markdown-to-jsx` is still bundled as a dependency of `@rjsf/core` (held at 9.10.3 by a workspace override: 9.10.4 is younger than 14 days).
+
+### Received messages
+
+- Every templated message is checked on render (`SessionStore.checkTemplate`, re-run when templates, the room's config or the documents change). `valid`: the card. `not-permitted`: the card with a warning (provisional answer 3). `invalid` (unknown template, schema, picker): the one-line plain text (`templatePlainText`) with a warning. A card shows only fields the template declares (the check refuses undeclared ones) in the form's order; a picker's GUID shows the current name, or the deleted entity's last name marked "(deleted)" (TPL-8, TPL-9). Nothing in a card is a link.
+- The warning is static text from the check, naming at most the template; it does not quote values.
+
+### Sending
+
+- The composer runs RJSF's validation (the same interpreter) before the store's `sendTemplateMessage`, which runs the receiver's full check and the stanza cap again (T-R1 unchanged: all of it is advisory). The stanza size is shown and checked before sending (PLY-53).
+- A refused templated message's values are kept on the room in the store (`RoomView.unsentTemplate`, like `unsent` for text), so a re-mounted panel shows them again; they are dropped on the next successful templated send. They live in memory only, like unsent text.
+- Unticked yes/no fields are sent as `false`, not left out.
+- Pickers offer live forces and roles (`x-wrx-scope: room` narrows to the room's effective participants, `x-wrx-force` to one force); a value the form already holds that the list no longer offers is kept as an option, labelled by name or "(deleted)", so the form never hides what it would send.

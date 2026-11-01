@@ -1,6 +1,6 @@
 # WP 4.2 — Template composer and card (Annex A, A2)
 
-**SRD ids:** TD3, TD7, TPL-3, TPL-5, TPL-6, TPL-8, TPL-9, PLY-14, PLY-26, PLY-45, NFR-14 · **Depends on:** 4.1 · **Status:** todo
+**SRD ids:** TD3, TD7, TPL-3, TPL-5, TPL-6, TPL-8, TPL-9, PLY-14, PLY-26, PLY-45, NFR-14 · **Depends on:** 4.1 · **Status:** done
 
 ## Goal
 
