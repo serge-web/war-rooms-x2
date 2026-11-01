@@ -73,6 +73,11 @@ export interface PubsubApi {
   configureNode(node: string, config: NodeConfig): Outcome<void>
   getNodeConfig(node: string): Outcome<NodeConfig>
   deleteNode(node: string): Outcome<void>
+  /**
+   * §8.5: deletes every item on the node, keeping the node, its config and its affiliations.
+   * Subscribers hear of it as `deleted` (they drop what they hold). Owner only.
+   */
+  purgeNode(node: string): Outcome<void>
   getAffiliations(node: string): Outcome<readonly PubsubAffiliationEntry[]>
   setAffiliations(node: string, entries: readonly PubsubAffiliationEntry[]): Outcome<void>
   getSubscriptions(node: string): Outcome<readonly SubscriptionEntry[]>

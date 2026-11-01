@@ -250,6 +250,18 @@ export class PubsubService {
     return ok0
   }
 
+  /**
+   * §8.5: the owner deletes every item; subscribers are told, as ejabberd does, with a purge
+   * event the transport reports as `deleted` (contract S02).
+   */
+  purgeNode(conn: Connection, name: string): Outcome<undefined> {
+    const node = this.owned(conn, name)
+    if (!node.ok) return node
+    node.value.items = []
+    this.notify(node.value, { node: name, items: [], retracted: [], deleted: true })
+    return ok0
+  }
+
   getAffiliations(conn: Connection, name: string): Outcome<readonly PubsubAffiliationEntry[]> {
     const node = this.owned(conn, name)
     if (!node.ok) return node

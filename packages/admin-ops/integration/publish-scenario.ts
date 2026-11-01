@@ -3,11 +3,13 @@
 //
 // 1. publish `sampleDesignWithWhiteCell()` on a clean server; check the effects as players
 //    (C01 style);
-// 2. publishing it again plans nothing (ADM-10);
+// 2. publishing it again plans nothing (ADM-10); a server published before WP 3.5, where White
+//    Cell published its own objectives item, is corrected: its publisher affiliation goes, the
+//    node is purged and the admin's item published again (D21, §3 rule 14);
 // 3. with players online, publish a change: Blue CO moves to Red (R-D), Red CO is deleted
 //    (R-E), the negotiation room is destroyed with its count confirmed (R-F), a joint room is
 //    added (Blue Observer read-only there, R-B), and the White Cell becomes an observer (write
-//    to read in every room, and from publisher to reader of objectives, F5). Check the plan's order and warnings, then the effects;
+//    to read in every room). Check the plan's order and warnings, then the effects;
 // 4. a publish that fails part-way stops, reports what ran, and a re-run completes it with the
 //    same design version (ADM-11, §3 rule 8);
 // 5. a per-role password reset keeps the vault in step (ADM-26);
@@ -315,6 +317,82 @@ export function definePublishIntegration(backend: PublishBackend): void {
       afterAll(closeAll)
     })
 
+    describe('2. a server published before WP 3.5, with a White Force editor’s item (D21)', () => {
+      let corrected: PublishPlan | undefined
+      let result: ExecutionResult | undefined
+      const node = 'objectives:red'
+      const ids = async () =>
+        must(await theOps().session.pubsub.getItems(node), 'items')
+          .map((i) => i.id)
+          .sort()
+
+      beforeAll(async () => {
+        // What a publish before WP 3.5 left: White Cell a publisher, room for its item, and its
+        // own item beside the admin's.
+        const config = must(await theOps().session.pubsub.getNodeConfig(node), 'config')
+        must(
+          await theOps().session.pubsub.configureNode(node, { ...config, maxItems: 10 }),
+          'old max_items',
+        )
+        mustOps(await theOps().setNodeAccess(node, 'white-cell', 'publish'), 'old publisher')
+        const cell = await login('white-cell')
+        must(
+          await cell.pubsub.publish(
+            node,
+            'white-cell',
+            JSON.stringify({
+              schemaVersion: 1,
+              forceId: 'red',
+              markdown: 'Stale umpire text',
+              updatedAt: '2026-10-30T09:00:00.000Z',
+            }),
+          ),
+          'before: White Cell publishes its own item',
+        )
+        expect(await ids()).toEqual(['admin', 'white-cell'])
+        corrected = await plan(sampleDesignWithWhiteCell())
+        result = await apply(corrected)
+      }, 300_000)
+
+      afterAll(closeAll)
+
+      it('plans: max_items to 1, White Cell to reader, purge, then the admin’s item again', () => {
+        const steps = corrected?.steps.map((s) => s.id) ?? []
+        expect(steps.slice(0, -1)).toEqual([
+          `node:${node}`,
+          `grant-node:${node}`,
+          `purge:${node}`,
+          `doc:${node}:admin`,
+        ])
+        expect(corrected?.steps.find((s) => s.id === `grant-node:${node}`)?.action).toEqual({
+          type: 'node-access',
+          node,
+          changes: [{ roleId: 'white-cell', access: 'read' }],
+        })
+        expect(result?.ok).toBe(true)
+      })
+
+      it('after: the node holds the admin’s item only, and White Cell can no longer publish', async () => {
+        expect(await ids()).toEqual(['admin'])
+        const cell = await login('white-cell')
+        const items = must(await cell.pubsub.getItems(node), 'White Cell still reads')
+        expect(items.map((i) => JSON.parse(i.payload) as { markdown: string })).toEqual([
+          expect.objectContaining({ markdown: '1. Delay Blue.' }),
+        ])
+        for (const itemId of ['white-cell', 'admin']) {
+          expect(errorOf(await cell.pubsub.publish(node, itemId, '{}'))?.condition, itemId).toBe(
+            'forbidden',
+          )
+        }
+        const config = must(await theOps().session.pubsub.getNodeConfig(node), 'config')
+        expect(config.maxItems).toBe(1)
+      })
+
+      it('publishing again plans nothing', async () => {
+        expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+      })
+    })
+
     describe('3. a change published while players are online', () => {
       let changed: PublishPlan | undefined
       let result: ExecutionResult | undefined
@@ -369,7 +447,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(at('doc:rooms:joint:current')).toBeLessThan(at('delete-role:red-co'))
         expect(at('delete-role:red-co')).toBeLessThan(at('destroy-room:negotiation'))
         expect(ids.at(-1)).toBe('doc:game-setup:current')
-        expect(changed?.designVersion).toBe(2)
+        expect(changed?.designVersion).toBe(3)
         expect(result?.ok).toBe(true)
       })
 
@@ -404,7 +482,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         await expectReadOnly('white-cell', 'joint')
         await expectReadOnly('blue-observer', 'joint')
         expect(vault?.roles()).toEqual(['blue-observer', 'white-cell', 'white-observer'])
-        // F5: as an observer, White Cell keeps reading objectives but no longer publishes them.
+        // As an observer, White Cell keeps reading objectives, and publishes none (D21).
         const cell = await login('white-cell')
         expect(must(await cell.pubsub.getItems('objectives:blue'), 'still reads')).toHaveLength(1)
         expect(
@@ -414,7 +492,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('documents and version are published; again plans nothing', async () => {
-        expect(await gameVersion()).toBe(2)
+        expect(await gameVersion()).toBe(3)
         expect((await plan(publishChangedDesign())).steps).toEqual([])
       })
     })
@@ -442,7 +520,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the re-run plans what is left, with the same version', () => {
-        expect(rerun?.designVersion).toBe(3)
+        expect(rerun?.designVersion).toBe(4)
         expect(rerun?.steps.map((s) => s.id)).toContain('account:red-obs')
         // The account the first run made exists: it is neither created again nor reset (F3).
         expect(rerun?.steps.map((s) => s.id)).not.toContain('account:red-xo')
@@ -456,7 +534,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         const done = await apply(rerun ?? (await plan(thirdDesign())))
         expect(done.ok).toBe(true)
         expect(done.passwordsSet).not.toContain('red-xo')
-        expect(await gameVersion()).toBe(3)
+        expect(await gameVersion()).toBe(4)
         expect((await plan(thirdDesign())).steps).toEqual([])
         expect(await postResult('red-xo', 'red-hq')).toMatchObject({ posted: 'ok' })
         await expectReadOnly('red-obs', 'red-hq')

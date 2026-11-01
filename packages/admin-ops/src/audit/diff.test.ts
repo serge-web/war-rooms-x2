@@ -192,6 +192,35 @@ describe('drift', () => {
     })
   })
 
+  it('D21: a White Force editor left as an objectives publisher, and its item, are found', () => {
+    // What a publish before WP 3.5 left: White Cell publishing, with its own item.
+    const drifted = withNode(view, 'objectives:red', (n) => ({
+      ...n,
+      affiliations: n.affiliations.map((a) =>
+        a.jid === jid('white-cell') ? { ...a, affiliation: 'publisher' as const } : a,
+      ),
+      items: [...n.items, { id: 'white-cell', payload: '{}', publisher: jid('white-cell') }],
+    }))
+    const report = audit(drifted)
+    expect(item(report, 'node-access:objectives:red:white-cell')).toMatchObject({
+      expected: 'member',
+      found: 'publisher',
+      severity: 'critical',
+      repair: [{ type: 'node-access', changes: [{ roleId: 'white-cell', access: 'read' }] }],
+    })
+    const stray = item(report, 'stray-items:objectives:red')
+    expect(stray).toMatchObject({
+      kind: 'stray-items',
+      severity: 'medium',
+      repairable: true,
+      destructive: false,
+    })
+    // Purge, then the admin's item again; no separate document item for it.
+    expect(stray.repair.map((a) => a.type)).toEqual(['purge-node', 'publish'])
+    expect(stray.repair[1]).toMatchObject({ node: 'objectives:red', itemId: 'admin' })
+    expect(report.items.map((i) => i.id)).not.toContain('document:objectives:red:admin')
+  })
+
   it('an owner affiliation the planner does not model is still found', () => {
     const drifted = withNode(view, 'objectives:red', (n) => ({
       ...n,

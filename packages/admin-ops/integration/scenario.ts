@@ -252,7 +252,8 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           await theOps().session.pubsub.getNodeConfig('objectives:blue'),
           'cfg',
         )
-        expect(objectives.maxItems).toBeGreaterThanOrEqual(2)
+        // §3 rule 14: one item, the admin's.
+        expect(objectives.maxItems).toBe(1)
       })
 
       it('the observer joins as a visitor and cannot post (R-B, ADM-37)', async () => {
@@ -272,17 +273,25 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(outsider.joined?.condition).toBe('registration-required')
       })
 
-      it('documents are readable by their readers only, and objectives take a White Force item (§3 rule 14)', async () => {
+      it('documents are readable by their readers only, and only the admin publishes objectives (§3 rule 14, D21)', async () => {
         const blue = await login('blue-co')
         const red = await login('red-co')
         const cell = await login('white-cell')
         expect(must(await blue.pubsub.getItems('objectives:blue'), 'blue reads').length).toBe(1)
         expect(errorOf(await red.pubsub.getItems('objectives:blue'))?.condition).toBe('not-allowed')
-        must(
-          await cell.pubsub.publish('objectives:blue', 'white-cell', JSON.stringify({ x: 1 })),
-          'White Cell publishes its own item',
+        // A White Force role that is not an observer reads every force's objectives, and
+        // publishes none (WP 3.5; before, it published its own item).
+        expect(must(await cell.pubsub.getItems('objectives:red'), 'White Cell reads').length).toBe(
+          1,
         )
-        expect(must(await blue.pubsub.getItems('objectives:blue'), 'two items').length).toBe(2)
+        for (const itemId of ['white-cell', 'admin']) {
+          expect(
+            errorOf(await cell.pubsub.publish('objectives:blue', itemId, JSON.stringify({ x: 1 })))
+              ?.condition,
+            itemId,
+          ).toBe('forbidden')
+        }
+        expect(must(await blue.pubsub.getItems('objectives:blue'), 'one item').length).toBe(1)
         expect(errorOf(await blue.pubsub.publish('objectives:blue', 'x', '{}'))?.condition).toBe(
           'forbidden',
         )

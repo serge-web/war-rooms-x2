@@ -3,6 +3,7 @@ import { nodeName } from '@wrx/schemas'
 import type { Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
 import { FakeSession, err, ok } from '@wrx/transport'
 import type { FakeOptions, Item, MamQuery, OccupantEvent, RoomMessage } from '@wrx/transport'
+import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID } from './documents.ts'
 import type { Logger } from './logger.ts'
 import { createSessionStore } from './store.ts'
 import type { SessionStore, SessionStoreOptions } from './store.ts'
@@ -139,7 +140,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
   const items = (node: string): Item[] =>
     (docs.get(node) ?? []).map((doc, i) => ({
-      id: i === 0 ? 'current' : `item-${i}`,
+      id: i === 0 ? firstItemId(node) : `item-${i}`,
       payload: typeof doc === 'string' ? doc : JSON.stringify(doc),
       publisher: undefined,
     }))
@@ -181,7 +182,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     refused,
     warnings,
     logger,
-    publish(node, doc, itemId = 'current') {
+    publish(node, doc, itemId = firstItemId(node)) {
       docs.set(node, [doc])
       session.emitItems({
         node,
@@ -197,6 +198,11 @@ export function harness(options: HarnessOptions = {}): Harness {
       })
     },
   }
+}
+
+/** The id a node's first item has: the admin's on objectives nodes (§3 rule 14), else `current`. */
+function firstItemId(node: string): string {
+  return node.startsWith('objectives:') ? OBJECTIVES_ITEM_ID : DOCUMENT_ITEM_ID
 }
 
 let counter = 0

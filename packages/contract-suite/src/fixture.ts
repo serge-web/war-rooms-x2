@@ -44,7 +44,10 @@ export interface Fixture {
     readonly blueCo: string
     readonly blueObs: string
     readonly redCo: string
-    /** A White Force role that is not an observer: publishes every force's objectives. */
+    /**
+     * A White Force role that is not an observer: reads every force's objectives, and publishes
+     * none (D21: only the admin edits them).
+     */
     readonly umpire: string
     /** A White Force observer: reads every force's objectives, publishes none (F5). */
     readonly whiteObs: string
@@ -120,14 +123,14 @@ export function plan(fx: Fixture) {
       {
         node: fx.nodes.objectivesBlue,
         config: WHITELIST_NODE,
-        readers: [blueCo, blueObs, whiteObs],
-        publishers: [umpire],
+        readers: [blueCo, blueObs, umpire, whiteObs],
+        publishers: [],
       },
       {
         node: fx.nodes.objectivesRed,
         config: WHITELIST_NODE,
-        readers: [redCo, whiteObs],
-        publishers: [umpire],
+        readers: [redCo, umpire, whiteObs],
+        publishers: [],
       },
     ],
   }

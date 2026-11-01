@@ -55,6 +55,8 @@ export type AuditKind =
   | 'stray-access'
   /** A published document differs from the design, or is missing. */
   | 'document'
+  /** An objectives node holds an item that is not the admin's (D21, §3 rule 14). */
+  | 'stray-items'
   /** The server's design version is not this design's. */
   | 'design-version'
   /** ADM-42, R17: anyone, even anonymous, can list node names. */

@@ -54,7 +54,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     title: 'Objectives',
     location: 'PubSub node `objectives:<forceId>`',
     access:
-      "Read: the force's roles, the White Force's roles and the admin. Publish: the admin and White Force roles that are not observers.",
+      "Read: the force's roles, every White Force role and the admin. Publish: the admin only, as one item (`admin`) replaced on each edit.",
     schema: objectivesSchema,
   },
   {

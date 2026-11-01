@@ -255,6 +255,8 @@ export class MockServer implements ServerLink {
         return { op: request.op, result: pubsub.getNodeConfig(conn, ...request.args) }
       case 'pubsub.deleteNode':
         return { op: request.op, result: pubsub.deleteNode(conn, ...request.args) }
+      case 'pubsub.purgeNode':
+        return { op: request.op, result: pubsub.purgeNode(conn, ...request.args) }
       case 'pubsub.getAffiliations':
         return { op: request.op, result: pubsub.getAffiliations(conn, ...request.args) }
       case 'pubsub.setAffiliations':

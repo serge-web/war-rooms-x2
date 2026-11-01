@@ -11,7 +11,11 @@
 //   4 revokes        voice revoked (write to read), room and node access removed (R-A)
 //   5 documents      assets, forces, roles, rooms, objectives (the admin's item, §3 rule 14);
 //                    after access, so no client learns of a room it cannot yet use correctly,
-//                    and a read-only role is read-only before its room documents say so (ADM-37)
+//                    and a read-only role is read-only before its room documents say so (ADM-37).
+//                    An objectives node holding any item but the admin's (a server published
+//                    before WP 3.5, when White Force editors wrote their own) is purged first,
+//                    after step 3 has taken their publisher affiliations, then the admin's item
+//                    is published again (D21)
 //   6 removals       deleted roles (R-E), destroyed rooms (R-F), deleted nodes
 //   7 game-setup     last, carrying the incremented `designVersion` (§3 rule 8)
 //
@@ -82,6 +86,8 @@ export type StepAction =
     }
   | { readonly type: 'destroy-room'; readonly roomId: string; readonly messageCount: number }
   | { readonly type: 'delete-node'; readonly node: string }
+  /** Every item goes; `stray` names the ones the design does not hold, for the admin. */
+  | { readonly type: 'purge-node'; readonly node: string; readonly stray: readonly string[] }
 
 export interface StepRisk {
   /** It removes access, an account, a room and its history, a node, or a password. */
@@ -127,8 +133,6 @@ export type PlanWarning =
    * password is not changed; reset it from the credentials sheet if its players need one (F3).
    */
   | { readonly kind: 'account-exists'; readonly roleId: string; readonly name: string }
-  /** No AdminOps operation retracts an item, so removed objectives text stays published. */
-  | { readonly kind: 'objectives-kept'; readonly forceId: string }
 
 /** Warnings the admin must confirm one by one before applying (ADM-14, ADM-40, ADM-26). */
 export function needsConfirmation(warning: PlanWarning): boolean {
@@ -230,11 +234,7 @@ export interface PublishedDesign {
   readonly forces: readonly Force[]
   readonly roles: readonly Role[]
   readonly rooms: readonly Room[]
-  /** Forces whose objectives node holds the admin's item. */
-  readonly objectivesForces: readonly string[]
 }
-
-export const OBJECTIVES_ITEM = 'admin'
 
 function documentOf(node: NodeView | undefined, itemId = DOCUMENT_ITEM_ID): string | undefined {
   return node?.items.find((i) => i.id === itemId)?.payload
@@ -245,17 +245,11 @@ export function publishedDesign(view: ServerView): PublishedDesign {
   const forces: Force[] = []
   const roles: Role[] = []
   const rooms: Room[] = []
-  const objectivesForces: string[] = []
   let game: GameSetup | undefined
   for (const node of view.nodes) {
     const ref = parseNodeName(node.node)
     const payload = documentOf(node)
-    if (ref === undefined) continue
-    if (ref.kind === 'objectives') {
-      if (documentOf(node, OBJECTIVES_ITEM) !== undefined) objectivesForces.push(ref.id)
-      continue
-    }
-    if (payload === undefined) continue
+    if (ref === undefined || payload === undefined) continue
     if (ref.kind === 'singleton' && ref.node === SINGLETON_NODES.gameSetup) {
       const parsed = parseDocument('game-setup', payload)
       if (parsed.ok) game = parsed.value
@@ -270,7 +264,7 @@ export function publishedDesign(view: ServerView): PublishedDesign {
       if (parsed.ok && parsed.value.id === ref.id) rooms.push(parsed.value)
     }
   }
-  return { game, forces, roles, rooms, objectivesForces }
+  return { game, forces, roles, rooms }
 }
 
 /** JSON with object keys sorted, so equal documents compare equal however they were written. */
@@ -671,15 +665,12 @@ export function planPublish(
     (a, b) => documentRank(a.node) - documentRank(b.node),
   )) {
     if (node.node === SINGLETON_NODES.gameSetup) continue
+    const current = serverNodes.get(node.node)
+    const purge = purgeStep(node, current)
+    if (purge !== undefined) documents.push(purge)
     for (const doc of node.documents) {
-      if (samePayload(doc.payload, documentOf(serverNodes.get(node.node), doc.itemId))) continue
+      if (purge === undefined && samePayload(doc.payload, documentOf(current, doc.itemId))) continue
       documents.push(documentStep(node, doc.itemId, doc.payload))
-    }
-  }
-  for (const forceId of published.objectivesForces) {
-    const kept = target.nodes.some((n) => n.node === `objectives:${forceId}`)
-    if (kept && !design.objectives.some((o) => o.forceId === forceId)) {
-      warnings.push({ kind: 'objectives-kept', forceId })
     }
   }
 
@@ -811,6 +802,30 @@ function documentStep(node: TargetNode, itemId: string, payload: string): PlanSt
     details: [],
     risk: { destructive: false, roles: [] },
     action: { type: 'publish', node: node.node, config: node.config, itemId, payload },
+  }
+}
+
+/**
+ * §3 rule 14, D21: an objectives node holds the admin's item only. Items the design does not
+ * hold (White Force editors' items from before WP 3.5, or text removed from the draft) are
+ * purged: every item goes, and the planner publishes the design's again right after. Other
+ * nodes keep their items: documents are replaced in place, announcements are history.
+ */
+function purgeStep(node: TargetNode, current: NodeView | undefined): PlanStep | undefined {
+  if (current === undefined || parseNodeName(node.node)?.kind !== 'objectives') return undefined
+  const wanted = new Set(node.documents.map((d) => d.itemId))
+  const stray = current.items.map((i) => i.id).filter((id) => !wanted.has(id))
+  if (stray.length === 0) return undefined
+  return {
+    id: `purge:${node.node}`,
+    group: 'documents',
+    summary: `Remove every item from ${node.node} but the admin's objectives`,
+    details: [
+      `${plural(stray.length, 'item')} the design does not hold: ${stray.join(', ')}`,
+      'Only the admin publishes objectives (D21); the admin’s item is published again next',
+    ],
+    risk: { destructive: true, roles: [] },
+    action: { type: 'purge-node', node: node.node, stray },
   }
 }
 

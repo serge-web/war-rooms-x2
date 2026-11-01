@@ -109,14 +109,14 @@ A channel: one MUC room plus this config.
 A force's objectives; confidential to that force, the White Force and the admin.
 
 - **Location:** PubSub node `objectives:<forceId>`
-- **Access:** Read: the force's roles, the White Force's roles and the admin. Publish: the admin and White Force roles that are not observers.
+- **Access:** Read: the force's roles, every White Force role and the admin. Publish: the admin only, as one item (`admin`) replaced on each edit.
 
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `schemaVersion` | constant | yes | = 1 |  |
 | `forceId` | string | yes | length ≥ 1; length ≤ 64; pattern `^[a-z0-9]+(?:-[a-z0-9]+)*$` | Id of the force these objectives belong to |
 | `markdown` | string | yes | length ≤ 50000 | Objectives as Markdown |
-| `updatedAt` | string | yes | format date-time | When this version was written. The node holds one item per author, because a publisher cannot overwrite another publisher's item; readers take the newest (§3 rule 14) |
+| `updatedAt` | string | yes | format date-time | When the admin wrote this version, by the admin's clock; display only. The node holds one item, the admin's, replaced on each edit; a live notification replaces the copy fetched at login, whatever this says (§3 rule 14) |
 
 ## Asset
 

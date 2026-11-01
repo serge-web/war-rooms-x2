@@ -132,7 +132,8 @@ export function sampleDesign(): DesignFile {
 
 /**
  * The sample design plus a White Force role that is not an observer ("White Cell"), which
- * writes in every room and edits objectives beside the admin (§3 rules 4 and 14).
+ * writes in every room and reads every force's objectives, but does not edit them (§3 rules 4
+ * and 14, D21).
  */
 export function sampleDesignWithWhiteCell(): DesignFile {
   const design = sampleDesign()

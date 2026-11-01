@@ -140,6 +140,7 @@ const OPS = {
   'pubsub.configureNode': [z.tuple([s, serverNodeConfig]), none],
   'pubsub.getNodeConfig': [z.tuple([s]), nodeConfig],
   'pubsub.deleteNode': [z.tuple([s]), none],
+  'pubsub.purgeNode': [z.tuple([s]), none],
   'pubsub.getAffiliations': [z.tuple([s]), z.array(pubsubAffiliationEntry)],
   'pubsub.setAffiliations': [z.tuple([s, z.array(pubsubAffiliationEntry)]), none],
   'pubsub.getSubscriptions': [z.tuple([s]), z.array(subscriptionEntry)],

@@ -219,12 +219,15 @@ export function repairRank(action: StepAction): number {
     case 'room-access':
     case 'node-access':
       return action.changes.some((c) => c.access !== 'none') ? 3 : 4
-    case 'publish':
+    // A purge runs before the publish that puts the admin's objectives back (D21).
+    case 'purge-node':
       return 5
+    case 'publish':
+      return 6
     case 'delete-role':
     case 'destroy-room':
     case 'delete-node':
-      return 6
+      return 7
   }
 }
 
@@ -375,10 +378,16 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     })
   }
 
+  const purged = new Set(
+    plan.steps.flatMap((s) => (s.action.type === 'purge-node' ? [s.action.node] : [])),
+  )
   for (const step of plan.steps) {
     roomAccessItems(step, view, roleName, out)
     nodeAccessItems(step, view, roleName, out)
-    documentItems(step, view, out)
+    strayItems(step, plan.steps, out)
+    if (step.action.type !== 'publish' || !purged.has(step.action.node)) {
+      documentItems(step, view, out)
+    }
     removalItems(step, view, input.messageCounts, out)
   }
 
@@ -566,6 +575,7 @@ const KIND_ORDER: readonly AuditKind[] = Object.freeze([
   'node-missing',
   'room-extra',
   'node-extra',
+  'stray-items',
   'document',
   'writers-unchecked',
   'design-version',
@@ -715,6 +725,29 @@ function nodeAccessItems(
       })
     }
   }
+}
+
+/**
+ * Items on an objectives node that are not the admin's (D21, §3 rule 14): a White Force editor's
+ * from a publish before WP 3.5, or text the design no longer has. The repair is the planner's:
+ * purge the node, then publish the admin's item again, in that order (`repairRank`).
+ */
+function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): void {
+  const action = step.action
+  if (action.type !== 'purge-node') return
+  const republish = steps
+    .map((s) => s.action)
+    .filter((a) => a.type === 'publish' && a.node === action.node)
+  out.add({
+    id: `stray-items:${action.node}`,
+    kind: 'stray-items',
+    target: action.node,
+    expected: 'the admin’s item only: only the admin publishes objectives (D21)',
+    found: `${action.stray.length === 1 ? 'an item' : `${action.stray.length} items`} the design does not hold: ${action.stray.join(', ')}`,
+    severity: 'medium',
+    repair: [action, ...republish],
+    note: 'Repair removes every item, then publishes the admin’s again. The game client shows the admin’s item only, but other XMPP clients of the force’s roles read the rest.',
+  })
 }
 
 function documentItems(step: PlanStep, view: ServerView, out: Builder): void {

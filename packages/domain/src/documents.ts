@@ -48,6 +48,12 @@ export type LiveDocumentKind = LiveDocument['kind']
  */
 export const DOCUMENT_ITEM_ID = 'current'
 
+/**
+ * The one item an objectives node holds: the admin's, the only publisher (§3 rule 14, D21).
+ * Readers ignore any other item, which only a server published before WP 3.5 can hold.
+ */
+export const OBJECTIVES_ITEM_ID = 'admin'
+
 export interface NodeSpec {
   readonly kind: LiveDocumentKind
   /** For per-entity nodes, the id the document must carry. */

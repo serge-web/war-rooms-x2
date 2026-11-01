@@ -178,5 +178,7 @@ async function runStep(
     }
     case 'delete-node':
       return none(await ops.deleteNode(action.node))
+    case 'purge-node':
+      return none(await ops.purgeNode(action.node))
   }
 }

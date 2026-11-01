@@ -363,6 +363,11 @@ class MockPubsub implements PubsubApi {
     return r.op === 'pubsub.deleteNode' || r.op === 'failed' ? r.result : mismatch()
   }
 
+  purgeNode: PubsubApi['purgeNode'] = async (node) => {
+    const r = await this.caller.call({ op: 'pubsub.purgeNode', args: [node] })
+    return r.op === 'pubsub.purgeNode' || r.op === 'failed' ? r.result : mismatch()
+  }
+
   getAffiliations: PubsubApi['getAffiliations'] = async (node) => {
     const r = await this.caller.call({ op: 'pubsub.getAffiliations', args: [node] })
     return r.op === 'pubsub.getAffiliations' || r.op === 'failed' ? r.result : mismatch()

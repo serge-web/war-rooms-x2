@@ -304,9 +304,11 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
       ['red-hq', 'read'],
       ['negotiation', 'read'],
     ])
+    // Only the admin edits objectives; a White Force role that is not an observer reads them too.
     const white = harness({ roleId: 'white-1' })
     await white.store.ready()
-    expect(white.store.me().data.canEditObjectives).toBe(true)
+    expect(white.store.me().data.canEditObjectives).toBe(false)
+    expect(white.store.objectives('red').data?.markdown).toBe('Delay Blue.')
   })
 })
 
@@ -407,13 +409,13 @@ describe('session store: connection (PLY-2, PLY-50)', () => {
 })
 
 describe('session store: operations', () => {
-  it('publishes objectives as an umpire (PLY-35)', async () => {
-    const h = harness({ roleId: 'white-1' })
+  it('publishes objectives as the admin, as its single item (PLY-35, §3 rule 14)', async () => {
+    const h = harness({ roleId: 'admin' })
     await h.store.ready()
     expect(await h.store.publishObjectives('red', '1. Hold the line.')).toEqual(ok(undefined))
     const call = h.session.calls.find((c) => c.op === 'publish')
-    // Each author has its own item: a publisher cannot overwrite another's (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'white-1'])
+    // One item, the admin's, replaced on each edit.
+    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'admin'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
       schemaVersion: 1,
       forceId: 'red',
@@ -421,9 +423,16 @@ describe('session store: operations', () => {
     })
   })
 
-  it("shows the newest author's objectives, whatever order items arrive in", async () => {
-    const h = harness()
+  it("shows the admin's item only, never a former White Force editor's (§3 rule 14)", async () => {
+    // A server published before WP 3.5 can hold an editor's item until the next publish purges it.
+    const docs = sampleDocuments()
+    docs.set('objectives:blue', [
+      objectives('blue', 'Admin original', '2026-10-24T10:00:00.000Z'),
+      objectives('blue', 'Old umpire edit', '2026-10-24T11:00:00.000Z'),
+    ])
+    const h = harness({ docs })
     await h.store.ready()
+    expect(h.store.objectives('blue').data?.markdown).toBe('Admin original')
     const item = (id: string, markdown: string, updatedAt: string) => ({
       id,
       payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
@@ -431,88 +440,93 @@ describe('session store: operations', () => {
     })
     h.session.emitItems({
       node: 'objectives:blue',
-      items: [
-        item('white-1', 'Umpire edit', '2026-10-24T11:00:00.000Z'),
-        item('admin', 'Admin original', '2026-10-24T10:00:00+00:00'),
-      ],
+      items: [item('white-1', 'Umpire edit', '2026-10-24T12:00:00.000Z')],
       retracted: [],
       deleted: false,
     })
-    expect(h.store.objectives('blue').data?.markdown).toBe('Umpire edit')
+    expect(h.store.objectives('blue').data?.markdown).toBe('Admin original')
     h.session.emitItems({
       node: 'objectives:blue',
       items: [item('admin', 'Admin revision', '2026-10-24T13:00:00+01:00')],
       retracted: [],
       deleted: false,
     })
-    // 13:00+01:00 is 12:00Z, after the umpire's 11:00Z.
     expect(h.store.objectives('blue').data?.markdown).toBe('Admin revision')
   })
 
-  describe('F11: an author’s clock cannot hide or pin an objectives edit', () => {
+  describe('F11: a live notification beats the fetched copy, whatever the clock says', () => {
     const NOW = '2026-10-25T09:00:00.000Z'
-    const item = (id: string, markdown: string, updatedAt: string) => ({
-      id,
+    const item = (markdown: string, updatedAt: string) => ({
+      id: 'admin',
       payload: JSON.stringify(objectives('blue', markdown, updatedAt)),
       publisher: undefined,
     })
-    const live = (h: ReturnType<typeof harness>, ...items: ReturnType<typeof item>[]) => {
-      h.session.emitItems({ node: 'objectives:blue', items, retracted: [], deleted: false })
+    const live = (h: ReturnType<typeof harness>, markdown: string, updatedAt: string) => {
+      h.session.emitItems({
+        node: 'objectives:blue',
+        items: [item(markdown, updatedAt)],
+        retracted: [],
+        deleted: false,
+      })
     }
-    /** Blue's objectives node as read on login: the admin's item and an umpire's. */
-    function stored(admin: string, umpire: string) {
+
+    it('a fetched copy stamped in the future does not pin itself above a live edit', async () => {
       const docs = sampleDocuments()
-      docs.set('objectives:blue', [
-        objectives('blue', 'Admin', admin),
-        objectives('blue', 'Umpire', umpire),
-      ])
-      return harness({ docs, now: () => NOW })
-    }
-
-    it('a clock set ahead does not pin an edit above a later one', async () => {
-      // The umpire's clock is years ahead; the admin edits afterwards with a correct clock.
-      const h = stored('2026-10-24T09:00:00.000Z', '2030-01-01T00:00:00.000Z')
+      docs.set('objectives:blue', [objectives('blue', 'Read at login', '2030-01-01T00:00:00.000Z')])
+      const h = harness({ docs, now: () => NOW })
       await h.store.ready()
-      // On a fresh read the future stamp counts as the read time, so it is still the newest...
-      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire')
-      live(h, item('current', 'Admin, later', '2026-10-25T09:00:00.000Z'))
-      // ...but any edit published after it wins. Before F11, 2030 hid it until 2030.
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, later')
+      expect(h.store.objectives('blue').data?.markdown).toBe('Read at login')
+      // The admin's clock was a day slow when it published this edit.
+      live(h, 'Live edit', '2026-10-24T09:00:00.000Z')
+      expect(h.store.objectives('blue').data?.markdown).toBe('Live edit')
     })
 
-    it('a clock set behind does not hide a live edit', async () => {
-      const h = stored('2026-10-25T08:00:00.000Z', '2026-10-24T09:00:00.000Z')
+    it('a fetch that answers after a live edit does not overwrite it', async () => {
+      const h = harness({ now: () => NOW })
       await h.store.ready()
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
-      // The umpire edits now, but its clock is a day slow.
-      live(h, item('item-1', 'Umpire, now', '2026-10-24T09:05:00.000Z'))
-      expect(h.store.objectives('blue').data?.markdown).toBe('Umpire, now')
-      // Arrival order, not stamps, decides between live edits.
-      live(h, item('current', 'Admin again', '2026-10-25T08:30:00.000Z'))
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin again')
-    })
-
-    it('within one read, stamps decide, a future one counting as the read time', async () => {
-      const h = stored('2026-10-25T09:00:00.000Z', '2026-10-24T09:00:00.000Z')
-      await h.store.ready()
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin')
-      // In one event, a stamp ahead of the receipt time ties with one at it; the later item wins.
-      live(
-        h,
-        item('item-1', 'Umpire, ahead', '2027-01-01T00:00:00.000Z'),
-        item('current', 'Admin, at receipt', NOW),
+      let answer: (items: readonly Item[]) => void = () => undefined
+      h.session.stub(
+        'pubsub',
+        'getItems',
+        () =>
+          new Promise((resolve) => {
+            answer = (items) => {
+              resolve(ok(items))
+            }
+          }),
       )
-      expect(h.store.objectives('blue').data?.markdown).toBe('Admin, at receipt')
+      const refreshing = h.store.refresh()
+      await flush()
+      live(h, 'Live edit', '2026-10-24T09:00:00.000Z')
+      answer([item('Stale copy', '2030-01-01T00:00:00.000Z')])
+      await refreshing
+      await flush()
+      expect(h.store.objectives('blue').data?.markdown).toBe('Live edit')
+    })
+
+    it('between live edits, arrival order decides, not stamps', async () => {
+      const h = harness({ now: () => NOW })
+      await h.store.ready()
+      live(h, 'First', '2026-10-25T08:59:00.000Z')
+      live(h, 'Second, clock behind', '2026-10-20T00:00:00.000Z')
+      expect(h.store.objectives('blue').data?.markdown).toBe('Second, clock behind')
     })
   })
 
-  it('refuses objectives from a player, a White Force observer, and invalid ones', async () => {
+  it('refuses objectives from a player and every White Force role, and invalid ones', async () => {
     const h = harness()
     await h.store.ready()
     expect(await h.store.publishObjectives('blue', 'x')).toMatchObject({
       ok: false,
       error: { code: 'not-permitted' },
     })
+    const white = harness({ roleId: 'white-1' })
+    await white.store.ready()
+    expect(await white.store.publishObjectives('blue', 'x')).toMatchObject({
+      ok: false,
+      error: { code: 'not-permitted' },
+    })
+    expect(white.session.calls.some((c) => c.op === 'publish')).toBe(false)
     const observer = harness({ roleId: 'white-observer' })
     await observer.store.ready()
     expect(await observer.store.publishObjectives('blue', 'x')).toMatchObject({

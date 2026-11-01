@@ -118,21 +118,22 @@ describe('stateFromDesign', () => {
       { jid: 'admin@d.mock', affiliation: 'owner' },
       { jid: 'blue-co@d.mock', affiliation: 'member' },
       { jid: 'blue-observer@d.mock', affiliation: 'member' },
-      // The White observer reads every force's objectives, and never publishes (F5).
+      // Every White Force role reads every force's objectives; only the admin publishes (D21).
       { jid: 'white-observer@d.mock', affiliation: 'member' },
     ])
+    expect(objectives?.config.maxItems).toBe(1)
     const withCell = unwrap(
       stateFromDesign({ design: sampleDesignWithWhiteCell(), domain: 'd.mock' }),
     )
     expect(withCell.nodes.find((n) => n.name === nodeName.objectives('red'))?.affiliations).toEqual(
       [
         { jid: 'admin@d.mock', affiliation: 'owner' },
-        { jid: 'white-cell@d.mock', affiliation: 'publisher' },
         { jid: 'red-co@d.mock', affiliation: 'member' },
         { jid: 'white-observer@d.mock', affiliation: 'member' },
+        { jid: 'white-cell@d.mock', affiliation: 'member' },
       ],
     )
-    // §3 rule 14: one item per author; the design's text is the admin's.
+    // §3 rule 14: one item, the admin's, holding the design's text.
     expect(objectives?.items.map((i) => i.id)).toEqual(['admin'])
     expect(state.nodes.find((n) => n.name === 'game-state')?.items).toEqual([])
     const role = state.nodes.find((n) => n.name === 'roles:blue-co')?.items[0]?.payload ?? ''
@@ -215,7 +216,7 @@ describe('the demo seed', () => {
     expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
   })
 
-  it('lets a White Force writer publish objectives under its own item, beside the admin’s', async () => {
+  it('lets a White Force writer read objectives but not publish them (D21, §3 rule 14)', async () => {
     const state = unwrap(stateFromDesign({ design: sampleDesignWithWhiteCell() }))
     const transport = new MockTransport(new MockServer({ seed: state }))
     const cell = unwrap(
@@ -225,11 +226,11 @@ describe('the demo seed', () => {
       }),
     )
     const node = nodeName.objectives('red')
-    unwrap(await cell.pubsub.publish(node, 'white-cell', '{"markdown":"new"}'))
-    const ids = unwrap(await cell.pubsub.getItems(node)).map((i) => i.id)
-    expect(ids.sort()).toEqual(['admin', 'white-cell'])
-    const overwrite = await cell.pubsub.publish(node, 'admin', '{}')
-    expect(overwrite.ok ? undefined : overwrite.error.condition).toBe('forbidden')
+    expect(unwrap(await cell.pubsub.getItems(node)).map((i) => i.id)).toEqual(['admin'])
+    for (const itemId of ['white-cell', 'admin']) {
+      const post = await cell.pubsub.publish(node, itemId, '{"markdown":"new"}')
+      expect(post.ok ? undefined : post.error.condition, itemId).toBe('forbidden')
+    }
   })
 
   it('exports a state that seeds a new server (PLY-34), and resets to its seed', async () => {

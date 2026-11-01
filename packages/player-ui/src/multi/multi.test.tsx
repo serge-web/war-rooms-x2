@@ -294,8 +294,9 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
       ['red-hq', 'read'],
       ['negotiation', 'read'],
     ])
+    // Read only: no role edits objectives, a White Force role that is not an observer included.
     const preview = previewAsRole(h.store, 'white-1')
-    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: true })
+    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: false })
     expect(preview.me().data.rooms.map((r) => r.room.id)).toEqual([
       'blue-hq',
       'red-hq',

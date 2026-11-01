@@ -807,6 +807,30 @@ export class AdminOps {
     return deleted
   }
 
+  /**
+   * Deletes every item on a node, keeping its config and affiliations (XEP-0060 §8.5), then
+   * reads it back: no item may be left. Publish uses it on an objectives node that holds items
+   * other than the admin's (§3 rule 14), after the White Force editors' publisher affiliations
+   * are gone, so no stale editor's text survives and nobody can write a new one.
+   */
+  async purgeNode(node: string): OpsOutcome<void> {
+    const op = 'purgeNode'
+    const valid = this.checkNode(op, node)
+    if (!valid.ok) return valid
+    const purged = await this.step(op, 'purge items', node, () =>
+      this.session.pubsub.purgeNode(node),
+    )
+    if (!purged.ok) return purged
+    const left = await this.query(op, 'verify purge', node, () =>
+      this.session.pubsub.getItems(node),
+    )
+    if (!left.ok) return left
+    if (left.value.length > 0) {
+      return this.fail(op, 'verify purge', node, 'verify-failed', 'items remain after the purge')
+    }
+    return opsOk(undefined)
+  }
+
   setNodeAccess(node: string, roleId: string, access: NodeAccess): OpsOutcome<void> {
     return this.applyNodeAccess(node, [{ roleId, access }])
   }

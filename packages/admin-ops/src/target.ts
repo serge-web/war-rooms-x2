@@ -2,7 +2,7 @@
 // nodes with their configs, each role's access and the documents they hold. Pure; 2.3 diffs it
 // against `AdminOps.readState` and 2.10 audits against it. It provisions the same state as the
 // mock's seed (`@wrx/mock-server` seed.ts), so a seeded mock and a published server agree.
-import { DOCUMENT_ITEM_ID, effectiveAccess } from '@wrx/domain'
+import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, effectiveAccess } from '@wrx/domain'
 import { SINGLETON_NODES, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
@@ -17,17 +17,14 @@ export type NodeAccess = 'publish' | 'read' | 'none'
 /** Items kept on `announcements`; the same as the mock's seed. */
 export const ANNOUNCEMENTS_MAX_ITEMS = 100
 
-/** The admin's own item on an objectives node (§3 rule 14: one item per author). */
-export const OBJECTIVES_ADMIN_ITEM_ID = 'admin'
-
 /**
- * §3 rule 14: an objectives node keeps one item per author, so `max_items` must hold the admin's
- * item plus one per White Force role that may edit (not an observer). At least 10, as the mock's
- * seed, so adding an editor during play does not push out an item before the node is reconfigured.
+ * The admin's item on an objectives node: the only item it holds, since only the admin publishes
+ * objectives (§3 rule 14, D21).
  */
-export function objectivesMaxItems(editors: number): number {
-  return Math.max(10, editors + 1)
-}
+export const OBJECTIVES_ADMIN_ITEM_ID = OBJECTIVES_ITEM_ID
+
+/** §3 rule 14: one item, the admin's, replaced on each edit. */
+export const OBJECTIVES_MAX_ITEMS = 1
 
 /** A room's settings: every RoomConfig field except the name and description. */
 export type RoomSetting = Exclude<keyof RoomConfig, 'name' | 'description'>
@@ -143,12 +140,10 @@ export function targetState(design: DesignFile): TargetState {
     return { roomId: room.id, config: gameRoomConfig(room.name), access }
   })
 
-  // White Force roles (the umpire-flag force) read every force's objectives; those that are not
-  // observers also publish them (§3 rule 14, D21). Observers never publish (review F5).
+  // Every White Force role (the umpire-flag force), observer or not, reads every force's
+  // objectives; only the admin, the node's owner, publishes them (§3 rule 14, D21, WP 3.5).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId))
-  const editors = white.filter((r) => !r.isObserver).map((r) => r.id)
-  const whiteObservers = white.filter((r) => r.isObserver).map((r) => r.id)
+  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => r.id)
   const publicAssets = new Set(publicAssetIds(design.game))
   const whitelist1 = gameNodeConfig('whitelist', 1)
 
@@ -192,16 +187,15 @@ export function targetState(design: DesignFile): TargetState {
       documents: [doc(room)],
     })),
     ...design.forces.map((force) => {
-      // §3 rule 14, D21: the force's roles and White Force observers read; White Force roles
-      // that are not observers publish (and so read). The admin owns the node.
+      // §3 rule 14, D21: the force's roles and every White Force role read; nobody but the
+      // admin, who owns the node, publishes.
       const access = new Map<string, 'publish' | 'read'>()
       for (const role of design.roles) if (role.forceId === force.id) access.set(role.id, 'read')
-      for (const id of whiteObservers) access.set(id, 'read')
-      for (const id of editors) access.set(id, 'publish')
+      for (const id of white) access.set(id, 'read')
       const objectives = design.objectives.find((o) => o.forceId === force.id)
       return {
         node: nodeName.objectives(force.id),
-        config: gameNodeConfig('whitelist', objectivesMaxItems(editors.length)),
+        config: gameNodeConfig('whitelist', OBJECTIVES_MAX_ITEMS),
         access,
         documents: objectives === undefined ? [] : [doc(objectives, OBJECTIVES_ADMIN_ITEM_ID)],
       }

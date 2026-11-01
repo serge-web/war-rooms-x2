@@ -4,7 +4,7 @@ import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
 import { sampleDesign } from '../../schemas/src/fixtures.ts'
-import { objectivesMaxItems, targetState } from './target.ts'
+import { OBJECTIVES_MAX_ITEMS, targetState } from './target.ts'
 
 /** The sample design with a White Force writer, and a White observer assigned to one room. */
 function withWhiteRoles() {
@@ -76,25 +76,26 @@ describe('targetState(sampleDesign())', () => {
       'blue-observer': 'read',
       'white-observer': 'read',
     })
-    expect(blue?.config.maxItems).toBe(objectivesMaxItems(0))
-    expect(objectivesMaxItems(0)).toBe(10)
-    expect(objectivesMaxItems(20)).toBe(21)
+    expect(blue?.config.maxItems).toBe(OBJECTIVES_MAX_ITEMS)
+    expect(OBJECTIVES_MAX_ITEMS).toBe(1)
     expect(blue?.documents.map((d) => d.itemId)).toEqual(['admin'])
   })
 
-  it('F5: White Force observers read objectives and never publish; its other roles publish', () => {
+  it('D21: every White Force role reads objectives and none publishes, observer or not', () => {
     const white = targetState(withWhiteRoles())
     for (const forceId of ['blue', 'red', 'white']) {
       const node = white.nodes.find((n) => n.node === `objectives:${forceId}`)
-      expect(node?.access.get('white-cell'), forceId).toBe('publish')
+      // Before WP 3.5 the White Force role that is not an observer published.
+      expect(node?.access.get('white-cell'), forceId).toBe('read')
       expect(node?.access.get('white-observer'), forceId).toBe('read')
       expect(node?.access.get('mediator'), forceId).toBe('read')
-      expect(node?.config.maxItems).toBe(objectivesMaxItems(1))
+      expect(node?.config.maxItems).toBe(1)
     }
+    // No role publishes anywhere: the admin, as owner, is the only publisher of every node.
     const publishers = white.nodes.flatMap((n) =>
       [...n.access].filter(([, a]) => a === 'publish').map(([id]) => `${n.node}:${id}`),
     )
-    expect(publishers.every((p) => p.endsWith(':white-cell'))).toBe(true)
+    expect(publishers).toEqual([])
   })
 
   it('F5: a White observer with an assigned room is a read-only member of that room only', () => {

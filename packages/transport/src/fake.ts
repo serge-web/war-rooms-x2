@@ -207,6 +207,7 @@ export class FakeSession implements Session {
         notifyRetract: true,
       }),
     deleteNode: (node) => this.call('pubsub', 'deleteNode', [node], undefined),
+    purgeNode: (node) => this.call('pubsub', 'purgeNode', [node], undefined),
     getAffiliations: (node) => this.call('pubsub', 'getAffiliations', [node], []),
     setAffiliations: (node, entries) =>
       this.call('pubsub', 'setAffiliations', [node, entries], undefined),

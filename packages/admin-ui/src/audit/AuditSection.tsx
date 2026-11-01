@@ -50,6 +50,7 @@ const KIND_LABEL: Readonly<Record<AuditKind, string>> = Object.freeze({
   'account-unknown': 'Account with no role',
   'stray-access': 'Leftovers of a deleted role',
   document: 'Document',
+  'stray-items': 'Objectives items not the admin’s',
   'design-version': 'Design version',
   'node-names-public': 'Node names are public',
 })
