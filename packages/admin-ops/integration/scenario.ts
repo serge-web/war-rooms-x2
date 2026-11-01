@@ -8,7 +8,7 @@
 // gets a per-room read-only entry (§3 rule 5).
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
 import { nodeName } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell, tid } from '../../schemas/src/fixtures.ts'
+import { sampleDesignWithWhiteCell, sampleTemplates, tid } from '../../schemas/src/fixtures.ts'
 import type { DesignFile } from '@wrx/schemas'
 import type {
   Endpoint,
@@ -324,6 +324,40 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(
           must(await red.pubsub.getItems(nodeName.room(tid('blue-hq'))), 'room doc').length,
         ).toBe(1)
+      })
+
+      it('every role reads `templates`; only the admin publishes and retracts there (Annex A)', async () => {
+        const node = targetState(first).nodes.find((n) => n.node === 'templates')
+        if (node === undefined) throw new Error('no templates node in the target')
+        expect(node.config).toMatchObject({ accessModel: 'whitelist', publishModel: 'publishers' })
+        const [template] = sampleTemplates()
+        if (template === undefined) throw new Error('no sample template')
+        const payload = JSON.stringify(template)
+        mustOps(
+          await theOps().publishDocument('templates', node.config, template.id, payload),
+          'publish a template',
+        )
+        const red = await login('red-co')
+        const cell = await login('white-cell')
+        expect(
+          must(await red.pubsub.getItems('templates'), 'red reads').map((i) => i.id),
+        ).toContain(template.id)
+        for (const session of [red, cell]) {
+          expect(
+            errorOf(await session.pubsub.publish('templates', template.id, payload))?.condition,
+          ).toBe('forbidden')
+          expect(errorOf(await session.pubsub.retract('templates', template.id))?.condition).toBe(
+            'forbidden',
+          )
+        }
+        mustOps(await theOps().retractItem('templates', template.id), 'retract')
+        expect(
+          must(await red.pubsub.getItems('templates'), 'red reads again').map((i) => i.id),
+        ).not.toContain(template.id)
+        // Already gone is success; below `templates` stays out of the tooling's reach.
+        mustOps(await theOps().retractItem('templates', template.id), 'retract again')
+        expect((await theOps().retractItem(`templates:${tid('x')}`, 'x')).ok).toBe(false)
+        await closeAll()
       })
 
       it('a node is created before the first publish (never auto-created open)', () => {

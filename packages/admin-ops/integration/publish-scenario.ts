@@ -13,10 +13,13 @@
 // 4. a publish that fails part-way stops, reports what ran, and a re-run completes it with the
 //    same design version (ADM-11, §3 rule 8);
 // 5. a per-role password reset keeps the vault in step (ADM-26);
-// 6. reset removes everything (ADM-15).
+// 5b. message templates (Annex A): published before the room that offers them and locked; each
+//    role offered its own; a templated message sent and checked valid on receipt; a change to a
+//    locked template refused; an unlocked one the design drops retracted;
+// 6. reset removes everything (ADM-15), the templates node included.
 import { nodeName } from '@wrx/schemas'
-import type { DesignFile } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
+import type { DesignFile, Template } from '@wrx/schemas'
+import { TEMPLATE, sampleDesignWithWhiteCell, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
 import { createSessionStore } from '@wrx/domain'
@@ -150,6 +153,47 @@ function thirdDesign(): DesignFile {
         forceId: tid('red'),
         isObserver: true,
         order: 2,
+      },
+    ],
+  }
+}
+
+const RED_REPORTS = tid('red-reports')
+const SPARE = tid('spare-template')
+
+/** An unlocked template no room offers, for step 5b's retraction. */
+function spareTemplate(): Template {
+  const [first] = sampleTemplates()
+  if (first === undefined) throw new Error('no sample template')
+  return { ...first, id: SPARE, name: 'Spare' }
+}
+
+/**
+ * Step 5b: the step 4 design with the three sample templates and a Red Reports room offering
+ * them, free text off: Red's force entry gives two, Red XO's role entry adds the third.
+ */
+function templatedThirdDesign(): DesignFile {
+  const base = thirdDesign()
+  return {
+    ...base,
+    templates: sampleTemplates(),
+    rooms: [
+      ...base.rooms,
+      {
+        schemaVersion: 1,
+        id: RED_REPORTS,
+        name: 'Red reports',
+        roomType: 'chat',
+        participants: [{ kind: 'force', id: tid('red'), access: 'write' }],
+        config: {
+          schemaVersion: 2,
+          freeText: false,
+          templates: [
+            { kind: 'force', id: tid('red'), templateIds: [TEMPLATE.sitrep, TEMPLATE.contact] },
+            { kind: 'role', id: tid('red-xo'), templateIds: [TEMPLATE.support] },
+          ],
+        },
+        order: 3,
       },
     ],
   }
@@ -677,6 +721,131 @@ export function definePublishIntegration(backend: PublishBackend): void {
         const stored = must(await theOps().session.admin.getPrivate(VAULT_STORAGE_KEY), 'stored')
         expect(stored).not.toContain(fresh)
       })
+      afterAll(closeAll)
+    })
+
+    describe('5b. message templates (Annex A, WP 4.1)', () => {
+      let first: PublishPlan | undefined
+      beforeAll(async () => {
+        first = await plan(templatedThirdDesign())
+        const result = await apply(first)
+        if (!result.ok) throw new Error(`templates: ${result.failed?.error.message}`)
+      }, 120_000)
+
+      it('published the templates before the room that offers them, locking them (TD6)', () => {
+        const ids = first?.steps.map((s) => s.id) ?? []
+        const reports = ids.indexOf(`doc:${nodeName.room(RED_REPORTS)}:current`)
+        for (const id of [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support]) {
+          const at = ids.indexOf(`doc:templates:${id}`)
+          expect(at, id).toBeGreaterThanOrEqual(0)
+          expect(at, id).toBeLessThan(reports)
+          expect(first?.steps[at]?.details).toEqual([
+            'A room offers it, so it locks: its fields are fixed from now on (TD6)',
+          ])
+        }
+      })
+
+      it('every role reads them, locked; no role may publish one', async () => {
+        const session = await login('blue-observer')
+        const items = must(await session.pubsub.getItems('templates'), 'read templates')
+        expect(items.map((i) => i.id).sort()).toEqual(
+          [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support].sort(),
+        )
+        for (const item of items) {
+          expect(JSON.parse(item.payload)).toMatchObject({
+            lockedAt: templatedThirdDesign().exportedAt,
+          })
+        }
+        expect(
+          errorOf(
+            await session.pubsub.publish('templates', TEMPLATE.sitrep, items[0]?.payload ?? '{}'),
+          )?.condition,
+        ).toBe('forbidden')
+        await closeAll()
+      })
+
+      it('each role is offered its templates; one is sent, checked and received as valid', async () => {
+        const xo = createSessionStore({ session: await login('red-xo'), logger: quiet })
+        const co = createSessionStore({ session: await login('blue-co'), logger: quiet })
+        const watcher = createSessionStore({
+          session: await login('white-observer'),
+          logger: quiet,
+        })
+        await Promise.all([xo.ready(), co.ready(), watcher.ready()])
+        const names = (s: typeof xo) => s.roomTemplates(RED_REPORTS).data.templates.map((t) => t.id)
+        expect(names(xo)).toEqual([TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support])
+        // Blue CO is in Red since step 3: Red's two, not Red XO's own.
+        expect(names(co)).toEqual([TEMPLATE.sitrep, TEMPLATE.contact])
+        expect(names(watcher)).toEqual([])
+        expect(xo.roomTemplates(RED_REPORTS).data.freeText).toBe(false)
+
+        xo.acquireRoom(RED_REPORTS)
+        watcher.acquireRoom(RED_REPORTS)
+        for (const s of [xo, watcher]) {
+          await expect
+            .poll(() => s.roomView(RED_REPORTS).data?.status, { timeout: 10_000 })
+            .toBe('joined')
+        }
+        const text = await xo.sendMessage(RED_REPORTS, 'free text')
+        expect(text.ok ? undefined : text.error.code).toBe('not-permitted')
+        const sent = await xo.sendTemplateMessage(RED_REPORTS, TEMPLATE.sitrep, {
+          force: tid('red'),
+          summary: `Holding ${run}`,
+          readiness: 80,
+          asOf: '2026-10-24',
+        })
+        expect(sent.ok).toBe(true)
+        await expect
+          .poll(
+            () =>
+              (watcher.roomView(RED_REPORTS).data?.messages ?? []).flatMap((m) =>
+                m.kind === 'message' && m.body.type === 'template'
+                  ? [watcher.checkTemplate(m)?.status]
+                  : [],
+              ),
+            { timeout: 10_000 },
+          )
+          .toEqual(['valid'])
+        await Promise.all([xo.logout(), co.logout(), watcher.logout()])
+        await closeAll()
+      })
+
+      it('refuses a change to a locked template’s fields, and plans no step', async () => {
+        const design = templatedThirdDesign()
+        const changed = {
+          ...design,
+          templates: design.templates.map((t) =>
+            t.id === TEMPLATE.contact ? { ...t, schema: { ...t.schema, required: ['grid'] } } : t,
+          ),
+        }
+        const refused = await plan(changed)
+        expect(refused.steps).toEqual([])
+        expect(refused.errors.map((e) => e.kind)).toEqual(['template-locked-changed'])
+        const result = await apply(refused)
+        expect(result.failed?.stepId).toBe('error:template-locked-changed')
+      })
+
+      it('removes an unlocked template the design drops, then plans nothing', async () => {
+        const design = templatedThirdDesign()
+        const draft = {
+          ...design,
+          templates: [...design.templates, spareTemplate()],
+        }
+        expect((await apply(await plan(draft))).ok).toBe(true)
+        const spare = must(await theOps().session.pubsub.getItems('templates'), 'read').find(
+          (i) => i.id === SPARE,
+        )
+        expect(JSON.parse(spare?.payload ?? '{}')).not.toHaveProperty('lockedAt')
+        const dropped = await plan(design)
+        expect(dropped.steps.map((s) => s.id)).toContain(`retract:templates:${SPARE}`)
+        expect((await apply(dropped)).ok).toBe(true)
+        const ids = must(await theOps().session.pubsub.getItems('templates'), 'read').map(
+          (i) => i.id,
+        )
+        expect(ids).not.toContain(SPARE)
+        expect((await plan(design)).steps).toEqual([])
+      })
+
       afterAll(closeAll)
     })
 

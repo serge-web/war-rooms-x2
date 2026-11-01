@@ -8,13 +8,14 @@
 //    subscribed, then its affiliation removed without its subscription (R-A); Blue Observer given
 //    voice back by a moderator while it is in Blue HQ (R-B); an extra account; Blue's objectives
 //    node opened to `open` access; Red's force document changed; White Cell made a publisher of
-//    White's objectives, as before WP 3.5, and its own item published there (D21);
+//    White's objectives, as before WP 3.5, and its own item published there (D21); a template
+//    the design does not have published to `templates` (Annex A);
 // 3. the audit finds each, with its full JID for the subscription and the stored role through
 //    the vault login for the observer;
 // 4. repairing everything (destructive items confirmed) leaves a clean re-audit, and the effects
 //    hold for players; repairing again changes nothing (idempotent).
 import { nodeName } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell, tid } from '@wrx/schemas/fixtures'
+import { sampleDesignWithWhiteCell, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -48,6 +49,9 @@ export interface AuditBackend {
 }
 
 const STRAY = 'stray-account'
+
+/** A template the design does not have, as drift (Annex A). */
+const STRAY_TEMPLATE = { ...sampleTemplates()[0], id: tid('stray-template'), name: 'Stray' }
 
 function must<T>(
   result:
@@ -291,6 +295,15 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           ),
           'White Cell writes its own objectives item',
         )
+        // A template the design does not have, published by hand (Annex A).
+        must(
+          await session.pubsub.publish(
+            'templates',
+            STRAY_TEMPLATE.id,
+            JSON.stringify(STRAY_TEMPLATE),
+          ),
+          'publish a stray template',
+        )
         drifted = await audit()
       }, 300_000)
 
@@ -360,6 +373,14 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         })
       })
 
+      it('finds the template the design does not have (Annex A)', () => {
+        expect(item(`stray-items:templates:${STRAY_TEMPLATE.id}`)).toMatchObject({
+          severity: 'low',
+          destructive: true,
+          repair: [{ type: 'retract-item', node: 'templates', itemId: STRAY_TEMPLATE.id }],
+        })
+      })
+
       it('finds the changed document', () => {
         expect(item(`document:${nodeName.force(tid('red'))}:current`)).toMatchObject({
           found: 'differs',
@@ -375,6 +396,7 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           'node-config',
           'room-config',
           'room-config',
+          'stray-items',
           'stray-items',
           'subscription',
           'voice',
@@ -451,6 +473,13 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           nodeName.force(tid('red')),
         )
         expect(JSON.parse(items[0]?.payload ?? '{}')).toMatchObject({ name: 'Red' })
+      })
+
+      it('the stray template is gone (Annex A)', async () => {
+        const ids = must(await theOps().session.pubsub.getItems('templates'), 'templates').map(
+          (i) => i.id,
+        )
+        expect(ids).not.toContain(STRAY_TEMPLATE.id)
       })
 
       it('White’s objectives hold the admin’s item only, and White Cell cannot publish (D21)', async () => {

@@ -3,6 +3,7 @@
 // game's PubSub nodes. Every name carries a
 // per-run tag, so runs never meet each other's state and a failed run leaves nothing that a later
 // run reads. Provisioning itself goes through the admin API under test (spike S4).
+import { TEMPLATE_LIMITS } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig, Session } from '@wrx/transport'
 import { json, must } from './harness.ts'
@@ -24,6 +25,14 @@ export const WHITELIST_NODE: NodeConfig = Object.freeze({
   accessModel: 'whitelist',
   publishModel: 'publishers',
   maxItems: 10,
+  notifyRetract: true,
+})
+
+/** Annex A: `templates` as the admin tooling creates it, one item per template (TPL-1). */
+export const TEMPLATES_NODE: NodeConfig = Object.freeze({
+  accessModel: 'whitelist',
+  publishModel: 'publishers',
+  maxItems: TEMPLATE_LIMITS.templates,
   notifyRetract: true,
 })
 
@@ -67,6 +76,8 @@ export interface Fixture {
     readonly rolesBlueCo: string
     readonly objectivesBlue: string
     readonly objectivesRed: string
+    /** Message templates: one item per template, read by every role (Annex A, TPL-1). */
+    readonly templates: string
   }
 }
 
@@ -97,6 +108,7 @@ export function makeFixture(domain: string): Fixture {
       rolesBlueCo: `${tag}:roles:blue-co`,
       objectivesBlue: `${tag}:objectives:blue`,
       objectivesRed: `${tag}:objectives:red`,
+      templates: `${tag}:templates`,
     },
   }
 }
@@ -120,6 +132,7 @@ export function plan(fx: Fixture) {
       { node: fx.nodes.gameState, config: WHITELIST_NODE, readers: everyRole, publishers: [] },
       { node: fx.nodes.forcesBlue, config: WHITELIST_NODE, readers: everyRole, publishers: [] },
       { node: fx.nodes.rolesBlueCo, config: WHITELIST_NODE, readers: everyRole, publishers: [] },
+      { node: fx.nodes.templates, config: TEMPLATES_NODE, readers: everyRole, publishers: [] },
       {
         node: fx.nodes.objectivesBlue,
         config: WHITELIST_NODE,
