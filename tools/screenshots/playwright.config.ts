@@ -26,6 +26,16 @@ export default defineConfig({
     timezoneId: 'UTC',
     colorScheme: 'light',
     reducedMotion: 'reduce',
+    // Software raster with whole-tile repaints: GPU and partial raster let anti-aliased edges
+    // (a rounded select's corners) differ by one colour step between runs of the full set.
+    launchOptions: {
+      args: [
+        '--disable-gpu',
+        '--disable-partial-raster',
+        '--disable-skia-runtime-opts',
+        '--force-color-profile=srgb',
+      ],
+    },
   },
   webServer: {
     command: `node tools/site/serve.ts ${dist} ${port} ${base}`,
