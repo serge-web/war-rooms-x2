@@ -26,7 +26,7 @@ Not for the public site (DOC-2). An independent read of the code as it stands af
 | V2 | medium | The audit audited a design the planner refuses, so its repairs could still rename an account (create the new, offer the old for deletion) | Fixed |
 | V3 | medium | A role of a new GUID could take a published role's login name, or a deleted role's from the server's records; the old messages then showed as the new role's, and the planner's safety-net `retired` record of a live login name blocked the draft for good | Fixed |
 | V4 | low | No operator guidance that the umpire plays with the server-admin login; restore unpacks the backup readable by other host users | Fixed (documented) |
-| V5 | medium | No limit on failed logins: the admin password can be guessed online over the exercise network | Accepted, with reason; owner may decide |
+| V5 | medium | No limit on failed logins: the admin password can be guessed online over the exercise network | Accepted for v1 by the product owner (Nov 1, 2026); revisit after v1 |
 | V6 | low | The admin's game view joining a room whose MUC room is gone creates it (locked) | Accepted (carried from WP 2.11) |
 | V7 | low | `retired` keeps 1000 items; past that ejabberd drops records and publish never converges | Accepted |
 | V8 | low | An anonymous session learns the number of rooms (RSM count) and of game nodes; now also that `directory` exists | Accepted (R17, ADM-42) |
@@ -48,7 +48,9 @@ No finding is rated high or critical, so nothing waits on the product owner's ac
 - The umpire's login is the server admin (D8). The game view runs no admin command by itself (checked below), but the browser it runs in holds a login that can change or delete the game. `ops/README.md` now says to play the umpire on a machine only the umpire uses, with a long admin password, and to log out after a session.
 - `restore.sh` makes the unpacked backup (password hashes, messages) world-readable in its temporary directory for the length of the restore, because ejabberd's container user must read it and the container runs with every capability dropped. The guide now says to restore on a host with no other users logged in. Changing it needs a capability or a uid mapping on the restore container; not worth the risk to a tested path for v1.
 
-### V5 (medium): online guessing of passwords. Accepted, owner may decide.
+### V5 (medium): online guessing of passwords. Accepted for v1 by the product owner.
+
+Owner decision (Nov 1, 2026): accepted for v1 on the grounds below (closed network, random role passwords, 12-character admin minimum); revisit after v1.
 
 `mod_fail2ban` is not loaded (the spike removed it), and nothing else limits failed logins, so anyone on the exercise network can try admin passwords as fast as SCRAM allows. Why accepted for v1: role passwords are random, about 79 bits, so guessing them is not practical; the admin password is chosen by the operator with a 12-character minimum (`offline-install.sh`), and the guide now asks for more; the network is closed. Why not fixed here: ejabberd bans by source address, and in the reference deployment that address is not reliable. With Docker's userland proxy (its default for some setups) every browser arrives from one address, so one player mistyping a password 20 times would lock everyone out of the exercise for the ban's length. Recommendation: decide with the real-hardware check (WP 3.3), once the host's networking is known; if each browser's address reaches ejabberd, enable `mod_fail2ban` with loopback allowed and a short ban.
 
