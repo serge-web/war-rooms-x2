@@ -60,7 +60,8 @@ jobs:
       - name: Site size (DOC-14)
         run: node tools/site/size-report.ts site/dist --title "Site build size"
       - run: pnpm --filter @wrx/web exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - name: App e2e in Chromium, with the performance guard (NFR-11, NFR-12) and axe (NFR-14)
+        run: pnpm e2e
         env:
           CI: 'true'
       - name: Real-server build has no external references (NFR-7, DOC-11)
@@ -94,6 +95,42 @@ jobs:
         with:
           name: site-playwright-report
           path: site/playwright-report
+          retention-days: 7
+
+  # NFR-13: the app's e2e suite in the other browsers, which only CI installs (locally there is
+  # Chromium alone). Firefox is required (a SHALL); WebKit, for Safari (a SHOULD), is advisory:
+  # its failures show on the run but do not fail it. The performance tests skip here: their
+  # timing APIs and recorded numbers are Chromium's (build-e2e runs them).
+  e2e-browsers:
+    name: App e2e in ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.advisory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: firefox
+            advisory: false
+          - browser: webkit
+            advisory: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @wrx/web exec playwright install --with-deps ${{ matrix.browser }}
+      - run: pnpm e2e
+        env:
+          CI: 'true'
+          WRX_E2E_BROWSERS: ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: apps/web/playwright-report
           retention-days: 7
 
   # The ejabberd contract-suite job (NFR-16, NFR-22) joins this workflow in WP 1.2, when the
