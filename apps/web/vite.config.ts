@@ -19,6 +19,24 @@ function markedXmppAutolink(): Plugin {
 }
 
 /**
+ * RJSF's format-to-widget table (`@rjsf/utils` getWidget) maps the string format `password` to
+ * `PasswordWidget`, text the site's secret scan (NFR-1, `password-literal`) rightly flags. The
+ * template profile allows only the formats `date` and `date-time` (WP 4.1), so the template
+ * preview never looks that entry up: this drops it, and the scan stays strict.
+ */
+function rjsfPasswordFormat(): Plugin {
+  return {
+    name: 'wrx-rjsf-password-format',
+    transform(code, id) {
+      if (!/[\\/]@rjsf[\\/]utils[\\/]/.test(id) || !code.includes("password: 'PasswordWidget',")) {
+        return null
+      }
+      return { code: code.replace("password: 'PasswordWidget',", ''), map: null }
+    },
+  }
+}
+
+/**
  * The Content-Security-Policy of a build (security review F7), as a `<meta>` tag in the built
  * index.html; deploy/README.md gives the same policy as a header, with the parts a meta tag
  * cannot carry. Scripts, workers, styles, fonts and images come only from the build itself:
@@ -80,7 +98,7 @@ function cspMeta(server: boolean): Plugin {
 export default defineConfig(({ mode }) => {
   const server = mode === 'server'
   return {
-    plugins: [react(), markedXmppAutolink(), cspMeta(server)],
+    plugins: [react(), markedXmppAutolink(), rjsfPasswordFormat(), cspMeta(server)],
     // Relative asset URLs, so one build runs under any base path: PR previews, the demo and
     // snapshots on GitHub Pages, or a customer's static host (DOC-11, NFR-8).
     base: './',

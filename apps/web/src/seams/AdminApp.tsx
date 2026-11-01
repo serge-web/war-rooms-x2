@@ -17,7 +17,7 @@ import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { DEMO_VAULT_PASSPHRASE, demoSeed } from '@wrx/mock-server'
 import { AppBarCore } from '@wrx/player-ui'
-import { designFileSchema } from '@wrx/schemas'
+import { designFileSchema, withTemplateLocks } from '@wrx/schemas'
 import { Button } from '@wrx/ui'
 import { useState } from 'react'
 import { ROUTE_HREFS } from '../router.ts'
@@ -36,10 +36,13 @@ export function AdminApp({
     mockHost?.names.storageKey(name) ?? `wrx1:${name}:${connection.endpoint.domain}`
   const [store] = useState(() => {
     // The mock starts provisioned and published with the demo seed, so its draft starts from
-    // the same design, its roles already published.
+    // the same design, its roles already published and the templates its rooms offer locked
+    // (TD6), as the seed's server holds them.
     const initial = (): Draft =>
       backendId === 'mock'
-        ? markPublished(draftFromDesign(designFileSchema.parse(demoSeed().design)))
+        ? markPublished(
+            draftFromDesign(withTemplateLocks(designFileSchema.parse(demoSeed().design), [])),
+          )
         : createDraft({ name: 'New exercise' })
     return createBrowserDraftStore(keyFor('admin-draft'), { initial })
   })
