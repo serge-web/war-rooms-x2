@@ -169,7 +169,10 @@
   resize: vertical;
 }
 
+/* A date field's focus moves through its parts and the browser's calendar button inside it,
+   where :focus-visible does not reach the field itself. */
 .wrx-tfield__input:focus-visible,
+.wrx-tfield__date:focus-within,
 .wrx-tfield__slider:focus-visible,
 .wrx-tfield__check input:focus-visible,
 .wrx-tfield__radio input:focus-visible {

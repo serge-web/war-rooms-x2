@@ -291,6 +291,8 @@ function RangeWidget(props: Props) {
     <div className="wrx-tfield__range">
       <input
         {...base}
+        // ARIA gives a slider no `aria-required`; the number field beside it carries it.
+        aria-required={undefined}
         type="range"
         className="wrx-tfield__slider"
         min={min}
