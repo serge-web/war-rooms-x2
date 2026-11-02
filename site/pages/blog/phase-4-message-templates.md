@@ -35,12 +35,11 @@ The plan for Phase 4 ran as drawn: four work packages, none added or split.
 
 Phase 4 was built on recommended answers to questions the product owner deferred. These are the ones a user sees, for the owner to confirm or change:
 
-- **Templates are not private to a force.** Every role can read every template, so a template's name and fields should not give away one force's plans.
 - **Unticked yes/no fields.** An unticked box is sent, and shown, as "No", not left out.
 - **The form's controls.** The template form uses the browser's own drop-downs and date pickers, styled with the app's colours, rather than the app's own drop-down component.
 - **Image and asset pickers.** Not built. They wait for the decision on how images are stored, and for the force assets of the map channel.
 
-Five are already decided. A role's own templates add to its force's; the umpire and White Force roles who are not observers may use every template a room offers, and observers none. A template locks when a published room first offers it, even if it is never used, because use cannot be seen reliably. A locked template may be removed after a confirmation, and its messages then show as plain text, with every value. A message whose template the room no longer offers its sender stays a card with a note, so changing a room's settings does not rewrite its history. And a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
+Six are already decided. Templates are not private to a force: every role can read every template, so a template's name and fields should not give away one force's plans. A role's own templates add to its force's; the umpire and White Force roles who are not observers may use every template a room offers, and observers none. A template locks when a published room first offers it, even if it is never used, because use cannot be seen reliably. A locked template may be removed after a confirmation, and its messages then show as plain text, with every value. A message whose template the room no longer offers its sender stays a card with a note, so changing a room's settings does not rewrite its history. And a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
 
 ## Next
 
