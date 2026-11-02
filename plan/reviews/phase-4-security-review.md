@@ -14,13 +14,13 @@ This is an independent read of the code at the head of the WP 4.4 branch, not a 
 | Low | A known limit of the design (D2: the server enforces membership and voice only), or harm limited to the actor's own client |
 | Info | No harm found; recorded so the next reviewer need not re-derive it |
 
-The product owner decides on anything rated High or Critical. H1 is fixed and tested below, and is flagged for the owner to confirm the fix and the rating; nothing here is accepted at High on the owner's behalf.
+The product owner decides on anything rated High or Critical. H1 is fixed and tested below; the product owner confirmed the High rating and the fix on Nov 2, 2026.
 
 ## Summary
 
 | Id | Finding | Rating | State |
 | --- | --- | --- | --- |
-| H1 | An over-long value made every receiver run the field's pattern on 8,000 characters: minutes of main-thread work per message | High | Fixed, tested; **for the owner** |
+| H1 | An over-long value made every receiver run the field's pattern on 8,000 characters: minutes of main-thread work per message | High | Fixed, tested; rating and fix confirmed by the owner (Nov 2, 2026) |
 | M1 | A lock fixes the schema only: the admin can relabel a locked template's fields (`ui:title`), reorder them, and rename the template, which changes how past messages read | Medium | Fixed (Nov 2, 2026): the owner chose to lock labels, order and name too; planner, audit and editor refuse them, with tests |
 | M2 | Removing a locked template turns its messages into plain text for good | Medium | Recorded: deliberate, confirmed one by one; the owner's pending answer |
 | L1 | A modified client can send a template its role is not offered, or free text in a templates-only room | Low | Accepted by design (D2, T-R1); the first is marked, the second cannot be |

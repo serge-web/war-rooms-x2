@@ -27,7 +27,7 @@ A room of 2,000 templated messages, using every field type, is measured on every
 
 Every new screen passes the automated WCAG 2.2 AA checks, and every field type can be filled and sent with the keyboard alone. The browser checks on Safari's engine found the composer's buttons covering part of a field at rest; the buttons now sit below the form.
 
-Before this gate, a reviewer read the template code again, independently of the people who wrote it. It found one problem rated high: a message with an over-long value could keep every other client in the room busy for minutes. It is fixed and covered by a test; its rating and fix await the product owner's confirmation. Everything else is either fixed with a test or recorded with its reason.
+Before this gate, a reviewer read the template code again, independently of the people who wrote it. It found one problem rated high: a message with an over-long value could keep every other client in the room busy for minutes. It is fixed and covered by a test; the product owner has confirmed the rating and the fix. Everything else is either fixed with a test or recorded with its reason.
 
 The plan for Phase 4 ran as drawn: four work packages, none added or split.
 
