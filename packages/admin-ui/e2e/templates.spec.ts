@@ -265,6 +265,9 @@ test(
     await open(page, 'Templates')
     await expect(page.getByRole('list', { name: 'Templates' })).toContainText('Locked')
     await expect(page.getByText(/A published room has offered this template/)).toBeVisible()
+    // The lock covers the name too (M1); the description stays editable.
+    await expect(page.getByLabel('Name', { exact: true })).toHaveAttribute('readonly', '')
+    await expect(page.getByLabel('Description', { exact: true })).toBeEditable()
     await expect(
       page.getByRole('group', { name: /^Text: Callsign/ }).getByLabel('Label'),
     ).toBeDisabled()

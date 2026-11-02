@@ -1003,22 +1003,49 @@ describe('message templates (Annex A, WP 4.1)', () => {
     expect(planPublish(later, view).steps).toEqual([])
   })
 
-  it('republishes a locked template whose name changes, keeping its lock', () => {
+  it('republishes a locked template whose description changes, keeping its lock', () => {
     const design = templated()
     const view = publishedView(design)
-    const renamed = {
+    const described = {
       ...design,
       templates: design.templates.map((t) =>
-        t.id === TEMPLATE.sitrep ? { ...t, name: 'SITREP' } : t,
+        t.id === TEMPLATE.sitrep ? { ...t, description: 'Daily, by 18:00' } : t,
       ),
     }
-    const plan = planPublish(renamed, view)
+    const plan = planPublish(described, view)
     expect(plan.errors).toEqual([])
     const action = step(plan, `doc:${TEMPLATES}:${TEMPLATE.sitrep}`).action
     const published =
       action.type === 'publish' ? (JSON.parse(action.payload) as Template) : undefined
-    expect(published?.name).toBe('SITREP')
+    expect(published?.description).toBe('Daily, by 18:00')
     expect(published?.lockedAt).toBe(design.exportedAt)
+  })
+
+  it.each([
+    ['name', (t: Template): Template => ({ ...t, name: 'SITREP' })],
+    ['labels', (t: Template): Template => ({ ...t, uiSchema: { ...t.uiSchema, 'ui:title': 'X' } })],
+    [
+      'field order',
+      (t: Template): Template => ({
+        ...t,
+        uiSchema: {
+          ...t.uiSchema,
+          'ui:order': [...Object.keys(t.schema.properties ?? {})].reverse(),
+        },
+      }),
+    ],
+  ])('refuses a design that changes a locked template’s %s (M1)', (_, change) => {
+    const design = templated()
+    const view = publishedView(design)
+    const changed = {
+      ...design,
+      templates: design.templates.map((t) => (t.id === TEMPLATE.sitrep ? change(t) : t)),
+    }
+    const plan = planPublish(changed, view)
+    expect(plan.steps).toEqual([])
+    expect(plan.errors).toEqual([
+      expect.objectContaining({ kind: 'template-locked-changed', templateId: TEMPLATE.sitrep }),
+    ])
   })
 
   it('refuses a design that changes a locked template’s fields, with the copy remedy', () => {

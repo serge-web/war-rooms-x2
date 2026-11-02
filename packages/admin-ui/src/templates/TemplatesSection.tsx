@@ -177,9 +177,9 @@ function TemplateForm({
       <IdLine id={template.id} />
       {locked && (
         <Notice tone="info" title="Locked.">
-          A published room has offered this template, so messages may use it: its fields are fixed
-          (TPL-4). You can still rename it. To change its fields, copy it to a new template and
-          offer the copy instead.{' '}
+          A published room has offered this template, so messages may use it: its fields, labels and
+          name are fixed, so past messages read as they did (TPL-4). You can still change its
+          description. To change the rest, copy it to a new template and offer the copy instead.{' '}
           <Button variant="primary" onClick={copy}>
             Copy to new template
           </Button>
@@ -190,6 +190,7 @@ function TemplateForm({
         value={template.name}
         maxLength={LIMITS.nameChars}
         hint="Shown in the composer’s drop-down and on each message card."
+        readOnly={locked}
         issues={validation.at(`${at}.name`)}
         onChange={(next) => {
           onChange(updateTemplate(draft, template.id, { name: next }))

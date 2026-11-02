@@ -578,22 +578,23 @@ export function addTemplate(
 }
 
 /**
- * Changes a template. A locked template keeps its schema: a patch that changes it is ignored
- * (the planner would refuse it, `template-locked-changed`); copy it to a new template instead.
- * Its name, description and UI schema may change (WP 4.1: a lock covers the schema only).
+ * Changes a template. A locked template keeps its schema, UI schema and name: a patch that
+ * changes them is ignored (the planner would refuse it, `template-locked-changed`); copy it to a
+ * new template instead. Its description may change (product owner, Nov 2, 2026; M1).
  */
 export function updateTemplate(draft: Draft, id: string, patch: TemplatePatch): Draft {
   const template = draft.design.templates.find((t) => t.id === id)
   if (template === undefined) return draft
   const next: Template = { ...template }
-  if (patch.name !== undefined) next.name = patch.name
+  const locked = isTemplateLocked(template)
+  if (patch.name !== undefined && !locked) next.name = patch.name
   if (patch.description !== undefined) {
     if (patch.description === '') delete next.description
     else next.description = patch.description
   }
-  if (patch.schema !== undefined && !isTemplateLocked(template)) next.schema = { ...patch.schema }
-  if (patch.uiSchema === null) delete next.uiSchema
-  else if (patch.uiSchema !== undefined) next.uiSchema = { ...patch.uiSchema }
+  if (patch.schema !== undefined && !locked) next.schema = { ...patch.schema }
+  if (!locked && patch.uiSchema === null) delete next.uiSchema
+  else if (!locked && patch.uiSchema !== undefined) next.uiSchema = { ...patch.uiSchema }
   return withDesign(draft, {
     templates: draft.design.templates.map((t) => (t.id === id ? next : t)),
   })

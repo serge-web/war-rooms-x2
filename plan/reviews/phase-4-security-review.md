@@ -21,7 +21,7 @@ The product owner decides on anything rated High or Critical. H1 is fixed and te
 | Id | Finding | Rating | State |
 | --- | --- | --- | --- |
 | H1 | An over-long value made every receiver run the field's pattern on 8,000 characters: minutes of main-thread work per message | High | Fixed, tested; **for the owner** |
-| M1 | A lock fixes the schema only: the admin can relabel a locked template's fields (`ui:title`), reorder them, and rename the template, which changes how past messages read | Medium | Recorded: depends on the owner's pending answer on what a lock covers |
+| M1 | A lock fixes the schema only: the admin can relabel a locked template's fields (`ui:title`), reorder them, and rename the template, which changes how past messages read | Medium | Fixed (Nov 2, 2026): the owner chose to lock labels, order and name too; planner, audit and editor refuse them, with tests |
 | M2 | Removing a locked template turns its messages into plain text for good | Medium | Recorded: deliberate, confirmed one by one; the owner's pending answer |
 | L1 | A modified client can send a template its role is not offered, or free text in a templates-only room | Low | Accepted by design (D2, T-R1); the first is marked, the second cannot be |
 | L2 | A modified client can use a template no published room offers, so it is not locked, and a later edit by the admin changes how that message reads | Low | Recorded |
@@ -50,13 +50,13 @@ The product owner decides on anything rated High or Critical. H1 is fixed and te
 
 **Residual.** Patterns and formats now run on at most 200 and 40 characters respectively, which the profile's existing test bounds. **For the owner:** confirm the rating and the fix.
 
-### M1: a lock fixes the schema only (Medium, recorded)
+### M1: a lock fixes the schema only (Medium, fixed)
 
 **What.** `templateLockErrors` (`packages/admin-ops/src/publish/plan.ts`) refuses a change to a locked template's `schema`, compared as canonical JSON. The `uiSchema`, `name` and `description` stay editable. Cards take each field's label from `ui:title` before the schema's `title` (`fieldLabel`, `packages/player-ui/src/templates/card.ts`) and their order from `ui:order`. So after a publish, the admin can relabel the fields of a locked template, and every past message's card reads differently, for example "Approve the strike: Yes" becoming "Cancel the strike: Yes". The values and schema titles are unchanged, but nothing on the card shows that the labels changed.
 
 **Who.** The admin only (TD2): a trusted actor who also designs the game. It is still a quiet way to change how the game's record reads, which matters for an after-action review.
 
-**Why not fixed here.** What a lock covers is one of the owner's pending decisions. The cheap fix, if the owner wants it, is to compare each field's `ui:title` (and `ui:order`, if order matters) with the schema in `templateLockErrors`, and make them read only in the editor.
+**Fixed.** The product owner chose (Nov 2, 2026) to lock labels, order and name as well. `templateLockErrors` now compares the name and the whole `uiSchema` (absent equals empty) as well as the schema; the audit uses the same check; `updateTemplate` ignores those changes on a locked template and the editor shows the name read only. Tests: `plan.test.ts` (name, labels, order refused; description allowed), `templates.test.ts` (draft), the admin-ui e2e (name read only). **Before the fix:** what a lock covers was one of the owner's pending decisions. The cheap fix, if the owner wants it, is to compare each field's `ui:title` (and `ui:order`, if order matters) with the schema in `templateLockErrors`, and make them read only in the editor.
 
 ### M2: removing a locked template (Medium, recorded)
 

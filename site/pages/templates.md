@@ -55,7 +55,7 @@ Each chat room's settings say whether free text is allowed, and which templates 
 
 ## Publishing and locking
 
-Templates are published with the rest of the game. Once a published room has offered a template, players may have used it, so its fields are locked: the editor shows it read only, and publishing refuses a change to its fields. To change it, the admin copies it to a new template, edits the copy and offers the copy instead. Old messages keep showing with the template they were sent with. A locked template's name and description can still change.
+Templates are published with the rest of the game. Once a published room has offered a template, players may have used it, so it is locked: its fields, their labels and order, and its name are fixed. The editor shows it read only, and publishing refuses a change to any of them. To change it, the admin copies it to a new template, edits the copy and offers the copy instead. Old messages keep showing with the template they were sent with. Only a locked template's description can still change.
 
 ## Sending and reading
 

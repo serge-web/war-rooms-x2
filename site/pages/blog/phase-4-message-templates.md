@@ -27,7 +27,7 @@ A room of 2,000 templated messages, using every field type, is measured on every
 
 Every new screen passes the automated WCAG 2.2 AA checks, and every field type can be filled and sent with the keyboard alone. The browser checks on Safari's engine found the composer's buttons covering part of a field at rest; the buttons now sit below the form.
 
-Before this gate, a reviewer read the template code again, independently of the people who wrote it. It found one problem rated high: a message with an over-long value could keep every other client in the room busy for minutes. It is fixed and covered by a test, and the product owner confirms the fix. Everything else is either fixed with a test or recorded with its reason.
+Before this gate, a reviewer read the template code again, independently of the people who wrote it. It found one problem rated high: a message with an over-long value could keep every other client in the room busy for minutes. It is fixed and covered by a test; its rating and fix await the product owner's confirmation. Everything else is either fixed with a test or recorded with its reason.
 
 The plan for Phase 4 ran as drawn: four work packages, none added or split.
 
@@ -36,7 +36,6 @@ The plan for Phase 4 ran as drawn: four work packages, none added or split.
 Phase 4 was built on recommended answers to questions the product owner deferred. These are the ones a user sees, for the owner to confirm or change:
 
 - **When a template locks.** A template locks when a published room first offers it, not when a message first uses it, because which templates have been used cannot be seen reliably. A template offered once and never used is locked too.
-- **What a lock covers.** A lock fixes a template's fields. Its name, description, field labels set in the display options, and field order can still change, and old cards then show the new ones.
 - **Removing a locked template.** Allowed, after a confirmation for each one. Messages that used it then show as plain text, with every value, from then on.
 - **Templates no longer offered.** A message whose template the room no longer offers its sender shows as a card with a note, not as plain text as the specification first said, so changing a room's settings does not rewrite its history.
 - **Who gets which templates.** A role's own templates add to its force's. The umpire and White Force roles who are not observers may use every template a room offers; observers none.
@@ -44,6 +43,8 @@ Phase 4 was built on recommended answers to questions the product owner deferred
 - **Unticked yes/no fields.** An unticked box is sent, and shown, as "No", not left out.
 - **The form's controls.** The template form uses the browser's own drop-downs and date pickers, styled with the app's colours, rather than the app's own drop-down component.
 - **Image and asset pickers.** Not built. They wait for the decision on how images are stored, and for the force assets of the map channel.
+
+One is already decided: a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
 
 ## Next
 

@@ -193,8 +193,9 @@ export type PlanError =
       readonly message: string
     }
   /**
-   * `template-locked-changed` (TD6, TPL-4): the design changes the schema of a template the
-   * server holds locked, which messages may already use. Copy it to a new template instead.
+   * `template-locked-changed` (TD6, TPL-4): the design changes the schema, UI schema (labels,
+   * order) or name of a template the server holds locked, which messages may already use, so
+   * past cards would read differently. Copy it to a new template instead.
    */
   | {
       readonly kind: 'template-locked-changed'
@@ -418,7 +419,8 @@ export function publishedDesign(view: ServerView): PublishedDesign {
 
 /**
  * Template changes the design may not make (TD6, TPL-4, provisional answer 2): a template the
- * server holds locked keeps its schema. Locks come from the server, since a lock set by another
+ * server holds locked keeps its schema, UI schema and name, so a past message's card reads as it
+ * did when sent (product owner, Nov 2, 2026; review finding M1). Its description may change. Locks come from the server, since a lock set by another
  * browser's publish is not in this draft. Removing a locked template is allowed, confirmed one
  * by one like a destroyed room (`template-removed`).
  */
@@ -431,16 +433,28 @@ export function templateLockErrors(
     if (before.lockedAt === undefined) continue
     const now = design.templates.find((t) => t.id === before.id)
     // Dropping it is not refused: it is a confirmed removal (`template-removed`).
-    if (now !== undefined && canonicalJson(now.schema) !== canonicalJson(before.schema)) {
+    if (now !== undefined && lockedPartsDiffer(now, before)) {
       errors.push({
         kind: 'template-locked-changed',
         templateId: before.id,
         name: now.name,
-        message: `The template ${before.name} is locked: a published room has offered it, so messages may use it, and the design changes its fields. Copy it to a new template and change the copy, then offer the copy in its rooms (TD6, TPL-4).`,
+        message: `The template ${before.name} is locked: a published room has offered it, so messages may use it, and the design changes its fields, labels or name. Copy it to a new template and change the copy, then offer the copy in its rooms (TD6, TPL-4).`,
       })
     }
   }
   return errors
+}
+
+/** The parts a lock fixes: schema, UI schema (absent and empty are the same) and name. */
+function lockedPartsDiffer(
+  now: Pick<Template, 'schema' | 'uiSchema' | 'name'>,
+  before: Pick<Template, 'schema' | 'uiSchema' | 'name'>,
+): boolean {
+  return (
+    now.name !== before.name ||
+    canonicalJson(now.schema) !== canonicalJson(before.schema) ||
+    canonicalJson(now.uiSchema ?? {}) !== canonicalJson(before.uiSchema ?? {})
+  )
 }
 
 /** JSON with object keys sorted, so equal documents compare equal however they were written. */

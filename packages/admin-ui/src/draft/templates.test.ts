@@ -48,7 +48,7 @@ describe('templates in the draft', () => {
     expect(designFileSchema.safeParse(added.draft.design).success).toBe(false)
   })
 
-  it('changes a template; a locked one keeps its schema', () => {
+  it('changes a template; a locked one keeps its schema, UI schema and name (M1)', () => {
     const schema = { type: 'object', properties: { a: { type: 'boolean' } } }
     const free = updateTemplate(templated(), TEMPLATE.contact, { name: 'Contact', schema })
     expect(free.design.templates[1]).toMatchObject({ name: 'Contact', schema })
@@ -60,11 +60,12 @@ describe('templates in the draft', () => {
       schema,
       uiSchema: null,
     })
+    const before = draft.design.templates[0]!
     const sitrep = next.design.templates[0]!
-    expect(sitrep.name).toBe('Sitrep')
+    expect(sitrep.name).toBe(before.name)
     expect(sitrep.description).toBeUndefined()
-    expect(sitrep.uiSchema).toBeUndefined()
-    expect(sitrep.schema).toEqual(draft.design.templates[0]!.schema)
+    expect(sitrep.uiSchema).toEqual(before.uiSchema)
+    expect(sitrep.schema).toEqual(before.schema)
   })
 
   it('copies a locked template to a new, unlocked one', () => {
