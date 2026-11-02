@@ -61,6 +61,8 @@ Templates are published with the rest of the game. Once a published room has off
 
 When a room offers templates, the composer gets a **Message type** drop-down: free text, if the room allows it, and each template the player's role may use. When Send is pressed, any field that does not fit is marked with the reason, and nothing is sent until every field fits. Values not yet sent are kept if the player switches between types or the message is refused, as unsent text is. In a room that takes only templates and offers a role none, the composer says so.
 
+Like the plain text box, the composer can be collapsed to a slim bar at the foot of the room, for players who read a room but rarely write in it. Collapsing loses nothing: the chosen type and the form's values are kept, and the bar says **Draft not sent** while something is waiting. Each room remembers whether it was collapsed, with the rest of the player's layout.
+
 Recipients see a card: the template's name, then each filled field's label and value, in the form's order. Everything on a card is plain text.
 
 Every client checks every templated message against its template when it shows it:

@@ -252,6 +252,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-43 Messages SHALL display as cards with a header row (sender role, force colour, time) above the text; consecutive messages from the same sender SHALL share one header.
 - PLY-44 The composer SHALL sit at the bottom of the panel and grow as text is entered; Enter sends, Shift+Enter inserts a new line.
 - PLY-45 Message times SHALL show local wall-clock time only, with a date divider line between messages from different days.
+- PLY-54 The composer of every chat room, free text or templated, SHALL collapse to a slim bar at the foot of the panel and expand again, from a button that exposes its state; collapsed, the message list takes the space. Collapsing SHALL NOT lose a draft, form values or a refused post (PLY-33), and the bar SHALL say when one is waiting. Each room's state SHALL be kept in the saved layout (PLY-5); with none saved, and after Reset layout (PLY-42), the composer is expanded for a role that may post and collapsed for observers and read-only participants (PLY-12). (Product-owner request, Nov 2, 2026.)
 
 **Welcome page**
 
@@ -730,6 +731,10 @@ Changes from Phase 4, message templates (WP 4.4, Nov 2, 2026):
 
 - Annex A: built, except the image and asset pickers. Its heading and introduction say so, and an "As built" part records the six provisional answers it rests on (leaf node, lock on publish, card with a warning for a template no longer offered, role entries add, templates not confidential, no image picker) and what was built. The answers wait for the product owner at gate G4.
 - §12: new user scenario SC-10, a templated room, on both backends.
+
+Changes from the product owner's request of Nov 2, 2026:
+
+- New PLY-54: the composer, free text or templated, collapses to a bar, remembered per room. Some users only read a room, and keep its message entry collapsed.
 
 ## Annex A. Message templates (built in Phase 4)
 

@@ -64,7 +64,7 @@ There are 31 work packages, including the spike S14, which is groundwork for aft
 | 2.3 | Publish and provisioning: diff, progress, live changes, reset, export/import, credentials sheet | ADM-10–17, 25–26, NFR-4, NFR-6 | 2.1, 2.2 |
 | 2.4 | Player shell: login, session, reconnect, forced logout, welcome page, empty states | PLY-1–3, 27–32, 46–48, 50–52, NFR-8–9 | 1.6 |
 | 2.5 | Workspace: dockable layout, persistence, reconciliation, default layout, reset | PLY-4–6, 8, 40–42, ARC-9 | 0.2, 2.4 |
-| 2.6 | Chat room panel: cards, composer, MAM history, unread counts, observer UI, unsent text | PLY-9–14, 33, 43–45, 49, 53 | 2.5 |
+| 2.6 | Chat room panel: cards, composer, MAM history, unread counts, observer UI, unsent text; the composer collapses to a bar, remembered per room (added Nov 2, 2026) | PLY-9–14, 33, 43–45, 49, 53, 54 | 2.5 |
 | 2.7 | Out-of-game column: announcements, force panel, objectives (including umpire editing) | PLY-15, 25, 35–39, ADM-23–24, 29 | 2.5, 2.1 |
 | 2.8 | Themes: runtime theming and inheritance, assets and SVG sanitising, theme editor | D19, PLY-24, 26, ADM-18–22 | 1.6, 2.2 |
 | 2.9 | Multi-client view, mock user controls, seed scenarios, admin preview-as-role | PLY-16–22, 34, ADM-30–31 | 1.5, 2.5 |
@@ -283,4 +283,4 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | Spike S14 added, after v1, with its own node in the chart; the deny-list gains S14 | SRD Annex B: the force-asset node layout depends on it. It touches access control, so its record stays off the site like S13's |
 | Future tasks FT-2 and FT-3 added for Annexes A and B | Planned in `plan/decisions/annex-a-b-implementation.md`; WPs are numbered once the owner answers its open questions |
 | NFR-13 narrowed to Chrome and Edge as the SHALL, Firefox and Safari as a SHOULD; the Firefox CI job becomes advisory, like WebKit's | WP 0.4: the customer's analysts use Chrome and Edge only (`plan/decisions/target-environment.md`). Firefox and WebKit failures are recorded in `plan/reviews/phase-3-browsers.md` |
-
+| 2.6 gains PLY-54, the collapsible composer: free text and templated, remembered per room in the saved layout, collapsed by default for read-only roles | Product-owner request of Nov 2, 2026: some users only read a room and want the space for messages |

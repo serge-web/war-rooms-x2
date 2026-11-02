@@ -21,7 +21,7 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 **For players**
 
 - **Welcome page and login**, then a workspace of room tabs that each player docks, splits and pops out, remembered per browser and per design version.
-- **Chat** with messages grouped by sender, date dividers, history that loads as you scroll, unread counts on tabs, and reconnection that fills any gap. Message text is always plain text.
+- **Chat** with messages grouped by sender, date dividers, history that loads as you scroll, unread counts on tabs, and reconnection that fills any gap. Message text is always plain text. Each room's message entry collapses to a slim bar for players who only read, keeping any draft; each room remembers it, and observers start with it collapsed.
 - **The out-of-game column**: announcements from the admin and the player's force panel with its objectives. In narrow windows it becomes a tab of its own.
 - **Observers** read their rooms but never post. White Force observers see the rooms assigned to them, or every room when none is.
 - **The umpire** is the admin, playing in the White Force: it reads and writes in every room, reads every force's objectives and posts announcements.
