@@ -191,4 +191,37 @@ describe('the template validator (TPL-6)', () => {
     for (let i = 0; i < 1_000; i++) one.validate(SITREP.schema, GOOD_SITREP)
     expect(performance.now() - started).toBeLessThan(2_000)
   })
+
+  // Security review, phase 4, H1: the profile bounds a pattern's cost only up to the field's
+  // maxLength (200 with a pattern), but a modified client may send 8,000 characters, and the
+  // validator ran the pattern on all of them anyway (cubic: 9 s at 4,000, minutes at 8,000).
+  it('refuses a text over its maxLength without running its pattern on it', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        grid: { type: 'string', maxLength: 200, pattern: '^a*a*a*b$' },
+        note: { type: 'string', maxLength: 20 },
+      },
+      required: ['grid'],
+    }
+    const v = createTemplateValidator()
+    const started = performance.now()
+    const result = v.validate(schema, { grid: 'a'.repeat(8_000), note: 'x'.repeat(21) })
+    expect(performance.now() - started).toBeLessThan(200)
+    expect(result.valid).toBe(false)
+    // The long field is reported once, as too long, not also as missing; the others as ever.
+    expect(fields(result)).toEqual(['grid is too long', 'note is too long'])
+    // At the limit, the pattern runs as before.
+    expect(fields(v.validate(schema, { grid: `${'a'.repeat(199)}b` }))).toEqual([])
+    expect(fields(v.validate(schema, { grid: 'a'.repeat(200) }))).toEqual([
+      'grid is not in the expected form',
+    ])
+  })
+
+  it('counts maxLength in code points, as JSON Schema does', () => {
+    const schema = { type: 'object', properties: { f: { type: 'string', maxLength: 2 } } }
+    const v = createTemplateValidator()
+    expect(v.validate(schema, { f: '😀😀' }).valid).toBe(true)
+    expect(fields(v.validate(schema, { f: '😀😀😀' }))).toEqual(['f is too long'])
+  })
 })

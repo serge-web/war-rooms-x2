@@ -174,8 +174,39 @@ export interface TemplateValidator {
   validateRaw(schema: Schema | boolean, value: unknown): ValuesCheck
 }
 
+/** Each declared text field's `maxLength` (the profile requires one on every text field). */
+export function textLimits(schema: Template['schema']): ReadonlyMap<string, number> {
+  const properties: unknown = schema.properties
+  const limits = new Map<string, number>()
+  if (typeof properties !== 'object' || properties === null) return limits
+  for (const field of templateFields(schema)) {
+    if (field.type !== 'string') continue
+    const declared: unknown = (properties as Record<string, unknown>)[field.name]
+    const max: unknown =
+      typeof declared === 'object' && declared !== null && 'maxLength' in declared
+        ? declared.maxLength
+        : undefined
+    if (typeof max === 'number' && Number.isFinite(max)) limits.set(field.name, max)
+  }
+  return limits
+}
+
+/** A string's length as JSON Schema counts it: in code points, not UTF-16 units. */
+function codePoints(text: string): number {
+  let n = 0
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charCodeAt(i)
+    if (unit >= 0xd800 && unit <= 0xdbff) i++
+    n++
+  }
+  return n
+}
+
 export function createTemplateValidator(): TemplateValidator {
-  const forTemplate = new WeakMap<object, { validator: Validator; declared: Set<string> }>()
+  const forTemplate = new WeakMap<
+    object,
+    { validator: Validator; declared: Set<string>; limits: ReadonlyMap<string, number> }
+  >()
   const forRaw = new WeakMap<object, Validator>()
   const run = (
     validator: Validator,
@@ -212,11 +243,38 @@ export function createTemplateValidator(): TemplateValidator {
           // shortCircuit false: every error, so the composer can mark every field at once.
           validator: new Validator(validationSchemaOf(schema), '2020-12', false),
           declared: new Set(templateFields(schema).map((f) => f.name)),
+          limits: textLimits(schema),
         }
         forTemplate.set(schema, compiled)
       }
-      const { validator, declared } = compiled
-      return run(validator, plainValues(values), declared)
+      const { validator, declared, limits } = compiled
+      const plain = plainValues(values)
+      // A text over its maxLength is refused before the validator sees it: the validator runs
+      // every keyword (shortCircuit false), so it would test the field's `pattern` or `format`
+      // on the whole value. The profile bounds a pattern's cost only up to the field's maxLength
+      // (200 with a pattern); a modified client's 8,000 characters took minutes (security
+      // review, phase 4, H1).
+      const tooLong: TemplateError[] = []
+      for (const [name, max] of limits) {
+        const value = plain[name]
+        if (typeof value !== 'string' || value.length <= max || codePoints(value) <= max) continue
+        tooLong.push({
+          field: name,
+          keyword: 'maxLength',
+          message: 'is too long',
+          schemaPath: `#/properties/${name}/maxLength`,
+        })
+      }
+      if (tooLong.length === 0) return run(validator, plain, declared)
+      const cut = new Set(tooLong.map((e) => e.field))
+      const rest = plainValues(
+        Object.fromEntries(Object.entries(plain).filter(([n]) => !cut.has(n))),
+      )
+      const result = run(validator, rest, declared)
+      return {
+        valid: false,
+        errors: [...tooLong, ...result.errors.filter((e) => !cut.has(e.field))],
+      }
     },
     validateRaw(schema, value) {
       if (typeof schema === 'boolean') return run(new Validator(schema, '2020-12', false), value)
