@@ -195,7 +195,7 @@ A message template: a JSON Schema form the admin designs.
 | `id` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The template GUID; also the item id |
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Shown in the composer’s drop-down and on each card (TD7) |
 | `description` | string | no | length ≤ 1000 | For the admin and the composer; plain text (PLY-14) |
-| `schema` | map of any | yes |  | JSON Schema 2020-12 in the WRX template profile |
+| `schema` | map of any | yes |  | JSON Schema 2020-12 in the WRX template profile: an object of up to 100 named scalar fields (text with a required maxLength of at most 8,000, or 200 with a pattern; number; integer; yes/no; date; date and time; a drop-down of up to 500 options; a force or role picker marked by x-wrx-picker, with x-wrx-scope and x-wrx-force), linked drop-downs and conditions one level deep (dependencies, if/then/else), and patterns that pass a safe-regex check. No $ref, arrays or nested objects |
 | `uiSchema` | map of any | no |  | RJSF UI schema in the WRX template profile: field order, widgets, hints |
 | `createdAt` | string | yes | format date-time | Admin's clock when created; display only |
 | `lockedAt` | string | no | format date-time | Set by the first publish that makes the template available in a room; its schema is then fixed, and changing it means copying it to a new template (TD6, TPL-4) |

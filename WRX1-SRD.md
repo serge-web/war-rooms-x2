@@ -726,9 +726,14 @@ Changes from WP 3.4, the v1 security review (Nov 1, 2026):
 - §3 table: new `directory` node, one item listing every force, role and room GUID with each role's login name, so a client finds its own role, force and rooms without node listing. It is a pointer only: a role is the user's own only if its document carries the user's login name.
 - ADM-5 as built: publish and audit refuse a design that changes a published role's login name, or gives a published or deleted role's login name to another role, with the reason and the remedy.
 
-## Annex A. Message templates (specified now, built after v1)
+Changes from Phase 4, message templates (WP 4.4, Nov 2, 2026):
 
-Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex specifies the feature so that v1 leaves room for it. It is not built in v1 (§8, structured form rooms).
+- Annex A: built, except the image and asset pickers. Its heading and introduction say so, and an "As built" part records the six provisional answers it rests on (leaf node, lock on publish, card with a warning for a template no longer offered, role entries add, templates not confidential, no image picker) and what was built. The answers wait for the product owner at gate G4.
+- §12: new user scenario SC-10, a templated room, on both backends.
+
+## Annex A. Message templates (built in Phase 4)
+
+Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
 
 **Decisions**
 
@@ -784,6 +789,26 @@ Some rooms let players send structured messages from templates the admin designs
 **Open questions**
 
 - [ ] Image picker: inline images with a size cap, or separate assets referenced by GUID?
+
+**As built (Phase 4, November 2026)**
+
+The product owner deferred the design record's open questions when Phase 4 started; it was built on the recommended answers, which stay provisional until the owner confirms them at gate G4 (`plan/decisions/annex-a-b-implementation.md`):
+
+1. TPL-1: `templates` is a single PubSub leaf node, not a collection, with one item per template, its item id the template's GUID. Every game user reads it; the admin alone publishes.
+2. TD6, TPL-4: a template locks when a publish makes it available in a room, not when a message first uses it, because the admin cannot reliably see use. A lock fixes the template's fields (its JSON Schema); its name, description and UI schema stay editable. A locked template opens read only in the editor, with "Copy to new template", and publish refuses a design that changes its fields. Removing a locked template is allowed after a confirmation; its messages then show as plain text.
+3. TPL-6: a message that fails its template's schema, or names an unknown template, shows as plain text with a warning, as written. A message whose template the room no longer offers to its sender shows as a card with a warning, so a changed room config does not turn history into plain text.
+4. TD4: a role entry adds to its force's entry. The admin and the White Force's roles that are not observers may use every template the room names; observers none.
+5. Templates are not confidential between forces: every role can read every template.
+6. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
+
+Also as built:
+
+- Templates use a restricted JSON Schema profile: an object of named scalar fields (text with a required `maxLength`, number, integer, yes/no, date, date and time, drop-down, linked drop-downs, force and role pickers), conditions one level deep, a short list of UI options, and patterns that pass a safe-regex check. Anything outside the profile is refused with a message saying why.
+- One validator, which interprets schemas and generates no code, checks the composer's form and every received message, so sender and receiver agree and the client's Content-Security-Policy is unchanged.
+- A `chat` room's config is version 2: free text allowed or not, and template entries per force or role (TPL-2). Version 1 configs read as free text with no templates.
+- A templated message is `{type: 'template', schemaVersion: 1, content: {templateId, values}}`, within the 64 KiB cap (PLY-53).
+- The admin's live preview is the player's own form, with the same widgets and checks (TPL-7).
+- User scenario SC-10 (§12) runs on the mock and on ejabberd. A room of 2,000 templated messages meets the NFR-11 budgets.
 
 ## Annex B. Force assets and map channel (in discussion)
 

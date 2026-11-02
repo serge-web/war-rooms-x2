@@ -865,7 +865,9 @@ export const templateSchema = z
       .describe('For the admin and the composer; plain text (PLY-14)'),
     schema: z
       .record(z.string(), z.unknown())
-      .describe('JSON Schema 2020-12 in the WRX template profile'),
+      .describe(
+        'JSON Schema 2020-12 in the WRX template profile: an object of up to 100 named scalar fields (text with a required maxLength of at most 8,000, or 200 with a pattern; number; integer; yes/no; date; date and time; a drop-down of up to 500 options; a force or role picker marked by x-wrx-picker, with x-wrx-scope and x-wrx-force), linked drop-downs and conditions one level deep (dependencies, if/then/else), and patterns that pass a safe-regex check. No $ref, arrays or nested objects',
+      ),
     uiSchema: z
       .record(z.string(), z.unknown())
       .optional()
