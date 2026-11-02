@@ -209,17 +209,18 @@ test('a template is filled and sent from the keyboard alone; axe passes (NFR-14)
   await expect(messageType(page)).toHaveValue(TEMPLATE.contact)
   // Into the form: date and time, grid, strength, yes/no, then past Clear to Send.
   await page.keyboard.press('Tab')
-  await expect(panel.getByLabel('Seen at')).toBeFocused()
-  // The browser's date and time field: its parts in turn, then on to the next field.
-  // (Chromium, en-US: month, day and year; Tab, as the year takes more digits; hours, minutes
-  // and AM.)
-  await page.keyboard.type('10242026')
-  await page.keyboard.press('Tab')
-  await page.keyboard.type('0840A')
+  const seenAt = panel.getByLabel('Seen at')
+  await expect(seenAt).toBeFocused()
+  // The browser's own date and time field. How its parts take typed digits (and whether a part
+  // moves on by itself) differs between Chromium, Firefox and WebKit, so each part is set with
+  // the arrow key every engine gives it (an empty part takes a value on ArrowUp), and Tab moves
+  // to the next part, then out of the field to the grid reference.
   const grid = panel.getByLabel('Grid reference')
-  for (let i = 0; i < 6 && !(await grid.evaluate((el) => el === document.activeElement)); i++) {
+  for (let i = 0; i < 10 && !(await grid.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press('ArrowUp')
     await page.keyboard.press('Tab')
   }
+  await expect(seenAt).toHaveValue(/^\d{4,}-\d{2}-\d{2}T\d{2}:\d{2}/)
   await expect(grid).toBeFocused()
   await page.keyboard.type('NV5678')
   await page.keyboard.press('Tab')
@@ -233,7 +234,7 @@ test('a template is filled and sent from the keyboard alone; axe passes (NFR-14)
   await expect(panel.getByRole('button', { name: 'Send' })).toBeFocused()
   await page.keyboard.press('Enter')
   const card = messages(page).locator('.wrx-tcard').last()
-  await expect(card.locator('dd')).toHaveText([/2026/, 'NV5678', '40', 'Yes'])
+  await expect(card.locator('dd')).toHaveText([/\d/, 'NV5678', '40', 'Yes'])
 
   // The slider and drop-downs answer the arrow keys too.
   await messageType(page).selectOption({ label: 'Situation report' })
