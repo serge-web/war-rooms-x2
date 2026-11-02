@@ -99,9 +99,8 @@ flowchart TB
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp44 todo
     class wp33,wp34 active
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43 done
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43,wp44 done
     class G0,G1,G2,G3,G4 gate
 ```
 
