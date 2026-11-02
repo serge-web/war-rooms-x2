@@ -499,7 +499,7 @@ Every interaction the mock supports SHALL be specified from the XMPP standards, 
 
 ## 12. User scenarios
 
-Nine end-to-end scenarios walk each actor through v1; each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
+Nine end-to-end scenarios walk each actor through v1, and SC-10 through message templates (Annex A); each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
 
 ### SC-1 Admin designs and publishes a game
 
@@ -603,6 +603,18 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 4. CI runs the test against both on every build.
 
 **Outcome:** the mock stays faithful to the server. **Traces to:** §11, ARC-10–11, NFR-16.
+
+### SC-10 Templated room (Annex A)
+
+**Actors:** admin, Blue CO, Red CO. **Start:** the demo game, published.
+
+1. The admin adds a role, Blue Liaison, and builds a template in the builder: a required text and a role picker. The preview shows the form as players fill it.
+2. In the Blue–Red negotiation the admin turns free text off and offers the template to the Blue force only, sees it in the access matrix, and publishes. The template locks.
+3. Blue CO picks the template, names Blue Liaison in the picker and sends it. Red CO sees the card, but its composer says the room offers its role nothing to send.
+4. The admin copies the locked template, changes the copy (a new label, a new yes/no field), offers the copy in its place, deletes Blue Liaison and publishes again.
+5. The old message still shows with the old template's name and fields, its picker value "Blue Liaison (deleted)", and a warning that the room no longer offers that template. Blue CO sends the copy, which shows with the new fields.
+
+**Outcome:** templated rooms work end to end on both backends, and a template change never rewrites history. **Traces to:** TD2–TD7, TPL-1–TPL-9, T-R1, ADM-9.
 
 ### Gaps found and requirements added
 
