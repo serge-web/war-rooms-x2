@@ -124,6 +124,11 @@ export function RoomTemplatesEditor({
                             checked={on}
                             onChange={(e) => {
                               const ids = entry?.templateIds ?? []
+                              // Unticking a row's last template removes its entry; the row
+                              // stays, all unticked, until the room is left.
+                              if (!e.target.checked && !extra.some((x) => keyOf(x) === keyOf(w))) {
+                                setExtra([...extra, w])
+                              }
                               onEntry(
                                 w.kind,
                                 w.id,
