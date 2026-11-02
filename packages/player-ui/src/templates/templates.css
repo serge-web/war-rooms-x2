@@ -100,7 +100,11 @@
   font-size: 0.8125rem;
 }
 
-/* The form scrolls inside the composer, so the message list keeps room above it. */
+/*
+ * The fields scroll inside the composer, so the message list keeps room above it; the actions sit
+ * below the scrolling fields, never over them. (A sticky bar over the fields covered part of a
+ * field at rest, the slider's number box in WebKit, below the 24 px target size, WCAG 2.5.8.)
+ */
 .wrx-composer__template {
   display: flex;
   flex: 1 1 auto;
@@ -110,17 +114,31 @@
 }
 
 .wrx-composer__form {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-height: 4rem;
+}
+
+.wrx-composer__form > .wrx-tform {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.wrx-composer__form .wrx-tform > .wrx-tform__fields {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.125rem 0.125rem 0;
 }
 
 .wrx-composer__actions {
-  position: sticky;
-  bottom: 0;
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
