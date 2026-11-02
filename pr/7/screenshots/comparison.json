@@ -72,6 +72,10 @@
     "status": "changed"
   },
   {
+    "name": "player-chat-collapsed",
+    "status": "new"
+  },
+  {
     "name": "player-column",
     "status": "changed"
   },
