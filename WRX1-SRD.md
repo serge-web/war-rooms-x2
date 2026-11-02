@@ -804,7 +804,8 @@ The product owner deferred the design record's open questions when Phase 4 start
 3. TPL-6: a message that fails its template's schema, or names an unknown template, shows as plain text with a warning, as written. A message whose template the room no longer offers to its sender shows as a card with a warning, so a changed room config does not turn history into plain text (confirmed by the product owner, Nov 2, 2026).
 4. TD4: a role entry adds to its force's entry. The admin and the White Force's roles that are not observers may use every template the room names; observers none (confirmed by the product owner, Nov 2, 2026).
 5. Templates are not confidential between forces: every role can read every template (confirmed by the product owner, Nov 2, 2026).
-6. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
+6. An unticked yes/no field is sent, and shown on the card, as "No", never left out (confirmed by the product owner, Nov 2, 2026).
+7. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
 
 Also as built:
 
