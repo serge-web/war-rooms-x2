@@ -144,7 +144,7 @@ test('each template is sent from a narrow pane and received as a card in another
 
 test('a hostile client’s message that does not fit its template shows as plain text (TPL-6)', async ({
   page,
-}) => {
+}, testInfo) => {
   const errors = await watch(page)
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
@@ -192,6 +192,9 @@ test('a hostile client’s message that does not fit its template shows as plain
   )
   await expect(article.locator('img, strong')).toHaveCount(0)
   expect(await page.evaluate(() => 'pwned' in window)).toBe(false)
+  // The plain text with its warning passes axe too (NFR-14, WP 4.4).
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  await expectNoViolations(page, testInfo, 'templated message shown as plain text with a warning')
   expect(errors).toEqual([])
 })
 

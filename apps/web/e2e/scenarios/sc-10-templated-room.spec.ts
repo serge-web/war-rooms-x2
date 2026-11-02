@@ -8,7 +8,8 @@
 // template's name and fields, its picker value "Blue Liaison (deleted)", and the warning that
 // the room no longer offers that template (provisional answer 3); Blue CO sends the new one.
 // Both backends; on ejabberd the admin first imports the published design (admin.ts).
-import type { Page } from '@playwright/test'
+import type { Page, TestInfo } from '@playwright/test'
+import { expectNoViolations } from '../a11y.ts'
 import { openAdminOnDemo, openSection, plan, publishPlan } from './admin.ts'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
 
@@ -36,6 +37,13 @@ async function label(
   const settings = page.getByRole('group', { name: new RegExp(`^${kind}: `) })
   await settings.getByLabel('Label').fill(text)
   if (required === true) await settings.getByLabel('Required').check()
+}
+
+/** axe on the screen as it is (NFR-14), on the mock only: the screens are the same on both. */
+async function scan(page: Page, kind: string, testInfo: TestInfo, screen: string) {
+  if (kind !== 'mock') return
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
+  await expectNoViolations(page, testInfo, screen)
 }
 
 /** The room's template table, in the Rooms section. */
@@ -93,6 +101,7 @@ test('SC-10: the admin offers a template to one force in a templates-only room; 
     .selectOption({ label: 'Force: Blue' })
   await offers.getByRole('button', { name: 'Add row' }).click()
   await offers.getByLabel(`Force: Blue may use ${OLD}`, { exact: true }).check()
+  await scan(admin, backend.kind, testInfo, 'room template table')
   // The access matrix shows who may use it (ADM-9).
   await openSection(admin, 'Access matrix')
   await expect(admin.getByRole('table', { name: /Templates each role may use/ })).toContainText(OLD)
@@ -114,6 +123,7 @@ test('SC-10: the admin offers a template to one force in a templates-only room; 
   await expect(
     admin.getByRole('group', { name: /^Text: Request/ }).getByLabel('Label'),
   ).toBeDisabled()
+  await scan(admin, backend.kind, testInfo, 'locked template')
 
   // 5. Blue CO sends it; Red CO sees the card and has nothing to send (TPL-3, TPL-5, TPL-6).
   const { page: blue, errors: blueErrors } = await player('blue-co')
@@ -140,6 +150,7 @@ test('SC-10: the admin offers a template to one force in a templates-only room; 
   await expect(
     roomPanel(red).getByRole('textbox', { name: `Message ${TALKS}`, exact: true }),
   ).toBeDisabled()
+  await scan(red, backend.kind, testInfo, 'templates-only composer offering nothing')
 
   // 6. The admin copies the locked template and changes the copy (TPL-4), offers the copy in
   // its place, and deletes Blue Liaison.
@@ -180,6 +191,7 @@ test('SC-10: the admin offers a template to one force in a templates-only room; 
       `This room does not offer ${OLD} to the sender now.`,
     )
   }
+  await scan(red, backend.kind, testInfo, 'card with a warning, deleted role')
 
   // 8. Blue CO's composer offers the copy only; its message shows with the new fields.
   await expect(type.locator('option')).toHaveText([NEW], { timeout: 30_000 })

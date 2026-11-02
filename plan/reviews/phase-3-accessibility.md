@@ -79,3 +79,22 @@ No contrast finding: the default theme passes axe on every screen.
   accessibility tree computes them, not as heard. A manual pass with NVDA and VoiceOver before
   the first exercise is still owed. Reflow at 320 px (1.4.10) and 200% text (1.4.4) are not
   tested here: the narrow layout is FT-1's.
+
+## Phase 4: message templates (WP 4.4)
+
+Every new screen is scanned with axe (WCAG 2.2 A and AA) in Chromium, and the templates' tasks are done from the keyboard alone:
+
+| Screen | Where |
+| --- | --- |
+| Composer with each template, cards | `apps/web/e2e/templates.spec.ts` |
+| Composer with problems shown (announced, `aria-invalid`, each problem describing its field) | `a11y.spec.ts`, "template composer with problems" |
+| Message shown as plain text with a warning | `templates.spec.ts`, hostile client |
+| Templates-only composer offering nothing; card with a warning and a deleted role | SC-10 (mock) |
+| Template editor: builder, raw editor, preview, locked template | `template-editor.spec.ts`, `packages/admin-ui/e2e/templates.spec.ts`, SC-10 |
+| Room template table, access matrix with templates | SC-10, `a11y.spec.ts` "every admin section" |
+
+Keyboard only: every field type of the three demo templates (date and time, text, integer, yes/no, slider, drop-down, linked drop-downs, role picker), sent with Enter on Send (`templates.spec.ts`, `a11y.spec.ts`); the builder's fields reordered with the keyboard and with Move buttons (admin-ui e2e).
+
+Found and fixed: in WebKit the composer's sticky Clear and Send bar covered most of the slider's number box at rest, below the 24 px target size (2.5.8); the bar now sits under the scrolling fields. The keyboard test set the date and time field by typing digits, which only Chromium accepted in that order; it now sets each part with ArrowUp, which every engine supports.
+
+Not checked here: Firefox and WebKit could not be run in this environment (their browsers are not installed); their CI jobs, advisory, run these specs. The native date, time and number fields are the browsers' own, and their keyboard handling differs between engines.

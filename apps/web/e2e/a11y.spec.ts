@@ -283,6 +283,67 @@ test.describe('keyboard only', () => {
   })
 })
 
+// Annex A (WP 4.4): the template screens players see that the other specs do not scan. The
+// composer with its problems shown, announced and linked to each field; the support request's
+// linked drop-downs, role picker and yes/no from the keyboard alone; and its card. SC-10 scans
+// a templates-only composer offering nothing, and a card with a warning; templates.spec.ts the
+// composer, cards and the plain-text warning; template-editor.spec.ts and the admin-ui e2e the
+// template editor and the room's template table.
+test('template composer with problems, and the linked drop-downs from the keyboard (NFR-14)', async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto('./')
+  await logIn(page, 'blue-co', 'demo-blue-co')
+  const reports = 'Blue Reports'
+  await page.getByRole('tab', { name: reports, exact: true }).click()
+  const panel = page.getByRole('region', { name: reports, exact: true })
+  const type = panel.getByRole('combobox', { name: 'Message type' })
+  await type.selectOption({ label: 'Situation report' })
+  // Sent empty: refused, the count announced, each problem beside its field and described by it.
+  await panel.getByRole('button', { name: 'Send' }).click()
+  await expect(panel.getByRole('alert')).toContainText('fields need attention')
+  const summary = panel.getByRole('textbox', { name: /Summary/ })
+  await expect(summary).toHaveAttribute('aria-invalid', 'true')
+  await expect(summary).toHaveAccessibleDescription(/.+/)
+  await settled(page)
+  await expectNoViolations(page, testInfo, 'template composer with problems')
+
+  // The support request from the keyboard: the linked pair, the role picker, the yes/no.
+  await type.focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(type).toHaveValue(/.+/)
+  await type.selectOption({ label: 'Support request' })
+  const support = panel.getByRole('combobox', { name: /^Support/ })
+  await support.focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(support).not.toHaveValue('')
+  await page.keyboard.press('Tab')
+  const detail = panel.getByRole('combobox', { name: /^Detail/ })
+  await expect(detail).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(detail).not.toHaveValue('')
+  await page.keyboard.press('Tab')
+  const to = panel.getByRole('combobox', { name: /^Addressed to/ })
+  await expect(to).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(to).not.toHaveValue('')
+  await page.keyboard.press('Tab')
+  await expect(panel.getByRole('checkbox', { name: 'Urgent' })).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(panel.getByRole('checkbox', { name: 'Urgent' })).toBeChecked()
+  await panel.getByRole('button', { name: 'Send' }).focus()
+  await page.keyboard.press('Enter')
+  const card = page
+    .getByRole('region', { name: `Messages in ${reports}`, exact: true })
+    .locator('.wrx-tcard')
+    .last()
+  await expect(card.locator('.wrx-tcard__name')).toHaveText('Support request')
+  await expect(card.locator('dd').last()).toHaveText('Yes')
+  await settled(page)
+  await expectNoViolations(page, testInfo, 'support request sent, as a card')
+})
+
 test('a room tab’s unread count is its description for screen readers (PLY-11, NFR-14)', async ({
   context,
 }) => {
