@@ -181,7 +181,8 @@ test(
     await shown.getByLabel(/^Number/).fill('50')
     await expect(shown.getByText('is too large')).toBeVisible()
     await shown.getByLabel(/^Force picker/).selectOption({ label: 'Blue' })
-    await shown.getByLabel(/^Role picker/).selectOption({ label: 'Blue CO' })
+    // As players see it: the role with its force.
+    await shown.getByLabel(/^Role picker/).selectOption({ label: 'Blue CO (Blue)' })
     await page.mouse.move(0, 0)
     await page.screenshot({ path: testInfo.outputPath('template-builder.png'), fullPage: true })
     await axe(page, testInfo, 'template builder and preview')
