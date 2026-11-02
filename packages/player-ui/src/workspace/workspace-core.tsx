@@ -18,13 +18,17 @@ import {
   moveTab,
   reconcile,
   restoreLayout,
+  roomTabState,
   serialiseLayout,
   specialTab,
+  updateRoomTabState,
 } from './model.ts'
 import type { Action, LayoutSpec } from './model.ts'
 import { WorkspaceSpecialContext } from './special.tsx'
 import type { WorkspaceSpecialTab } from './special.tsx'
 import type { LayoutStorage } from './storage.ts'
+import { RoomTabStateContext } from './tab-state.ts'
+import type { RoomTabStateStore } from './tab-state.ts'
 import { TabLabel } from './tabs.tsx'
 import type { RoomTabBadge } from './tabs.tsx'
 
@@ -136,6 +140,26 @@ export function WorkspaceCore({
   saveRef.current = (m: Model) => {
     if (layoutKey !== undefined) storage?.save(layoutKey, serialiseLayout(m, ids))
   }
+
+  // PLY-54: each room tab's own state, in its tab node's config, for the panels to read and
+  // change. One store for the workspace's life; it follows the model on screen, so a reset or
+  // a restored layout reaches the panels without remounting them. Popouts render through
+  // portals, so their panels find it too.
+  const modelRef = useRef(model)
+  modelRef.current = model
+  const tabState = useMemo(() => tabStateStore(modelRef, ids), [ids])
+  useLayoutEffect(() => {
+    tabState.changed()
+    const listener = {
+      onAfterAction() {
+        tabState.changed()
+      },
+    }
+    model.addChangeListener(listener)
+    return () => {
+      model.removeChangeListener(listener)
+    }
+  }, [model, tabState])
 
   // PLY-5: a new key (another design version) restores that key's layout, or keeps this one.
   useLayoutEffect(() => {
@@ -266,17 +290,42 @@ export function WorkspaceCore({
         {announcement}
       </p>
       <div className="wrx-workspace__layout" ref={rootRef} onKeyDownCapture={onKeyDownCapture}>
-        <Layout
-          model={model}
-          factory={factory}
-          onRenderTab={onRenderTab}
-          onTabSetPlaceHolder={onTabSetPlaceHolder}
-          popoutURL={popoutUrl}
-          icons={ICONS}
-        />
+        <RoomTabStateContext.Provider value={tabState}>
+          <Layout
+            model={model}
+            factory={factory}
+            onRenderTab={onRenderTab}
+            onTabSetPlaceHolder={onTabSetPlaceHolder}
+            popoutURL={popoutUrl}
+            icons={ICONS}
+          />
+        </RoomTabStateContext.Provider>
       </div>
     </div>
   )
+}
+
+/** The room tabs' state over whichever model is on screen (PLY-54). */
+function tabStateStore(
+  modelRef: { readonly current: Model },
+  ids: TabIds,
+): RoomTabStateStore & { changed(): void } {
+  const listeners = new Set<() => void>()
+  return {
+    get: (roomId) => roomTabState(modelRef.current, ids, roomId),
+    update(roomId, patch) {
+      updateRoomTabState(modelRef.current, ids, roomId, patch)
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    changed() {
+      for (const listener of listeners) listener()
+    },
+  }
 }
 
 /** The tab button (role=tab) an event came from, if it is inside this workspace. */

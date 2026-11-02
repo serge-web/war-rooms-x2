@@ -9,6 +9,30 @@ import { messageSize, sizeNote } from './format.ts'
 
 export type SendOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string }
 
+/** What a composer holds that is not sent (PLY-54): nothing, a draft, or a refused post. */
+export type DraftState = 'none' | 'draft' | 'unsent'
+
+/** The more pressing of two draft states: a refused post, then a draft. */
+export function worseDraft(a: DraftState, b: DraftState): DraftState {
+  return a === 'unsent' || b === 'unsent'
+    ? 'unsent'
+    : a === 'draft' || b === 'draft'
+      ? 'draft'
+      : 'none'
+}
+
+/** Tells `report` of `state` after every change, so a parent can say a draft is waiting. */
+export function useReportDraft(
+  state: DraftState,
+  report: ((state: DraftState) => void) | undefined,
+): void {
+  const latest = useRef(report)
+  latest.current = report
+  useEffect(() => {
+    latest.current?.(state)
+  }, [state])
+}
+
 export interface ComposerCoreProps {
   /** Sends the text; resolves when the server has accepted or refused it. */
   readonly onSend: (text: string) => Promise<SendOutcome>
@@ -24,6 +48,8 @@ export interface ComposerCoreProps {
   readonly onTextChange?: (text: string) => void
   /** Inside the template composer, which draws the frame (chat-composer.tsx). */
   readonly embedded?: boolean
+  /** Told whether text is waiting to be sent, e.g. for the collapsed composer's bar (PLY-54). */
+  readonly onDraftChange?: ((state: DraftState) => void) | undefined
 }
 
 /** The tallest the text area grows before it scrolls, in pixels (also in chat.css). */
@@ -51,6 +77,7 @@ export function ComposerCore({
   label = 'Message',
   onTextChange,
   embedded = false,
+  onDraftChange,
 }: ComposerCoreProps) {
   const [text, setText] = useState(initialText)
   const [error, setError] = useState(initialError)
@@ -64,6 +91,10 @@ export function ComposerCore({
   const note = sizeNote(size)
   const disabled = disabledReason !== undefined
   const canSend = !disabled && !sending && text.trim() !== '' && size.over === undefined
+  useReportDraft(
+    text.trim() === '' ? 'none' : error === undefined ? 'draft' : 'unsent',
+    onDraftChange,
+  )
 
   // PLY-44: grow with the text, up to MAX_HEIGHT. CSS `field-sizing: content` does it where the
   // browser has it; elsewhere measure, and measure again once a web font loads or the width

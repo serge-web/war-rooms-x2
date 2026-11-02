@@ -62,6 +62,8 @@ test('a White Force observer sees every room read only and reads, but cannot edi
     'Blue–Red negotiation',
     'Blue Reports',
   ])
+  // The composers start collapsed for a read-only role (PLY-54); expanded, it says why.
+  await page.getByRole('button', { name: 'Show message entry' }).first().click()
   await expect(page.getByText(/You are observing this game/).first()).toBeVisible()
   await forcePanel(page).getByLabel('Show objectives for').selectOption({ label: 'Blue' })
   await expect(forcePanel(page).getByRole('region', { name: 'Blue objectives' })).toContainText(

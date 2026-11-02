@@ -14,6 +14,7 @@ import { ToastProvider } from '@wrx/ui'
 import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { ChatPanel } from '../chat/chat-panel.tsx'
 import { OnlinePanelCore } from './panels.tsx'
 import { layoutKey, memoryLayoutStorage } from './storage.ts'
 import type { LayoutStorage } from './storage.ts'
@@ -350,6 +351,55 @@ describe('Workspace', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent),
     ).toEqual(['blue-coBLUE(you)', 'red-coRED'])
+  })
+})
+
+describe('the collapsed composer, remembered per room (PLY-54)', () => {
+  const CHAT = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
+    chat: { playerComponent: ChatPanel },
+  })
+  const panel = (name: string) => screen.getByRole('region', { name })
+  const toggleIn = (name: string) => within(panel(name)).getByRole('button', { name: /message/ })
+
+  it('is saved in the room’s tab, per room, and restored on the next login', async () => {
+    const storage = memoryLayoutStorage()
+    const first = await mount({ storage, registry: CHAT })
+    expect(toggleIn('blue-hq').textContent).toBe('Hide message entry')
+    fireEvent.click(toggleIn('blue-hq'))
+    await act(() => flush())
+    expect(toggleIn('blue-hq').textContent).toBe('Write a message')
+    expect(toggleIn('red-hq').textContent).toBe('Hide message entry')
+    const saved = JSON.parse(storage.entries.get(KEY('white-1')) ?? '{}') as unknown
+    expect(JSON.stringify(saved)).toContain('"config":{"composerCollapsed":true}')
+    first.unmount()
+
+    await mount({ storage, registry: CHAT })
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('false')
+    expect(toggleIn('red-hq').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('Reset layout returns every room to its default, keeping what was typed (PLY-42)', async () => {
+    const storage = memoryLayoutStorage()
+    await mount({ storage, registry: CHAT })
+    fireEvent.change(within(panel('blue-hq')).getByRole('textbox'), {
+      target: { value: 'Kept' },
+    })
+    fireEvent.click(toggleIn('blue-hq'))
+    await act(() => flush())
+    expect(within(panel('blue-hq')).getByText('Draft not sent')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset layout' }))
+    await act(() => flush())
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('true')
+    expect(within(panel('blue-hq')).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Kept')
+    expect(storage.entries.get(KEY('white-1'))).not.toContain('composerCollapsed')
+  })
+
+  it('starts collapsed for an observer, who can still expand it', async () => {
+    await mount({ registry: CHAT }, { roleId: 'blue-observer' })
+    const toggle = within(panel('blue-hq')).getByRole('button', { name: 'Show message entry' })
+    fireEvent.click(toggle)
+    await act(() => flush())
+    expect(within(panel('blue-hq')).getByText(/You are observing this game/)).toBeTruthy()
   })
 })
 

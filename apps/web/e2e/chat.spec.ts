@@ -96,6 +96,8 @@ test('two clients send and receive; a hidden tab counts unread (PLY-9, PLY-11, P
 test('an observer reads but cannot post (PLY-12)', async ({ page }) => {
   const errors = await open(page, 'blue-observer')
   await expect(messages(page, ROOMS.blue)).toContainText('Orders for the crossing are out.')
+  // Collapsed by default for a read-only role (PLY-54), and expandable to see why.
+  await panel(page, ROOMS.blue).getByRole('button', { name: 'Show message entry' }).click()
   const box = composer(page, ROOMS.blue)
   await expect(box).toBeDisabled()
   await expect(panel(page, ROOMS.blue)).toContainText(

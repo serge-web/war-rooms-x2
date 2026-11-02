@@ -15,11 +15,13 @@ import {
   moveTab,
   reconcile,
   restoreLayout,
+  roomTabState,
   SPECIAL_TAB_CLASS,
   serialiseLayout,
   specialTab,
   structure,
   tabIdsIn,
+  updateRoomTabState,
 } from './model.ts'
 import type { LayoutSpec, TabSpec } from './model.ts'
 import { defaultColumns, pickFewest, reconcilePlan } from './rules.ts'
@@ -270,6 +272,75 @@ describe('saving and restoring (PLY-5, D6)', () => {
     const tab = restored.getNodeById(ids.toModel('room:r1'))?.toJson()
     expect(tab).toMatchObject({ component: 'room' })
     expect(tab).not.toHaveProperty('config')
+  })
+})
+
+describe('a room tab’s own state (PLY-54)', () => {
+  it('is kept in the tab’s config, saved and restored with the layout', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    expect(roomTabState(model, ids, 'r1')).toEqual({})
+    updateRoomTabState(model, ids, 'r1', { composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r1')).toEqual({ composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r2')).toEqual({})
+    // No tab, no state, and no error.
+    updateRoomTabState(model, ids, 'r9', { composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r9')).toEqual({})
+    const text = serialiseLayout(model, ids)
+    const other = tabIds('ws1')
+    const restored = restoreLayout(text, spec(1, 2), other)
+    if (restored === undefined) throw new Error('not restored')
+    expect(roomTabState(restored, other, 'r1')).toEqual({ composerCollapsed: true })
+    expect(roomTabState(restored, other, 'r2')).toEqual({})
+  })
+
+  it('keeps only known fields of the right type from storage', () => {
+    const saved = JSON.stringify({
+      layout: {
+        type: 'row',
+        children: [
+          {
+            type: 'tabset',
+            children: [
+              { type: 'tab', id: 'room:r1', name: 'Room 1', config: { composerCollapsed: 'yes' } },
+              {
+                type: 'tab',
+                id: 'room:r2',
+                name: 'Room 2',
+                config: { composerCollapsed: false, evil: '<script>' },
+              },
+              {
+                type: 'tab',
+                id: 'panel:online',
+                name: 'Online',
+                config: { composerCollapsed: true },
+              },
+            ],
+          },
+        ],
+      },
+    })
+    const restored = restoreLayout(saved, spec(1, 2), ids)
+    if (restored === undefined) throw new Error('not restored')
+    expect(restored.getNodeById(ids.toModel('room:r1'))?.toJson()).not.toHaveProperty('config')
+    expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: false })
+    expect(restored.getNodeById(ids.toModel('panel:online'))?.toJson()).not.toHaveProperty('config')
+  })
+
+  it('a popped-out room keeps its state across a save, docked again', () => {
+    const model = defaultModel(spec(1, 2, 3), ids)
+    model.doAction(Actions.popoutTab(ids.toModel('room:r2')))
+    updateRoomTabState(model, ids, 'r2', { composerCollapsed: true })
+    expect(detachedTabs(model, ids)).toEqual(r(2))
+    const restored = restoreLayout(serialiseLayout(model, ids), spec(1, 2, 3), ids)
+    if (restored === undefined) throw new Error('not restored')
+    expect(detachedTabs(restored, ids)).toEqual([])
+    expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: true })
+  })
+
+  it('goes back to the defaults on reset (PLY-42)', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    updateRoomTabState(model, ids, 'r1', { composerCollapsed: true })
+    expect(roomTabState(defaultModel(spec(1, 2), ids, model), ids, 'r1')).toEqual({})
   })
 })
 

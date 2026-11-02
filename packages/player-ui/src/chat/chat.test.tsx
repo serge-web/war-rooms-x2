@@ -203,6 +203,8 @@ describe('ChatPanel', () => {
 
   it('disables the composer for an observer, with an explanation (PLY-12)', async () => {
     await mount({ roleId: 'blue-observer', access: 'read' })
+    // Collapsed for a read-only role (PLY-54); expanded, it says why it cannot post.
+    fireEvent.click(screen.getByRole('button', { name: 'Show message entry' }))
     const area = composer() as HTMLTextAreaElement
     expect(area.disabled).toBe(true)
     expect(screen.getByText(/You are observing this game/)).toBeTruthy()
@@ -225,6 +227,88 @@ describe('ChatPanel', () => {
         .map((li) => li.textContent),
     ).toEqual(['blue-co (you)', 'white-1'])
     expect(screen.getByText('Online (2)')).toBeTruthy()
+  })
+})
+
+describe('the collapsible composer (PLY-54)', () => {
+  const toggle = (name: string) => screen.getByRole('button', { name })
+
+  it('starts expanded for a role that may post, and collapses to a bar and back', async () => {
+    await mount()
+    const hide = toggle('Hide message entry')
+    expect(hide.getAttribute('aria-expanded')).toBe('true')
+    const entry = document.getElementById(hide.getAttribute('aria-controls') ?? '')
+    expect(entry?.contains(composer())).toBe(true)
+    fireEvent.click(hide)
+    expect(entry?.hidden).toBe(true)
+    expect(screen.queryByRole('textbox')).toBeNull()
+    const write = toggle('Write a message')
+    // The same button, so focus stays on it (the disclosure pattern).
+    expect(write).toBe(hide)
+    expect(write.getAttribute('aria-expanded')).toBe('false')
+    expect(write.getAttribute('aria-controls')).toBe(entry?.id)
+    fireEvent.click(write)
+    expect(entry?.hidden).toBe(false)
+    expect(composer()).toBeTruthy()
+  })
+
+  it('keeps a draft while collapsed, and the bar says so', async () => {
+    await mount()
+    fireEvent.change(composer(), { target: { value: 'Half a thought' } })
+    fireEvent.click(toggle('Hide message entry'))
+    const note = screen.getByText('Draft not sent')
+    expect(toggle('Write a message').getAttribute('aria-describedby')).toBe(note.id)
+    fireEvent.click(toggle('Write a message'))
+    expect((composer() as HTMLTextAreaElement).value).toBe('Half a thought')
+    // Expanded, the note goes: the text is in view.
+    expect(screen.queryByText('Draft not sent')).toBeNull()
+  })
+
+  it('keeps a refused post while collapsed, and the bar says it was not sent', async () => {
+    const h = await mount()
+    h.session.stub('muc', 'send', () => Promise.resolve(err('forbidden')))
+    fireEvent.change(composer(), { target: { value: 'Secret plan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await act(() => flush())
+    fireEvent.click(toggle('Hide message entry'))
+    expect(screen.getByText('Message not sent')).toBeTruthy()
+    fireEvent.click(toggle('Write a message'))
+    expect(screen.getByRole('alert').textContent).toContain('Not sent:')
+    expect((composer() as HTMLTextAreaElement).value).toBe('Secret plan')
+  })
+
+  it('starts collapsed for an observer and a read-only participant', async () => {
+    await mount({ roleId: 'blue-observer', access: 'read' })
+    expect(toggle('Show message entry').getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    cleanup()
+    await mount({ access: 'read' })
+    expect(toggle('Show message entry')).toBeTruthy()
+    fireEvent.click(toggle('Show message entry'))
+    expect(screen.getByText('Your role can read this room but not post in it.')).toBeTruthy()
+  })
+
+  it('ChatPanelCore keeps the state itself, or leaves it to the caller', () => {
+    const base = {
+      roomName: 'HQ',
+      messages: [],
+      online: [],
+      hasOlder: false,
+      loadingOlder: false,
+      onSend: () => Promise.resolve({ ok: true as const }),
+    }
+    const { rerender } = render(<ChatPanelCore {...base} readOnly />)
+    fireEvent.click(toggle('Show message entry'))
+    expect(toggle('Hide message entry')).toBeTruthy()
+    const changes: boolean[] = []
+    const onChange = (collapsed: boolean) => {
+      changes.push(collapsed)
+    }
+    rerender(<ChatPanelCore {...base} composerCollapsed onComposerCollapsedChange={onChange} />)
+    fireEvent.click(toggle('Write a message'))
+    expect(changes).toEqual([false])
+    // Controlled: nothing changes until the caller says so.
+    expect(toggle('Write a message')).toBeTruthy()
   })
 })
 

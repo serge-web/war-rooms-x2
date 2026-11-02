@@ -12,8 +12,8 @@ import { Suspense, useId, useMemo, useState } from 'react'
 import { LazyTemplateForm } from '../templates/lazy.tsx'
 import { NO_PICKER_SOURCE } from '../templates/pickers.ts'
 import type { PickerSource } from '../templates/pickers.ts'
-import { ComposerCore } from './composer.tsx'
-import type { ComposerCoreProps } from './composer.tsx'
+import { ComposerCore, useReportDraft, worseDraft } from './composer.tsx'
+import type { ComposerCoreProps, DraftState } from './composer.tsx'
 import { sizeNote, templateMessageSize } from './format.ts'
 
 export type TemplateSendOutcome =
@@ -66,6 +66,18 @@ export function initialValues(template: Template): FormValues {
   return values
 }
 
+/** Whether a form holds anything the player entered: a value other than its starting one. */
+export function hasEnteredValues(template: Template, values: FormValues): boolean {
+  const start = initialValues(template)
+  return Object.entries(values).some(
+    ([name, value]) =>
+      value !== undefined &&
+      value !== '' &&
+      !(Array.isArray(value) && value.length === 0) &&
+      JSON.stringify(value) !== JSON.stringify(start[name]),
+  )
+}
+
 /** The values as a message holds them: empty fields left out. */
 export function sendableValues(values: FormValues): Record<string, TemplateValue> {
   const out: Record<string, TemplateValue> = {}
@@ -81,6 +93,7 @@ export function ChatComposerCore(props: ChatComposerCoreProps) {
     pickers = NO_PICKER_SOURCE,
     unsentTemplate,
     disabledReason,
+    onDraftChange,
     ...textProps
   } = props
   const offered = templates.length > 0 && onSendTemplate !== undefined
@@ -94,20 +107,37 @@ export function ChatComposerCore(props: ChatComposerCoreProps) {
     unsentOffered ? new Map([[unsentTemplate.templateId, unsentTemplate.values]]) : new Map(),
   )
   const selectId = useId()
+  // PLY-54: what the mounted composer reports (it alone knows of a refusal), with the drafts of
+  // the types not on screen.
+  const [shown, setShown] = useState<{ readonly id: string; readonly state: DraftState }>({
+    id: FREE_TEXT,
+    state: 'none',
+  })
+
+  // The chosen type, or the first one offered if it has gone (the room's config changed).
+  const template = templates.find((t) => t.id === mode)
+  const current = template?.id ?? (freeText ? FREE_TEXT : (templates[0]?.id ?? FREE_TEXT))
+  const chosen = templates.find((t) => t.id === current)
+  const chosenId = chosen?.id ?? FREE_TEXT
+
+  let draft: DraftState = shown.id === chosenId ? shown.state : 'none'
+  if (chosen !== undefined && text.trim() !== '') draft = worseDraft(draft, 'draft')
+  for (const t of templates) {
+    if (t.id === chosen?.id) continue
+    const values = drafts.get(t.id)
+    if (values !== undefined && hasEnteredValues(t, values)) draft = worseDraft(draft, 'draft')
+  }
+  useReportDraft(offered ? draft : 'none', offered ? onDraftChange : undefined)
 
   if (!offered) {
     return (
       <ComposerCore
         {...textProps}
         disabledReason={disabledReason ?? (freeText ? undefined : NO_TEMPLATES_REASON)}
+        onDraftChange={onDraftChange}
       />
     )
   }
-
-  // The chosen type, or the first one offered if it has gone (the room's config changed).
-  const template = templates.find((t) => t.id === mode)
-  const current = template?.id ?? (freeText ? FREE_TEXT : (templates[0]?.id ?? FREE_TEXT))
-  const chosen = templates.find((t) => t.id === current)
 
   return (
     <div className="wrx-composer wrx-composer--templates">
@@ -138,6 +168,9 @@ export function ChatComposerCore(props: ChatComposerCoreProps) {
           disabledReason={disabledReason}
           onTextChange={setText}
           embedded
+          onDraftChange={(state) => {
+            setShown({ id: FREE_TEXT, state })
+          }}
         />
       ) : (
         <TemplateComposer
@@ -151,6 +184,9 @@ export function ChatComposerCore(props: ChatComposerCoreProps) {
           pickers={pickers}
           disabledReason={disabledReason}
           unsent={unsentTemplate?.templateId === chosen.id ? unsentTemplate : undefined}
+          onDraftChange={(state) => {
+            setShown({ id: chosen.id, state })
+          }}
         />
       )}
     </div>
@@ -165,6 +201,7 @@ function TemplateComposer({
   pickers,
   disabledReason,
   unsent,
+  onDraftChange,
 }: {
   readonly template: Template
   readonly values: FormValues
@@ -173,6 +210,7 @@ function TemplateComposer({
   readonly pickers: PickerSource
   readonly disabledReason: string | undefined
   readonly unsent: UnsentTemplate | undefined
+  readonly onDraftChange: (state: DraftState) => void
 }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | undefined>(unsent?.reason)
@@ -187,6 +225,10 @@ function TemplateComposer({
   const note = sizeNote(size)
   const disabled = disabledReason !== undefined
   const canSend = !disabled && !sending && size.over === undefined
+  useReportDraft(
+    error !== undefined ? 'unsent' : hasEnteredValues(template, values) ? 'draft' : 'none',
+    onDraftChange,
+  )
 
   const submit = async (submitted: FormValues) => {
     if (!canSend) return

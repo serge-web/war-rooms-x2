@@ -38,8 +38,10 @@ test('SC-4: the Blue observer reads Blue’s rooms; the server refuses a modifie
   await expect(messages(observer)).toContainText('Orders for the crossing are out.')
   await expect(messages(observer)).toContainText('Recce team moving to the bridge.')
 
-  // 2. The composer is disabled, with an explanation (PLY-12).
+  // 2. The composer is disabled, with an explanation (PLY-12). It starts collapsed for a
+  // read-only role (PLY-54); expanding it shows why.
   const panel = observer.getByRole('region', { name: BLUE_HQ, exact: true })
+  await panel.getByRole('button', { name: 'Show message entry' }).click()
   await expect(observer.getByRole('textbox', { name: `Message ${BLUE_HQ}` })).toBeDisabled()
   await expect(panel.getByRole('button', { name: 'Send' })).toBeDisabled()
   await expect(panel).toContainText(

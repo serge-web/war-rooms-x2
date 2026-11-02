@@ -234,6 +234,48 @@ describe('the template composer', () => {
   })
 })
 
+describe('the collapsed template composer (PLY-54)', () => {
+  const toggle = (name: string) => screen.getByRole('button', { name })
+
+  it('keeps the form’s values and chosen type while collapsed, and says a draft waits', async () => {
+    await mount()
+    // The form's own starting values are not a draft.
+    fireEvent.click(toggle('Hide message entry'))
+    expect(screen.queryByText('Draft not sent')).toBeNull()
+    fireEvent.click(toggle('Write a message'))
+    await choose('Contact report')
+    await fillContact()
+    fireEvent.click(toggle('Hide message entry'))
+    expect(screen.queryByRole('combobox')).toBeNull()
+    expect(screen.getByText('Draft not sent')).toBeTruthy()
+    fireEvent.click(toggle('Write a message'))
+    expect(typeSelect().selectedOptions[0]?.textContent).toBe('Contact report')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: /Grid reference/ }).value).toBe(
+      'NV1234',
+    )
+  })
+
+  it('counts a draft of a type not on screen, and a refused one as not sent', async () => {
+    const { h } = await mount()
+    await choose('Contact report')
+    fireEvent.change(screen.getByRole('textbox', { name: /Grid reference/ }), {
+      target: { value: 'NV99' },
+    })
+    await choose('Situation report')
+    fireEvent.click(toggle('Hide message entry'))
+    expect(screen.getByText('Draft not sent')).toBeTruthy()
+    fireEvent.click(toggle('Write a message'))
+
+    h.session.stub('muc', 'send', () => Promise.resolve(err('forbidden')))
+    await choose('Contact report')
+    await fillContact()
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await screen.findByRole('alert')
+    fireEvent.click(toggle('Hide message entry'))
+    expect(screen.getByText('Message not sent')).toBeTruthy()
+  })
+})
+
 describe('received templated messages', () => {
   it('shows a card, a not-permitted one with a warning, an invalid one as text with a warning', async () => {
     await mount({

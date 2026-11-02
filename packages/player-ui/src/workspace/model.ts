@@ -20,9 +20,11 @@ import type {
   IJsonTabNode,
   IJsonTabSetNode,
 } from 'flexlayout-react'
-import { parseTabId } from './ids.ts'
+import { parseTabId, roomTabId } from './ids.ts'
 import type { TabIds, TabKind } from './ids.ts'
 import { defaultColumns, pickFewest, reconcilePlan } from './rules.ts'
+import { parseRoomTabState } from './tab-state.ts'
+import type { RoomTabState } from './tab-state.ts'
 
 export { Model }
 export type { Action }
@@ -360,7 +362,12 @@ function mapTab(tab: unknown, rename: Rename): IJsonTabNode | 'special' | undefi
   if (ids === undefined || typeof name !== 'string') return undefined
   const kind = parseTabId(ids.logical)?.kind
   if (kind === 'special') return 'special'
-  return kind === undefined ? undefined : { type: 'tab', id: ids.id, name, component: kind }
+  if (kind === undefined) return undefined
+  const out: IJsonTabNode = { type: 'tab', id: ids.id, name, component: kind }
+  // A room tab's own state (PLY-54), known fields only.
+  const config = kind === 'room' ? parseRoomTabState(tab.config) : undefined
+  if (config !== undefined) out.config = config
+  return out
 }
 
 interface MappedTabs {
@@ -513,14 +520,25 @@ function rebuild(json: unknown, rename: Rename): IJsonModel | undefined {
   return { global: { ...GLOBAL }, borders, layout }
 }
 
-/** PLY-5: the layout to save, with this instance's prefix stripped, as JSON text. */
+/**
+ * PLY-5: the layout to save, with this instance's prefix stripped, as JSON text. Popouts are not
+ * saved (their tabs come back docked), but their room tabs' own state is (PLY-54), under
+ * `detached` by logical id, so a room popped out keeps its state across a reload.
+ */
 export function serialiseLayout(model: Model, ids: TabIds): string {
   const json = rebuild(model.toJson(), (id) => {
     const logical = ids.toLogical(id)
     return logical === undefined ? undefined : { logical, id: logical }
   })
   const { global: _global, ...rest } = json ?? defaultLayoutJson({ rooms: [], panels: [] }, ids)
-  return JSON.stringify(rest)
+  const detached: Record<string, RoomTabState> = {}
+  for (const tab of allTabs(model)) {
+    if (tab.getLayoutId() === Model.MAIN_LAYOUT_ID) continue
+    const logical = ids.toLogical(tab.getId())
+    const config = parseRoomTabState(tab.getConfig())
+    if (logical !== undefined && config !== undefined) detached[logical] = config
+  }
+  return JSON.stringify(Object.keys(detached).length === 0 ? rest : { ...rest, detached })
 }
 
 /**
@@ -549,7 +567,44 @@ export function restoreLayout(
     return undefined
   }
   reconcile(model, spec, ids)
+  // Popped-out rooms come back docked by reconciliation; give them their saved state (PLY-54).
+  const detached = isRecord(parsed) && isRecord(parsed.detached) ? parsed.detached : {}
+  for (const [logical, value] of Object.entries(detached)) {
+    const ref = parseTabId(logical)
+    const config = parseRoomTabState(value)
+    if (ref?.kind !== 'room' || config === undefined) continue
+    const node = model.getNodeById(ids.toModel(logical))
+    if (node instanceof TabNode && parseRoomTabState(node.getConfig()) === undefined) {
+      act(model, Actions.updateNodeAttributes(node.getId(), { config }))
+    }
+  }
   return model
+}
+
+// ---- A room tab's own state (PLY-54) -----------------------------------------------------
+
+/** What the room's tab remembers; empty when it remembers nothing or there is no such tab. */
+export function roomTabState(model: Model, ids: TabIds, roomId: string): RoomTabState {
+  const node = model.getNodeById(ids.toModel(roomTabId(roomId)))
+  if (!(node instanceof TabNode)) return NO_TAB_STATE
+  // The config object is replaced on every update, so this is stable between updates.
+  const config: unknown = node.getConfig()
+  return isRecord(config) ? config : NO_TAB_STATE
+}
+
+const NO_TAB_STATE: RoomTabState = Object.freeze({})
+
+/** Merges `patch` into the room tab's state; nothing happens without the tab. */
+export function updateRoomTabState(
+  model: Model,
+  ids: TabIds,
+  roomId: string,
+  patch: RoomTabState,
+): void {
+  const node = model.getNodeById(ids.toModel(roomTabId(roomId)))
+  if (!(node instanceof TabNode)) return
+  const config = { ...(parseRoomTabState(node.getConfig()) ?? {}), ...patch }
+  act(model, Actions.updateNodeAttributes(node.getId(), { config }))
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

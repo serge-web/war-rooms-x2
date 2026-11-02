@@ -2,7 +2,9 @@
 // room over plain props (NFR-18): who is online (PLY-13), the message list (PLY-9, PLY-43,
 // PLY-45) and the composer (PLY-44, PLY-12, PLY-33). ChatPanel wires it to the pane's store: it
 // joins the room, pages MAM history back on scroll (PLY-49), sends, and marks the room read while
-// the panel is on screen (PLY-11). The workspace wraps it in the room's theme (PLY-24).
+// the panel is on screen (PLY-11). The workspace wraps it in the room's theme (PLY-24). The
+// composer collapses to a bar (PLY-54), remembered in the room's tab; it stays mounted while
+// collapsed, so nothing typed is lost.
 import { ADMIN_AUTHOR_ID, UMPIRE_NAME, participantsOf } from '@wrx/domain'
 import type {
   Author,
@@ -16,6 +18,7 @@ import {
   useAuthors,
   useEffectiveAccess,
   useForces,
+  useMe,
   useOccupants,
   useRetired,
   useRoles,
@@ -29,18 +32,19 @@ import type { Template } from '@wrx/schemas'
 import { templatePlainText } from '@wrx/templates'
 import type { FormValues } from '@wrx/templates'
 import { Banner, Button } from '@wrx/ui'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 // The panels file, not the workspace module's index: that loads the layout library, which the
 // standalone `@wrx/player-ui/chat` entry must not.
 import { onlineRoles } from '../workspace/panels.tsx'
 import type { OnlineRole } from '../workspace/panels.tsx'
+import { useComposerCollapsed } from '../workspace/tab-state.ts'
 import { templateCard } from '../templates/card.ts'
 import { entityLabel } from '../templates/pickers.ts'
 import type { PickerSource } from '../templates/pickers.ts'
 import { ChatComposerCore } from './chat-composer.tsx'
 import type { TemplateSendOutcome, UnsentTemplate } from './chat-composer.tsx'
-import type { SendOutcome } from './composer.tsx'
+import type { DraftState, SendOutcome } from './composer.tsx'
 import { chatClock, chatRows } from './format.ts'
 import type { ChatMessage, TimeFormat } from './format.ts'
 import { MessageListCore } from './message-list.tsx'
@@ -81,7 +85,24 @@ export interface ChatPanelCoreProps {
   readonly announcement?: string
   readonly timeFormat?: TimeFormat | undefined
   readonly scrollRef?: RefObject<HTMLDivElement | null>
+  /**
+   * The role may only read this room (an observer or a read-only participant): the composer
+   * starts collapsed (PLY-54).
+   */
+  readonly readOnly?: boolean
+  /**
+   * The composer is collapsed to a bar (PLY-54); undefined for the default, collapsed only when
+   * `readOnly`. With `onComposerCollapsedChange` the caller keeps it; without, the panel does.
+   */
+  readonly composerCollapsed?: boolean | undefined
+  readonly onComposerCollapsedChange?: ((collapsed: boolean) => void) | undefined
 }
+
+/** The collapsed composer bar's note when something is waiting to be sent (PLY-54). */
+export const DRAFT_NOTES: Readonly<Record<Exclude<DraftState, 'none'>, string>> = Object.freeze({
+  draft: 'Draft not sent',
+  unsent: 'Message not sent',
+})
 
 export function ChatPanelCore({
   roomName,
@@ -104,9 +125,23 @@ export function ChatPanelCore({
   announcement = '',
   timeFormat,
   scrollRef,
+  readOnly = false,
+  composerCollapsed,
+  onComposerCollapsedChange,
 }: ChatPanelCoreProps) {
   const clock = useMemo(() => chatClock(timeFormat), [timeFormat?.locale, timeFormat?.timeZone])
   const rows = useMemo(() => chatRows(messages, clock), [messages, clock])
+  const [ownCollapsed, setOwnCollapsed] = useState<boolean | undefined>(undefined)
+  const controlled = onComposerCollapsedChange !== undefined
+  const collapsed = (controlled ? composerCollapsed : ownCollapsed) ?? readOnly
+  const [draft, setDraft] = useState<DraftState>('none')
+  const entryId = useId()
+  const noteId = useId()
+  const toggle = () => {
+    if (controlled) onComposerCollapsedChange(!collapsed)
+    else setOwnCollapsed(!collapsed)
+  }
+  const note = collapsed && draft !== 'none' ? DRAFT_NOTES[draft] : undefined
   return (
     <div className="wrx-chat">
       <OnlineStrip online={online} />
@@ -140,18 +175,45 @@ export function ChatPanelCore({
       <p className="wrx-visually-hidden" role="status" aria-live="polite">
         {announcement}
       </p>
-      <ChatComposerCore
-        onSend={onSend}
-        disabledReason={disabledReason}
-        initialText={unsent?.text}
-        initialError={unsent?.reason}
-        label={`Message ${roomName}`}
-        templates={templates}
-        freeText={freeText}
-        onSendTemplate={onSendTemplate}
-        pickers={pickers}
-        unsentTemplate={unsentTemplate}
-      />
+      {/* PLY-54: a disclosure button (the WAI-ARIA pattern: focus stays on it). */}
+      <div
+        className={
+          collapsed ? 'wrx-chat__entry-bar wrx-chat__entry-bar--collapsed' : 'wrx-chat__entry-bar'
+        }
+      >
+        {note === undefined ? null : (
+          <span id={noteId} className="wrx-chat__entry-note">
+            {note}
+          </span>
+        )}
+        <Button
+          size="small"
+          variant="ghost"
+          className="wrx-chat__entry-toggle"
+          aria-expanded={!collapsed}
+          aria-controls={entryId}
+          aria-describedby={note === undefined ? undefined : noteId}
+          onClick={toggle}
+        >
+          {collapsed ? (readOnly ? 'Show message entry' : 'Write a message') : 'Hide message entry'}
+        </Button>
+      </div>
+      {/* Hidden, not unmounted, so typed text, form values and a refused post survive. */}
+      <div id={entryId} className="wrx-chat__entry" hidden={collapsed}>
+        <ChatComposerCore
+          onSend={onSend}
+          disabledReason={disabledReason}
+          initialText={unsent?.text}
+          initialError={unsent?.reason}
+          label={`Message ${roomName}`}
+          templates={templates}
+          freeText={freeText}
+          onSendTemplate={onSendTemplate}
+          pickers={pickers}
+          unsentTemplate={unsentTemplate}
+          onDraftChange={setDraft}
+        />
+      </div>
     </div>
   )
 }
@@ -449,6 +511,9 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
   useMarkRead(roomId, view?.messages, loaded, onScreen)
   const announcement = useArrivalAnnouncement(messages, loaded)
   const [olderError, setOlderError] = useState<string | undefined>(undefined)
+  // PLY-54: known from the role before the room is joined, so the default never flips.
+  const observer = useMe().data.isObserver
+  const [composerCollapsed, setComposerCollapsed] = useComposerCollapsed(roomId)
 
   const onLoadOlder = useCallback(() => {
     setOlderError(undefined)
@@ -521,6 +586,9 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
       problem={roomProblem(view, snapshot.error, onRetry)}
       announcement={announcement}
       scrollRef={scrollRef}
+      readOnly={observer || access === 'read' || view?.readOnlyReason !== undefined}
+      composerCollapsed={composerCollapsed}
+      onComposerCollapsedChange={setComposerCollapsed}
     />
   )
 }

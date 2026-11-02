@@ -55,6 +55,11 @@ export const ReadOnly: Story = {
   },
 }
 
+/** PLY-54: the composer collapsed to a bar, as a role that only reads usually keeps it. */
+export const Collapsed: Story = {
+  args: { readOnly: true, disabledReason: 'Your role can read this room but not post in it.' },
+}
+
 export const RefusedPost: Story = {
   args: {
     unsent: { text: 'Move to grid 1234.', reason: 'you can no longer post in this room.' },
