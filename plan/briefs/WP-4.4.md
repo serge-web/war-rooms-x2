@@ -23,3 +23,4 @@ Prove templated rooms end to end, and review them.
 - **Security review** (`plan/reviews/phase-4-security-review.md`): H1, patterns ran on over-long values, fixed in `@wrx/templates` (for the owner); M1, M2, L1 to L3 recorded.
 - **Ports:** `WRX_MOCK_HOST_E2E_PORT`, `WRX_SHOTS_PORT`, `WRX_ADMIN_UI_E2E_PORT` and `WRX_THEME_E2E_PORT` move the e2e and screenshot servers.
 - **Docs:** SRD Annex A "As built", the data dictionary's profile description, `site/pages/templates.md`, and the gate post `site/pages/blog/phase-4-message-templates.md` (blog posts may now be phase 4).
+- **Safari:** keyboard entry in the date and time field is unverified. Playwright's WebKit build leaves the control empty under the arrow keys and typed digits, so the keyboard e2e fills that one field directly on WebKit; the rest of that test is keyboard only.
