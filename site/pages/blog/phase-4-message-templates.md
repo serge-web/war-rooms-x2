@@ -37,14 +37,13 @@ Phase 4 was built on recommended answers to questions the product owner deferred
 
 - **When a template locks.** A template locks when a published room first offers it, not when a message first uses it, because which templates have been used cannot be seen reliably. A template offered once and never used is locked too.
 - **Removing a locked template.** Allowed, after a confirmation for each one. Messages that used it then show as plain text, with every value, from then on.
-- **Templates no longer offered.** A message whose template the room no longer offers its sender shows as a card with a note, not as plain text as the specification first said, so changing a room's settings does not rewrite its history.
 - **Who gets which templates.** A role's own templates add to its force's. The umpire and White Force roles who are not observers may use every template a room offers; observers none.
 - **Templates are not private to a force.** Every role can read every template, so a template's name and fields should not give away one force's plans.
 - **Unticked yes/no fields.** An unticked box is sent, and shown, as "No", not left out.
 - **The form's controls.** The template form uses the browser's own drop-downs and date pickers, styled with the app's colours, rather than the app's own drop-down component.
 - **Image and asset pickers.** Not built. They wait for the decision on how images are stored, and for the force assets of the map channel.
 
-One is already decided: a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
+Two are already decided. A message whose template the room no longer offers its sender stays a card with a note, so changing a room's settings does not rewrite its history. And a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
 
 ## Next
 
