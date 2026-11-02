@@ -218,7 +218,13 @@ test('a template is filled and sent from the keyboard alone; axe passes (NFR-14)
   // moves on by itself) differs between Chromium, Firefox and WebKit, so each part is set with
   // the arrow key every engine gives it (an empty part takes a value on ArrowUp), and Tab moves
   // to the next part, then out of the field to the grid reference.
+  // An engine without a date and time control (Linux WebKit) shows a text box, whose type
+  // property reads `text`; there the value is typed in the format the field sends.
   const grid = panel.getByLabel('Grid reference')
+  if ((await seenAt.evaluate((el) => (el as HTMLInputElement).type)) === 'text') {
+    await page.keyboard.type('2026-01-15T09:30')
+    await page.keyboard.press('Tab')
+  }
   for (let i = 0; i < 10 && !(await grid.evaluate((el) => el === document.activeElement)); i++) {
     await page.keyboard.press('ArrowUp')
     await page.keyboard.press('Tab')
