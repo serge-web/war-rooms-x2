@@ -61,13 +61,17 @@ test('the template editor runs under the CSP, with no violation (F7, NFR-14)', a
   await page.keyboard.press('ControlOrMeta+a')
   await page.keyboard.insertText(
     JSON.stringify({
-      schema: { type: 'object', properties: { note: { type: 'string', maxLength: 3 } } },
+      schema: {
+        type: 'object',
+        properties: { note: { type: 'string', maxLength: 10, minLength: 5 } },
+      },
     }),
   )
   const copyPreview = page.getByRole('region', { name: 'Preview of Copy of Situation report' })
-  await copyPreview.getByLabel('note').fill('toolong')
+  // The player's text box stops at maxLength, so the preview's check is shown with minLength.
+  await copyPreview.getByLabel('note').fill('abc')
   await copyPreview.getByRole('button', { name: 'Check' }).click()
-  await expect(copyPreview.getByText('is too long')).toBeVisible()
+  await expect(copyPreview.getByText('is too short')).toBeVisible()
 
   violations.push(
     ...(await page.evaluate(
