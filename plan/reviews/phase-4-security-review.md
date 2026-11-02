@@ -22,7 +22,7 @@ The product owner decides on anything rated High or Critical. H1 is fixed and te
 | --- | --- | --- | --- |
 | H1 | An over-long value made every receiver run the field's pattern on 8,000 characters: minutes of main-thread work per message | High | Fixed, tested; rating and fix confirmed by the owner (Nov 2, 2026) |
 | M1 | A lock fixes the schema only: the admin can relabel a locked template's fields (`ui:title`), reorder them, and rename the template, which changes how past messages read | Medium | Fixed (Nov 2, 2026): the owner chose to lock labels, order and name too; planner, audit and editor refuse them, with tests |
-| M2 | Removing a locked template turns its messages into plain text for good | Medium | Recorded: deliberate, confirmed one by one; the owner's pending answer |
+| M2 | Removing a locked template turns its messages into plain text for good | Medium | Accepted by the owner (Nov 2, 2026): deliberate, confirmed one by one |
 | L1 | A modified client can send a template its role is not offered, or free text in a templates-only room | Low | Accepted by design (D2, T-R1); the first is marked, the second cannot be |
 | L2 | A modified client can use a template no published room offers, so it is not locked, and a later edit by the admin changes how that message reads | Low | Recorded |
 | L3 | A picker's room scope and force filter are not checked on receipt | Low | Accepted by design (drift) |
@@ -58,7 +58,7 @@ The product owner decides on anything rated High or Critical. H1 is fixed and te
 
 **Fixed.** The product owner chose (Nov 2, 2026) to lock labels, order and name as well. `templateLockErrors` now compares the name and the whole `uiSchema` (absent equals empty) as well as the schema; the audit uses the same check; `updateTemplate` ignores those changes on a locked template and the editor shows the name read only. Tests: `plan.test.ts` (name, labels, order refused; description allowed), `templates.test.ts` (draft), the admin-ui e2e (name read only). **Before the fix:** what a lock covers was one of the owner's pending decisions. The cheap fix, if the owner wants it, is to compare each field's `ui:title` (and `ui:order`, if order matters) with the schema in `templateLockErrors`, and make them read only in the editor.
 
-### M2: removing a locked template (Medium, recorded)
+### M2: removing a locked template (Medium, accepted by the owner)
 
 **What.** The planner allows dropping a locked template from the design. The publish retracts its item after the rooms stop offering it, and from then on its messages fail the "known template" check and show as plain text with a warning, for good. The retraction is a destructive step: confirmed one by one in the apply dialog and in the audit's repair (`stepConfirmation`, `template:<id>`), and its warning says whether the template was locked.
 
