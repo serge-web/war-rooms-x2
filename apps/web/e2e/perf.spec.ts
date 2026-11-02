@@ -1,4 +1,4 @@
-// Performance at the v1 sizes (WP 3.2): NFR-11 on the scale fixture (50 roles, 30 rooms, 10,000
+// Performance at the v1 sizes (WP 3.2; templated messages, WP 4.4): NFR-11 on the scale fixture (50 roles, 30 rooms, 10,000
 // messages in one room): a room tab renders in under 1 s, scrolling stays smooth, and the access
 // matrix and publish plan stay usable; and NFR-12: four panes of the multi-client view, a message
 // reaching all four within 1 s, and typing without visible lag. Measured in Chromium only, where
@@ -6,7 +6,8 @@
 // assertions are a regression guard at MARGIN times the target, so a shared CI runner does not
 // fail them, and a real regression (a lost virtualisation, an O(n²) render) still does.
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Page, TestInfo } from '@playwright/test'
+import type { ScaleOptions } from '@wrx/mock-server'
 import { logIn, roomTabs } from './mock.ts'
 import { MARGIN, inputStats, record, scrollFrames, timeToFrame, watchInput } from './perf.ts'
 import { SCALE_BUSY_ROOM_NAME, busyRoomList, loadScale, storeScaleDraft } from './scale.ts'
@@ -15,20 +16,25 @@ test.skip(({ browserName }) => browserName !== 'chromium', 'timing APIs and numb
 
 const BUSY_TAB = `.flexlayout__layout_main [role="tab"][aria-label="${SCALE_BUSY_ROOM_NAME}"]`
 const BUSY_LIST = `[role="region"][aria-label="Messages in ${SCALE_BUSY_ROOM_NAME}"]`
-/** The newest message in the busy room. */
-const NEWEST = '#10000 '
 
 async function asUmpire(page: Page): Promise<void> {
   await logIn(page, 'admin', 'demo-admin')
   await expect(roomTabs(page)).toHaveCount(30, { timeout: 30_000 })
 }
 
-test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smoothly', async ({
-  page,
-}, testInfo) => {
-  test.setTimeout(180_000)
+/**
+ * The busy room of a scale fixture: a cold and a warm render of its tab, typing in it, scrolling
+ * up with paging, paging in the whole history and scrolling down through it, against NFR-11.
+ */
+async function measureBusyRoom(
+  page: Page,
+  testInfo: TestInfo,
+  { total, options = {} }: { readonly total: number; readonly options?: ScaleOptions },
+): Promise<void> {
+  const NEWEST = `#${String(total)} `
+  const count = total.toLocaleString('en-GB')
   await page.setViewportSize({ width: 1400, height: 900 })
-  await loadScale(page)
+  await loadScale(page, './', options)
   const login = Date.now()
   await asUmpire(page)
   const loginMs = Date.now() - login
@@ -63,17 +69,19 @@ test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smo
   // Typing in the busy room's composer: input-to-paint for every keystroke.
   await page.getByRole('textbox', { name: `Message ${SCALE_BUSY_ROOM_NAME}`, exact: true }).click()
   await watchInput(page)
-  await page.keyboard.type('Typing in a room of ten thousand messages.', { delay: 25 })
+  await page.keyboard.type(`Typing in a room of ${count} messages.`, { delay: 25 })
   const typing = await inputStats(page)
 
   // Scroll up through the history: older pages of 50 load as the reader nears the top (PLY-49).
   const up = await scrollFrames(page, BUSY_LIST, -60, 600)
   // How far back that reached: the message number of the oldest row on screen.
-  const reached = Number(
-    /#(\d+) /.exec((await page.locator(`${BUSY_LIST} article`).first().textContent()) ?? '')?.[1],
+  // (Of a templated room, only situation reports carry a number, in their summary.)
+  const numbers = (await page.locator(`${BUSY_LIST} article`).allTextContents()).flatMap((t) =>
+    [...t.matchAll(/#(\d+) /g)].map((m) => Number(m[1])),
   )
+  const reached = numbers.length === 0 ? Number.NaN : Math.min(...numbers)
 
-  // Page in the whole history, then scroll down through all 10,000 rows held in memory.
+  // Page in the whole history, then scroll down through every row held in memory.
   const all = Date.now()
   await page.evaluate(async (selector) => {
     const el = document.querySelector(selector)
@@ -94,7 +102,12 @@ test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smo
 
   await record(testInfo, [
     { name: 'umpire login to 30 room tabs (informational)', value: loginMs, unit: 'ms' },
-    { name: 'room tab, cold render (10,000-message room)', value: cold, unit: 'ms', target: 1000 },
+    {
+      name: `room tab, cold render (${count}-message room)`,
+      value: cold,
+      unit: 'ms',
+      target: 1000,
+    },
     { name: 'room tab, switch back (mounted)', value: warm, unit: 'ms', target: 1000 },
     { name: 'rows in the DOM', value: rendered, unit: 'count' },
     { name: 'typing: longest input-to-paint', value: typing.max, unit: 'ms', target: 100 },
@@ -109,17 +122,17 @@ test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smo
       unit: 'ms',
     },
     { name: 'scroll up with paging: reached message number', value: reached, unit: 'count' },
-    { name: 'page in all 10,000 (informational)', value: allMs, unit: 'ms' },
-    { name: 'scroll down, 10,000 loaded: p50 frame', value: down.p50, unit: 'ms' },
-    { name: 'scroll down, 10,000 loaded: p95 frame', value: down.p95, unit: 'ms' },
-    { name: 'scroll down, 10,000 loaded: longest frame', value: down.max, unit: 'ms' },
-    { name: 'scroll down, 10,000 loaded: frames over 50 ms', value: down.long, unit: 'count' },
+    { name: `page in all ${count} (informational)`, value: allMs, unit: 'ms' },
+    { name: `scroll down, ${count} loaded: p50 frame`, value: down.p50, unit: 'ms' },
+    { name: `scroll down, ${count} loaded: p95 frame`, value: down.p95, unit: 'ms' },
+    { name: `scroll down, ${count} loaded: longest frame`, value: down.max, unit: 'ms' },
+    { name: `scroll down, ${count} loaded: frames over 50 ms`, value: down.long, unit: 'count' },
     {
-      name: 'scroll down, 10,000 loaded: longest script in a frame',
+      name: `scroll down, ${count} loaded: longest script in a frame`,
       value: down.longestScript,
       unit: 'ms',
     },
-    { name: 'rows in the DOM, 10,000 loaded', value: renderedFull, unit: 'count' },
+    { name: `rows in the DOM, ${count} loaded`, value: renderedFull, unit: 'count' },
   ])
 
   expect(cold).toBeLessThan(1000 * MARGIN)
@@ -130,6 +143,28 @@ test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smo
   // Smooth: most frames at the display rate; a guard against a render that scales with the room.
   expect(down.p95).toBeLessThan(50 * MARGIN)
   expect(up.p95).toBeLessThan(50 * MARGIN)
+}
+
+test('NFR-11: a room tab of 10,000 messages renders in under 1 s and scrolls smoothly', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000)
+  await measureBusyRoom(page, testInfo, { total: 10_000 })
+})
+
+// Annex A (WP 4.4): the same budgets with 2,000 templated messages, every one a card checked
+// against its template and the room's config on receipt (TPL-6), all three demo templates mixed.
+test('NFR-11: a room of 2,000 templated messages renders in under 1 s and scrolls smoothly', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(180_000)
+  await measureBusyRoom(page, testInfo, {
+    total: 2_000,
+    options: { messages: 2_000, templated: true },
+  })
+  // Every message is a card, and none is marked: the receiver's check passes them all.
+  await expect(page.locator(`${BUSY_LIST} .wrx-tcard`).first()).toBeVisible()
+  await expect(page.locator(`${BUSY_LIST} .wrx-chat__warning`)).toHaveCount(0)
 })
 
 test('NFR-11: the access matrix and the publish plan stay usable at 50 roles and 30 rooms', async ({

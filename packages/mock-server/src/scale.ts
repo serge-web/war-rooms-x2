@@ -4,7 +4,8 @@
 // admin's draft is the same design (`scaleDesign`). Deterministic: the same options give the same
 // state, so measurements are comparable between runs. Every password is a DEMO PASSWORD (NFR-6).
 import { DESIGN_FILE_VERSION } from '@wrx/schemas'
-import type { DesignFile } from '@wrx/schemas'
+import type { ChatRoomConfig, DesignFile, Template } from '@wrx/schemas'
+import { sampleTemplates } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
 import type { SeedMessage } from './seed.ts'
 import type { MockState } from './state.ts'
@@ -18,6 +19,12 @@ export interface ScaleOptions {
   readonly messages?: number
   /** Messages in each other room. Default 5. */
   readonly messagesPerOtherRoom?: number
+  /**
+   * Annex A (WP 4.4): when true, the design has the demo's three templates (every field type),
+   * the busy room offers all three to every player force beside free text, and every message in
+   * the busy room is a templated one, valid for its template. Default false.
+   */
+  readonly templated?: boolean
 }
 
 /**
@@ -180,6 +187,23 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     })
   }
 
+  const templates = options.templated === true ? scaleTemplates() : []
+  if (templates.length > 0) {
+    const busy = rooms[0]
+    const config: ChatRoomConfig = {
+      schemaVersion: 2,
+      freeText: true,
+      templates: forces
+        .filter((f) => !f.isUmpire)
+        .map((f) => ({
+          kind: 'force' as const,
+          id: f.id,
+          templateIds: templates.map((t) => t.id),
+        })),
+    }
+    if (busy !== undefined) rooms[0] = { ...busy, config }
+  }
+
   return {
     format: 'wrx1-design',
     schemaVersion: DESIGN_FILE_VERSION,
@@ -206,8 +230,91 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
       })),
     assets: [],
     retired: [],
-    templates: [],
+    templates,
   }
+}
+
+/**
+ * The demo's three templates (`sampleTemplates`): a situation report (force picker, text,
+ * slider, date, drop-down), a contact report (date and time, patterned text, integer, yes/no)
+ * and a support request (linked drop-downs, a role picker), its role picker filtered to Force 1.
+ */
+export function scaleTemplates(): Template[] {
+  return sampleTemplates().map((t, i) => {
+    const properties = t.schema.properties as Record<string, Record<string, unknown>>
+    const fixed = Object.fromEntries(
+      Object.entries(properties).map(([name, field]) => [
+        name,
+        field['x-wrx-force'] === undefined ? field : { ...field, 'x-wrx-force': scaleId('f1') },
+      ]),
+    )
+    return {
+      ...t,
+      id: scaleId(`template-${String(i + 1)}`),
+      schema: { ...t.schema, properties: fixed },
+    }
+  })
+}
+
+/**
+ * A templated message body for message `n` of the busy room, valid for its template: template
+ * `kind` (mod 3), so the caller can make the newest a situation report, whose summary holds the
+ * message number as chat messages' text does.
+ */
+function templatedBody(
+  templates: readonly Template[],
+  design: DesignFile,
+  random: () => number,
+  n: number,
+  kind: number,
+): string {
+  const template = templates[kind % templates.length]
+  if (template === undefined) return chat(`#${n + 1}`)
+  const forces = design.forces.filter((f) => !f.isUmpire)
+  const forceOne = design.roles.filter((r) => r.forceId === scaleId('f1'))
+  const pick = <T>(list: readonly T[]): T | undefined => list[Math.floor(random() * list.length)]
+  const day = String(1 + Math.floor(random() * 28)).padStart(2, '0')
+  const hour = String(Math.floor(random() * 24)).padStart(2, '0')
+  let values: Record<string, string | number | boolean>
+  switch (kind % templates.length) {
+    case 0:
+      values = {
+        force: pick(forces)?.id ?? '',
+        summary: text(random, n).slice(0, 500),
+        readiness: 5 * Math.floor(random() * 21),
+        asOf: `2026-10-${day}`,
+        ...(random() < 0.7 ? { threat: pick(['low', 'medium', 'high'] as const) ?? 'low' } : {}),
+      }
+      break
+    case 1:
+      values = {
+        seenAt: `2026-10-${day}T${hour}:30:00.000Z`,
+        grid: `NV${String(1000 + Math.floor(random() * 9000))}`,
+        strength: 1 + Math.floor(random() * 999),
+        hostile: random() < 0.5,
+      }
+      break
+    default: {
+      const air = random() < 0.5
+      values = {
+        kind: air ? 'air' : 'logistics',
+        detail: air
+          ? random() < 0.5
+            ? 'strike'
+            : 'recce'
+          : random() < 0.5
+            ? 'fuel'
+            : 'ammunition',
+        to: pick(forceOne)?.id ?? '',
+        urgent: random() < 0.3,
+      }
+    }
+  }
+  return JSON.stringify({
+    type: 'template',
+    schemaVersion: 1,
+    content: { templateId: template.id, values },
+  })
 }
 
 /** The history: `messages` in the busy room from its writers, a few in each other room. */
@@ -226,7 +333,10 @@ export function scaleHistory(design: DesignFile, options: ScaleOptions = {}): Se
     history.push({
       room: SCALE_BUSY_ROOM,
       author,
-      body: chat(text(random, i)),
+      body:
+        design.templates.length > 0
+          ? templatedBody(design.templates, design, random, i, total - 1 - i)
+          : chat(text(random, i)),
       at: new Date(end - (total - i) * 10_000).toISOString(),
     })
   }

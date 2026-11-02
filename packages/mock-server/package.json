@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@wrx/contract-suite": "workspace:*",
+    "@wrx/templates": "workspace:*",
     "vitest": "^5.0.5"
   }
 }

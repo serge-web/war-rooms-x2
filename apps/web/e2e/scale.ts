@@ -9,15 +9,21 @@ import type { Page } from '@playwright/test'
 
 export { SCALE_BUSY_ROOM_NAME, SCALE_PLAYER } from '@wrx/mock-server'
 
-/** Made once per worker: the JSON is a few megabytes. */
-let cached: string | undefined
-function scaleJson(): string {
-  cached ??= JSON.stringify(scaleState())
-  return cached
+/** Made once per worker and options: the JSON is a few megabytes. */
+const cached = new Map<string, string>()
+function scaleJson(options: ScaleOptions): string {
+  const key = JSON.stringify(options)
+  const json = cached.get(key) ?? JSON.stringify(scaleState(options))
+  cached.set(key, json)
+  return json
 }
 
 /** Opens the app and replaces the mock database with the scale fixture. */
-export async function loadScale(page: Page, path = './'): Promise<void> {
+export async function loadScale(
+  page: Page,
+  path = './',
+  options: ScaleOptions = {},
+): Promise<void> {
   await page.goto(path)
   await page.waitForFunction(() => window.wrxMock !== undefined)
   const error = await page.evaluate(async (json) => {
@@ -25,7 +31,7 @@ export async function loadScale(page: Page, path = './'): Promise<void> {
     if (host === undefined) return 'no mock host'
     const imported = await host.importDatabase(json)
     return imported.ok ? undefined : imported.error
-  }, scaleJson())
+  }, scaleJson(options))
   expect(error).toBeUndefined()
 }
 
