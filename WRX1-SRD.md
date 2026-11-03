@@ -387,7 +387,7 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 
 **Browsers and accessibility**
 
-- NFR-13 Current Chrome and Edge SHALL be supported; Firefox and Safari SHOULD be.
+- NFR-13 Current Chrome and Edge SHALL be supported; Safari SHOULD be. Firefox is not supported (product owner, Nov 3, 2026).
 - NFR-14 The UI SHOULD meet WCAG 2.2 AA, including keyboard alternatives to drag and drop.
 
 **Testing and quality**
@@ -825,6 +825,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - **Kept as built:** rule 4 consequences, now highlighted in ADM-9; PLY-31, with delete-and-recreate as the eviction route (ADM-26, R29).
 - **Accepted risks:** lost vault passphrase (R22), public repos (R18). New risks R23–R30.
 - **New spike checks** S15–S16 (§10, P7).
+- **Browsers (NFR-13).** The draft made Firefox a SHALL; the owner chose instead to drop Firefox support. Chrome and Edge stay SHALL, Safari SHOULD; CI no longer runs Firefox.
 
 **Assumptions to confirm**
 

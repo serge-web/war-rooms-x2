@@ -16,3 +16,5 @@
 ## The real-hardware run (NFR-23)
 
 Not done yet. When it is, record here: the machine (OS, kernel, CPU, Docker version, disk), the bundle's version and SHA-256, the CA route used, and the result of each step of the checklist in `ops/README.md`.
+
+**Update, Nov 3, 2026.** The product owner dropped Firefox support: Chrome and Edge are SHALL, Safari SHOULD, and CI no longer runs Firefox (SRD NFR-13).

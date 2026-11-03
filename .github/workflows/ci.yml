@@ -99,9 +99,9 @@ jobs:
 
   # NFR-13: the app's e2e suite in the other browsers, which only CI installs (locally there is
   # Chromium alone). Chrome and Edge are the SHALL (WP 0.4: the customer's analysts use them
-  # only), covered by build-e2e's Chromium run. Firefox and WebKit (for Safari) are a SHOULD, so
-  # both are advisory: their test failures show as warnings and the job passes. Known failures are in
-  # plan/reviews/phase-3-browsers.md. The performance tests skip here: their timing APIs and
+  # only), covered by build-e2e's Chromium run. WebKit (for Safari) is a SHOULD, so it is
+  # advisory: its test failures show as warnings and the job passes. Firefox is not supported
+  # (product owner, Nov 3, 2026). Known failures are in plan/reviews/phase-3-browsers.md. The performance tests skip here: their timing APIs and
   # recorded numbers are Chromium's (build-e2e runs them).
   e2e-browsers:
     name: App e2e in ${{ matrix.browser }} (advisory)
@@ -111,8 +111,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - browser: firefox
-            advisory: true
           - browser: webkit
             advisory: true
     steps:

@@ -33,13 +33,13 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 
 ### Supported browsers
 
-Decided in WP 0.4:
+Decided in WP 0.4, and on Nov 3, 2026 for Firefox:
 
 | Browser | Support |
 | --- | --- |
 | Current Google Chrome | Supported (SHALL): every test runs on its engine (Chromium) |
 | Current Microsoft Edge | Supported (SHALL): same engine as Chrome |
-| Current Firefox | Best effort (SHOULD): the tests run on it and failures are fixed or recorded |
+| Firefox | Not supported (product owner, Nov 3, 2026) |
 | Current Safari | Best effort (SHOULD): the tests run on its engine (WebKit) and failures are fixed or recorded |
 
 Known browser issues are under "Known limits".
@@ -71,7 +71,6 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 ### Known limits
 
 - **Pending checks:** the real-hardware install (WP 3.3) and the certificate decision, above.
-- **Firefox:** a room popped out into its own window shows no messages. Dock it back, or maximise it instead.
 - **Safari:** dragging room tabs with the mouse is unverified in a real Safari (the automated WebKit tests cannot drag them); moving a tab with the keyboard works.
 - **Unread counts** start again at each login.
 - **One game per server.**
