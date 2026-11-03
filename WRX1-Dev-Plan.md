@@ -38,13 +38,13 @@ Each work package (WP) is a written brief that one Claude Code session builds on
 
 ## Phases and work packages
 
-There are 31 work packages, including the spike S14, which is groundwork for after v1. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
+There are 39 work packages, including the spike S14 and the Phase 5 spike checks. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
 
 | WP | Work package | SRD ids | Depends on |
 | --- | --- | --- | --- |
 | **Phase 0 — Foundations** |  |  |  |
 | 0.1 | S13 offline voice revocation, and the WebSocket stanza cap (P1) | ADM-37, R15 | — |
-| 0.2 | Layout library evaluation, FlexLayout vs dockview (P3) | PLY-4–6, 40–42, ARC-9 | — |
+| 0.2 | Layout library evaluation, FlexLayout vs dockview (P3) | PLY-4, PLY-5, PLY-40, PLY-42, ARC-9 | — |
 | 0.3 | StanzaJS health check (P4) | ARC-1, ARC-12 | — |
 | 0.4 | Target environment questions (P2), answered by Doc with the customer | D12, D17, NFR-23 | — |
 | 0.5 | Repo scaffold: monorepo, TypeScript strict, lint rules, Vitest, Playwright, CI with ejabberd container, PR template, **README with the Mermaid plan chart** | D18, NFR-7, NFR-15–19, NFR-22, DOC-22 | — |
@@ -63,7 +63,7 @@ There are 31 work packages, including the spike S14, which is groundwork for aft
 | 2.2 | Admin design editor and admin screen layout | ADM-1–9, 27–28 | 1.6 |
 | 2.3 | Publish and provisioning: diff, progress, live changes, reset, export/import, credentials sheet | ADM-10–17, 25–26, NFR-4, NFR-6 | 2.1, 2.2 |
 | 2.4 | Player shell: login, session, reconnect, forced logout, welcome page, empty states | PLY-1–3, 27–32, 46–48, 50–52, NFR-8–9 | 1.6 |
-| 2.5 | Workspace: dockable layout, persistence, reconciliation, default layout, reset | PLY-4–6, 8, 40–42, ARC-9 | 0.2, 2.4 |
+| 2.5 | Workspace: dockable layout, persistence, reconciliation, default layout, reset | PLY-4, 5, 8, 40, 42, ARC-9 | 0.2, 2.4 |
 | 2.6 | Chat room panel: cards, composer, MAM history, unread counts, observer UI, unsent text; the composer collapses to a bar, remembered per room (added Nov 2, 2026) | PLY-9–14, 33, 43–45, 49, 53, 54 | 2.5 |
 | 2.7 | Out-of-game column: announcements, force panel, objectives (including umpire editing) | PLY-15, 25, 35–39, ADM-23–24, 29 | 2.5, 2.1 |
 | 2.8 | Themes: runtime theming and inheritance, assets and SVG sanitising, theme editor | D19, PLY-24, 26, ADM-18–22 | 1.6, 2.2 |
@@ -81,6 +81,14 @@ There are 31 work packages, including the spike S14, which is groundwork for aft
 | 4.2 | Composer and card: RJSF theme on our tokens, special fields, send, card, TPL-6 checks | TD3, TD7, TPL-3, TPL-5, TPL-6 | 4.1 |
 | 4.3 | Template editor: builder, raw editor, live preview, room template config, lock and copy | TD4, TD5, TPL-2, TPL-4, TPL-7 | 4.1 |
 | 4.4 | Acceptance: scenario SC-10, performance, accessibility, security review, docs and gate post | Annex A, T-R1, T-R2 | 4.2, 4.3 |
+| **Phase 5 — Turns and the map (the product owner's Nov 3, 2026 revision, part of v1)** |  |  |  |
+| 5.1 | Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers) on ejabberd 26.09; record outcomes and adopt shapers if they work | R15, P7 | 1.2 |
+| 5.2 | Turn and world-state model: zod schemas for `game-state` and world-state messages (fixed asset fields, `sidc`), JSON Schema export (P8, D26), `map` room type in the registry with its config, one map room per game, the 500 KB map-room cap, `game-state` provisioning, mock and contract tests | §3 rules 16–18, D25, D26, ARC-5, PLY-53 | G4 |
+| 5.3 | Design and publishing changes: `designVersion` only on structural changes, layout reset with a notice (retiring the in-place room reconciliation), `rooms:*` and `game-state` readable by every role, room discovery by `directory` subscription, room-name visibility warning, access matrix highlights for the rule 4 consequences | §3 rules 4, 8, 15; D6, PLY-5, PLY-30, PLY-60, ADM-9, R24 | 5.2 |
+| 5.4 | Turns: the admin advances phases, the turn panel in the out-of-game column, composers disabled for non-White Force roles during adjudication (advisory) | D7, ADM-43, PLY-55, PLY-56, R27 | 5.2 |
+| 5.5 | Map room for players: Leaflet with a runtime tile URL, milsymbol symbols bundled, asset details, the newest valid world state from MAM, admin-only acceptance, 600 assets under 1 s | PLY-57–59, NFR-7, NFR-9, NFR-11, R23, R30 | 5.2 |
+| 5.6 | World-state editor for the admin: add, move, edit and delete assets on the map; browser-only draft with an unpublished-edits indicator; change summary and publish at phase change | ADM-44–46, R25, R26 | 5.4, 5.5 |
+| 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6 |
 | **After v1 — Annexes A and B** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
 
@@ -96,7 +104,7 @@ Raised during the build, not yet given a work package.
 | --- | --- | --- | --- |
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 | FT-2 | **Message templates (SRD Annex A), after v1. A1 to A4 became Phase 4 (WPs 4.1 to 4.4); A5, the image and asset pickers, stays here.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
-| FT-3 | **Force assets and the map channel (SRD Annex B), after v1.** Spike S14 done (two flat nodes per force, `plan/decisions/S14.md`); then proposed WPs B1 to B4, after the owner answers the writer-model questions, (asset model, provisioning, map channel, asset picker) in the same record | Annex B | Product owner's revision, Nov 1, 2026 |
+| FT-3 | **Superseded (Nov 3, 2026).** Force assets in their own store (SRD Annex B) are replaced by the map room's world state (D25), built in Phase 5. Spike S14's result (no collection nodes on ejabberd 26.09) still stands and shapes room discovery (PLY-60). | Annex B | Oct 2026 |
 
 ## The README plan chart
 
@@ -153,6 +161,16 @@ flowchart TB
         wp43["4.3 Template editor"]
         wp44["4.4 Acceptance and review"]
     end
+    subgraph P5["Phase 5 — Turns and the map"]
+        direction LR
+        wp51["5.1 Spike checks S15–S16"]
+        wp52["5.2 Turn and world-state model"]
+        wp53["5.3 Design, publish and layout changes"]
+        wp54["5.4 Turns and turn panel"]
+        wp55["5.5 Map room"]
+        wp56["5.6 World-state editor"]
+        wp57["5.7 Acceptance and review"]
+    end
     subgraph PX["After v1 — Annexes A and B"]
         direction LR
         wps14["S14 Collection access spike"]
@@ -162,6 +180,7 @@ flowchart TB
     G2{{"Gate G2"}}
     G3{{"Gate G3 — v1"}}
     G4{{"Gate G4 — templates"}}
+    G5{{"Gate G5 — turns and map"}}
 
     wp05 --> wp06 --> wp07
     wp05 --> wp08
@@ -190,13 +209,19 @@ flowchart TB
     wp41 --> wp42 & wp43
     wp42 & wp43 --> wp44
     P4 -.-> G4
+    G4 --> wp52
+    wp12 --> wp51
+    wp52 --> wp53 & wp54 & wp55
+    wp54 & wp55 --> wp56
+    wp53 & wp56 --> wp57
+    P5 -.-> G5
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44 todo
-    class G0,G1,G2,G3,G4 gate
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57 todo
+    class G0,G1,G2,G3,G4,G5 gate
 ```
 
 **How PRs update the chart**
@@ -208,6 +233,7 @@ flowchart TB
 - CI renders the chart on every PR and fails if the Mermaid doesn't parse. The PR checklist asks whether the chart reflects the PR.
 - At each gate, the chart is compared with this baseline, and the differences are recorded in the gate's blog post.
 | Phase 4 added: WPs 4.1 to 4.4 for message templates (Annex A A1 to A4), one phase PR, gate G4 | The product owner started Annex A on Nov 1, 2026 and deferred its open questions; Phase 4 builds on the recommended answers (`plan/decisions/annex-a-b-implementation.md`, "Provisional answers") |
+| Phase 5 added: WPs 5.1 to 5.7 for turns and the map (the product owner's Nov 3, 2026 revision), one phase PR, gate G5; FT-3 superseded; PLY-6 and PLY-41 retired from WPs 0.2 and 2.5 | The owner moved a turn model and a map room with an admin-edited world state into v1. v1's release now waits for G5 as well as the WP 3.3 hardware check |
 
 ## CI gates and human checkpoints
 

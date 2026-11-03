@@ -1,5 +1,7 @@
-// SC-6 Admin changes the game during play (SRD §12). Traces to: ADM-13, ADM-25, PLY-6,
-// PLY-28–30, D23.
+// SC-6 Admin changes the game during play (SRD §12). Traces to: ADM-13, ADM-25, PLY-5, PLY-28–30, D23.
+//
+// The Nov 3, 2026 revision makes step 4 reset the layout to the default with a notice (PLY-5);
+// WP 5.3 changes this spec to match. Until then it checks the earlier in-place reconciliation.
 //
 // With Blue CO and Red CO online, the admin moves Blue CO to Red and adds a room for Red. The
 // publish view lists the online roles affected; the publish grants Red access before it revokes

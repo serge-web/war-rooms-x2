@@ -2,7 +2,7 @@
 
 ## v1 (release candidate, not yet released)
 
-v1 is complete and tested, and waits for one check before it is released: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. How the customer issues server certificates is also still open. Both are deployment steps; neither is expected to change the code. This page will give the release date once the check is done.
+The product owner's Nov 3, 2026 revision moved a turn model and a map room into v1, so v1 now waits for Phase 5 (turns and the map) as well as one check: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. How the customer issues server certificates is also still open. Both are deployment steps; neither is expected to change the code. This page will give the release date once the check is done.
 
 ### What v1 does
 
@@ -76,5 +76,5 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 - **Unread counts** start again at each login.
 - **One game per server.**
 - **One account per role:** players sharing a role share its login.
-- **Not in v1** (the design keeps each cheap to add later): structured form rooms and message templates, map rooms and force assets, turns and a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
+- **Not in v1** (the design keeps each cheap to add later): structured form rooms and message templates, a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
 - **Operating the server:** the umpire plays with the server's admin account, so play it on a machine only the umpire uses; `ops/README.md` says what else to look after.
