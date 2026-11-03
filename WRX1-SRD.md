@@ -729,7 +729,7 @@ Changes from WP 3.4, the v1 security review (Nov 1, 2026):
 
 Changes from Phase 4, message templates (WP 4.4, Nov 2, 2026):
 
-- Annex A: built, except the image and asset pickers. Its heading and introduction say so, and an "As built" part records the six provisional answers it rests on (leaf node, lock on publish, card with a warning for a template no longer offered, role entries add, templates not confidential, no image picker) and what was built. The answers wait for the product owner at gate G4.
+- Annex A: built, except the image and asset pickers. Its heading and introduction say so, and an "As built" part records the six provisional answers it rests on (leaf node, lock on publish, card with a warning for a template no longer offered, role entries add, templates not confidential, no image picker) and what was built. The product owner confirmed the answers on Nov 2 and 3, 2026, and locks were widened to labels, order and name.
 - §12: new user scenario SC-10, a templated room, on both backends.
 
 Changes from the product owner's request of Nov 2, 2026:
@@ -797,7 +797,7 @@ Some rooms let players send structured messages from templates the admin designs
 
 **As built (Phase 4, November 2026)**
 
-The product owner deferred the design record's open questions when Phase 4 started; it was built on the recommended answers, which stay provisional until the owner confirms them at gate G4 (`plan/decisions/annex-a-b-implementation.md`):
+The product owner deferred the design record's open questions when Phase 4 started; it was built on the recommended answers, which the product owner confirmed on Nov 2 and 3, 2026, except the image picker, which stays open (`plan/decisions/annex-a-b-implementation.md`):
 
 1. TPL-1: `templates` is a single PubSub leaf node, not a collection, with one item per template, its item id the template's GUID. Every game user reads it; the admin alone publishes.
 2. TD6, TPL-4: a template locks when a publish makes it available in a room, not when a message first uses it, because the admin cannot reliably see use (confirmed by the product owner, Nov 2, 2026). A lock fixes the template's fields (its JSON Schema), its UI schema (labels, order) and its name, so past cards read as they did when sent (product owner, Nov 2, 2026); only its description stays editable. A locked template opens read only in the editor, with "Copy to new template", and publish refuses a design that changes its fields. Removing a locked template is allowed after a confirmation; its messages then show as plain text (confirmed by the product owner, Nov 2, 2026).
@@ -805,7 +805,8 @@ The product owner deferred the design record's open questions when Phase 4 start
 4. TD4: a role entry adds to its force's entry. The admin and the White Force's roles that are not observers may use every template the room names; observers none (confirmed by the product owner, Nov 2, 2026).
 5. Templates are not confidential between forces: every role can read every template (confirmed by the product owner, Nov 2, 2026).
 6. An unticked yes/no field is sent, and shown on the card, as "No", never left out (confirmed by the product owner, Nov 2, 2026).
-7. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
+7. The template form uses the browser's own controls (drop-downs, date pickers, sliders) styled with the theme, not Radix primitives, so it works in popped-out windows (confirmed by the product owner, Nov 3, 2026).
+8. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
 
 Also as built:
 

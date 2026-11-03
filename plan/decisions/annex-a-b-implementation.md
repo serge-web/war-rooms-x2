@@ -200,6 +200,8 @@ WP 3.5 and S14 are done (3.5 landed before the v1 security review, 3.4). After v
 
 Nov 1, 2026: the product owner started Annex A (Phase 4, WPs 4.1 to 4.4) and deferred questions 1 to 8. Phase 4 builds on the recommended answers below; each can be changed later, and the gate post lists them for confirmation.
 
+**Confirmed, Nov 2 and 3, 2026.** The product owner confirmed answers 1 to 5 as below, with one change to answer 2: a lock also fixes the UI schema (labels, order) and the name, not just the schema (review finding M1). Also confirmed: removing a locked template after a confirmation (M2), an unticked yes/no sent as "No", the browser's own form controls instead of Radix, and H1's High rating and fix. Answers 6 to 8 (images and assets) stay open for Annex B.
+
 1. `templates` is a single leaf with one item per template.
 2. A template locks when a published room makes it available.
 3. A message whose template is no longer allowed in the room shows as a card with a warning; a message that fails the schema, or names an unknown template, shows as plain text with a warning (TPL-6).

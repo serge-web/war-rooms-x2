@@ -31,15 +31,23 @@ Before this gate, a reviewer read the template code again, independently of the 
 
 The plan for Phase 4 ran as drawn: four work packages, none added or split.
 
+## Decided at the gate
+
+Phase 4 was built on recommended answers to questions the product owner had deferred. The owner has now confirmed each one a user sees:
+
+- **When a template locks.** When a published room first offers it, even if it is never used, because use cannot be seen reliably.
+- **What a lock covers.** A template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
+- **Removing a locked template.** Allowed after a confirmation; its messages then show as plain text, with every value.
+- **Templates no longer offered.** A message whose template the room no longer offers its sender stays a card with a note, so changing a room's settings does not rewrite its history.
+- **Who gets which templates.** A role's own templates add to its force's. The umpire and White Force roles who are not observers may use every template a room offers; observers none.
+- **Templates are not private to a force.** Every role can read every template, so a template's name and fields should not give away one force's plans.
+- **Unticked yes/no fields.** Sent, and shown, as "No".
+- **The form's controls.** The browser's own drop-downs, date pickers and sliders, styled with the app's colours. They work from the keyboard and in popped-out windows.
+
 ## What is still open
 
-Phase 4 was built on recommended answers to questions the product owner deferred. These are the ones a user sees, for the owner to confirm or change:
-
-- **The form's controls.** The template form uses the browser's own drop-downs and date pickers, styled with the app's colours, rather than the app's own drop-down component.
 - **Image and asset pickers.** Not built. They wait for the decision on how images are stored, and for the force assets of the map channel.
-
-Seven are already decided. An unticked yes/no box is sent, and shown, as "No". Templates are not private to a force: every role can read every template, so a template's name and fields should not give away one force's plans. A role's own templates add to its force's; the umpire and White Force roles who are not observers may use every template a room offers, and observers none. A template locks when a published room first offers it, even if it is never used, because use cannot be seen reliably. A locked template may be removed after a confirmation, and its messages then show as plain text, with every value. A message whose template the room no longer offers its sender stays a card with a note, so changing a room's settings does not rewrite its history. And a lock fixes a template's fields, their labels and order, and its name, so old cards always read as they did when sent. Only its description can still change.
 
 ## Next
 
-Gate G4 is the product owner's review of this phase, including the answers above. After it, the remaining template work is the image and asset pickers, which follow the force assets and the map channel.
+Gate G4 is the product owner's review of this phase. After it, the remaining template work is the image and asset pickers, which follow the force assets and the map channel.
