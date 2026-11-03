@@ -38,7 +38,7 @@ Each work package (WP) is a written brief that one Claude Code session builds on
 
 ## Phases and work packages
 
-There are 39 work packages, including the spike S14 and the Phase 5 spike checks. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
+There are 40 work packages, including the spike S14 and the Phase 5 spike checks. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
 
 | WP | Work package | SRD ids | Depends on |
 | --- | --- | --- | --- |
@@ -88,7 +88,8 @@ There are 39 work packages, including the spike S14 and the Phase 5 spike checks
 | 5.4 | Turns: the admin advances phases, the turn panel in the out-of-game column, composers disabled for non-White Force roles during adjudication (advisory) | D7, ADM-43, PLY-55, PLY-56, R27 | 5.2 |
 | 5.5 | Map room for players: Leaflet with a runtime tile URL, milsymbol symbols bundled, asset details, the newest valid world state from MAM, admin-only acceptance, 600 assets under 1 s | PLY-57–59, NFR-7, NFR-9, NFR-11, R23, R30 | 5.2 |
 | 5.6 | World-state editor for the admin: add, move, edit and delete assets on the map; browser-only draft with an unpublished-edits indicator; change summary and publish at phase change | ADM-44–46, R25, R26 | 5.4, 5.5 |
-| 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6 |
+| 5.8 | Objectives edited by the White Force: one item per author, newest by server timestamp, publisher affiliations for White Force non-observers, cleanup when a role leaves the White Force or is deleted, umpire editing in the player client for those roles | D21, §3 rule 14, PLY-35, R10 | 5.1 |
+| 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6, 5.8 |
 | **After v1 — Annexes A and B** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
 
@@ -169,6 +170,7 @@ flowchart TB
         wp54["5.4 Turns and turn panel"]
         wp55["5.5 Map room"]
         wp56["5.6 World-state editor"]
+        wp58["5.8 White Force edits objectives"]
         wp57["5.7 Acceptance and review"]
     end
     subgraph PX["After v1 — Annexes A and B"]
@@ -213,14 +215,15 @@ flowchart TB
     wp12 --> wp51
     wp52 --> wp53 & wp54 & wp55
     wp54 & wp55 --> wp56
-    wp53 & wp56 --> wp57
+    wp51 --> wp58
+    wp53 & wp56 & wp58 --> wp57
     P5 -.-> G5
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57 todo
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58 todo
     class G0,G1,G2,G3,G4,G5 gate
 ```
 
@@ -233,7 +236,7 @@ flowchart TB
 - CI renders the chart on every PR and fails if the Mermaid doesn't parse. The PR checklist asks whether the chart reflects the PR.
 - At each gate, the chart is compared with this baseline, and the differences are recorded in the gate's blog post.
 | Phase 4 added: WPs 4.1 to 4.4 for message templates (Annex A A1 to A4), one phase PR, gate G4 | The product owner started Annex A on Nov 1, 2026 and deferred its open questions; Phase 4 builds on the recommended answers (`plan/decisions/annex-a-b-implementation.md`, "Provisional answers") |
-| Phase 5 added: WPs 5.1 to 5.7 for turns and the map (the product owner's Nov 3, 2026 revision), one phase PR, gate G5; FT-3 superseded; PLY-6 and PLY-41 retired from WPs 0.2 and 2.5 | The owner moved a turn model and a map room with an admin-edited world state into v1. v1's release now waits for G5 as well as the WP 3.3 hardware check |
+| Phase 5 added: WPs 5.1 to 5.8 for turns, the map and White Force objective editing (the product owner's Nov 3, 2026 revision), one phase PR, gate G5; FT-3 superseded; PLY-6 and PLY-41 retired from WPs 0.2 and 2.5 | The owner moved a turn model and a map room with an admin-edited world state into v1. v1's release now waits for G5 as well as the WP 3.3 hardware check |
 
 ## CI gates and human checkpoints
 

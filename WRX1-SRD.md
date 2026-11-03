@@ -60,7 +60,7 @@ Twenty-six decisions frame v1; each has a consequence the requirements below dep
 
 **D20 — Themed welcome page before login, via anonymous read-only access.** Consequence: SASL ANONYMOUS is enabled, and anonymous sessions may read only `game-setup` and the game theme's assets. Those must hold nothing sensitive, and every other node must use a non-open access model. The mock emulates anonymous login; spike check S10 verifies the server.
 
-**D21 — Objectives are written by the admin per force; the force reads them, and every White Force role reads every force's objectives; only the admin edits them, in the admin backend or, as umpire, in the game view.** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, every White Force role and the admin; publish by the admin only. Whitelists re-sync when roles move force.
+**D21 — Objectives are written by the admin per force; the force reads them, and the White Force may read every force's objectives and, except its observers, edit them during play (product owner, Nov 3, 2026, reversing the WP 3.5 admin-only rule).** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, the White Force's roles and the admin; publish by the admin and White Force roles that are not observers (publisher affiliation). Whitelists and publishers re-sync when roles move force or leave the White Force.
 
 **D22 — Several people may log in to the same role at once, silently.** Consequence: multiple sessions of one account must join rooms under the same nickname (spike check S11), and each keeps its own browser layout.
 
@@ -119,7 +119,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
 13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`) as a single item, which only the admin publishes and replaces on each edit; whitelist read for that force's roles, every White Force role and the admin, and publish by the admin only. A live notification replaces the copy fetched at login, whatever its `updatedAt` says.
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest by server timestamp (the PubSub delay stamp, not the author's `updatedAt`; spike check S15). A role's items SHALL be deleted when it leaves the White Force or is deleted; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
 15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements, `game-state`, `directory` and `rooms:*` nodes SHALL be readable by every role and publishable only by the admin (PLY-37, PLY-60); room names are therefore visible to every role (R24).
 
 **World state**
@@ -250,7 +250,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 - PLY-15 The admin, as umpire, and White Force roles that are not observers SHALL see and post in every room; White Force observers SHALL see their assigned rooms, or every room when none is assigned, read only (§3 rule 4). A combined cross-room view is deferred to the backlog (§8).
 
-- PLY-35 The admin, as umpire, SHALL view and edit every force's objectives from the game view, with a Markdown preview; edits SHALL publish live to that force's force panel. Every other White Force role, observer or not, SHALL view them read only; only the admin edits objectives (ADM-23, D21).
+- PLY-35 The admin and White Force roles that are not observers SHALL view and edit every force's objectives from the player client, with a Markdown preview; White Force observers SHALL view them read only; edits SHALL publish live to that force's force panel.
 
 **Out-of-game column**
 
@@ -443,7 +443,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 | R7 | **Cross-tab mock complexity.** Leader election, re-election and IndexedDB schema migration add failure modes | Medium | SharedWorker first; leader fallback covered by Playwright multi-tab tests |
 | R8 | **Browser-only layouts.** Demo laptops lose arrangements | Low | Layout export/import MAY be added cheaply |
 | R9 | **Message `type` is client-asserted.** A modified client can send arbitrary body JSON | Low in v1 (chat only) | Validate and render as plain text; never trust body for identity or permissions |
-| R10 | **Force objectives are confidential but would sit in readable PubSub.** The force panel shows objectives; WRX's open nodes let any player read every force's objectives | High | **Closed by spike:** `objectives:<forceId>` with whitelist read (force, White Force, admin) and admin-only publish is enforced; revocation per ADM-36 |
+| R10 | **Force objectives are confidential but would sit in readable PubSub.** The force panel shows objectives; WRX's open nodes let any player read every force's objectives | High | **Closed by spike:** `objectives:<forceId>` with whitelist read (force, White Force, admin) and publishers (admin, White Force non-observers) is enforced; revocation per ADM-36 |
 | R11 | **Theme images vs PubSub limits and SVG scripting.** Large images can exceed item limits; SVG can carry script | Medium | **Closed by spike:** ejabberd caps items at 250,000 bytes (operator-configurable); 100 KB assets work. SVG sanitised and rendered via `<img>` only (§3 rule 12) |
 | R12 | **Welcome page precedes login,** but PubSub requires an authenticated session | Medium | Decided (D20): anonymous read access limited to `game-setup` and its theme assets (NFR-21), verified by S10 |
 
@@ -486,7 +486,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Repo visibility: repos stay public; exposure accepted (R18)
 - [ ] Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers), §10
 - [x] Welcome page: before login, via anonymous read access (D20)
-- [x] Objectives: admin-written per force, force read-only, the White Force reads all; only the admin edits (D21)
+- [x] Objectives: admin-written per force, force read-only, the White Force reads all and, except its observers, may edit (D21, Nov 3, 2026)
 - [x] Spike S14: collection-level access on ejabberd failed (collections need the `dag` plugin, which no longer starts on 26.09), so force assets use two flat whitelist nodes per force (Annex B, `plan/decisions/S14.md`)
 - [ ] Message templates: image storage, inline or a separate asset (Annex A)
 - [x] Concurrent logins per role: allowed silently (D22)
@@ -821,6 +821,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - **Size cap.** Map-room messages may reach 500 KB (PLY-53).
 - **Room discovery (PLY-60).** `rooms:*` readable by every role (§3 table, rule 15, R24). The draft's `rooms` collection is replaced by the existing `directory` index node, since collections do not exist on ejabberd 26.09 (S14); the draft's check S14 is therefore dropped and S15–S16 kept.
 - **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired.
+- **Objectives (D21, §3 rule 14, PLY-35, R10).** The owner chose the draft's rule over WP 3.5's: White Force roles that are not observers edit objectives again, one item per author, newest by server timestamp (S15), with cleanup when a role leaves the White Force.
 - **Kept as built:** rule 4 consequences, now highlighted in ADM-9; PLY-31, with delete-and-recreate as the eviction route (ADM-26, R29).
 - **Accepted risks:** lost vault passphrase (R22), public repos (R18). New risks R23–R30.
 - **New spike checks** S15–S16 (§10, P7).
@@ -841,7 +842,7 @@ Some rooms let players send structured messages from templates the admin designs
 | # | Decision |
 | --- | --- |
 | TD1 | Templates are JSON Schema documents, rendered and filled with React JSON Schema Form (RJSF), as in War Rooms X |
-| TD2 | Only the admin creates and edits templates. The other White Force roles do not edit the game (D21) |
+| TD2 | Only the admin creates and edits templates |
 | TD3 | Per room, the admin decides whether free text is allowed alongside templates |
 | TD4 | Per room, the admin chooses which templates each force or role may use, so forces in the same room can have different templates |
 | TD5 | The admin builds templates with a drag-and-drop form builder, and can also edit the JSON Schema directly |

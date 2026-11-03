@@ -65,6 +65,7 @@ flowchart TB
         wp54["5.4 Turns and turn panel"]
         wp55["5.5 Map room"]
         wp56["5.6 World-state editor"]
+        wp58["5.8 White Force edits objectives"]
         wp57["5.7 Acceptance and review"]
     end
     subgraph PX["After v1 — Annexes A and B"]
@@ -109,14 +110,15 @@ flowchart TB
     wp12 --> wp51
     wp52 --> wp53 & wp54 & wp55
     wp54 & wp55 --> wp56
-    wp53 & wp56 --> wp57
+    wp51 --> wp58
+    wp53 & wp56 & wp58 --> wp57
     P5 -.-> G5
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp51,wp52,wp53,wp54,wp55,wp56,wp57 todo
+    class wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58 todo
     class wp33,wp34 active
     class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43,wp44 done
     class G0,G1,G2,G3,G4,G5 gate
