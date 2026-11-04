@@ -8,6 +8,7 @@ import {
   sampleDesignWithWhiteCell,
   templatedDesign,
   tid,
+  withSampleMapRoom,
 } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, emptyView, jid, publishedView, withNode } from './fixtures.ts'
@@ -106,6 +107,56 @@ describe('first publish onto an empty server', () => {
     expect(changes).toContainEqual({ roleId: 'red-co', access: 'read' })
     expect(ids(plan)).not.toContain('grant-node:game-setup')
     expect(ids(plan)).not.toContain(`grant-node:${nodeName.asset(tid('game-logo'))}`)
+  })
+})
+
+describe('the turn state and the map room (WP 5.2)', () => {
+  const turnStep = 'doc:game-state:current'
+  const state = (turn: number, phase: string) => JSON.stringify({ schemaVersion: 1, turn, phase })
+
+  it('a first publish sets turn 1, planning', () => {
+    const plan = planPublish(sampleDesignWithWhiteCell(), emptyView())
+    expect(step(plan, turnStep)).toMatchObject({
+      summary: 'Publish the turn state: turn 1, planning',
+      action: { type: 'publish', node: 'game-state', payload: state(1, 'planning') },
+    })
+  })
+
+  it('a later publish leaves an advanced turn alone, and plans nothing for it', () => {
+    const design = sampleDesignWithWhiteCell()
+    const advanced = withNode(publishedView(design), 'game-state', (n) => ({
+      ...n,
+      items: [{ id: 'current', payload: state(3, 'adjudication'), publisher: jid('admin') }],
+    }))
+    expect(ids(planPublish(design, advanced))).toEqual([])
+  })
+
+  it('sets turn 1 again when the item is missing or invalid', () => {
+    const design = sampleDesignWithWhiteCell()
+    for (const items of [
+      [],
+      [{ id: 'current', payload: '{"schemaVersion":1}', publisher: undefined }],
+    ]) {
+      const view = withNode(publishedView(design), 'game-state', (n) => ({ ...n, items }))
+      expect(ids(planPublish(design, view))).toEqual([turnStep, 'doc:game-setup:current'])
+    }
+  })
+
+  it('provisions the map room like any room, every role read only but the White Force’s writers', () => {
+    const design = withSampleMapRoom(sampleDesignWithWhiteCell())
+    const plan = planPublish(design, emptyView())
+    expect(step(plan, `room:${ROOM.map}`).action).toMatchObject({
+      type: 'ensure-room',
+      create: true,
+    })
+    expect(step(plan, `grant-room:${ROOM.map}`).details).toEqual([
+      'White Cell: becomes a member with voice',
+    ])
+    for (const role of ['blue-co', 'blue-observer', 'red-co', 'white-observer']) {
+      const readOnly = step(plan, `read-only-grant:${role}`).action
+      expect(readOnly.type === 'read-only' && readOnly.roomIds).toContain(ROOM.map)
+    }
+    expect(ids(planPublish(design, publishedView(design)))).toEqual([])
   })
 })
 

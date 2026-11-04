@@ -4,9 +4,12 @@ import { nodeName, parseDocument } from '@wrx/schemas'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import {
+  ROOM,
   TEMPLATE,
+  demoDesign,
   sampleDesign,
   sampleDesignWithWhiteCell,
+  sampleWorldState,
   templatedDesign,
   tid,
 } from '../../schemas/src/fixtures.ts'
@@ -141,10 +144,78 @@ describe('stateFromDesign', () => {
     ])
     // §3 rule 14: one item, the admin's, holding the design's text.
     expect(objectives?.items.map((i) => i.id)).toEqual(['admin'])
-    expect(state.nodes.find((n) => n.name === 'game-state')?.items).toEqual([])
+    // D7: turn 1, planning, as a first publish leaves it.
+    const turn = state.nodes.find((n) => n.name === 'game-state')?.items
+    expect(turn?.map((i): unknown => [i.id, JSON.parse(i.payload)])).toEqual([
+      ['current', { schemaVersion: 1, turn: 1, phase: 'planning' }],
+    ])
     const role =
       state.nodes.find((n) => n.name === nodeName.role(tid('blue-co')))?.items[0]?.payload ?? ''
     expect(JSON.parse(role)).not.toHaveProperty('password')
+  })
+
+  it('provisions the map room with every role, and posts the world state as the admin (§3 rule 18, D25)', () => {
+    const state = unwrap(
+      stateFromDesign({
+        design: demoDesign(),
+        domain: 'd.mock',
+        worldState: sampleWorldState(),
+        worldStateAt: '2026-10-24T08:00:00.000Z',
+        history: [
+          {
+            room: ROOM.blueHq,
+            author: 'blue-co',
+            body: JSON.stringify({ type: 'chat', schemaVersion: 1, content: { text: 'hi' } }),
+            at: '2026-10-24T09:00:00.000Z',
+          },
+        ],
+      }),
+    )
+    const map = state.rooms.find((r) => r.jid.startsWith(ROOM.map))
+    expect(map?.affiliations.map((a) => `${a.jid} ${a.affiliation}`).sort()).toEqual([
+      'admin@d.mock owner',
+      'blue-co@d.mock member',
+      'blue-observer@d.mock member',
+      'red-co@d.mock member',
+      'white-observer@d.mock member',
+    ])
+    // Read entries: every role outside the White Force's writers is stored as a visitor.
+    expect(map?.storedRoles.map((r) => r.jid).sort()).toEqual([
+      'blue-co@d.mock',
+      'blue-observer@d.mock',
+      'red-co@d.mock',
+      'white-observer@d.mock',
+    ])
+    expect(map?.archive.map((m) => m.from)).toEqual(['admin@d.mock'])
+    expect(JSON.parse(map?.archive[0]?.body ?? '{}')).toEqual({
+      type: 'world-state',
+      schemaVersion: 1,
+      content: sampleWorldState(),
+    })
+    // The world state comes before the rest of the history.
+    const first = state.rooms.find((r) => r.jid.startsWith(ROOM.blueHq))?.archive[0]
+    expect(BigInt(map?.archive[0]?.stanzaId ?? '0')).toBeLessThan(BigInt(first?.stanzaId ?? '0'))
+  })
+
+  it('refuses a world state with no map room, or an invalid one', () => {
+    const none = stateFromDesign({ design: sampleDesign(), worldState: sampleWorldState() })
+    expect(none.ok || none.error).toMatch(/no map room/)
+    const bad = stateFromDesign({ design: demoDesign(), worldState: { turn: 0, assets: {} } })
+    expect(bad.ok || bad.error).toMatch(/^worldState:/)
+  })
+
+  it('takes a world state over 64 KiB, under the map-room cap (PLY-53)', () => {
+    const base = Object.values(sampleWorldState().assets)[0]
+    if (base === undefined) throw new Error('fixture')
+    const assets = Object.fromEntries(
+      Array.from({ length: 600 }, (_, i) => {
+        const id = `a0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`
+        return [id, { ...base, id }]
+      }),
+    )
+    const state = unwrap(stateFromDesign({ design: demoDesign(), worldState: { turn: 1, assets } }))
+    const body = state.rooms.find((r) => r.jid.startsWith(ROOM.map))?.archive[0]?.body ?? ''
+    expect(body.length).toBeGreaterThan(65_536)
   })
 
   it('archives history in time order with increasing stanza-ids', () => {

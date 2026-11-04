@@ -30,7 +30,7 @@
 // which members are read-only, since they are published only after access is applied. While the
 // publish marker is set (a publish did not finish) they may lag, and are not trusted: read-only
 // members are re-checked, and writers in the vault have their voice checked.
-import { DOCUMENT_ITEM_ID, effectiveAccess } from '@wrx/domain'
+import { DOCUMENT_ITEM_ID, effectiveAccess, nodeSpec, parseItem } from '@wrx/domain'
 import {
   NODE_PREFIXES,
   SINGLETON_NODES,
@@ -469,6 +469,13 @@ function sortKeys(value: unknown): unknown {
     return Object.fromEntries(entries.map(([k, v]) => [k, sortKeys(v)]))
   }
   return value
+}
+
+/** Whether a node holds an item that is a valid document of its kind (ARC-6). */
+function holdsValidDocument(node: NodeView | undefined): boolean {
+  const spec = node === undefined ? undefined : nodeSpec(node.node)
+  if (node === undefined || spec === undefined) return false
+  return node.items.some((item) => parseItem(spec, item.payload).ok)
 }
 
 function samePayload(a: string, b: string | undefined): boolean {
@@ -977,6 +984,8 @@ export function planPublish(
     if (purge !== undefined) documents.push(purge)
     for (const doc of node.documents) {
       if (purge === undefined && samePayload(doc.payload, documentOf(current, doc.itemId))) continue
+      // The turn state is the admin's to advance (ADM-43): only a missing or invalid one is set.
+      if (doc.initial === true && holdsValidDocument(current)) continue
       documents.push(
         documentStep(node, doc.itemId, doc.payload, label(node.node), { design, published }),
       )
@@ -1132,9 +1141,11 @@ function documentStep(
       ? `the admin's item on ${label}`
       : ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.retired
         ? `the record of a deleted force or role on ${label}`
-        : template !== undefined
-          ? `the template ${template.name}`
-          : label
+        : ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.gameState
+          ? 'the turn state: turn 1, planning'
+          : template !== undefined
+            ? `the template ${template.name}`
+            : label
   const details =
     template?.lockedAt !== undefined && before?.lockedAt === undefined
       ? ['A room offers it, so it locks: its fields are fixed from now on (TD6)']

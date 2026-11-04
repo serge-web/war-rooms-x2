@@ -7,7 +7,13 @@
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
 import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, directoryOf, effectiveAccess } from '@wrx/domain'
-import { SINGLETON_NODES, TEMPLATE_LIMITS, nodeName, publicAssetIds } from '@wrx/schemas'
+import {
+  INITIAL_GAME_STATE,
+  SINGLETON_NODES,
+  TEMPLATE_LIMITS,
+  nodeName,
+  publicAssetIds,
+} from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
@@ -105,6 +111,11 @@ export interface TargetDocument {
   readonly itemId: string
   /** JSON text, as published. */
   readonly payload: string
+  /**
+   * Published only when the node holds no valid document of its kind: the turn state, which
+   * the admin advances during play (ADM-43), so a publish must never set it back to turn 1.
+   */
+  readonly initial?: boolean
 }
 
 export interface TargetRoom {
@@ -180,11 +191,13 @@ export function targetState(design: DesignFile): TargetState {
       access: everyRole('read'),
       documents: [],
     },
+    // D7: the turn state, read by every role (§3 rule 15), published by the admin. A first
+    // publish starts the game at turn 1, planning; later ones leave the turn where it is.
     {
       node: SINGLETON_NODES.gameState,
       config: whitelist1,
       access: everyRole('read'),
-      documents: [],
+      documents: [{ ...doc(INITIAL_GAME_STATE), initial: true }],
     },
     // §3 rule 1: deleted forces' and roles' last names, read by every role, for message authors.
     // Published with the other documents, before any removal (ADM-39).

@@ -87,7 +87,7 @@ describe('a room node deleted mid-session (PLY-6)', () => {
     await vi.waitFor(() => {
       expect(roomIds(umpire)).not.toContain('press')
     })
-    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports'])
+    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports', 'map'])
     await umpire.logout()
   })
 
