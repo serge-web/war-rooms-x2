@@ -7,8 +7,11 @@
 // fail them, and a real regression (a lost virtualisation, an O(n²) render) still does.
 import { expect, test } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
+import { scaleDesign, scaleId, scaleWorldState } from '@wrx/mock-server'
 import type { ScaleOptions } from '@wrx/mock-server'
-import { logIn, roomTabs } from './mock.ts'
+import { LIMITS } from '@wrx/schemas'
+import { stubTiles } from './map.ts'
+import { DOMAIN, logIn, roomTabs } from './mock.ts'
 import { MARGIN, inputStats, record, scrollFrames, timeToFrame, watchInput } from './perf.ts'
 import { SCALE_BUSY_ROOM_NAME, busyRoomList, loadScale, storeScaleDraft } from './scale.ts'
 
@@ -291,4 +294,91 @@ test('NFR-12: four panes; a message reaches all four within 1 s, and typing does
   ])
   expect(deliveries.at(-1)).toBeLessThan(1000 * MARGIN)
   expect(typing.max).toBeLessThan(100 * MARGIN)
+})
+
+// WP 5.5: a world state of 600 assets on the map (NFR-11), to the frame that shows all 600
+// symbols. Cold: the map tab's first render, which also loads the map's chunk and pages back
+// through MAM for the state. Live: a new 600-asset state from the admin, every asset a new one,
+// from the send to the frame that shows it. Recorded in plan/reviews/phase-5-security-notes.md.
+test('NFR-11: a world state of 600 assets renders on the map in under 1 s', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await loadScale(page, './', { messages: 200, worldAssets: 600 })
+  await asUmpire(page)
+  const MAP_TAB = '.flexlayout__layout_main [role="tab"][aria-label="Map"]'
+  const SYMBOLS = 'img.wrx-map__symbol'
+  const cold = await timeToFrame(
+    page,
+    'map-600-cold',
+    { click: MAP_TAB },
+    { selector: SYMBOLS, count: 600 },
+  )
+  await expect(page.locator(SYMBOLS)).toHaveCount(600)
+  await expect(page.getByText('World state for turn 1: 600 assets')).toBeVisible()
+
+  // The next state: the same 600 assets under new ids, so every symbol is replaced.
+  const next = scaleWorldState(scaleDesign(), 600)
+  const renamed = Object.fromEntries(
+    Object.values(next.assets).map((a) => {
+      const id = `6${a.id.slice(1)}`
+      return [id, { ...a, id, lat: a.lat + 0.01 }]
+    }),
+  )
+  const body = JSON.stringify({
+    type: 'world-state',
+    schemaVersion: 1,
+    content: { turn: 2, assets: renamed },
+  })
+  const live = await page.evaluate(
+    async ({ body, room, domain, maxBytes }) => {
+      const host = window.wrxMock
+      if (host === undefined) throw new Error('no mock host')
+      const login = await host.connect({
+        endpoint: { websocketUrl: '', domain },
+        credentials: { kind: 'password', username: 'admin', password: 'demo-admin' },
+        resource: 'perf-admin',
+      })
+      if (!login.ok) throw new Error(login.error.condition)
+      const jid = `${room}@${login.value.services.muc}`
+      const joined = await login.value.muc.join(jid, 'perf-admin')
+      if (!joined.ok) throw new Error(joined.error.condition)
+      const frame = () => new Promise((r) => requestAnimationFrame(r))
+      const done = () =>
+        document.querySelectorAll('img.wrx-map__symbol[data-asset^="6"]').length === 600 &&
+        document.querySelectorAll('img.wrx-map__symbol').length === 600
+      performance.mark('wrx:map-600-live:start')
+      const start = performance.now()
+      const sent = await login.value.muc.send(jid, body, { maxBytes })
+      if (!sent.ok) throw new Error(sent.error.condition)
+      for (;;) {
+        await frame()
+        if (done()) break
+        if (performance.now() - start > 20_000) throw new Error('map-600-live: timed out')
+      }
+      await frame()
+      const elapsed = performance.now() - start
+      performance.measure('wrx:map-600-live', 'wrx:map-600-live:start')
+      await login.value.disconnect()
+      return elapsed
+    },
+    { body, room: scaleId('map'), domain: DOMAIN, maxBytes: LIMITS.worldStateStanzaBytes },
+  )
+  await expect(page.getByText('World state for turn 2: 600 assets')).toBeVisible()
+
+  await record(testInfo, [
+    { name: 'map tab, cold render (600 assets)', value: cold, unit: 'ms', target: 1000 },
+    {
+      name: 'new 600-asset world state, live, to rendered',
+      value: live,
+      unit: 'ms',
+      target: 1000,
+    },
+    { name: 'world-state message, characters', value: body.length, unit: 'count' },
+  ])
+  expect(cold).toBeLessThan(1000 * MARGIN)
+  expect(live).toBeLessThan(1000 * MARGIN)
 })

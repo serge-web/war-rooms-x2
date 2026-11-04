@@ -1,0 +1,40 @@
+# WP 5.5 — Map room for players
+
+**SRD ids:** D12, D25, §3 rules 16–18, PLY-57, PLY-58, PLY-59, NFR-7, NFR-9, NFR-11, R23, R26, R30 · **Depends on:** 5.2 · **Blocks:** 5.6 · **Status:** in progress
+
+## Goal
+
+The map room's player panel replaces WP 5.2's placeholder: the newest valid world state from the admin (D25, PLY-58, PLY-59) on a Leaflet map, each asset drawn as its MIL-STD-2525/APP-6 symbol by milsymbol, both bundled (NFR-7), over base tiles from a runtime-configured URL (NFR-9). Players select an asset to see its fields, or use a table of the same assets; nobody edits here (WP 5.6 is the admin's editor, and will reuse the map).
+
+## Acceptance
+
+- **Libraries (the dependency rule: at least 14 days old, MIT, Apache or BSD):** `leaflet` 1.9.4 (BSD-2-Clause, May 2023), `milsymbol` 3.0.4 (MIT, Mar 2026; 3.0.5 is 8 days old, so not taken), `@types/leaflet` 1.9.22 (MIT, dev). No CDN: both are bundled into a lazily loaded map chunk; Leaflet's CSS loads with the panel, so a popout has it.
+- **Tiles (NFR-9, D12, R30):**
+  - `config.json` (server build) takes `map.tiles: {url, attribution, attributionUrl?, maxZoom?}`. The URL template is `https:` (or `http:` to this machine only, as `ws:` is, F13) or a path on this origin, with `{z}`, `{x}`, `{y}` and optionally `{s}`/`{r}`, and no other placeholder; the attribution is plain text, its link `https:` only. An invalid `map` block is reported like any other config problem.
+  - The server build has **no default**: without `map.tiles` the map shows the assets on a plain background with a notice, and makes no third-party request (a tile server learns which area every player looks at, so it is the operator's choice).
+  - The mock build (demo, previews, the site) reads no `config.json`, so it carries a built-in default: OpenStreetMap's standard tiles, `https://tile.openstreetmap.org/{z}/{x}/{y}.png`, with "© OpenStreetMap contributors" linked to the copyright page. The OSMF tile usage policy allows normal interactive viewing by a person, with visible attribution and a Referer, and forbids bulk or offline use and heavy use; there is no SLA and access may be withdrawn. A low-traffic demo fits; nothing here prefetches. Tile requests send the page's origin as Referer (`strict-origin`) whatever the document's `Referrer-Policy`, as the policy asks.
+  - The attribution is rendered by React as text and a link, not Leaflet's HTML attribution control.
+- **Symbols (PLY-57):** `milsymbol` draws each asset's `sidc` (15-character letter-based or 20/30-digit number-based, as `sidcSchema` allows) as SVG, shown as an `<img>` with a `data:` URL, so no symbol markup enters the DOM. Symbols are cached per code. A code milsymbol does not know still draws its frame.
+- **Map (PLY-57):** read-only for every role: no composer, no dragging of assets. The initial view is the room config's (`mapRoomConfigSchema`): centre and zoom when both are set; centre alone at the zoom that fits the assets; zoom alone around the assets' centre; neither, fit the assets' bounds. With no assets, the whole world. The view is set once per panel: later states move the symbols, not the reader's view. "Show all assets" fits the bounds again.
+- **Details and the table (PLY-57, NFR-14):** selecting a symbol (mouse) or a table row (keyboard) shows a details region: title, force, category, symbol code, position, state, health and fuel. The map can be panned and zoomed from the keyboard (Leaflet's keyboard handler), and its symbols are hidden from assistive technology; the table is the accessible view of the same state, sorted by force then title. Escape or "Close" clears the selection; a selected symbol is outlined.
+- **World state (PLY-58, PLY-59):** from `useWorldState` (WP 5.2): a spinner while searching, "The umpire has not published a world state yet." when there is none, the turn the state belongs to ("World state for turn N"), and later valid states from the admin replace it live. Messages from anyone else are ignored (and logged by the store).
+- **Memory (R26):** in a room watched for its world state, the store keeps only the newest accepted world state and what came after it; older entries are dropped as each newer accepted one arrives (their ids kept, so MAM pages do not add them back). The ignored-message count survives the trim.
+- **CSP (F7):** see Notes. Leaflet needs no `eval`; its inline styles fit `style-src 'self' 'unsafe-inline'`. `popout.html`'s `img-src` is the build's.
+- **Performance (NFR-11):** a 600-asset world state renders on the map in under 1 s: a measured Playwright test in `perf.spec.ts` style, on a scale fixture with a 600-asset world state, recorded in the phase-5 notes.
+- **Tests:**
+  - Unit: config parsing of `map.tiles`; the view and table helpers; the symbol cache; the panel's states, table, details and keyboard; the store's trim.
+  - e2e on the mock: the map renders with one symbol per asset, the details panel, the table, axe; the CSP spec (no violation, tiles stubbed, popout); a non-admin world state ignored; reload loads from MAM. The same scenario runs on the ejabberd project.
+  - The server build: tiles from `config.json`; the no-tiles notice.
+  - Screenshots: the map room with an asset selected. Tiles in tests and screenshots never reach the internet: a local tile is served by route, and Chromium cannot resolve the default tile host in test runs (DOC-20).
+- **Gates:** `pnpm check`, build plus `check:bundle`, `CI=1 pnpm e2e`, `e2e:mock-host`, `e2e:admin-ui`, `e2e:theme`, site build plus `check:site`, screenshots `--repeat`; on ejabberd the contract suite and the ejabberd Playwright project.
+
+## Notes
+
+- **The CSP decision.** The tile host must be allowed in `img-src`, and the CSP is a `<meta>` tag built into `index.html`. Three ways were weighed:
+  1. **Take the tile origin from config at deploy time**: rewrite the built `index.html` (and `popout.html`) when `config.json` is written. Narrowest, but the policy would then be edited by a shell script after the build, on every host type, and a mistake fails open or breaks the client; the reference deployment's header is a static file in `ejabberd.yml`, so it would need templating too.
+  2. **`img-src https:` in the server build's meta tag**, narrowed by the operator's header, exactly as `connect-src` already allows any `wss:` host because the build cannot know the WebSocket host. The cost: an injected `<img>` could load from (and beacon to) any HTTPS host. Nothing renders untrusted markup: React renders text, the Markdown renderer drops images, theme images are `data:` URLs, symbols are our own `data:` URLs, so this loses defence in depth, not a boundary.
+  3. Allowing nothing and serving tiles from the same origin only: safe, but no public tile server could be used.
+
+  Chosen: **2 for the server build, and the exact origin for the mock build** (`https://tile.openstreetmap.org`, known when building because the mock build reads no `config.json`). The reference deployment's header stays without tiles, as its install writes no `map` block; an operator who adds tiles adds their origin to the header. Recorded in `plan/reviews/phase-5-security-notes.md` and `deploy/README.md`.
+- **Popouts.** `popout.html` is a static file with its own policy; the build writes the build's `img-src` into it, so a popped-out map shows tiles. Leaflet listens on the global `document` for a drag's moves, which in a popout is the opener's; the map forwards the popout's mouse moves to it, so dragging works there too.
+- **5.3 and 5.4** run in parallel: this WP keeps out of the design, publish, layout-reset, turn-panel and composer files. Shared edits are additive: a `worldAssets` option on the scale fixture, a `post-body` step in the scenarios' raw client, and the e2e tile stub.

@@ -1,6 +1,6 @@
 // Repeatable screenshots (DOC-20): a fixed clock, no animation or caret, fonts loaded, and the
 // page settled before capture. Scenarios call shoot() and nothing else saves images.
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 import { isShotName } from './manifest.ts'
@@ -14,9 +14,30 @@ export function outDir(): string {
   return dir
 }
 
-/** Call before the first navigation. */
+/** The map's one local tile (WP 5.5): the same image for every tile, from the e2e fixtures. */
+const TILE_PNG = readFileSync(new URL('../../../apps/web/e2e/fixtures/tile.png', import.meta.url))
+
+/**
+ * Call before the first navigation: a fixed clock, and the map's tiles served locally, so no
+ * shot depends on (or reaches) a tile server. The config's launch flag makes the demo's tile host
+ * unresolvable as well, so a missed request fails rather than fetching.
+ */
 export async function freezeClock(page: Page): Promise<void> {
   await page.clock.setFixedTime(FIXED_TIME)
+  await page
+    .context()
+    .route('https://tile.openstreetmap.org/**', (route) =>
+      route.fulfill({ contentType: 'image/png', body: TILE_PNG }),
+    )
+}
+
+/** Waits until the map's tiles in view have loaded. */
+export async function mapSettled(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll('img.leaflet-tile').length > 0 &&
+      document.querySelectorAll('img.leaflet-tile:not(.leaflet-tile-loaded)').length === 0,
+  )
 }
 
 export async function shoot(page: Page, name: string): Promise<void> {

@@ -8,8 +8,22 @@
 //       "domain": "example.org",
 //       "label": "Exercise server"                       // optional; shown in the badge
 //     },
-//     "defaultBackend": "server"                        // optional: "server" (default) or "mock"
+//     "defaultBackend": "server",                       // optional: "server" (default) or "mock"
+//     "map": {                                          // optional: the map room's base tiles
+//       "tiles": {
+//         "url": "https://tiles.example.org/{z}/{x}/{y}.png",  // or a path on this origin
+//         "attribution": "© OpenStreetMap contributors",       // plain text, shown on the map
+//         "attributionUrl": "https://www.openstreetmap.org/copyright",  // optional, https:
+//         "maxZoom": 19                                         // optional, default 19
+//       }
+//     }
 //   }
+//
+// Without `map.tiles` the map shows the assets on a plain background: the server build sends no
+// player's view to a third-party tile server unless the operator chooses one (D12, R30). The
+// tile host must also be allowed by the page's `img-src` (deploy/README.md).
+import { TILE_MAX_ZOOM, TILE_PLACEHOLDERS } from '@wrx/player-ui'
+import type { MapTiles } from '@wrx/player-ui'
 import type { Endpoint } from '@wrx/transport'
 
 export interface ServerConfig {
@@ -21,6 +35,8 @@ export interface ServerConfig {
 export interface RuntimeConfig {
   readonly server: ServerConfig | undefined
   readonly defaultBackend: 'server' | 'mock'
+  /** The map room's base tiles (NFR-9); undefined: no base map. */
+  readonly tiles?: MapTiles | undefined
 }
 
 export type ConfigResult =
@@ -70,6 +86,101 @@ export function isLoopbackHost(hostname: string): boolean {
 
 const DOMAIN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/i
 
+const MAX_ATTRIBUTION = 200
+const MAX_TILE_URL = 500
+const PLACEHOLDER = /\{([a-z])\}/g
+
+/**
+ * A tile URL template: absolute `https:`, `http:` to this machine only (as `ws:`, F13), or a path
+ * on this origin; `{z}`, `{x}` and `{y}` present, braces only as placeholders Leaflet fills, and
+ * no credentials. Returned absolute, with the placeholders as they were.
+ */
+export function tileUrl(value: string, baseUri: string): string | undefined {
+  if (value.length > MAX_TILE_URL) return undefined
+  const names = [...value.matchAll(PLACEHOLDER)].map((m) => m[1] ?? '')
+  const rest = value.replace(PLACEHOLDER, '')
+  if (rest.includes('{') || rest.includes('}')) return undefined
+  if (names.some((n) => !TILE_PLACEHOLDERS.includes(n))) return undefined
+  if (!['z', 'x', 'y'].every((n) => names.includes(n))) return undefined
+  let url: URL
+  try {
+    url = new URL(value.replace(PLACEHOLDER, '__$1__'), baseUri)
+  } catch {
+    return undefined
+  }
+  if (url.username !== '' || url.password !== '') return undefined
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopbackHost(url.hostname))) {
+    return undefined
+  }
+  return url.href.replace(/__([a-z])__/g, '{$1}')
+}
+
+type TilesResult =
+  | { readonly ok: true; readonly tiles: MapTiles | undefined }
+  | { readonly ok: false; readonly error: string }
+
+/** Reads `map.tiles`: undefined (no base map) when it is absent. */
+export function parseTiles(map: unknown, baseUri: string): TilesResult {
+  if (map === undefined) return { ok: true, tiles: undefined }
+  if (!isRecord(map)) return { ok: false, error: 'map must be an object' }
+  const tiles = map.tiles
+  if (tiles === undefined) return { ok: true, tiles: undefined }
+  if (!isRecord(tiles)) return { ok: false, error: 'map.tiles must be an object' }
+  const { url: rawUrl, attribution, attributionUrl, maxZoom } = tiles
+  const url = typeof rawUrl === 'string' ? tileUrl(rawUrl, baseUri) : undefined
+  if (url === undefined) {
+    return {
+      ok: false,
+      error:
+        'map.tiles.url must be an https: URL template, or a path on this origin, with {z}, {x} and {y}',
+    }
+  }
+  if (
+    typeof attribution !== 'string' ||
+    attribution.trim() === '' ||
+    attribution.length > MAX_ATTRIBUTION
+  ) {
+    return {
+      ok: false,
+      error: `map.tiles.attribution must be text of up to ${MAX_ATTRIBUTION} characters`,
+    }
+  }
+  let link: string | undefined
+  if (attributionUrl !== undefined) {
+    let parsed: URL | undefined
+    try {
+      parsed = typeof attributionUrl === 'string' ? new URL(attributionUrl) : undefined
+    } catch {
+      parsed = undefined
+    }
+    if (parsed?.protocol !== 'https:') {
+      return { ok: false, error: 'map.tiles.attributionUrl must be an https: URL' }
+    }
+    link = parsed.href
+  }
+  if (
+    maxZoom !== undefined &&
+    (typeof maxZoom !== 'number' ||
+      !Number.isInteger(maxZoom) ||
+      maxZoom < 0 ||
+      maxZoom > TILE_MAX_ZOOM)
+  ) {
+    return {
+      ok: false,
+      error: `map.tiles.maxZoom must be a whole number from 0 to ${TILE_MAX_ZOOM}`,
+    }
+  }
+  return {
+    ok: true,
+    tiles: {
+      url,
+      attribution: attribution.trim(),
+      attributionUrl: link,
+      maxZoom: typeof maxZoom === 'number' ? maxZoom : 19,
+    },
+  }
+}
+
 /** Checks a parsed `config.json`; nothing in it is trusted until it passes. */
 export function parseConfig(json: unknown, baseUri: string): ConfigResult {
   if (!isRecord(json)) return { ok: false, error: 'config.json must hold an object' }
@@ -77,9 +188,12 @@ export function parseConfig(json: unknown, baseUri: string): ConfigResult {
   if (defaultBackend !== 'server' && defaultBackend !== 'mock') {
     return { ok: false, error: 'defaultBackend must be "server" or "mock"' }
   }
+  const map = parseTiles(json.map, baseUri)
+  if (!map.ok) return map
+  const tiles = map.tiles
   const server = json.server
   if (server === undefined)
-    return { ok: true, config: { server: undefined, defaultBackend: 'mock' } }
+    return { ok: true, config: { server: undefined, defaultBackend: 'mock', tiles } }
   if (!isRecord(server)) return { ok: false, error: 'server must be an object' }
   const { websocketUrl: rawUrl, domain, label } = server
   if (typeof rawUrl !== 'string') return { ok: false, error: 'server.websocketUrl is missing' }
@@ -105,6 +219,7 @@ export function parseConfig(json: unknown, baseUri: string): ConfigResult {
     config: {
       server: { endpoint: { websocketUrl: url, domain }, label: label?.trim() ?? domain },
       defaultBackend,
+      tiles,
     },
   }
 }

@@ -1,11 +1,24 @@
 // The scale fixture (WP 3.2, NFR-11): the v1 sizes, valid, deterministic, and usable through the
 // transport, with the busy room's history paged by MAM as a client reads it; and its templated
 // form (WP 4.4): 2,000 templated messages, each valid, and the receiver's check timed per message.
-import { chatRoomConfigReader, checkDesign, templateMessageBodySchema } from '@wrx/schemas'
+import {
+  LIMITS,
+  chatRoomConfigReader,
+  checkDesign,
+  templateMessageBodySchema,
+  worldStateSchema,
+} from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator } from '@wrx/templates'
 import type { TemplateValidator } from '@wrx/templates'
 import { describe, expect, it } from 'vitest'
-import { SCALE_BUSY_ROOM, SCALE_PLAYER, scaleDesign, scaleHistory, scaleState } from './scale.ts'
+import {
+  SCALE_BUSY_ROOM,
+  SCALE_PLAYER,
+  scaleDesign,
+  scaleHistory,
+  scaleState,
+  scaleWorldState,
+} from './scale.ts'
 import { demoPassword } from './seed.ts'
 import { MockServer } from './server.ts'
 import { parseMockState } from './state.ts'
@@ -107,5 +120,23 @@ describe('the templated scale fixture (WP 4.4)', () => {
       `[perf] receiver check: ${(median * 1000).toFixed(1)} µs per message (median of 5 runs of 2,000); first three, new validator: ${coldMs.toFixed(1)} ms`,
     )
     expect(median).toBeLessThan(1)
+  })
+})
+
+describe('the scale fixture’s world state (WP 5.5, NFR-11)', () => {
+  it('holds 600 valid assets over the player forces, within the map-room cap', () => {
+    const design = scaleDesign()
+    const state = scaleWorldState(design, 600)
+    expect(worldStateSchema.safeParse(state).success).toBe(true)
+    const assets = Object.values(state.assets)
+    expect(assets).toHaveLength(600)
+    expect(new Set(assets.map((a) => a.forceId)).size).toBe(4)
+    expect(assets.some((a) => /^\d{20}$/.test(a.sidc))).toBe(true)
+    const body = JSON.stringify({ type: 'world-state', schemaVersion: 1, content: state })
+    expect(body.length).toBeLessThan(LIMITS.worldStateStanzaBytes / 2)
+    expect(JSON.stringify(scaleWorldState(design, 600))).toBe(JSON.stringify(state))
+    expect(parseMockState(JSON.stringify(scaleState({ messages: 50, worldAssets: 600 }))).ok).toBe(
+      true,
+    )
   })
 })

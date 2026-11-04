@@ -12,6 +12,7 @@ import type { BackendsOptions } from './backends.ts'
 import { NO_CONFIG, loadConfig } from './config.ts'
 import type { ConfigResult } from './config.ts'
 import { demoLogins } from './demo-logins.ts'
+import { DEMO_TILES } from './tiles.ts'
 import './app.css'
 
 declare global {
@@ -90,6 +91,9 @@ async function main(): Promise<void> {
         configProblem={loaded.ok ? undefined : loaded.error}
         backendPreference={backendPreference()}
         layoutStorage={layoutStorage()}
+        // The server build's tiles are config.json's, or none (NFR-9); the mock build reads no
+        // config.json and shows the demo default.
+        tiles={__WRX_REAL_SERVER__ ? (loaded.ok ? loaded.config.tiles : undefined) : DEMO_TILES}
       />
     </StrictMode>,
   )

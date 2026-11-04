@@ -3,6 +3,7 @@
 // the welcome page must fall back to the default theme and still allow login (PLY-27).
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { TEST_TILES, TEST_TILE_HOST, mapPanel, openMap, stubTiles, tilesLoaded } from './map.ts'
 import { logIn } from './mock.ts'
 
 async function serveConfig(page: Page, body: unknown): Promise<void> {
@@ -52,4 +53,35 @@ test('an invalid config.json is reported, and the mock is used', async ({ page }
   await expect(page.getByRole('alert').filter({ hasText: 'config.json was ignored' })).toBeVisible()
   await expect(page.getByLabel('Backend: MOCK')).toBeVisible()
   await expect(page.getByRole('radio')).toHaveCount(0)
+})
+
+test('the map’s base tiles come from config.json (NFR-9); with none, there is no base map (WP 5.5)', async ({
+  page,
+  context,
+}) => {
+  const tiles = await stubTiles(context)
+  await serveConfig(page, { ...UNREACHABLE, map: { tiles: TEST_TILES } })
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.goto('./')
+  await page.getByRole('radio', { name: /Mock/ }).check()
+  await logIn(page, 'blue-co', 'demo-blue-co')
+  const panel = await openMap(page, 6)
+  await tilesLoaded(panel)
+  expect(tiles.length).toBeGreaterThan(0)
+  expect(tiles.every((t) => t.url.startsWith(`${TEST_TILE_HOST}/`))).toBe(true)
+  await expect(panel.getByRole('link', { name: '© Test tiles' })).toBeVisible()
+  expect(
+    await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content'),
+  ).toContain("img-src 'self' data: blob: https:;")
+
+  // Without a map block: the assets on a plain background, and no tile asked for.
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+  await serveConfig(page, UNREACHABLE)
+  const before = tiles.length
+  await page.reload()
+  await logIn(page, 'blue-co', 'demo-blue-co')
+  await openMap(page, 6)
+  await expect(mapPanel(page)).toContainText('No base map is configured for this deployment')
+  await expect(mapPanel(page).locator('img.leaflet-tile')).toHaveCount(0)
+  expect(tiles.length).toBe(before)
 })
