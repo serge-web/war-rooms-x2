@@ -20,12 +20,14 @@ async function player(page: Page, roleId: string): Promise<void> {
   await expect(column(page)).toBeVisible()
 }
 
-test('the column sits outside the workspace: game time, admin panel, force panel (PLY-36, PLY-25)', async ({
+test('the column sits outside the workspace: turn panel, admin panel, force panel (PLY-36, PLY-55, PLY-25)', async ({
   page,
 }) => {
   await player(page, 'blue-co')
   const aside = column(page)
-  await expect(aside.getByRole('region', { name: 'Game time' })).toContainText('not used')
+  await expect(aside.getByRole('region', { name: 'Turn' }).getByRole('status')).toHaveText(
+    'Turn 1, Planning',
+  )
   await expect(announcements(page)).toContainText('None yet')
   await expect(forcePanel(page).getByRole('heading', { name: 'Blue CO' })).toBeVisible()
   await expect(forcePanel(page)).toContainText('Blue')
@@ -36,7 +38,7 @@ test('the column sits outside the workspace: game time, admin panel, force panel
   const order = await aside.evaluate((el) =>
     [...el.querySelectorAll('.wrx-column > section')].map((s) => s.getAttribute('aria-label')),
   )
-  expect(order).toEqual(['Game time', null, 'Force panel'])
+  expect(order).toEqual(['Turn', null, 'Force panel'])
   expect(
     await page
       .getByRole('main', { name: 'Workspace' })

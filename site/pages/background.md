@@ -14,12 +14,12 @@ WRX1 keeps Serge's way of describing a game and War Rooms X's XMPP transport, an
 ## What version 1 does
 
 - **An admin backend** to design one wargame and provision it on the server in one step. Publishing is repeatable: it works out what changed and applies only that.
-- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a column for announcements, the player's force and its objectives. In a narrow window or multi-client pane the column becomes a tab of its own. Each room's message entry can be collapsed to a slim bar for players who only read, so the messages get the space; each room remembers it, and observers, who cannot post, start with it collapsed.
+- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a column with the current turn and phase, announcements, the player's force and its objectives. In a narrow window or multi-client pane the column becomes a tab of its own. Each room's message entry can be collapsed to a slim bar for players who only read, so the messages get the space; each room remembers it, and observers, who cannot post, start with it collapsed. During adjudication the message entry of every role outside the White Force is paused, with a note saying why; anything already typed is kept for the next turn.
 - **A mock backend** that runs entirely in the browser, for reviews and demos with no server at all.
 - **A multi-client view** that shows two to four independent clients on one page, so a demo can show several players at once.
 - **This site**, which explains the project and hosts a live build of every pull request.
 
-Other kinds of room (structured forms, maps, requests for information), turns and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers just one, `chat`.
+Other kinds of room (structured forms, maps, requests for information) and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers just one, `chat`.
 
 ## Key decisions
 
@@ -53,9 +53,11 @@ The admin may change a published game while players are online, and changes appl
 
 Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout.
 
-### No turns in v1
+### Turns, moved on by the admin
 
-There is no turn model yet, so permissions don't change during play. A reserved document keeps space for one.
+A game runs in numbered turns, each a planning phase and then an adjudication phase. Only the admin moves the game on, from the turn panel at the top of the column in the game view or from the admin backend's header, and confirms each change first. Every player's turn panel updates at once.
+
+While the umpires adjudicate, roles outside the White Force cannot post: their message entry is paused, with a note saying why, and anything they had typed is kept until the next turn's planning. The White Force and the admin keep posting. This is a rule the app applies, not the server: a modified client could still post during adjudication, which is accepted in version 1.
 
 ### Offline and air-gapped
 
