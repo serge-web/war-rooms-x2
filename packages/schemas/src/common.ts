@@ -16,6 +16,19 @@ export const LIMITS = Object.freeze({
    * WebSocket limit (WP 0.1), so the client enforces this one (PLY-53, R15).
    */
   messageStanzaBytes: 65_536,
+  /**
+   * Cap on a world-state message stanza in the map room, counted the same way (PLY-53, D25):
+   * about 2,500 assets in plain JSON. Every other message keeps `messageStanzaBytes`.
+   */
+  worldStateStanzaBytes: 500_000,
+  /** Most assets one world state may hold; the stanza cap is reached first in practice. */
+  worldStateAssets: 5_000,
+  /** An asset's category and state, in characters (§3 rule 17). */
+  worldLabelChars: 60,
+  /** Highest turn number (D7); a bound for validation, far above any game. */
+  turnMax: 10_000,
+  /** Highest zoom a map room's config may open at (web map zoom levels). */
+  mapZoomMax: 22,
   /** Message text cap in characters; fits the stanza cap even at 7 bytes a character escaped. */
   messageTextChars: 8_000,
   announcementTextChars: 2_000,

@@ -97,7 +97,7 @@ describe('every document carries schemaVersion 1', () => {
       announcementSchema,
       { schemaVersion: 1, text: 'Break', postedAt: '2026-10-24T10:00:00Z' },
     ],
-    ['game-state', gameStateSchema, { schemaVersion: 1 }],
+    ['game-state', gameStateSchema, { schemaVersion: 1, turn: 1, phase: 'planning' }],
   ] as const)('%s', (_name, schema, valid) => {
     expect(schema.safeParse(valid).success).toBe(true)
     expect(schema.safeParse({ ...valid, schemaVersion: 2 }).success).toBe(false)

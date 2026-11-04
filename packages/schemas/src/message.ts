@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LIMITS } from './common.ts'
 import { templateMessageBodySchema } from './template.ts'
+import { worldStateMessageBodySchema } from './world.ts'
 
 /**
  * The body of every MUC groupchat message is JSON `{type, schemaVersion, content}` (SRD §3).
@@ -27,6 +28,7 @@ export const chatMessageBodySchema = z
 export const messageBodySchema = z.discriminatedUnion('type', [
   chatMessageBodySchema,
   templateMessageBodySchema,
+  worldStateMessageBodySchema,
 ])
 
 export type ChatMessageBody = z.infer<typeof chatMessageBodySchema>

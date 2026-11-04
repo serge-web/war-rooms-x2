@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:room.schema.json",
+  "title": "Room document (`rooms:<roomId>`)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Display name"
+    },
+    "roomType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Room type id from the registry (v1: chat and map)"
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "force",
+              "role"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "description": "Force or role id"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "write",
+              "read"
+            ],
+            "description": "Read-only entries join as MUC visitors"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "access"
+        ],
+        "description": "A room participant entry (§3 rule 4)"
+      },
+      "description": "Mixed force and role entries; White Force roles are added implicitly, and a role entry assigns a White Force observer the room (§3 rule 4)"
+    },
+    "config": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {},
+      "description": "Type-specific config, validated by the room type (ARC-5)"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+    },
+    "theme": {
+      "description": "Styles this room's panel and tab",
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Colour as #rrggbb"
+            },
+            "secondary": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Colour as #rrggbb"
+            },
+            "background": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Colour as #rrggbb"
+            },
+            "surface": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Colour as #rrggbb"
+            },
+            "text": {
+              "type": "string",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "description": "Colour as #rrggbb"
+            },
+            "fontFamily": {
+              "description": "Bundled font id",
+              "type": "string",
+              "enum": [
+                "sans",
+                "serif",
+                "mono"
+              ]
+            }
+          },
+          "description": "Design tokens; an unset token inherits from the game theme, then the default"
+        },
+        "logoAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "iconAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "tokens"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "roomType",
+    "participants",
+    "config",
+    "order"
+  ],
+  "description": "A channel: one MUC room plus this config"
+}

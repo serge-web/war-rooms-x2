@@ -11,9 +11,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "dictionary": "node scripts/generate-dictionary.ts"
+    "dictionary": "node scripts/generate-dictionary.ts",
+    "json-schema": "node scripts/export-json-schema.ts"
   },
   "dependencies": {
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cfworker/json-schema": "4.1.1"
   }
 }
