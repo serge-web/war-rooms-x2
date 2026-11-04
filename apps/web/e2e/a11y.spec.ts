@@ -46,13 +46,13 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
     await logIn(page, 'blue-co', 'demo-blue-co')
-    await expect(roomTabs(page)).toHaveCount(3)
+    await expect(roomTabs(page)).toHaveCount(4)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as Blue CO')
 
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(4)
+    await expect(roomTabs(page)).toHaveCount(5)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the umpire')
 
@@ -66,7 +66,7 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     // A read-only role: the composer is disabled with its reason.
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'white-observer', 'demo-white-observer')
-    await expect(roomTabs(page)).toHaveCount(4)
+    await expect(roomTabs(page)).toHaveCount(5)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the White observer')
   })
@@ -180,7 +180,7 @@ test.describe('keyboard only', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(4)
+    await expect(roomTabs(page)).toHaveCount(5)
     await settled(page)
     // From the first control on the page, in the header.
     await page.getByRole('banner').first().locator('a, button, input, select').first().focus()
@@ -213,18 +213,21 @@ test.describe('keyboard only', () => {
     expect(await focusIsVisible(page)).toBeUndefined()
     await page.keyboard.type('demo-blue-co')
     await page.keyboard.press('Enter')
-    await expect(roomTabs(page)).toHaveCount(3)
+    await expect(roomTabs(page)).toHaveCount(4)
 
     // Room tabs: reachable by Tab, switched with the arrow keys and Enter (the tablist pattern).
     const blue = page.getByRole('tab', { name: 'Blue HQ', exact: true })
     await tabTo(page, blue)
+    // The default layout stacks the negotiation behind Blue HQ (four rooms in three columns).
     const talks = 'Blue–Red negotiation'
-    // Move negotiation into Blue HQ's tabset with the keyboard alternative to dragging (NFR-14).
-    await tabTo(page, page.getByRole('tab', { name: talks, exact: true }))
-    await page.keyboard.press('Alt+Shift+ArrowLeft')
+    // Arrow to it in the tablist, then move it into the next tabset with the keyboard
+    // alternative to dragging (NFR-14).
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('tab', { name: talks, exact: true })).toBeFocused()
+    await page.keyboard.press('Alt+Shift+ArrowRight')
     await expect(
       page.getByRole('main', { name: 'Workspace' }).getByRole('status').first(),
-    ).toContainText(`${talks} moved to column 1`)
+    ).toContainText(`${talks} moved to column 2`)
     await expect(page.getByRole('tab', { name: talks, exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('tab', { name: talks, exact: true })).toHaveAttribute(
@@ -360,6 +363,8 @@ test('a room tab’s unread count is its description for screen readers (PLY-11,
   const blue = await context.newPage()
   await blue.goto('./')
   await logIn(blue, 'blue-co', 'demo-blue-co')
+  // Four rooms in three columns: the negotiation starts behind Blue HQ.
+  await blue.getByRole('tab', { name: talks, exact: true }).click()
   const box = blue.getByRole('textbox', { name: `Message ${talks}`, exact: true })
   for (const text of ['One.', 'Two.']) {
     await box.fill(text)

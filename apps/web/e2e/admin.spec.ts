@@ -58,6 +58,8 @@ test('the seeded game is published; the demo passphrase opens the vault; the aud
   await expect(page.getByText('No differences: the server matches the design.')).toBeVisible({
     timeout: 30_000,
   })
-  // Blue’s observer in Blue HQ and Blue Reports, and the White observer in each of the four rooms.
-  await expect(page.getByText(/Voice checked through 6 role logins/)).toBeVisible()
+  // Read only: Blue’s observer in Blue HQ, Blue Reports and the map room, the White observer in
+  // each of the five rooms, Blue CO and Red CO in the map room (§3 rule 18); and the writers the
+  // vault holds, Blue CO and Red CO, in their other rooms: 10 and 5.
+  await expect(page.getByText(/Voice checked through 15 role logins/)).toBeVisible()
 })

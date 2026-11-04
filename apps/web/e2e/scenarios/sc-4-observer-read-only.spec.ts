@@ -34,7 +34,7 @@ test('SC-4: the Blue observer reads Blue’s rooms; the server refuses a modifie
 
   // 1. Blue's rooms with their history.
   await expect(observer.getByLabel('Logged in as Blue Observer, Blue')).toBeVisible()
-  await expect(tabs(observer)).toHaveText([BLUE_HQ, 'Blue Reports'])
+  await expect(tabs(observer)).toHaveText([BLUE_HQ, 'Blue Reports', 'Map'])
   await expect(messages(observer)).toContainText('Orders for the crossing are out.')
   await expect(messages(observer)).toContainText('Recce team moving to the bridge.')
 

@@ -41,7 +41,13 @@ export function assetsByForce(
 
 export function MapPanelCore({ name, state, loading, problem, forces }: MapPanelCoreProps) {
   return (
-    <div className="wrx-room-placeholder wrx-map-placeholder">
+    // Focusable, so a pane too small for the list can be scrolled from the keyboard (WCAG 2.1.1).
+    <div
+      className="wrx-room-placeholder wrx-map-placeholder"
+      tabIndex={0}
+      role="group"
+      aria-label={`${name}: world state`}
+    >
       <h2 className="wrx-room-placeholder__name">{name}</h2>
       {problem !== undefined ? (
         <p className="wrx-empty">This map cannot be shown: {problem}</p>

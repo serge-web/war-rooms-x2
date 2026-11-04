@@ -27,9 +27,12 @@ async function asUmpire(page: Page): Promise<string[]> {
   })
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
-  // These checks are about the three-room layout of v1's demo: the templated room (Annex A) is
-  // taken out first.
-  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(ROOM.blueReports) }])
+  // These checks are about the three-room layout of v1's demo: the templated room (Annex A) and
+  // the map room (WP 5.2) are taken out first.
+  await asMockAdmin(page, [
+    { op: 'delete-node', node: nodeName.room(ROOM.blueReports) },
+    { op: 'delete-node', node: nodeName.room(ROOM.map) },
+  ])
   await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   return errors

@@ -38,7 +38,9 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   }
   const { page: blue, errors: blueErrors } = await player('blue-co')
   const { page: red, errors: redErrors } = await player('red-co')
-  await expect.poll(() => columns(blue)).toEqual([['Blue HQ'], [TALKS], ['Blue Reports']])
+  // Four rooms in three columns: the negotiation shares the first with Blue HQ, on show.
+  await tab(blue, TALKS).click()
+  await expect.poll(() => columns(blue)).toEqual([['Blue HQ', TALKS], ['Blue Reports'], ['Map']])
   // A message half written in the negotiation, which the change must not disturb.
   const draft = blue.getByRole('textbox', { name: `Message ${TALKS}`, exact: true })
   await draft.fill('Half-written reply to Red')

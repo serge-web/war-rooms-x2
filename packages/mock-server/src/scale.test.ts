@@ -12,10 +12,11 @@ import { parseMockState } from './state.ts'
 import { MockTransport } from './transport.ts'
 
 describe('the scale fixture', () => {
-  it('has 50 roles, 30 rooms and 10,000 messages in the busy room, and a clean design', () => {
+  it('has 50 roles, 30 rooms and the map room, 10,000 messages in the busy room, and a clean design', () => {
     const design = scaleDesign()
     expect(design.roles).toHaveLength(50)
-    expect(design.rooms).toHaveLength(30)
+    expect(design.rooms.filter((r) => r.roomType === 'chat')).toHaveLength(30)
+    expect(design.rooms.filter((r) => r.roomType === 'map')).toHaveLength(1)
     expect(checkDesign(design).filter((i) => i.severity === 'error')).toEqual([])
     const state = scaleState()
     const busy = state.rooms.find((r) => r.jid.startsWith(`${SCALE_BUSY_ROOM}@`))

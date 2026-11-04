@@ -100,6 +100,9 @@ async function replaceRaw(editor: Locator, text: string) {
   await editor.page().keyboard.insertText(text)
 }
 
+/** The vault's passphrase in this test (ADM-37); the mock skips the strength check only for its demo. */
+const VAULT_PASSPHRASE = 'correct horse battery staple'
+
 test(
   'builds a template with every field type, edits it raw, previews it, offers it and publishes it locked',
   { tag: '@screenshot' },
@@ -254,6 +257,13 @@ test(
     await plan.getByRole('region', { name: 'Documents' }).getByRole('button').first().click()
     await expect(plan.getByText('Publish the template Patrol report')).toBeVisible()
     await expect(plan.getByText(/A room offers it, so it locks/)).toBeVisible()
+    // Every role is read only in the map room (§3 rule 18), so the vault holds their passwords.
+    await page.getByRole('button', { name: 'Create the vault' }).click()
+    const vault = page.getByRole('alertdialog', { name: 'Create the observer-password vault' })
+    await vault.getByLabel('Passphrase', { exact: true }).fill(VAULT_PASSPHRASE)
+    await vault.getByLabel('Passphrase again').fill(VAULT_PASSPHRASE)
+    await vault.getByRole('button', { name: 'Create' }).click()
+    await expect(page.getByText('Vault unlocked.')).toBeVisible({ timeout: 20_000 })
     await plan.getByRole('button', { name: /^Publish \d+ changes?…$/ }).click()
     const dialog = page.getByRole('alertdialog', { name: 'Publish these changes?' })
     await dialog.getByRole('button', { name: 'Publish', exact: true }).click()

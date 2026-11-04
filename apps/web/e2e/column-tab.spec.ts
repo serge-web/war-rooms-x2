@@ -38,7 +38,7 @@ test('narrow, the column is a special tab that cannot be closed; wide, the colum
   await player(page, 'blue-co')
   await expect(column(page)).toBeVisible()
   await expect(columnTab(page)).toHaveCount(0)
-  const rooms = ['Blue HQ', 'Blue–Red negotiation', 'Blue Reports']
+  const rooms = ['Blue HQ', 'Blue–Red negotiation', 'Blue Reports', 'Map']
   await expect(roomTabs(page)).toHaveText(rooms)
 
   await page.setViewportSize(NARROW)
@@ -166,6 +166,7 @@ test('multi-client panes switch on their own width, not the screen’s (FT-1, PL
     'Blue HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   // One pane's tab opens that pane's column only.
   await columnTab(pane(page, 2)).click()

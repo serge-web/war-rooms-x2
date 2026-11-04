@@ -3,7 +3,7 @@
 // stays the default (PLY-21). Tests load it into the running mock with `importDatabase`, and the
 // admin's draft is the same design (`scaleDesign`). Deterministic: the same options give the same
 // state, so measurements are comparable between runs. Every password is a DEMO PASSWORD (NFR-6).
-import { DESIGN_FILE_VERSION } from '@wrx/schemas'
+import { DESIGN_FILE_VERSION, MAP_ROOM_TYPE, mapParticipants } from '@wrx/schemas'
 import type { ChatRoomConfig, DesignFile, Template } from '@wrx/schemas'
 import { sampleTemplates } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
@@ -204,6 +204,18 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     if (busy !== undefined) rooms[0] = { ...busy, config }
   }
 
+  // And the game's map room (§3 rule 18), as every draft has one, so the admin's draft and the
+  // seeded server agree.
+  rooms.push({
+    schemaVersion: 1,
+    id: scaleId('map'),
+    name: 'Map',
+    roomType: MAP_ROOM_TYPE,
+    participants: mapParticipants(forces),
+    config: {},
+    order: rooms.length,
+  })
+
   return {
     format: 'wrx1-design',
     schemaVersion: DESIGN_FILE_VERSION,
@@ -211,7 +223,8 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     game: {
       schemaVersion: 1,
       name: 'Scale exercise',
-      description: 'The NFR-11 scale fixture: 50 roles, 30 rooms, 10,000 messages in one room.',
+      description:
+        'The NFR-11 scale fixture: 50 roles, 30 rooms and the map room, 10,000 messages in one room.',
       briefing: '## Briefing\n\nA generated game for measuring the client at scale.',
       designVersion: 1,
       theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' } },

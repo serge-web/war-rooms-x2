@@ -40,6 +40,8 @@ test('SC-3: Blue and Red chat across forces; Red’s dropped connection loses, r
   await backend.asAdmin(blue, [{ op: 'post', room: ROOM.negotiation, texts: HISTORY }])
   await logInAs(blue, backend, 'blue-co')
   await expect(tab(blue, TALKS)).toBeVisible({ timeout: 20_000 })
+  // Four rooms in three columns: Blue's negotiation starts behind Blue HQ.
+  await tab(blue, TALKS).click()
 
   const red = await peerContext.newPage()
   await red.setViewportSize({ width: 1400, height: 900 })

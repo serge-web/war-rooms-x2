@@ -45,6 +45,18 @@ async function open(page: Page, roleId: string): Promise<string[]> {
   return errors
 }
 
+/**
+ * Blue CO has four rooms, the map room included, in three columns, so the negotiation starts
+ * behind Blue HQ: moved to the next column with the keyboard and put on show, so both are open.
+ */
+async function talksBeside(page: Page, scope: Page | Locator = page): Promise<void> {
+  await scope.getByRole('tab', { name: TALKS, exact: true }).focus()
+  await page.keyboard.press('Alt+Shift+ArrowRight')
+  await expect(scope.getByRole('tab', { name: TALKS, exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(composer(scope, TALKS)).toBeVisible()
+}
+
 /** Let the page settle for axe: fonts, the first history page, the rows measured. */
 async function settled(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
@@ -61,6 +73,7 @@ test('a collapsed room stays collapsed after a reload; the list takes the space 
   page,
 }) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await expect(toggle(page, BLUE)).toHaveText('Hide message entry')
   await expect(toggle(page, BLUE)).toHaveAttribute('aria-expanded', 'true')
   const before = await height(messages(page, BLUE))
@@ -159,6 +172,7 @@ test('axe passes with the composer expanded and collapsed, and an observer start
   page,
 }, testInfo) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await settled(page)
   await composer(page, BLUE).fill('A draft')
   await expectNoViolations(page, testInfo, 'composer expanded')
@@ -192,6 +206,7 @@ test('each multi-client pane collapses its own rooms (PLY-54, PLY-17)', async ({
   const red = pane(page, 2)
   await quickLogIn(blue, 'Blue CO (Blue)')
   await quickLogIn(red, 'Red CO (Red)')
+  await talksBeside(page, blue)
   await expect(composer(blue, TALKS)).toBeVisible()
   await expect(composer(red, TALKS)).toBeVisible()
   await composer(blue, TALKS).fill('Pane draft')
@@ -207,6 +222,7 @@ test('a popped-out room collapses in its window, and keeps it after a reload doc
   page,
 }) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await composer(page, TALKS).fill('Written before the popout')
   const popup = page.waitForEvent('popup')
   await page

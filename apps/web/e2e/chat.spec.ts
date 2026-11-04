@@ -44,6 +44,8 @@ test('two clients send and receive; a hidden tab counts unread (PLY-9, PLY-11, P
   const blueErrors = await open(blue, 'blue-co')
   const redErrors = await open(red, 'red-co')
 
+  // Four rooms in three columns: Blue's negotiation starts behind Blue HQ.
+  await tab(blue, ROOMS.talks).click()
   // History from the demo seed, with role names and local times (PLY-9).
   await expect(messages(blue, ROOMS.talks)).toContainText(
     'Blue proposes a ceasefire at the crossing until noon.',

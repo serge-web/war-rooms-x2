@@ -61,6 +61,7 @@ test('a White Force observer sees every room read only and reads, but cannot edi
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   // The composers start collapsed for a read-only role (PLY-54); expanded, it says why.
   await page.getByRole('button', { name: 'Show message entry' }).first().click()
@@ -151,6 +152,7 @@ test('the umpire posts in every room; a White observer reads every room and post
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   // ...and the server, which enforces it (PLY-39), lets the umpire post in each, makes the White
   // observer a visitor in each, and keeps Blue out of Red HQ.
