@@ -3,12 +3,12 @@
   "shots": {
     "admin-design-editor": "89a1e298254e873c55616512052369fcbcedd5cda86c9fb518d81bcf370f5093",
     "admin-preview-as-role": "87678ac950af0e934a9ca7e65bd9960933689fb9006043e345a38c1a2a290a6c",
-    "admin-publish-plan": "6d86a0bd783afec4607ca185fef2dbf9c7546239d86b9a74a82cac25bba0031c",
+    "admin-publish-plan": "e3fdd2115a38509b93d967dcf45f79f7cf1631f3fae71f172d8167dcca723ffe",
     "admin-room-templates": "4e0106a5fcb9d136b12fad5ba634a50bd78d6333184155445b140c0a4ebff4c7",
     "admin-template-builder": "076d7f410cdda4d2315d6bf18503bd2bd9375521398544e083681540bc6701c6",
     "admin-template-raw": "e8d85e390e8f851122985213da60f72d50d70118be5b14af137eb7164250d0d2",
     "admin-theme-editor": "c13f6288bcfd54a662d356d31b9cac979bb99ea5ec6f43611527a612060de3bc",
-    "app-shell": "837fc6ca211cf44249d7c503a0b899e70f538911a1ca4f01029d0baf526e1d28",
+    "app-shell": "1f15d833600f941dae4c8d54874abdaee9cfdf38517c5119e667be6aae1bb1e3",
     "multi-client-column-tab": "9420126f2c962fc93f5c8620c4252d329d894c3d2b456230f31dfd1b3f37c394",
     "multi-client-two-panes": "05ce56ec3fb3f70b7378a7d26b0dbe885f3c66c2d270a39bb323aba92b744deb",
     "multi-client-view": "25f8dfd20dad8923034e1dc58781b7dafb6f77b2cff54f9a054cd475816b80d0",
@@ -23,7 +23,7 @@
     "player-column": "e26081ae1aa0d30b8bb3c5ced79a8b1093b5e555b9615b1c94569c6b4c7f70be",
     "player-objectives-editor": "b77742f564679462458126873e18b79381a6a7789de910f1b47022cca8ef24f2",
     "player-shell": "7dc71c5f934aacf3b660b3e4a3ce08b50040640eea8d7099c02a34d4b73705b1",
-    "player-welcome": "837fc6ca211cf44249d7c503a0b899e70f538911a1ca4f01029d0baf526e1d28",
+    "player-welcome": "1f15d833600f941dae4c8d54874abdaee9cfdf38517c5119e667be6aae1bb1e3",
     "player-workspace": "7f069a4c1f2d56e87af7d968acec1baa898eabd01cb0a41f3787429c2d2f9bff",
     "template-card": "479615d629a8e686ac4a66c6e168a29317df8aad16071ea283e935ac6c18e0db",
     "template-composer": "5c710a35f6dae68a1adfe5a0a1edcd981451461b5e0308024abd52c732f0d91d"

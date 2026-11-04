@@ -9,7 +9,7 @@
   },
   {
     "name": "admin-publish-plan",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-room-templates",
@@ -29,7 +29,7 @@
   },
   {
     "name": "app-shell",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "multi-client-column-tab",
@@ -89,7 +89,7 @@
   },
   {
     "name": "player-welcome",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-workspace",
