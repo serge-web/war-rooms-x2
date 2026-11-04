@@ -294,6 +294,20 @@ export interface PhaseChange {
   readonly to: GameState
 }
 
+/**
+ * Why a phase change failed. `worldStateSent` is set when the world state given with it was
+ * published to the map room and only the `game-state` publish then failed (WP 5.9, review L3):
+ * players already see the new world state, the phase did not move, and a retry need not send
+ * the world state again.
+ */
+export interface AdvancePhaseError extends DomainError {
+  readonly worldStateSent?: { readonly stanzaId: string; readonly state: WorldState }
+}
+
+export type AdvancePhaseResult =
+  | { readonly ok: true; readonly value: PhaseChange }
+  | { readonly ok: false; readonly error: AdvancePhaseError }
+
 export interface RoomWatch {
   readonly joined: Joined
   readonly release: Release
@@ -419,9 +433,10 @@ export interface SessionStore {
    * (`nextGameState`) and publishes it to `game-state`. Refused before sending for any role,
    * when `game-state` no longer holds `from` (`stale`), when none is published (`not-found`), and
    * after the last turn (`invalid`). With `options.worldState`, publishes it first (ADM-45), and
-   * refuses the change if it is refused.
+   * refuses the change if it is refused; if it went out and `game-state` then failed, the error
+   * carries `worldStateSent`.
    */
-  advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>>
+  advancePhase(options: AdvancePhaseOptions): Promise<AdvancePhaseResult>
   /**
    * Retries the nodes that failed and picks up what the directory names; run after a design
    * change and on reconnection. Nodes are never listed: rooms, forces and roles are found from
@@ -2070,7 +2085,7 @@ class Store implements SessionStore {
     return postingPaused(this.me().data, this.gameState().data)
   }
 
-  async advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>> {
+  async advancePhase(options: AdvancePhaseOptions): Promise<AdvancePhaseResult> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
     if (!this.identity.isAdmin) {
       return domainErr('not-permitted', 'only the admin advances the game (ADM-43)')
@@ -2089,6 +2104,7 @@ class Store implements SessionStore {
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
     // ADM-45: the world state first, so players never see the new phase with the old map. If it
     // is refused (too large, not joined), the phase stays where it is.
+    let worldStateSent: { readonly stanzaId: string; readonly state: WorldState } | undefined
     if (options.worldState !== undefined) {
       const sent = await this.sendWorldState(options.worldState.roomId, options.worldState.state)
       if (!sent.ok) {
@@ -2100,6 +2116,10 @@ class Store implements SessionStore {
           },
         }
       }
+      worldStateSent = Object.freeze({
+        stanzaId: sent.value.stanzaId,
+        state: options.worldState.state,
+      })
     }
     const published = await this.publish(
       SINGLETON_NODES.gameState,
@@ -2107,7 +2127,18 @@ class Store implements SessionStore {
       parsed.value,
       'Advancing the game',
     )
-    if (!published.ok) return published
+    if (!published.ok) {
+      // L3 (WP 5.9): the world state is out, so the error must not say it was not.
+      if (worldStateSent === undefined) return published
+      return {
+        ok: false,
+        error: {
+          ...published.error,
+          message: `the world state was published, but the phase did not change: ${published.error.message}`,
+          worldStateSent,
+        },
+      }
+    }
     return domainOk(Object.freeze({ from: current, to: parsed.value }))
   }
 

@@ -7,7 +7,9 @@
 //
 // When the admin holds a world-state draft (WP 5.6, ADM-45), the confirmation shows its change
 // summary (ADM-46) and the change publishes it first, its turn the next phase's; with no
-// differences it says the world state is not published.
+// differences it says the world state is not published. If the world state went out and the
+// phase change then failed (WP 5.9, review L3), the error says so, the draft is cleared as
+// published, and the confirmation stays open so that confirming again moves only the phase.
 import {
   diffWorldStates,
   isEmptyDiff,
@@ -18,13 +20,14 @@ import {
   sameGameState,
   worldDraftKey,
 } from '@wrx/domain'
-import type { DomainResult, PhaseChange, WorldDraft } from '@wrx/domain'
+import type { AdvancePhaseResult, WorldDraft } from '@wrx/domain'
 import { useForces, useGameState, useMe, useSessionStore, useWorldState } from '@wrx/hooks'
 import type { GameState } from '@wrx/schemas'
 import { Button, Dialog, DialogClose, Spinner } from '@wrx/ui'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { WorldStateSummary } from '../map/change-summary.tsx'
+import type { JustPublished } from '../map/draft-storage.ts'
 import {
   draftForTurn,
   sizeRefusal,
@@ -52,6 +55,8 @@ export interface TurnPanelCoreProps {
   readonly confirmDetails?: ReactNode
   /** The confirmation cannot be confirmed yet, e.g. the world state is too large (WP 5.6). */
   readonly confirmBlocked?: boolean
+  /** Called when the confirmation closes: cancelled, or the change went through. */
+  readonly onConfirmClosed?: (() => void) | undefined
   /** `column` (default) in the out-of-game column; `bar` in the admin backend's header. */
   readonly variant?: 'column' | 'bar'
 }
@@ -98,12 +103,14 @@ function AdvanceControl({
   onAdvance,
   confirmDetails,
   confirmBlocked,
+  onConfirmClosed,
   bar,
 }: {
   readonly state: GameState
   readonly onAdvance: (from: GameState) => Promise<string | undefined>
   readonly confirmDetails: ReactNode
   readonly confirmBlocked: boolean
+  readonly onConfirmClosed: (() => void) | undefined
   readonly bar: boolean
 }) {
   const [from, setFrom] = useState<GameState | undefined>(undefined)
@@ -123,6 +130,10 @@ function AdvanceControl({
   // another admin tab does not rewrite; it disables the confirmation instead.
   const words = advanceWords(from ?? state)
   const moved = from !== undefined && !sameGameState(from, state)
+  const close = () => {
+    setFrom(undefined)
+    onConfirmClosed?.()
+  }
   const confirm = async () => {
     if (from === undefined || busy || moved || confirmBlocked) return
     setBusy(true)
@@ -130,7 +141,7 @@ function AdvanceControl({
     const problem = await onAdvance(from)
     if (!mounted.current) return
     setBusy(false)
-    if (problem === undefined) setFrom(undefined)
+    if (problem === undefined) close()
     else setError(problem)
   }
   return (
@@ -150,7 +161,7 @@ function AdvanceControl({
       <Dialog
         open={open}
         onOpenChange={(value) => {
-          if (!value && !busy) setFrom(undefined)
+          if (!value && !busy) close()
         }}
         title={words.title}
         description={words.description}
@@ -200,6 +211,7 @@ export function TurnPanelCore({
   onAdvance,
   confirmDetails,
   confirmBlocked = false,
+  onConfirmClosed,
   variant = 'column',
 }: TurnPanelCoreProps) {
   const noteId = useId()
@@ -250,6 +262,7 @@ export function TurnPanelCore({
           onAdvance={onAdvance}
           confirmDetails={confirmDetails}
           confirmBlocked={confirmBlocked}
+          onConfirmClosed={onConfirmClosed}
           bar={bar}
         />
       )}
@@ -282,14 +295,26 @@ export function TurnPanel(props: TurnPanelProps) {
     const parsed = parseWorldDraft(snapshot.text)
     return parsed.ok ? parsed.value : undefined
   }, [snapshot.text])
-  if (key !== undefined && mapRoomId !== undefined && draft !== undefined) {
+  // A draft that a failed phase change published (L3): its panel stays, with the confirmation
+  // and its error open, until the confirmation closes; the stored draft is already cleared.
+  const [held, setHeld] = useState<{ readonly key: string; readonly draft: WorldDraft }>()
+  const shown = draft ?? (held !== undefined && held.key === key ? held.draft : undefined)
+  if (key !== undefined && mapRoomId !== undefined && shown !== undefined) {
     return (
       <TurnPanelWithWorld
         {...props}
         roomId={mapRoomId}
-        draft={draft}
+        draft={shown}
         draftKey={key}
         draftText={snapshot.text}
+        recent={snapshot.published}
+        sent={draft === undefined}
+        onWorldSent={(sentDraft) => {
+          setHeld({ key, draft: sentDraft })
+        }}
+        onConfirmClosed={() => {
+          setHeld(undefined)
+        }}
       />
     )
   }
@@ -316,11 +341,21 @@ function TurnPanelWithWorld({
   draft,
   draftKey,
   draftText,
+  recent,
+  sent,
+  onWorldSent,
+  onConfirmClosed,
 }: TurnPanelProps & {
   readonly roomId: string
   readonly draft: WorldDraft
   readonly draftKey: string
   readonly draftText: string | undefined
+  /** A state just published from the draft, until the room's echo replaces the one before. */
+  readonly recent: JustPublished | undefined
+  /** The draft was published by a phase change that then failed (L3); only the phase is left. */
+  readonly sent: boolean
+  readonly onWorldSent: (draft: WorldDraft) => void
+  readonly onConfirmClosed: () => void
 }) {
   const store = useSessionStore()
   const storage = useWorldDraftStorage()
@@ -332,7 +367,11 @@ function TurnPanelWithWorld({
     world.status === 'loading' ||
     view === undefined ||
     (view.state === undefined && !view.none && world.status !== 'error')
-  const published = view?.state
+  // Until the room echoes a state just published, compare with it, not with the one it replaces.
+  const published =
+    recent !== undefined && view !== undefined && view.stanzaId === recent.replacing
+      ? recent.state
+      : view?.state
   const diff = useMemo(() => diffWorldStates(published, draft.state), [published, draft])
   const dirty = !isEmptyDiff(diff)
   const next = current === undefined ? undefined : nextGameState(current)
@@ -358,6 +397,11 @@ function TurnPanelWithWorld({
             </p>
             <WorldStateSummary diff={diff} state={toPublish} forces={forces} />
           </>
+        ) : sent ? (
+          <p>
+            Your world-state draft is published, so confirming now moves only the phase; the world
+            state is not sent again.
+          </p>
         ) : (
           <p>
             Your world-state draft has no changes from the published one, so no world state is
@@ -379,6 +423,16 @@ function TurnPanelWithWorld({
       dirty ? { from, worldState: { roomId, state } } : { from },
     )
     if (!result.ok) {
+      const out = result.error.worldStateSent
+      if (out !== undefined) {
+        // L3: the world state is out and players see it; only the phase is left to move. The
+        // draft is published, so it is cleared as after a successful change, and held in view.
+        onWorldSent(draft)
+        if (draftText !== undefined) {
+          storage?.published(draftKey, draftText, out.state, view?.stanzaId)
+        }
+        return `The world state for turn ${String(out.state.turn)} was published and players see it, but the phase did not move: ${errorText(result.error)} Confirm again to move the phase; the world state is not sent again.`
+      }
       return dirty && result.error.code !== 'stale'
         ? `Not changed: the world state was not published, so the phase did not move: ${worldPublishErrorText(result.error)}`
         : advanceResult(result)
@@ -394,6 +448,7 @@ function TurnPanelWithWorld({
       confirmDetails={details}
       confirmBlocked={searching || tooLarge !== undefined}
       onAdvance={onAdvance}
+      onConfirmClosed={onConfirmClosed}
     />
   )
 }
@@ -403,9 +458,11 @@ function TurnPanelView({
   confirmDetails,
   confirmBlocked,
   onAdvance,
+  onConfirmClosed,
 }: TurnPanelProps & {
   readonly confirmBlocked?: boolean
   readonly onAdvance: ((from: GameState) => Promise<string | undefined>) | undefined
+  readonly onConfirmClosed?: () => void
 }) {
   const snapshot = useGameState()
   const me = useMe().data
@@ -424,12 +481,13 @@ function TurnPanelView({
       onAdvance={onAdvance}
       confirmDetails={confirmDetails}
       confirmBlocked={confirmBlocked === true}
+      onConfirmClosed={onConfirmClosed}
       {...(variant === undefined ? {} : { variant })}
     />
   )
 }
 
-function advanceResult(result: DomainResult<PhaseChange>): string | undefined {
+function advanceResult(result: AdvancePhaseResult): string | undefined {
   if (result.ok) return undefined
   return result.error.code === 'stale'
     ? 'Not changed: the game moved on since this was opened. Cancel and check the turn panel.'

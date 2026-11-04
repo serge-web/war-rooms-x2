@@ -11,6 +11,7 @@ import { SessionStoreProvider } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
 import { WORLD_ASSET, sampleDesign, sampleWorldState, tid } from '@wrx/schemas/fixtures'
 import type { WorldState } from '@wrx/schemas'
+import { err, ok } from '@wrx/transport'
 import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -229,6 +230,45 @@ describe('the world-state editor (ADM-44, ADM-45)', () => {
     expect(writes.map((c) => c.op)).toEqual(['send', 'publish'])
     expect((JSON.parse(String(writes[0]?.args[1])) as { content: WorldState }).content.turn).toBe(2)
     expect(storage.snapshot(KEY).text).toBeUndefined()
+  })
+
+  it('says the world state went out when only the phase change fails, and retries the phase alone (L3, WP 5.9)', async () => {
+    const { h, storage } = await mount(
+      'admin',
+      <>
+        <TurnPanel />
+        {mapPanel}
+      </>,
+      undefined,
+      at(1, 'adjudication'),
+    )
+    await editHealth('Tank Company', '40')
+    h.session.stub('pubsub', 'publish', () => Promise.resolve(err('remote-server-timeout')))
+    fireEvent.click(screen.getByRole('button', { name: 'Start turn 2…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Start turn 2?' })
+    await waitFor(() => {
+      expect(dialog.textContent).toContain('Tank Company: health 100% → 40%')
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start turn 2' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toBe(
+      'The world state for turn 2 was published and players see it, but the phase did not move: the server did not answer. Try again. Confirm again to move the phase; the world state is not sent again.',
+    )
+    expect(alert.textContent).not.toMatch(/not published/)
+    // The draft was published: it is cleared, and the map shows no unpublished edits.
+    expect(storage.snapshot(KEY).text).toBeUndefined()
+    expect(screen.queryByText(/Unpublished edits/)).toBeNull()
+    // The confirmation stays, and now says only the phase is left.
+    expect(screen.getByRole('dialog', { name: 'Start turn 2?' })).toBe(dialog)
+    expect(dialog.textContent).toContain('confirming now moves only the phase')
+    expect(dialog.textContent).not.toContain('Tank Company: health 100% → 40%')
+    h.session.stub('pubsub', 'publish', () => Promise.resolve(ok(undefined)))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start turn 2' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    const writes = h.session.calls.filter((c) => c.op === 'send' || c.op === 'publish')
+    expect(writes.map((c) => c.op)).toEqual(['send', 'publish', 'publish'])
   })
 
   it('says a phase change with no edits publishes no world state', async () => {
