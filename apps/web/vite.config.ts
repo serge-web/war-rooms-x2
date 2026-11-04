@@ -1,6 +1,9 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { DEMO_TILE_ORIGIN } from './src/tiles.ts'
 
 /**
  * marked's GFM autolink tokenizer contains the regex text `xmpp:email`, which the site's
@@ -49,10 +52,27 @@ function rjsfPasswordFormat(): Plugin {
  * is not known when building: it allows any `wss:` host, and plain `ws:` only to this machine,
  * as config.ts does (F13). An operator who knows the host narrows it with the header.
  *
+ * `img-src` and the map's base tiles (WP 5.5, NFR-9): the mock build reads no config.json, so
+ * its tiles are the built-in demo default and its policy names exactly that origin (`'demo'`).
+ * The server build reads the tile URL from config.json at run time, so, as with `connect-src`,
+ * it allows any `https:` image host (`'any'`) and the operator's header narrows it to theirs.
+ * `'none'` is the policy with no tile host at all: the reference deployment's header, whose
+ * install configures no tiles (plan/reviews/phase-5-security-notes.md).
+ *
  * Only in `vite build`: the dev server needs an inline React refresh preamble and its own
  * WebSocket.
  */
-export function contentSecurityPolicy(server: boolean): string {
+export type TilePolicy = 'demo' | 'any' | 'none'
+
+export function imageSources(tiles: TilePolicy): string {
+  const extra = tiles === 'demo' ? ` ${DEMO_TILE_ORIGIN}` : tiles === 'any' ? ' https:' : ''
+  return `'self' data: blob:${extra}`
+}
+
+export function contentSecurityPolicy(
+  server: boolean,
+  tiles: TilePolicy = server ? 'any' : 'demo',
+): string {
   const connect = server
     ? "'self' wss: ws://localhost:* ws://127.0.0.1:* ws://*.localhost:*"
     : "'self'"
@@ -61,7 +81,7 @@ export function contentSecurityPolicy(server: boolean): string {
     "script-src 'self'",
     "worker-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    `img-src ${imageSources(tiles)}`,
     "font-src 'self'",
     `connect-src ${connect}`,
     "object-src 'none'",
@@ -90,6 +110,31 @@ function cspMeta(server: boolean): Plugin {
   }
 }
 
+/**
+ * `popout.html` is a static file with its own policy (F7): a popped-out map loads its tiles under
+ * that policy, so the build writes its own `img-src` into the copy in the output folder.
+ */
+function popoutImageSources(server: boolean): Plugin {
+  let outDir = ''
+  return {
+    name: 'wrx-popout-img-src',
+    apply: 'build',
+    configResolved(config) {
+      outDir = resolve(config.root, config.build.outDir)
+    },
+    writeBundle() {
+      const file = join(outDir, 'popout.html')
+      const html = readFileSync(file, 'utf8')
+      const next = html.replace(
+        "img-src 'self' data: blob:;",
+        `img-src ${imageSources(server ? 'any' : 'demo')};`,
+      )
+      if (next === html) throw new Error('popout.html: no img-src to set')
+      writeFileSync(file, next)
+    },
+  }
+}
+
 // Two builds of one app:
 // - `vite build` (default): mock only. Previews, the demo, snapshots and the site use it, so it
 //   reads no config.json and carries no real transport or endpoint (DOC-12).
@@ -98,7 +143,13 @@ function cspMeta(server: boolean): Plugin {
 export default defineConfig(({ mode }) => {
   const server = mode === 'server'
   return {
-    plugins: [react(), markedXmppAutolink(), rjsfPasswordFormat(), cspMeta(server)],
+    plugins: [
+      react(),
+      markedXmppAutolink(),
+      rjsfPasswordFormat(),
+      cspMeta(server),
+      popoutImageSources(server),
+    ],
     // Relative asset URLs, so one build runs under any base path: PR previews, the demo and
     // snapshots on GitHub Pages, or a customer's static host (DOC-11, NFR-8).
     base: './',
@@ -107,8 +158,9 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: 0,
       outDir: server ? 'server-build/dist' : 'dist',
       // React, Radix, zod, FlexLayout (WP 2.5) and the in-tab mock server; the real transport and
-      // the admin backend are their own chunks.
-      chunkSizeWarningLimit: 900,
+      // the admin backend are their own chunks. So is the map (WP 5.5), loaded lazily: Leaflet
+      // and milsymbol with all its symbol sets, about 1 MB before gzip.
+      chunkSizeWarningLimit: 1100,
     },
     preview: { port: server ? 4175 : 4173 },
   }

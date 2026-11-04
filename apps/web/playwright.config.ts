@@ -39,6 +39,13 @@ function ejabberdArgs(): string[] {
  * `mock-build-firefox`. The ejabberd project is Chromium's only: it trusts the test certificate
  * with a Chromium flag.
  */
+/**
+ * Map tiles never reach the internet from a test (WP 5.5, DOC-20): each test that shows the map
+ * serves a local tile by route (e2e/map.ts), and Chromium cannot resolve the demo's tile host, so
+ * a test that forgets fails rather than fetching.
+ */
+const NO_TILE_HOST = '--host-resolver-rules=MAP tile.openstreetmap.org ~NOTFOUND'
+
 type BrowserName = 'chromium' | 'firefox' | 'webkit'
 const DEVICES: Record<BrowserName, (typeof devices)[string]> = {
   chromium: devices['Desktop Chrome'],
@@ -60,16 +67,17 @@ const browsers: BrowserName[] = (process.env.WRX_E2E_BROWSERS ?? 'chromium')
 function browserProjects(browser: BrowserName): Project[] {
   const suffix = browser === 'chromium' ? '' : `-${browser}`
   const device = DEVICES[browser]
+  const args = browser === 'chromium' ? [NO_TILE_HOST] : []
   const projects: Project[] = [
     {
       name: `mock-build${suffix}`,
       testIgnore: /(server|ejabberd)\.spec\.ts/,
-      use: { ...device, baseURL: `http://localhost:${mockPort}/` },
+      use: { ...device, baseURL: `http://localhost:${mockPort}/`, launchOptions: { args } },
     },
     {
       name: `server-build${suffix}`,
       testMatch: /(server|shell)\.spec\.ts/,
-      use: { ...device, baseURL: `http://localhost:${serverPort}/` },
+      use: { ...device, baseURL: `http://localhost:${serverPort}/`, launchOptions: { args } },
     },
   ]
   if (browser === 'chromium') {
@@ -80,7 +88,7 @@ function browserProjects(browser: BrowserName): Project[] {
       use: {
         ...device,
         baseURL: `http://localhost:${serverPort}/`,
-        launchOptions: { args: ejabberdArgs() },
+        launchOptions: { args: [...ejabberdArgs(), NO_TILE_HOST] },
       },
     })
   }

@@ -28,5 +28,6 @@ export {
   scaleHistory,
   scaleId,
   scaleState,
+  scaleWorldState,
 } from './scale.ts'
 export type { ScaleOptions } from './scale.ts'

@@ -112,3 +112,21 @@ describe('Timeline (ARC-4)', () => {
     expect(elapsed).toBeLessThan(1_000)
   })
 })
+
+describe('Timeline.retainOnly (R26)', () => {
+  it('keeps one entry, and never takes the dropped ones back until cleared', () => {
+    const timeline = new Timeline()
+    timeline.merge([entry('a', t(1)), entry('b', t(2)), entry('c', t(3))])
+    expect(timeline.retainOnly('b').map((e) => e.id)).toEqual(['a', 'c'])
+    expect(ids(timeline)).toEqual(['b'])
+    expect(timeline.has('a')).toBe(true)
+    expect(timeline.merge([entry('a', t(1)), entry('d', t(4))])).toBe(1)
+    expect(ids(timeline)).toEqual(['b', 'd'])
+    expect(timeline.retainOnly(undefined).map((e) => e.id)).toEqual(['b', 'd'])
+    expect(timeline.size).toBe(0)
+    expect(timeline.retainOnly(undefined)).toEqual([])
+    timeline.clear()
+    expect(timeline.has('a')).toBe(false)
+    expect(timeline.merge([entry('a', t(1))])).toBe(1)
+  })
+})

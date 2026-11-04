@@ -3,7 +3,7 @@
 // (the admin login, in the White Force), the chat panel, and a room with its composer collapsed
 // to a bar holding a draft (PLY-54).
 import { expect, test } from '@playwright/test'
-import { freezeClock, shoot } from '../lib/shoot.ts'
+import { freezeClock, mapSettled, shoot } from '../lib/shoot.ts'
 import { hostMockInLeaderTab, roomTabs, welcomeLoaded } from './mock-app.ts'
 
 test('player welcome page', { tag: '@screenshot' }, async ({ page }) => {
@@ -104,7 +104,7 @@ test('player chat panel, composer collapsed', { tag: '@screenshot' }, async ({ p
   await shoot(page, 'player-chat-collapsed')
 })
 
-test('player map room, the placeholder until the map', { tag: '@screenshot' }, async ({ page }) => {
+test('player map room, an asset selected', { tag: '@screenshot' }, async ({ page }) => {
   await freezeClock(page)
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
@@ -112,12 +112,36 @@ test('player map room, the placeholder until the map', { tag: '@screenshot' }, a
   await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  // WP 5.2: the world state the client accepts, the admin's newest (PLY-58, PLY-59), listed by
-  // force until WP 5.5 draws the map.
+  // WP 5.5: the admin's newest world state on the map, one symbol per asset (PLY-57, PLY-59),
+  // over a local tile, with an asset's details.
   await page.getByRole('tab', { name: 'Map', exact: true }).click()
-  const room = page.getByRole('region', { name: 'Map', exact: true })
-  await expect(room).toContainText('World state for turn 1: 6 assets.')
-  await expect(room.getByRole('region', { name: 'Red' })).toContainText('Tank Company')
+  const room = page.getByRole('group', { name: 'Map: world state', exact: true })
+  await expect(room.getByText('World state for turn 1: 6 assets')).toBeVisible()
+  await expect(room.locator('img.wrx-map__symbol')).toHaveCount(6)
+  await room.locator('img.wrx-map__symbol[alt="A Squadron"]').click()
+  await expect(room.getByRole('region', { name: 'Asset details' })).toContainText('A Squadron')
+  await mapSettled(page)
   await page.mouse.move(0, 0)
-  await shoot(page, 'player-map-placeholder')
+  await shoot(page, 'player-map')
+})
+
+test('player map room, the table of assets', { tag: '@screenshot' }, async ({ page }) => {
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  await page.getByLabel('Login name').fill('red-co')
+  await page.getByLabel('Password', { exact: true }).fill('demo-red-co')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  const room = page.getByRole('group', { name: 'Map: world state', exact: true })
+  await expect(room.locator('img.wrx-map__symbol')).toHaveCount(6)
+  await room.getByRole('button', { name: 'Table' }).click()
+  await room.getByRole('button', { name: 'Tank Company' }).click()
+  await expect(room.getByRole('region', { name: 'Asset details' })).toContainText('Tank Company')
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await shoot(page, 'player-map-table')
 })

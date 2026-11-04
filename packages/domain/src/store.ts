@@ -469,6 +469,8 @@ interface RoomEntry {
   seeking: Promise<void> | undefined
   /** A search has finished since the last join. */
   sought: boolean
+  /** Ignored messages dropped from a world-state room's timeline (R26), still counted. */
+  droppedIgnored: number
 }
 
 const LOADING: Snapshot<undefined> = Object.freeze({
@@ -1327,6 +1329,7 @@ class Store implements SessionStore {
       world: false,
       seeking: undefined,
       sought: false,
+      droppedIgnored: 0,
     }
   }
 
@@ -1441,6 +1444,7 @@ class Store implements SessionStore {
     // Too much was missed to bridge: start again from what was fetched, so there is no hole.
     this.logger.warn('Reconnection gap too large; history restarted', { room: entry.roomId })
     entry.timeline.clear()
+    entry.droppedIgnored = 0
     for (const messages of pages) this.mergeMessages(entry, messages)
     entry.olderCursor = before
     entry.hasOlder = true
@@ -1454,7 +1458,26 @@ class Store implements SessionStore {
       const normalised = this.toEntry(entry, message)
       if (normalised !== undefined) entries.push(normalised)
     }
-    return entry.timeline.merge(entries)
+    const added = entry.timeline.merge(entries)
+    if (added > 0 && entry.world) this.trimWorldState(entry)
+    return added
+  }
+
+  /**
+   * R26: a room watched for its world state keeps only its newest accepted world state. Each is
+   * the full state (about 100 KB at 600 assets, up to 500 KB), the panel shows only the newest,
+   * and a modified client's posts are never shown, so nothing else is worth its memory. Dropped
+   * ids stay known to the timeline, so paging back never adds them again.
+   */
+  private trimWorldState(entry: RoomEntry): void {
+    const removed = entry.timeline.retainOnly(this.acceptedWorldState(entry)?.id)
+    for (const dropped of removed) {
+      if (!(dropped.kind === 'message' && this.isAccepted(dropped))) entry.droppedIgnored++
+    }
+  }
+
+  private isAccepted(entry: ReadableEntry): boolean {
+    return entry.body.type === 'world-state' && entry.sender.isAdmin
   }
 
   private toEntry(entry: RoomEntry, message: RoomMessage): TimelineEntry | undefined {
@@ -1623,6 +1646,7 @@ class Store implements SessionStore {
     if (entry === undefined) return release
     if (!entry.world) {
       entry.world = true
+      this.trimWorldState(entry)
       // Joined already, for another reason: look now. A join under way looks when it is done.
       if (existing !== undefined && entry.status === 'joined' && entry.historyLoaded) {
         void this.seekWorldState(entry)
@@ -1698,7 +1722,7 @@ class Store implements SessionStore {
         timestamp: accepted?.timestamp,
         searching: entry.seeking !== undefined,
         none: accepted === undefined && entry.sought,
-        ignored: total - this.acceptedCount(entry),
+        ignored: total - this.acceptedCount(entry) + entry.droppedIgnored,
       })
       const settled = accepted !== undefined || entry.sought
       const status: LoadStatus =

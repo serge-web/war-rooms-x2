@@ -84,8 +84,9 @@ describe('the reference ejabberd.yml (NFR-2, NFR-22)', () => {
   it('sends the client’s own Content-Security-Policy, narrowed to its origin and unframed', () => {
     const header = /Content-Security-Policy: "([^"]+)"/.exec(live)?.[1]
     // The mock build's policy is the server build's with connect-src narrowed to 'self', which
-    // covers a WebSocket on the same origin.
-    expect(header).toBe(`${contentSecurityPolicy(false)}; frame-ancestors 'none'`)
+    // covers a WebSocket on the same origin; and no tile host, as the install configures no
+    // base map (WP 5.5): an operator who adds tiles adds their origin to img-src.
+    expect(header).toBe(`${contentSecurityPolicy(false, 'none')}; frame-ancestors 'none'`)
     expect(live).toMatch(/X-Content-Type-Options: nosniff/)
     expect(live).toMatch(/Referrer-Policy: no-referrer/)
   })

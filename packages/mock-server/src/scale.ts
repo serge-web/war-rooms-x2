@@ -4,7 +4,7 @@
 // admin's draft is the same design (`scaleDesign`). Deterministic: the same options give the same
 // state, so measurements are comparable between runs. Every password is a DEMO PASSWORD (NFR-6).
 import { DESIGN_FILE_VERSION, MAP_ROOM_TYPE, mapParticipants } from '@wrx/schemas'
-import type { ChatRoomConfig, DesignFile, Template } from '@wrx/schemas'
+import type { ChatRoomConfig, DesignFile, Template, WorldAsset, WorldState } from '@wrx/schemas'
 import { sampleTemplates } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
 import type { SeedMessage } from './seed.ts'
@@ -25,6 +25,12 @@ export interface ScaleOptions {
    * the busy room is a templated one, valid for its template. Default false.
    */
   readonly templated?: boolean
+  /**
+   * WP 5.5 (NFR-11): when set, the admin has published a world state of this many assets to the
+   * map room, spread over the player forces, with letter- and number-based symbol codes. Default
+   * none.
+   */
+  readonly worldAssets?: number
 }
 
 /**
@@ -367,10 +373,71 @@ export function scaleHistory(design: DesignFile, options: ScaleOptions = {}): Se
   return history
 }
 
+/** Symbol codes for the world state: letter-based 2525C functions, and a few number-based. */
+const FUNCTIONS = [
+  'UCI---',
+  'UCA---',
+  'UCR---',
+  'UCF---',
+  'UCE---',
+  'UCD---',
+  'USS---',
+  'UCFM--',
+] as const
+const ECHELONS = ['D', 'E', 'F', 'G', 'H'] as const
+const NUMBER_BASED = ['1211000000', '1205000000', '1303000000', '1206000000'] as const
+
+function sidc(force: number, k: number, random: () => number): string {
+  // Two friendly forces and two hostile ones, as a two-sided game draws them.
+  const affiliation = force < 2 ? 'F' : 'H'
+  if (random() < 0.1) {
+    // 2525D: version 10, context 0, identity 3 or 6, land unit 10, status 0, HQ 0, echelon 15.
+    return `10${force < 2 ? '03' : '06'}1000${String(11 + (k % 5))}${NUMBER_BASED[k % NUMBER_BASED.length] ?? '1211000000'}`
+  }
+  const fn = FUNCTIONS[Math.floor(random() * FUNCTIONS.length)] ?? 'UCI---'
+  const echelon = ECHELONS[k % ECHELONS.length] ?? 'E'
+  return `S${affiliation}GP${fn}-${echelon}---`
+}
+
+/**
+ * The world state of `count` assets (WP 5.5, NFR-11): spread over the player forces around the
+ * demo's river crossing, each with a symbol code, state, health and fuel. Deterministic.
+ */
+export function scaleWorldState(design: DesignFile, count: number): WorldState {
+  const random = generator(23)
+  const players = design.forces.filter((f) => !f.isUmpire)
+  const assets: WorldAsset[] = []
+  for (let i = 0; i < count; i++) {
+    const force = i % players.length
+    const id = scaleId(`asset-${String(i).padStart(4, '0')}`)
+    assets.push({
+      id,
+      forceId: players[force]?.id ?? WHITE,
+      title: `${players[force]?.name ?? 'White'} unit ${Math.floor(i / players.length) + 1}`,
+      category:
+        ['infantry', 'armour', 'reconnaissance', 'artillery', 'engineers'][i % 5] ?? 'infantry',
+      sidc: sidc(force, i, random),
+      // Each force on its side of the crossing, about 60 by 40 km in all.
+      lat: Math.round((51.8 + random() * 0.4) * 1e5) / 1e5,
+      lon: Math.round((5.5 + force * 0.2 + random() * 0.25) * 1e5) / 1e5,
+      state: random() < 0.85 ? 'operational' : 'damaged',
+      health: Math.round(40 + random() * 60),
+      fuel: Math.round(random() * 100),
+    })
+  }
+  return { turn: 1, assets: Object.fromEntries(assets.map((a) => [a.id, a])) }
+}
+
 /** The scale fixture as mock state, for `importDatabase` or `new MockServer({ seed })`. */
 export function scaleState(options: ScaleOptions = {}): MockState {
   const design = scaleDesign(options)
-  const state = stateFromDesign({ design, history: scaleHistory(design, options) })
+  const state = stateFromDesign({
+    design,
+    history: scaleHistory(design, options),
+    ...(options.worldAssets === undefined
+      ? {}
+      : { worldState: scaleWorldState(design, options.worldAssets) }),
+  })
   if (!state.ok) throw new Error(`the scale fixture is invalid: ${state.error}`)
   return state.value
 }

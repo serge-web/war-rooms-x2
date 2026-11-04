@@ -23,3 +23,66 @@ The product owner's Nov 3 revision reverses WP 3.5's admin-only rule (`phase-3-s
 - **A publish can revert the admin's own game-view edit.** The planner compares the draft with the admin's own item. After the admin amends objectives in the game view, its item no longer holds the draft, so the next publish sends the draft again as the newest edit (the plan step says so), replacing what the force sees, White Force edits made since included. The same was true under WP 3.5 for the admin's item. White Force edits alone never trigger it.
 - **Text by a departed role stays visible until the next publish.** Leaving the White Force is a design change, so the role's publisher affiliation and items go when the admin publishes; until then it is still a White Force role on the server and may edit.
 - **Item ids carry the author's login name** (`white-cell-…`). Readers of the node, the force and the White Force, already see the `publisher`; nothing new is disclosed.
+
+## WP 5.5, the map room for players (PLY-57–59, D12, D25, NFR-7, NFR-9, NFR-11, R23, R26, R30)
+
+### Libraries (the dependency rule)
+
+| Package | Version | Released | Licence | Where |
+| --- | --- | --- | --- | --- |
+| `leaflet` | 1.9.4 | May 18, 2023 | BSD-2-Clause | `@wrx/player-ui`, map chunk |
+| `milsymbol` | 3.0.4 | Mar 10, 2026 | MIT | `@wrx/player-ui`, map chunk |
+| `@types/leaflet` | 1.9.22 | Aug 1, 2026 | MIT | dev only (pulls `@types/geojson` 7946.0.16, MIT, Jan 2025) |
+
+`milsymbol` 3.0.5 (Oct 27, 2026) is 8 days old and was not taken. Leaflet 2.0 is in beta. Both libraries are bundled (NFR-7) into one lazily loaded chunk (`leaflet-map-*.js`, about 1 MB before gzip, 245 kB after; milsymbol is most of it); neither holds `eval` or `new Function` (the built chunk was searched), and both run under the build's policy with no violation (`apps/web/e2e/map.spec.ts`).
+
+### The Content-Security-Policy and the tile host (F7)
+
+The tile host must be in `img-src`, and the policy is a `<meta>` tag built into `index.html` (and `popout.html`).
+
+- **Mock build** (demo, previews, the site): it reads no `config.json`, so its tiles are a built-in default (`apps/web/src/tiles.ts`) and its policy names exactly that origin: `img-src 'self' data: blob: https://tile.openstreetmap.org`.
+- **Server build**: the tile URL comes from `config.json` at run time, so the built-in policy allows `img-src 'self' data: blob: https:`, as `connect-src` already allows any `wss:` host. The operator's header narrows it to the tile origin (`deploy/README.md`).
+- **Reference deployment**: its install writes no `map` block, so it has no base map, and its header (`ejabberd.yml`) keeps `img-src 'self' data: blob:`. `reference-config.test.ts` now compares it with `contentSecurityPolicy(false, 'none')`.
+- **`popout.html`** is a static file with its own policy; the build writes its `img-src` into the copy in `dist` (`popoutImageSources` in `vite.config.ts`), so a popped-out map's tiles load (e2e).
+
+**Weighed and not chosen:** rewriting the built policy with the tile origin when `config.json` is written at deploy time. Narrowest, but the policy would be edited by a shell step after the build on every kind of host, the reference header is a static file that would need templating as well, and a mistake either fails open or breaks the client.
+
+**Security cost of `https:` in the server build's `img-src`:** an injected `<img>` (or CSS `url()`, since `style-src` has `'unsafe-inline'`) could load from, and so beacon to, any HTTPS host: a reader's address and timing, and anything an attacker could put in the URL. Nothing renders untrusted markup today: React renders text, the Markdown renderer drops images (`packages/ui/src/markdown.tsx`), theme images are `data:` URLs, and symbols are our own `data:` URLs from a validated code. So this removes a layer of defence in depth, not a boundary, and only where the operator has not narrowed it with the header. The mock build keeps one named origin. Scripts are unchanged: no `unsafe-eval`, no inline script.
+
+**Leaflet's styles:** Leaflet sets inline `style` attributes (positions, transforms, sizes) and ships `leaflet.css`, bundled with the panel; `style-src 'self' 'unsafe-inline'` already covers both, so `style-src` is unchanged. Leaflet's attribution control (which would set `innerHTML`) is off; the attribution is rendered by React as text and a link.
+
+### Tile privacy (D12, R30)
+
+- A tile server learns every player's address, when they look, and which area at which zoom: in a wargame, that can reveal the area of operations. The server build therefore has **no default** tile server; without `map.tiles` the map shows the assets on a plain background and asks nothing of anyone. Choosing a tile server is the operator's decision (`deploy/README.md`); a server on the same origin or the internal network keeps it inside.
+- Tile requests send `Referer` as the origin only (`referrerPolicy: 'strict-origin'` on the tile layer), whatever the page's `Referrer-Policy`: OSMF's policy asks for a Referer, and no path or hash leaves. Tiles are never fetched with `crossOrigin`, so no pixels are read back.
+- **The demo's default is OpenStreetMap's tile server.** OSMF's tile usage policy (read Nov 4, 2026) allows normal interactive viewing by a person with visible attribution and a valid Referer; it forbids bulk download, prefetching, offline use and heavy use, offers no SLA and may block without notice. The demo is light, interactive use and prefetches nothing. If OSMF blocks or changes the policy, the demo's base map goes blank; the map still shows the assets.
+- `config.json`'s tile URL is checked (`parseTiles`): `https:`, `http:` to this machine only, or a path on this origin; `{z}`, `{x}`, `{y}` required, no other placeholder (Leaflet throws on an unknown one), no braces elsewhere, no credentials; attribution plain text of at most 200 characters, its link `https:` only.
+
+### Symbols and assets
+
+- milsymbol gets only the asset's `sidc`, which `sidcSchema` has checked, and no text modifiers; its SVG goes into an `<img>` as a `data:` URL, never into the DOM as markup, so a hostile code cannot inject script. A code milsymbol does not know draws an unknown frame.
+- Asset titles, categories, states and the attribution are React text; marker `alt` and `title` attributes are set as properties.
+
+### Authority and memory (D25, R23, R26)
+
+- Unchanged from WP 5.2: only valid world states from the admin's real JID are accepted (PLY-58). The scenario `apps/web/e2e/scenarios/map-room.spec.ts` posts a forged state as Red CO on both backends: the server takes it (members have voice), the map ignores it live, and after a reload the client pages back past it to the admin's newest (PLY-59).
+- **R26:** a room watched for its world state now keeps only the newest accepted world state (`Timeline.retainOnly`, `trimWorldState` in the store). This also bounds what a modified client can make every reader hold: before, each forged 500 KB state stayed in every client's memory for the session. Dropped ids stay known, so MAM pages and reconnections never add them back; the ignored count survives the trim.
+
+### Performance (NFR-11)
+
+Measured in `apps/web/e2e/perf.spec.ts` ("a world state of 600 assets"), Chromium, the scale fixture with a 600-asset world state (`scaleWorldState`, about 167,000 characters), on the development container:
+
+| Measure | Value | Target |
+| --- | --: | --: |
+| New 600-asset world state from the admin, send to the frame showing all 600 symbols | 140–260 ms (4 runs, one at a time); 400 ms in the full parallel suite | 1,000 ms |
+| Map tab's first render, chunk preloaded: click to the frame showing all 600 symbols, the MAM search included | 730–900 ms (4 runs, one at a time); 1,140 ms in the full parallel suite | 1,000 ms |
+| Map chunk load and compile when not preloaded (instrumented run) | about 550 ms | |
+
+Before the map opened straight at the assets' view (it first showed the world, fetching tiles for a view replaced at once), the first render was 1,000–1,140 ms. The CI guard is 3 × the target, as for the other budgets. The first render meets the budget alone but with little margin, and misses it under a loaded runner; the live replacement, the case that recurs during play, is well under. The map chunk is fetched while the browser is idle after login (`MapPreload`), so its compile is usually not on the tab's first open.
+
+### Weak points
+
+- **The server build's `img-src https:`** relies on the operator's header to narrow it; a host that serves no header keeps the wide policy.
+- **The first open of the map tab has little margin** on the 1 s budget at 600 assets (above), and misses it on a loaded machine. Leaflet places one `<img>` per asset; a canvas renderer or clustering would be the next step if a slower machine misses it.
+- **Popouts:** Leaflet follows a drag on the opener's `document`; the map forwards the popout's mouse and pointer moves to it (`forwardPopoutDrags`). This leans on Leaflet internals; Leaflet 2 changes them. Touch dragging in a popout is not tested.
+- **Third-party tiles on the demo** are outside our control (above).

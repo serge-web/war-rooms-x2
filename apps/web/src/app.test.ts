@@ -2,7 +2,9 @@ import type { MockHost, MockNotice } from '@wrx/mock-host'
 import type { Transport } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { Backends } from './backends.ts'
-import { NO_CONFIG, loadConfig, parseConfig, websocketUrl } from './config.ts'
+import { NO_CONFIG, loadConfig, parseConfig, parseTiles, tileUrl, websocketUrl } from './config.ts'
+import { DEMO_TILES, DEMO_TILE_ORIGIN } from './tiles.ts'
+import { contentSecurityPolicy } from '../vite.config.ts'
 import { demoLogins } from './demo-logins.ts'
 import { parseRoute } from './router.ts'
 
@@ -85,6 +87,90 @@ describe('runtime config (NFR-9)', () => {
   })
 })
 
+describe('the map’s base tiles in config.json (NFR-9, WP 5.5)', () => {
+  const tiles = (value: unknown, base = BASE) => parseConfig({ map: { tiles: value } }, base)
+
+  it('reads a tile server, with or without the endpoints', () => {
+    const osm = {
+      url: 'https://tile.example.org/{z}/{x}/{y}.png',
+      attribution: '  © OpenStreetMap contributors ',
+      attributionUrl: 'https://www.openstreetmap.org/copyright',
+    }
+    expect(tiles(osm)).toEqual({
+      ok: true,
+      config: {
+        server: undefined,
+        defaultBackend: 'mock',
+        tiles: {
+          url: 'https://tile.example.org/{z}/{x}/{y}.png',
+          attribution: '© OpenStreetMap contributors',
+          attributionUrl: 'https://www.openstreetmap.org/copyright',
+          maxZoom: 19,
+        },
+      },
+    })
+    const both = parseConfig(
+      {
+        server: { websocketUrl: '/ws', domain: 'wrx.example' },
+        map: { tiles: { ...osm, maxZoom: 17 } },
+      },
+      BASE,
+    )
+    expect(both.ok && both.config.tiles?.maxZoom).toBe(17)
+    // No map block: no base map, and nothing asked of any tile server.
+    const none = parseConfig({ server: { websocketUrl: '/ws', domain: 'wrx.example' } }, BASE)
+    expect(none.ok && none.config.tiles).toBeUndefined()
+    expect(parseConfig({ map: {} }, BASE)).toMatchObject({ ok: true, config: { tiles: undefined } })
+  })
+
+  it('takes a path as a tile server on this origin, and subdomains and retina', () => {
+    expect(tileUrl('/tiles/{z}/{x}/{y}.png', BASE)).toBe(
+      'https://wrx.example/tiles/{z}/{x}/{y}.png',
+    )
+    expect(tileUrl('https://{s}.tiles.example/{z}/{x}/{y}{r}.png', BASE)).toBe(
+      'https://{s}.tiles.example/{z}/{x}/{y}{r}.png',
+    )
+    expect(tileUrl('http://localhost:8080/{z}/{x}/{y}.png', BASE)).toBe(
+      'http://localhost:8080/{z}/{x}/{y}.png',
+    )
+  })
+
+  it('refuses what it cannot trust', () => {
+    for (const url of [
+      'http://tiles.example/{z}/{x}/{y}.png', // plaintext off this machine
+      'ftp://tiles.example/{z}/{x}/{y}.png',
+      'javascript:alert(1)//{z}{x}{y}',
+      'https://tiles.example/{z}/{x}.png', // no {y}
+      'https://tiles.example/{z}/{x}/{y}.png?key={apikey}', // a placeholder Leaflet cannot fill
+      'https://tiles.example/{z}/{x}/{y}.png{',
+      'https://user:secret@tiles.example/{z}/{x}/{y}.png',
+      `https://tiles.example/${'a'.repeat(600)}/{z}/{x}/{y}.png`,
+    ]) {
+      expect(tileUrl(url, BASE), url).toBeUndefined()
+    }
+    const good = { url: 'https://t.example/{z}/{x}/{y}.png', attribution: 'Tiles' }
+    expect(tiles(good).ok).toBe(true)
+    expect(tiles({ ...good, url: 'http://t.example/{z}/{x}/{y}.png' }).ok).toBe(false)
+    expect(tiles({ ...good, attribution: '' }).ok).toBe(false)
+    expect(tiles({ ...good, attribution: 'x'.repeat(201) }).ok).toBe(false)
+    expect(tiles({ ...good, attribution: 3 }).ok).toBe(false)
+    expect(tiles({ ...good, attributionUrl: 'http://t.example/' }).ok).toBe(false)
+    expect(tiles({ ...good, attributionUrl: 'javascript:alert(1)' }).ok).toBe(false)
+    expect(tiles({ ...good, maxZoom: 23 }).ok).toBe(false)
+    expect(tiles({ ...good, maxZoom: 1.5 }).ok).toBe(false)
+    expect(tiles('https://t.example/{z}/{x}/{y}.png').ok).toBe(false)
+    expect(parseConfig({ map: [] }, BASE).ok).toBe(false)
+    const refused = tiles({ ...good, url: 'nope' })
+    expect(refused.ok ? '' : refused.error).toMatch(/^map\.tiles\.url/)
+  })
+
+  it('the mock build’s default is a valid config, and its origin is what its policy allows', () => {
+    const parsed = parseTiles({ tiles: DEMO_TILES }, BASE)
+    expect(parsed).toEqual({ ok: true, tiles: { ...DEMO_TILES } })
+    expect(new URL(DEMO_TILES.url.replace(/\{[a-z]\}/g, '0')).origin).toBe(DEMO_TILE_ORIGIN)
+  })
+})
+
 describe('routes', () => {
   it('maps hashes to views, whatever the base path (DOC-11)', () => {
     expect(parseRoute('')).toEqual({ name: 'player' })
@@ -159,5 +245,20 @@ describe('demo logins (NFR-6)', () => {
     ])
     expect(demoLogins().at(-1)?.label).toBe('Umpire (White, admin)')
     expect(demoLogins()[0]?.label).toBe('Blue CO (Blue)')
+  })
+})
+
+describe('the Content-Security-Policy’s images (F7, WP 5.5)', () => {
+  const imgSrc = (policy: string) => /img-src ([^;]+)/.exec(policy)?.[1]
+
+  it('names the demo tile origin in the mock build, any https: host in the server build', () => {
+    expect(imgSrc(contentSecurityPolicy(false))).toBe(`'self' data: blob: ${DEMO_TILE_ORIGIN}`)
+    expect(imgSrc(contentSecurityPolicy(true))).toBe("'self' data: blob: https:")
+    expect(imgSrc(contentSecurityPolicy(false, 'none'))).toBe("'self' data: blob:")
+    // Never eval, whatever the tiles.
+    for (const policy of [contentSecurityPolicy(false), contentSecurityPolicy(true)]) {
+      expect(policy).not.toContain('unsafe-eval')
+      expect(policy).toContain("script-src 'self';")
+    }
   })
 })

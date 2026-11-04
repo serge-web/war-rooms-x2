@@ -20,6 +20,7 @@ import { cuttableLink } from './link.ts'
 import type { CuttableLink } from './link.ts'
 import { rawRun } from './raw.ts'
 import { isBrowserNotice } from '../notices.ts'
+import { TEST_TILES, stubTiles } from '../map.ts'
 import type { RawStep } from './raw.ts'
 
 export type BackendKind = 'mock' | 'ejabberd'
@@ -87,6 +88,8 @@ export async function useEjabberd(
           domain: server.endpoint.domain,
           label: 'Reference ejabberd',
         },
+        // The map's base tiles from config.json (NFR-9), stubbed by e2e/map.ts.
+        map: { tiles: TEST_TILES },
       }),
     }),
   )
@@ -105,6 +108,8 @@ export const test = base.extend<ScenarioFixtures, WorkerFixtures>({
     { scope: 'worker' },
   ],
   context: async ({ context, server }, use) => {
+    // Every scenario's map tiles are local (WP 5.5, DOC-20).
+    await stubTiles(context)
     if (server !== undefined) await useEjabberd(context, server)
     await use(context)
   },
@@ -115,6 +120,7 @@ export const test = base.extend<ScenarioFixtures, WorkerFixtures>({
       return
     }
     const peer = await browser.newContext(baseURL === undefined ? {} : { baseURL })
+    await stubTiles(peer)
     const link = await cuttableLink(server.endpoint.websocketUrl)
     links.set(peer, link)
     await useEjabberd(peer, server, link.websocketUrl)

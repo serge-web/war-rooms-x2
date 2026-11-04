@@ -36,6 +36,8 @@ export default defineConfig({
         '--disable-partial-raster',
         '--disable-skia-runtime-opts',
         '--force-color-profile=srgb',
+        // Map tiles are served locally (lib/shoot.ts); the demo's tile host never resolves.
+        '--host-resolver-rules=MAP tile.openstreetmap.org ~NOTFOUND',
       ],
     },
   },

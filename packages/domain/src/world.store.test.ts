@@ -184,6 +184,29 @@ describe('world state (D25, PLY-58, PLY-59)', () => {
     release()
   })
 
+  it('keeps only the newest accepted world state in memory (R26)', async () => {
+    const forged = world(stateAt(9), { nick: 'red-co', from: `red-co@${DOMAIN}/r` })
+    const h = await mapHarness([world(stateAt(1)), forged, world(stateAt(2))])
+    const release = h.store.acquireWorldState(tid('map'))
+    await flush(20)
+    const held = () => h.store.roomView(tid('map')).data?.messages ?? []
+    expect(held()).toHaveLength(1)
+    expect(h.store.worldState(tid('map')).data).toMatchObject({ state: { turn: 2 }, ignored: 1 })
+
+    // A modified client's post, then a newer state: each is dropped once it is not the newest.
+    h.session.emitMessage(world(stateAt(8), { nick: 'red-co', from: `red-co@${DOMAIN}/r` }))
+    expect(held()).toHaveLength(1)
+    expect(h.store.worldState(tid('map')).data).toMatchObject({ state: { turn: 2 }, ignored: 2 })
+    const third = world(stateAt(3))
+    h.session.emitMessage(third)
+    expect(held().map((m) => m.id)).toEqual([third.stanzaId])
+    expect(h.store.worldState(tid('map')).data).toMatchObject({ state: { turn: 3 }, ignored: 2 })
+    // A dropped message delivered again (a MAM page, a reconnection) is not taken back.
+    h.session.emitMessage(forged)
+    expect(held()).toHaveLength(1)
+    release()
+  })
+
   it('looks once the room, already joined for another reason, is watched for it', async () => {
     const h = await mapHarness(
       [

@@ -10,11 +10,13 @@ import {
   ChatPanel,
   ChatUnreadBadge,
   MapPanel,
+  MapPreload,
+  MapTilesProvider,
   PlayerClient,
   UnreadProvider,
   Workspace,
 } from '@wrx/player-ui'
-import type { Connection, DemoLogin, LayoutStorage } from '@wrx/player-ui'
+import type { Connection, DemoLogin, LayoutStorage, MapTiles } from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
 import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
@@ -27,8 +29,8 @@ import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
 
 /**
- * The room types with their player panels: chat (WP 2.6), and the map room's placeholder (WP 5.2,
- * until the map in WP 5.5). Frozen, so shared safely (ARC-2).
+ * The room types with their player panels: chat (WP 2.6) and the map room (WP 5.5). Frozen, so
+ * shared safely (ARC-2).
  */
 const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
   chat: { playerComponent: ChatPanel },
@@ -48,13 +50,17 @@ export interface AppProps {
   }
   /** Where the player's workspace layouts are saved (PLY-5), under this deployment (DOC-10). */
   readonly layoutStorage?: LayoutStorage
+  /** The map room's base tiles (NFR-9): config.json's, or the mock build's default. */
+  readonly tiles?: MapTiles | undefined
 }
 
 export function App(props: AppProps) {
   return (
     <ThemeScope root className="wrx-app">
       <ToastProvider>
-        <AppRoutes {...props} />
+        <MapTilesProvider tiles={props.tiles}>
+          <AppRoutes {...props} />
+        </MapTilesProvider>
       </ToastProvider>
     </ThemeScope>
   )
@@ -179,6 +185,8 @@ function AppRoutes({
   // own session, so unread counts per room (PLY-11) stay per pane.
   const workspace = (
     <UnreadProvider>
+      {/* Every role has the map room (§3 rule 18): its chunk loads while the browser is idle. */}
+      <MapPreload />
       <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
     </UnreadProvider>
   )
