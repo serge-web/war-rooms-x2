@@ -231,8 +231,8 @@ export function MapView({
     })
     observer.observe(container)
     const stopForwarding = forwardPopoutDrags(container)
-    // Until the first assets arrive (the effect below), a view must exist for Leaflet.
-    map.setView([WORLD_LAT, WORLD_LON], WORLD_ZOOM)
+    // No view yet: the effect below opens at the assets' view, so no tile is fetched for a view
+    // that is replaced at once.
     return () => {
       stopForwarding()
       observer.disconnect()
@@ -250,6 +250,10 @@ export function MapView({
     const layer = layerRef.current
     if (map === undefined || layer === undefined) return
     const placed = placedRef.current
+    const container = containerRef.current
+    // The opening view first; a hidden map (the table view) takes the world until it is shown.
+    if (container !== null) openWhenShown(map, container, openedRef, latest)
+    if (!openedRef.current && placed.size === 0) map.setView([WORLD_LAT, WORLD_LON], WORLD_ZOOM)
     for (const [id, entry] of placed) {
       if (assets[id] === undefined) {
         layer.removeLayer(entry.marker)
@@ -296,8 +300,6 @@ export function MapView({
         entry.title = asset.title
       }
     }
-    const container = containerRef.current
-    if (container !== null) openWhenShown(map, container, openedRef, latest)
   }, [assets, tiles])
 
   // The selection's outline.
