@@ -16,10 +16,23 @@
 // 5b. message templates (Annex A): published before the room that offers them and locked; each
 //    role offered its own; a templated message sent and checked valid on receipt; a change to a
 //    locked template refused; an unlocked one the design drops retracted;
-// 6. reset removes everything (ADM-15), the templates node included.
-import { nodeName } from '@wrx/schemas'
+// 5c. the map room and the turn state (WP 5.2): the map room added, every role read only there
+//    (§3 rule 18), the vault taking the passwords that needs; the admin posts a world state near
+//    500 KB (PLY-53); the turn the admin advanced survives a publish, and a missing one is set
+//    to turn 1 again;
+// 6. reset removes everything (ADM-15), the templates node, the turn state and the map room
+//    included.
+import { INITIAL_GAME_STATE, LIMITS, nodeName } from '@wrx/schemas'
 import type { DesignFile, Template } from '@wrx/schemas'
-import { TEMPLATE, sampleDesignWithWhiteCell, sampleTemplates, tid } from '@wrx/schemas/fixtures'
+import {
+  ROOM,
+  TEMPLATE,
+  sampleDesignWithWhiteCell,
+  sampleTemplates,
+  sampleWorldState,
+  tid,
+  withSampleMapRoom,
+} from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
 import { createSessionStore } from '@wrx/domain'
@@ -395,6 +408,19 @@ export function definePublishIntegration(backend: PublishBackend): void {
 
       it('the game is at design version 1', async () => {
         expect(await gameVersion()).toBe(1)
+      })
+
+      it('the turn state is turn 1, planning, and every role reads it (D7, §3 rule 15)', async () => {
+        const red = await login('red-co')
+        const items = must(await red.pubsub.getItems('game-state'), 'read game-state')
+        expect(items.map((i) => [i.id, JSON.parse(i.payload) as unknown])).toEqual([
+          ['current', INITIAL_GAME_STATE],
+        ])
+        const forged = JSON.stringify({ ...INITIAL_GAME_STATE, turn: 5 })
+        expect(errorOf(await red.pubsub.publish('game-state', 'current', forged))?.condition).toBe(
+          'forbidden',
+        )
+        await closeAll()
       })
 
       it('publishing the same design again plans nothing (ADM-10)', async () => {
@@ -844,6 +870,79 @@ export function definePublishIntegration(backend: PublishBackend): void {
         )
         expect(ids).not.toContain(SPARE)
         expect((await plan(design)).steps).toEqual([])
+      })
+
+      afterAll(closeAll)
+    })
+
+    describe('5c. the map room and the turn state (WP 5.2)', () => {
+      const design = () => withSampleMapRoom(templatedThirdDesign())
+      const turnState = async () => {
+        const items = must(await theOps().session.pubsub.getItems('game-state'), 'game-state')
+        return items.map((i) => JSON.parse(i.payload) as unknown)
+      }
+
+      it('adds the map room, every role read only there, and the vault holds them all (§3 rule 18)', async () => {
+        const added = await plan(design())
+        expect(added.steps.map((s) => s.id)).toContain(`room:${ROOM.map}`)
+        expect((await apply(added)).ok).toBe(true)
+        const config = must(await theOps().session.muc.getRoomConfig(room(ROOM.map)), 'config')
+        expect(config).toMatchObject({ membersOnly: true, moderated: true, archive: true })
+        const roles = design().roles.map((r) => r.loginName)
+        expect(vault?.roles()).toEqual([...roles].sort())
+        for (const role of ['blue-co', 'red-xo', 'blue-observer']) {
+          await expectReadOnly(role, ROOM.map)
+        }
+        await closeAll()
+        expect((await plan(design())).steps).toEqual([])
+      })
+
+      it('the admin posts a world state near 500 KB, and a role reads it from MAM (D25, PLY-53)', async () => {
+        const admin = theOps().session
+        must(await admin.muc.join(room(ROOM.map), 'admin'), 'admin joins')
+        const base = Object.values(sampleWorldState().assets)[0]
+        if (base === undefined) throw new Error('fixture')
+        const assets = Object.fromEntries(
+          Array.from({ length: 1_600 }, (_, i) => {
+            const id = `a0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`
+            return [id, { ...base, id, title: `Unit ${i}` }]
+          }),
+        )
+        const body = JSON.stringify({
+          type: 'world-state',
+          schemaVersion: 1,
+          content: { turn: 1, assets },
+        })
+        expect(body.length).toBeGreaterThan(400_000)
+        const sent = must(
+          await admin.muc.send(room(ROOM.map), body, { maxBytes: LIMITS.worldStateStanzaBytes }),
+          'send the world state',
+        )
+        must(await admin.muc.leave(room(ROOM.map)), 'admin leaves')
+        const reader = await login('red-xo')
+        must(await reader.muc.join(room(ROOM.map), 'red-xo'), 'join')
+        const page = must(await reader.mam.queryRoom(room(ROOM.map), { max: 1 }), 'MAM')
+        expect(page.messages.at(-1)?.stanzaId).toBe(sent.stanzaId)
+        expect(page.messages.at(-1)?.body).toBe(body)
+        await closeAll()
+      }, 120_000)
+
+      it('a publish leaves the turn the admin advanced; a missing one is set to turn 1 again', async () => {
+        const advanced = { schemaVersion: 1, turn: 2, phase: 'adjudication' }
+        must(
+          await theOps().session.pubsub.publish('game-state', 'current', JSON.stringify(advanced)),
+          'advance',
+        )
+        expect((await plan(design())).steps).toEqual([])
+        expect(await turnState()).toEqual([advanced])
+        must(await theOps().session.pubsub.retract('game-state', 'current'), 'retract')
+        const again = await plan(design())
+        expect(again.steps.map((s) => s.id)).toEqual([
+          'doc:game-state:current',
+          'doc:game-setup:current',
+        ])
+        expect((await apply(again)).ok).toBe(true)
+        expect(await turnState()).toEqual([INITIAL_GAME_STATE])
       })
 
       afterAll(closeAll)

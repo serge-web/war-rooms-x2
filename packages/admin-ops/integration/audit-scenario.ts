@@ -2,7 +2,8 @@
 // ejabberd (ejabberd-audit/audit.ejabberd.test.ts), through the real planner, executor, audit
 // and repair:
 //
-// 1. publish `sampleDesignWithWhiteCell()` on a clean server; the audit finds nothing;
+// 1. publish `sampleDesignWithWhiteCell()` on a clean server; the audit finds nothing; a turn
+//    the admin advanced is no drift, a missing turn state is, and repair sets turn 1 (WP 5.2);
 // 2. inject drift with ordinary admin and moderator operations on the test game, each a step the
 //    tooling could have missed (R14): Red HQ unmoderated; Blue CO granted Red's objectives,
 //    subscribed, then its affiliation removed without its subscription (R-A); Blue Observer given
@@ -14,7 +15,7 @@
 //    the vault login for the observer;
 // 4. repairing everything (destructive items confirmed) leaves a clean re-audit, and the effects
 //    hold for players; repairing again changes nothing (idempotent).
-import { nodeName } from '@wrx/schemas'
+import { INITIAL_GAME_STATE, nodeName } from '@wrx/schemas'
 import { sampleDesignWithWhiteCell, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
@@ -197,6 +198,29 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       if (!again.ok) expect(again.error.message).toMatch(/belongs to the published role Blue CO/)
       // Nothing changed: the design itself still audits clean.
       expect(describeFindings(await audit())).toEqual([])
+    })
+
+    it('1c. an advanced turn is no drift; a missing turn state is found and repaired (D7)', async () => {
+      const pubsub = theOps().session.pubsub
+      const advanced = JSON.stringify({ schemaVersion: 1, turn: 3, phase: 'adjudication' })
+      must(await pubsub.publish('game-state', 'current', advanced), 'advance')
+      expect(describeFindings(await audit())).toEqual([])
+      must(await pubsub.retract('game-state', 'current'), 'retract')
+      const report = await audit()
+      expect(describeFindings(report)).toEqual(['document:game-state:current [missing]'])
+      const missing = report.items.filter((i) => i.kind === 'document')
+      const result = mustOps(
+        await repairAndAudit(theOps(), design, missing, {
+          confirmed: new Set(),
+          passwordFor: (id) => book.passwordFor(id),
+          audit: auditOptions(),
+        }),
+        'repair',
+      )
+      expect(result.repair.ok).toBe(true)
+      expect(describeFindings(result.after)).toEqual([])
+      const items = must(await pubsub.getItems('game-state'), 'read')
+      expect(items.map((i) => JSON.parse(i.payload) as unknown)).toEqual([INITIAL_GAME_STATE])
     })
 
     describe('2. drift, injected with ordinary admin and moderator operations', () => {

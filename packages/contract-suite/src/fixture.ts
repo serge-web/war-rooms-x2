@@ -66,6 +66,8 @@ export interface Fixture {
     readonly blueHq: string
     readonly redHq: string
     readonly negotiation: string
+    /** The map room (§3 rule 18): every role a member; world states of up to 500 KB (D25). */
+    readonly map: string
   }
   readonly nodes: {
     readonly gameSetup: string
@@ -98,6 +100,7 @@ export function makeFixture(domain: string): Fixture {
       blueHq: `${tag}-blue-hq`,
       redHq: `${tag}-red-hq`,
       negotiation: `${tag}-negotiation`,
+      map: `${tag}-map`,
     },
     nodes: {
       gameSetup: `${tag}:game-setup`,
@@ -124,6 +127,7 @@ export function plan(fx: Fixture) {
       { room: fx.rooms.blueHq, members: [blueCo, blueObs, umpire] },
       { room: fx.rooms.redHq, members: [redCo, umpire] },
       { room: fx.rooms.negotiation, members: [blueCo, redCo, umpire] },
+      { room: fx.rooms.map, members: everyRole },
     ],
     nodes: [
       { node: fx.nodes.gameSetup, config: OPEN_NODE, readers: [], publishers: [] },
