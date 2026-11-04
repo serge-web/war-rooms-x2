@@ -20,7 +20,7 @@ import type { AuditItem, AuditReport } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { MockServer, MockTransport } from '@wrx/mock-server'
-import { sampleDesign, tid } from '@wrx/schemas/fixtures'
+import { sampleDesign, tid, withSampleMapRoom } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -185,7 +185,9 @@ describe('the Audit section in the admin app, on a mock server', () => {
     if (!created.ok) throw new Error('vault')
     ops.useVault(created.value)
     const book = new CredentialsBook('demo')
-    const prepared = await preparePublish(ops, sampleDesign(), { vault: created.value })
+    const prepared = await preparePublish(ops, withSampleMapRoom(sampleDesign()), {
+      vault: created.value,
+    })
     if (!prepared.ok) throw new Error('plan')
     const published = await executePlan(ops, prepared.value.plan, {
       passwordFor: (id) => book.passwordFor(id),
@@ -203,7 +205,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
 
     const store = createDraftStore({
       persistence: memoryDraftPersistence(),
-      initial: () => draftFromDesign(sampleDesign()),
+      initial: () => draftFromDesign(withSampleMapRoom(sampleDesign())),
     })
     render(
       createElement(AdminApp, {
@@ -224,7 +226,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Unlock' }))
     await waitFor(
       () => {
-        expect(screen.getByText(/Voice checked through 4 role logins/)).toBeTruthy()
+        expect(screen.getByText(/Voice checked through 12 role logins/)).toBeTruthy()
       },
       { timeout: 20_000 },
     )

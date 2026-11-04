@@ -7,16 +7,24 @@
 // (§3 rule 1). A role's login name is a readable slug, made from its name at creation, editable
 // until the role is first published, then fixed (ADM-5). Deleting a published force or role
 // records its last name in the design's `retired` list, which also holds its login name for good.
+//
+// The draft always has exactly one map room (§3 rule 18): a new draft, an import and a stored
+// draft gain one if they have none, its participants follow the forces (every force, read only),
+// and it cannot be deleted, retyped, duplicated or given other participants.
 import { byOrderThenId } from '@wrx/domain'
 import {
   ANONYMOUS_LIKE_NAME,
   DESIGN_FILE_VERSION,
   LIMITS,
+  MAP_ROOM_TYPE,
   RESERVED_LOGIN_NAMES,
   chatRoomConfigReader,
   chatRoomConfigSchema,
+  hasMapParticipants,
   isReservedLoginName,
+  mapParticipants,
   newEntityId,
+  withMapRoom,
 } from '@wrx/schemas'
 import type {
   ChatRoomConfig,
@@ -102,50 +110,61 @@ export interface NewDraftOptions {
   readonly now?: Date
   /** The id of the White Force the design starts with; a new GUID by default. */
   readonly whiteForceId?: string
+  /** The id of the map room the design starts with (§3 rule 18); a new GUID by default. */
+  readonly mapRoomId?: string
 }
 
-/** An empty design: a game and the White Force (ADM-4: the umpire flag), nothing else. */
+/**
+ * An empty design: a game, the White Force (ADM-4: the umpire flag) and the map room (§3 rule
+ * 18), nothing else.
+ */
 export function createDraft(options: NewDraftOptions = {}): Draft {
   const now = options.now ?? new Date()
-  return {
-    design: {
-      format: 'wrx1-design',
-      schemaVersion: DESIGN_FILE_VERSION,
-      exportedAt: now.toISOString(),
-      game: {
-        schemaVersion: 1,
-        name: options.name ?? 'Untitled game',
-        description: '',
-        briefing: '',
-        designVersion: 1,
-        theme: { tokens: {} },
-        roomTypeDefaults: {},
-      },
-      forces: [
-        {
-          schemaVersion: 1,
-          id: options.whiteForceId ?? newEntityId(),
-          name: 'White',
-          colour: DEFAULT_FORCE_COLOUR,
-          isUmpire: true,
-          order: 0,
-        },
-      ],
-      roles: [],
-      rooms: [],
-      objectives: [],
-      assets: [],
-      retired: [],
-      templates: [],
+  const mapRoomId = options.mapRoomId ?? newEntityId()
+  const design: DesignFile = {
+    format: 'wrx1-design',
+    schemaVersion: DESIGN_FILE_VERSION,
+    exportedAt: now.toISOString(),
+    game: {
+      schemaVersion: 1,
+      name: options.name ?? 'Untitled game',
+      description: '',
+      briefing: '',
+      designVersion: 1,
+      theme: { tokens: {} },
+      roomTypeDefaults: {},
     },
-    meta: EMPTY_META,
+    forces: [
+      {
+        schemaVersion: 1,
+        id: options.whiteForceId ?? newEntityId(),
+        name: 'White',
+        colour: DEFAULT_FORCE_COLOUR,
+        isUmpire: true,
+        order: 0,
+      },
+    ],
+    roles: [],
+    rooms: [],
+    objectives: [],
+    assets: [],
+    retired: [],
+    templates: [],
   }
+  return { design: withMapRoom(design, () => mapRoomId), meta: EMPTY_META }
 }
 
-/** A draft over an existing design (an import, or the published one), with orders made consistent. */
-export function draftFromDesign(design: DesignFile, meta: Partial<DraftMeta> = {}): Draft {
+/**
+ * A draft over an existing design (an import, the published one, or a stored draft), with orders
+ * made consistent and the map room added if it has none (§3 rule 18), its id from `newId`.
+ */
+export function draftFromDesign(
+  design: DesignFile,
+  meta: Partial<DraftMeta> = {},
+  newId: IdSource = newEntityId,
+): Draft {
   return {
-    design: normalise(design),
+    design: normalise(withMapRoom(design, newId)),
     meta: {
       publishedRoleIds: meta.publishedRoleIds ?? EMPTY_META.publishedRoleIds,
       publishedForceIds: meta.publishedForceIds ?? EMPTY_META.publishedForceIds,
@@ -476,6 +495,8 @@ export function addRoom(
   roomType: string = DEFAULT_ROOM_TYPE,
   newId: IdSource = newEntityId,
 ): Added {
+  // §3 rule 18: the draft has its one map room already; another is never added.
+  if (roomType === MAP_ROOM_TYPE) return { draft, id: '' }
   const id = newId()
   const room: Room = {
     schemaVersion: 1,
@@ -492,11 +513,16 @@ export function addRoom(
 export function updateRoom(draft: Draft, id: string, patch: RoomPatch): Draft {
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, id, (room) => {
-      const typeChanged = patch.roomType !== undefined && patch.roomType !== room.roomType
+      // §3 rule 18: the map room stays the map room, and no other room becomes one.
+      const retype =
+        patch.roomType !== undefined &&
+        patch.roomType !== MAP_ROOM_TYPE &&
+        room.roomType !== MAP_ROOM_TYPE
+      const typeChanged = retype && patch.roomType !== room.roomType
       return {
         ...room,
         ...(patch.name === undefined ? {} : { name: patch.name }),
-        ...(patch.roomType === undefined ? {} : { roomType: patch.roomType }),
+        ...(retype ? { roomType: patch.roomType } : {}),
         config: patch.config !== undefined ? { ...patch.config } : typeChanged ? {} : room.config,
       }
     }),
@@ -508,6 +534,7 @@ export function updateRoom(draft: Draft, id: string, patch: RoomPatch): Draft {
  * each force or role appears at most once (ADM-6, §3 rule 4).
  */
 export function setParticipant(draft: Draft, roomId: string, entry: Participant): Draft {
+  if (isMapRoomId(draft, roomId)) return draft
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, roomId, (room) => {
       const at = room.participants.findIndex((p) => p.kind === entry.kind && p.id === entry.id)
@@ -526,6 +553,7 @@ export function removeParticipant(
   kind: Participant['kind'],
   id: string,
 ): Draft {
+  if (isMapRoomId(draft, roomId)) return draft
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, roomId, (room) => ({
       ...room,
@@ -538,9 +566,19 @@ export function moveRoom(draft: Draft, id: string, index: number): Draft {
   return withDesign(draft, { rooms: moveInOrder(draft.design.rooms, id, index) })
 }
 
+/** Deletes a room; the map room is never deleted (§3 rule 18). */
 export function deleteRoom(draft: Draft, id: string): Draft {
-  if (!draft.design.rooms.some((r) => r.id === id)) return draft
+  if (!draft.design.rooms.some((r) => r.id === id) || isMapRoomId(draft, id)) return draft
   return withDesign(draft, { rooms: draft.design.rooms.filter((r) => r.id !== id) })
+}
+
+/** Whether a room is the game's map room, whose participants are fixed (§3 rule 18). */
+export function isMapRoom(room: Pick<Room, 'roomType'>): boolean {
+  return room.roomType === MAP_ROOM_TYPE
+}
+
+function isMapRoomId(draft: Draft, roomId: string): boolean {
+  return draft.design.rooms.some((r) => r.id === roomId && isMapRoom(r))
 }
 
 // --- Templates (Annex A, WP 4.3) ---------------------------------------------------------------
@@ -724,7 +762,8 @@ export function referencesTo(design: DesignFile, kind: IdKind, id: string): Refe
   }
   if (kind === 'forces' || kind === 'roles') {
     const entryKind = kind === 'forces' ? 'force' : 'role'
-    for (const room of [...design.rooms].sort(byOrderThenId)) {
+    // The map room's entries follow the forces by themselves (§3 rule 18).
+    for (const room of [...design.rooms].sort(byOrderThenId).filter((r) => !isMapRoom(r))) {
       if (room.participants.some((p) => p.kind === entryKind && p.id === id)) {
         refs.push({
           kind: 'room',
@@ -784,8 +823,20 @@ export function normalise(design: DesignFile): DesignFile {
 }
 
 function withDesign(draft: Draft, changes: Partial<DesignFile>): Draft {
-  const design = normalise({ ...draft.design, ...changes })
+  const design = normalise(withMapParticipants({ ...draft.design, ...changes }))
   return { ...draft, design }
+}
+
+/** The map room's participants follow the forces: every force, read only (§3 rule 18). */
+function withMapParticipants(design: DesignFile): DesignFile {
+  if (design.rooms.every((r) => !isMapRoom(r) || hasMapParticipants(r, design.forces))) {
+    return design
+  }
+  const participants = mapParticipants(design.forces)
+  return {
+    ...design,
+    rooms: design.rooms.map((r) => (isMapRoom(r) ? { ...r, participants } : r)),
+  }
 }
 
 /** A login name from a role's name, unique and never a deleted role's (§3 rule 1). */

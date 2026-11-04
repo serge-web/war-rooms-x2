@@ -9,6 +9,7 @@ import {
   BackendChoiceCore,
   ChatPanel,
   ChatUnreadBadge,
+  MapPanel,
   PlayerClient,
   UnreadProvider,
   Workspace,
@@ -25,9 +26,13 @@ import { AdminRoute } from './AdminRoute.tsx'
 import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
 
-/** The room types with their player panels: chat (WP 2.6). Frozen, so shared safely (ARC-2). */
+/**
+ * The room types with their player panels: chat (WP 2.6), and the map room's placeholder (WP 5.2,
+ * until the map in WP 5.5). Frozen, so shared safely (ARC-2).
+ */
 const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
   chat: { playerComponent: ChatPanel },
+  map: { playerComponent: MapPanel },
 })
 
 export interface AppProps {

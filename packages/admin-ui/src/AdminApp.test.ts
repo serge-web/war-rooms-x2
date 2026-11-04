@@ -8,7 +8,13 @@ import type { DesignFile } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { nameOf, sampleDesign, sampleDesignWithWhiteCell, tid } from '../../schemas/src/fixtures.ts'
+import {
+  ROOM,
+  nameOf,
+  sampleDesign,
+  sampleDesignWithWhiteCell,
+  tid,
+} from '../../schemas/src/fixtures.ts'
 import { AdminApp } from './AdminApp.tsx'
 import type { AdminAppProps, AdminSection } from './AdminApp.tsx'
 import {
@@ -40,7 +46,8 @@ interface Setup {
 function setup({ design = sampleDesign(), draft, section = 'game', props = {} }: Setup = {}) {
   const store = createDraftStore({
     persistence: memoryDraftPersistence(),
-    initial: () => draft ?? draftFromDesign(design),
+    // The map room the draft adds has the fixture's id, so tests can name it (§3 rule 18).
+    initial: () => draft ?? draftFromDesign(design, {}, () => ROOM.map),
   })
   const user = userEvent.setup()
   render(
@@ -425,14 +432,30 @@ describe('rooms (ADM-6, ADM-7)', () => {
     expect(room(store, tid('blue-hq'))?.config).toEqual({ slow: true })
   })
 
+  it('shows the map room with its participants fixed, and offers no way to delete or retype it (§3 rule 18)', async () => {
+    const { user, store } = setup({ section: 'rooms' })
+    await user.click(screen.getByRole('button', { name: 'Map' }))
+    const form = screen.getByRole('form', { name: 'Room: Map' })
+    expect(form.textContent).toContain('This is the game’s map room.')
+    expect(within(form).queryByRole('button', { name: 'Delete Map' })).toBeNull()
+    expect(within(form).queryByLabelText('Room type')).toBeNull()
+    expect(room(store, ROOM.map)?.participants.map((p) => p.access)).toEqual([
+      'read',
+      'read',
+      'read',
+    ])
+    // No second map room can be added: the type picker offers chat only, so it is not shown.
+    expect(screen.queryByLabelText('Room type')).toBeNull()
+  })
+
   it('flags a room type the registry does not know', () => {
     const base = sampleDesign()
     setup({
       section: 'rooms',
-      design: { ...base, rooms: base.rooms.map((r) => ({ ...r, roomType: 'map' })) },
+      design: { ...base, rooms: base.rooms.map((r) => ({ ...r, roomType: 'poll' })) },
     })
     expect(main().textContent).toContain('This room type is not supported by this client.')
-    expect(main().textContent).toContain('room type "map" is not supported')
+    expect(main().textContent).toContain('room type "poll" is not supported')
   })
 })
 
@@ -485,6 +508,7 @@ describe('reordering (ADM-8)', () => {
       tid('blue-hq'),
       tid('red-hq'),
       tid('negotiation'),
+      ROOM.map,
     ])
     expect(document.body.textContent).toContain('Moving Blue HQ cancelled.')
   })
@@ -496,6 +520,7 @@ describe('reordering (ADM-8)', () => {
       'blue-hq:0',
       'negotiation:1',
       'red-hq:2',
+      'map:3',
     ])
     expect(screen.getByRole('button', { name: 'Move Blue HQ up' })).toHaveProperty('disabled', true)
 
@@ -607,7 +632,7 @@ describe('access matrix (ADM-9)', () => {
 
   it('says when there is nothing to show', () => {
     const base = sampleDesign()
-    setup({ section: 'access', design: { ...base, rooms: [] } })
+    setup({ section: 'access', design: { ...base, rooms: [], roles: [] } })
     expect(main().textContent).toContain('Add rooms and roles to see who can use each room.')
     expect(main().textContent).toContain('No problems: the design can be published.')
   })

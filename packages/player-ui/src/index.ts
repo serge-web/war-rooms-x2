@@ -41,3 +41,4 @@ export type { PreviewRoleOption, PreviewSelectorCoreProps } from './preview/admi
 export { previewAsRole } from './preview/preview-store.ts'
 export * from './workspace/index.ts'
 export * from './chat/index.ts'
+export * from './map/index.ts'
