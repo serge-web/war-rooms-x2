@@ -86,3 +86,17 @@ Before the map opened straight at the assets' view (it first showed the world, f
 - **The first open of the map tab has little margin** on the 1 s budget at 600 assets (above), and misses it on a loaded machine. Leaflet places one `<img>` per asset; a canvas renderer or clustering would be the next step if a slower machine misses it.
 - **Popouts:** Leaflet follows a drag on the opener's `document`; the map forwards the popout's mouse and pointer moves to it (`forwardPopoutDrags`). This leans on Leaflet internals; Leaflet 2 changes them. Touch dragging in a popout is not tested.
 - **Third-party tiles on the demo** are outside our control (above).
+
+## WP 5.6, the admin's world-state editor (ADM-16, ADM-44–46, D25, R25, R26)
+
+- **Nothing new on the server.** The editor publishes through the admin's own session only: `sendWorldState` and `advancePhase` refuse any other session before sending, and clients accept world states only from the admin's real JID (PLY-58, unchanged). A preview as a role, and every player, gets no editor; the server would take a map-room post from them (members have voice) and every client ignores it, as WP 5.5's scenario shows.
+- **The draft is in `localStorage`** under the deployment's namespace (DOC-10), keyed by server and map-room GUID (`world-draft:v1:<server>:<mapRoomId>`). It holds the planned positions and states of every asset: in a wargame, the umpire's adjudication before players see it. Any script on the origin can read it, as it can the design draft already held there (WP 2.2). On a shared machine the next user of the browser profile can read it until it is published or discarded. Accepted as R25 says (browser-only draft, server-side drafts post-v1); the UI says the draft is held in this browser.
+- **What a stored draft can do.** It is parsed with `worldStateSchema` on every read (`parseWorldDraft`); a draft that fails is set aside with a notice, never published. Another tab's write arrives by the `storage` event and is parsed the same way. A tampered draft can only become a world state the admin then sees in the change summary and confirms.
+- **The size check** runs before every publish (`worldStateSize`, the 500,000-byte map-room cap, PLY-53): the publish button and the phase change are blocked with the size, and the store and transports check again.
+- **Design files** gain an optional `worldState` (version 3). It is checked by `worldStateSchema` on import; assets whose force is not in the design are a warning. Import writes it to the world-state draft only: nothing reaches the map room until the admin publishes it (ADM-45).
+
+**Weak points**
+
+- **The draft is not tied to the admin's login.** Anyone who logs in as the admin in the same browser profile sees and can publish it; anyone with the profile can read it.
+- **Last writer wins between admin tabs.** Two tabs editing the same draft overwrite each other's edits on save (each saves the whole state); a newer publish from another tab is shown as a note on the draft, not merged.
+- **The draft is not cleared by the mock's "Reset to seed"** or by a server reset; "Discard draft" is the only way, so a stale draft can outlive the game it was made for, under the same map-room GUID.

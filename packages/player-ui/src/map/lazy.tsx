@@ -31,3 +31,6 @@ export function MapPreload(): null {
   }, [])
   return null
 }
+
+/** The asset form's symbol preview (WP 5.6), in a chunk with milsymbol. */
+export const LazySymbolPreview = lazy(() => import('./symbol-preview.tsx'))

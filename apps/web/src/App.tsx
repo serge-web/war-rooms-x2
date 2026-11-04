@@ -14,9 +14,16 @@ import {
   MapTilesProvider,
   PlayerClient,
   UnreadProvider,
+  WorldDraftProvider,
   Workspace,
 } from '@wrx/player-ui'
-import type { Connection, DemoLogin, LayoutStorage, MapTiles } from '@wrx/player-ui'
+import type {
+  Connection,
+  DemoLogin,
+  LayoutStorage,
+  MapTiles,
+  WorldDraftStorage,
+} from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
 import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
@@ -52,6 +59,11 @@ export interface AppProps {
   readonly layoutStorage?: LayoutStorage
   /** The map room's base tiles (NFR-9): config.json's, or the mock build's default. */
   readonly tiles?: MapTiles | undefined
+  /**
+   * Where the admin's world-state drafts are kept (ADM-45, R25), under this deployment (DOC-10).
+   * Without it, the admin's map room has no editor.
+   */
+  readonly worldDrafts?: WorldDraftStorage | undefined
 }
 
 export function App(props: AppProps) {
@@ -59,7 +71,9 @@ export function App(props: AppProps) {
     <ThemeScope root className="wrx-app">
       <ToastProvider>
         <MapTilesProvider tiles={props.tiles}>
-          <AppRoutes {...props} />
+          <WorldDraftProvider storage={props.worldDrafts}>
+            <AppRoutes {...props} />
+          </WorldDraftProvider>
         </MapTilesProvider>
       </ToastProvider>
     </ThemeScope>

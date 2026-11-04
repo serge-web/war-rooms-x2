@@ -59,6 +59,12 @@ A game runs in numbered turns, each a planning phase and then an adjudication ph
 
 While the umpires adjudicate, roles outside the White Force cannot post: their message entry is paused, with a note saying why, and anything they had typed is kept until the next turn's planning. The White Force and the admin keep posting. This is a rule the app applies, not the server: a modified client could still post during adjudication, which is accepted in version 1.
 
+### The map, edited by the admin
+
+Every game has one map room, which every role sees. It shows the world state: each force's units and platforms, drawn as standard military symbols, with their position, state, health and fuel. Only the admin changes it. In the umpire's game view the admin adds assets (with a form, or by clicking the map), drags them to new positions, edits any of their details in a form that previews the symbol, and deletes them.
+
+Edits build up as a draft, kept only in the admin's browser until published: the map says so while there are unpublished edits, because clearing that browser's data or changing device loses them. The admin publishes the draft with the next phase change, or at any time with "Publish world state", for example to set up the starting position before play or to correct a mistake. Either way, the admin first sees a summary of what changes (assets added, removed, and changed with the fields that changed) and confirms. Every publish sends the whole world state as one message, and every player's map updates at once. A design export carries the world state too, so a game can be set up again on another server with its map; importing it makes it the admin's draft, which players see only once it is published.
+
 ### Offline and air-gapped
 
 The client is a static build with every font, icon and library bundled, and makes no calls to the internet. It can be served next to the XMPP server, from a separate static host, or as plain files with the mock backend.

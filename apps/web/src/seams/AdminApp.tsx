@@ -3,7 +3,9 @@
 // goes through admin operations over the admin's own session (ADM-12, ADM-35). The header carries
 // the turn control (ADM-43), over the same session. The draft is kept
 // in this browser under a key per backend: the mock deployment's own namespace for the mock
-// (DOC-10), the server's domain otherwise. The publish marker is kept on the server.
+// (DOC-10), the server's domain otherwise. The publish marker is kept on the server. A design
+// export carries the world state: the admin's world-state draft from this browser, else the
+// latest published state; an import makes the file's the draft (ADM-16, WP 5.6).
 import { AdminOps, privateMarkerStore, storageMarkerStore } from '@wrx/admin-ops'
 import {
   AdminApp as AdminEditorApp,
@@ -13,11 +15,22 @@ import {
   draftFromDesign,
   markPublished,
 } from '@wrx/admin-ui'
-import type { Draft, PublishConnection } from '@wrx/admin-ui'
-import { defaultRoomTypes, withSlots } from '@wrx/domain'
+import type { Draft, PublishConnection, WorldStateTransfer } from '@wrx/admin-ui'
+import {
+  defaultRoomTypes,
+  parseWorldDraft,
+  serialiseWorldDraft,
+  worldDraftKey,
+  withSlots,
+} from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { DEMO_VAULT_PASSPHRASE, demoSeed } from '@wrx/mock-server'
-import { AppBarCore, TurnPanel } from '@wrx/player-ui'
+import {
+  AppBarCore,
+  TurnPanel,
+  readPublishedWorldState,
+  useWorldDraftStorage,
+} from '@wrx/player-ui'
 import { designFileSchema, withTemplateLocks } from '@wrx/schemas'
 import { Button } from '@wrx/ui'
 import { useState } from 'react'
@@ -48,6 +61,29 @@ export function AdminApp({
     return createBrowserDraftStore(keyFor('admin-draft'), { initial })
   })
   const [registry] = useState(() => withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {}))
+  const drafts = useWorldDraftStorage()
+  const [worldState] = useState((): WorldStateTransfer | undefined => {
+    if (drafts === undefined) return undefined
+    const key = (mapRoomId: string) => worldDraftKey(session.identity.domain, mapRoomId)
+    return {
+      forExport: async (mapRoomId) => {
+        const text = drafts.snapshot(key(mapRoomId)).text
+        const held = text === undefined ? undefined : parseWorldDraft(text)
+        if (held?.ok === true) return held.value.state
+        return readPublishedWorldState(session, mapRoomId)
+      },
+      importDraft: (mapRoomId, state) =>
+        drafts.save(
+          key(mapRoomId),
+          // No published state it started from: the summary is against whatever is published.
+          serialiseWorldDraft({
+            state,
+            baseStanzaId: undefined,
+            savedAt: new Date().toISOString(),
+          }),
+        ),
+    }
+  })
   const [publish] = useState((): PublishConnection => ({
     ops: new AdminOps({
       session: session.session,
@@ -81,6 +117,7 @@ export function AdminApp({
         publish={publish}
         // ADM-43: the turn control, so the admin can move the game on from here too.
         headerItems={<TurnPanel variant="bar" />}
+        {...(worldState === undefined ? {} : { worldState })}
         onSwitchToGame={() => {
           location.hash = ROUTE_HREFS.player
         }}

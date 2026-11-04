@@ -3,6 +3,7 @@
 // (the admin login, in the White Force), the chat panel, and a room with its composer collapsed
 // to a bar holding a draft (PLY-54).
 import { expect, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { freezeClock, mapSettled, shoot } from '../lib/shoot.ts'
 import { hostMockInLeaderTab, roomTabs, welcomeLoaded } from './mock-app.ts'
 
@@ -144,4 +145,71 @@ test('player map room, the table of assets', { tag: '@screenshot' }, async ({ pa
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   })
   await shoot(page, 'player-map-table')
+})
+
+/** The umpire's map room with two unpublished edits (WP 5.6): a moved asset and a health cut. */
+async function umpireDraft(page: Page): Promise<Locator> {
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  await page.getByLabel('Login name').fill('admin')
+  await page.getByLabel('Password', { exact: true }).fill('demo-admin')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  const room = page.getByRole('group', { name: 'Map: world state', exact: true })
+  await expect(room.locator('img.wrx-map__symbol')).toHaveCount(6)
+  await room.getByRole('button', { name: 'Table' }).click()
+  await room.getByRole('button', { name: 'Tank Company' }).click()
+  await room.getByRole('button', { name: 'Edit…' }).click()
+  const form = room.getByRole('form', { name: 'Edit Tank Company' })
+  await form.getByLabel('Health (%)', { exact: true }).fill('40')
+  await form.getByLabel('State', { exact: true }).fill('damaged')
+  await form.getByRole('button', { name: 'Save to the draft' }).click()
+  await room.getByRole('button', { name: 'Recce Troop' }).click()
+  await room.getByRole('button', { name: 'Edit…' }).click()
+  const recce = room.getByRole('form', { name: 'Edit Recce Troop' })
+  await recce.getByLabel('Latitude', { exact: true }).fill('51.99')
+  await recce.getByRole('button', { name: 'Save to the draft' }).click()
+  await expect(room.getByText('Unpublished edits: 2 assets changed')).toBeVisible()
+  await room.getByRole('button', { name: 'Map', exact: true }).click()
+  // The map's tabset maximised, so the editor has the room it would have in its own window.
+  await page
+    .locator('.flexlayout__tabset_container, .flexlayout__tabset')
+    .filter({ has: page.getByRole('tab', { name: 'Map', exact: true }) })
+    .getByTitle('Maximize tabset')
+    .first()
+    .click()
+  await room.getByRole('button', { name: 'Show all assets' }).click()
+  return room
+}
+
+test('umpire world-state editor, unpublished edits', { tag: '@screenshot' }, async ({ page }) => {
+  // WP 5.6: the admin's draft on the map with the asset form open, held only in this browser
+  // (ADM-44, ADM-45, R25).
+  const room = await umpireDraft(page)
+  await room.locator('img.wrx-map__symbol[alt="Tank Company"]').click()
+  await room.getByRole('button', { name: 'Edit…' }).click()
+  await expect(room.getByRole('img', { name: /Symbol preview/ })).toBeVisible()
+  await mapSettled(page)
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await shoot(page, 'umpire-world-editor')
+})
+
+test('umpire world-state change summary', { tag: '@screenshot' }, async ({ page }) => {
+  // WP 5.6: the change summary before a publish on its own (ADM-46), with the message's size (R26).
+  const room = await umpireDraft(page)
+  await room.getByRole('button', { name: 'Publish world state…' }).click()
+  await expect(room.getByRole('group', { name: 'World-state changes' })).toContainText(
+    '2 assets: 0 added, 0 removed, 2 changed',
+  )
+  await mapSettled(page)
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await shoot(page, 'umpire-world-summary')
 })

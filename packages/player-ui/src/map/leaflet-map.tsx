@@ -2,8 +2,10 @@
 // milsymbol symbol. Loaded lazily (`lazy.tsx`), so a client that never opens the map room loads
 // neither library. Leaflet needs no eval; its inline styles fit `style-src 'unsafe-inline'` (F7).
 //
-// Read-only: markers cannot be dragged and nothing here writes the world state. WP 5.6's editor
-// reuses this component and adds its editing beside it.
+// Read-only for players: markers cannot be dragged and nothing here writes the world state. The
+// admin's editor (WP 5.6, ADM-44) passes `editable`, so symbols can be dragged (`onMove`), and
+// `placing`, so a click on the map picks a new asset's position (`onPlace`); the edits themselves
+// are the editor's.
 import * as L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import type { MapRoomConfig, WorldAsset } from '@wrx/schemas'
@@ -30,6 +32,12 @@ export interface MapViewProps {
   readonly fitRequest?: number
   /** Each change pans to the selected asset ("Show on map"). */
   readonly showRequest?: number
+  /** The admin's editor (ADM-44): symbols can be dragged; `onMove` gets where each is dropped. */
+  readonly editable?: boolean
+  readonly onMove?: (id: string, lat: number, lon: number) => void
+  /** The next click on the map picks a position (`onPlace`), e.g. for a new asset. */
+  readonly placing?: boolean
+  readonly onPlace?: (lat: number, lon: number) => void
 }
 
 /** The class every symbol's `<img>` carries; tests count them. */
@@ -173,6 +181,10 @@ export function MapView({
   label,
   fitRequest = 0,
   showRequest = 0,
+  editable = false,
+  onMove,
+  placing = false,
+  onPlace,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | undefined>(undefined)
@@ -182,11 +194,17 @@ export function MapView({
   const symbolsRef = useRef(symbols)
   const openedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
+  const onMoveRef = useRef(onMove)
+  const onPlaceRef = useRef(placing ? onPlace : undefined)
+  const editableRef = useRef(editable)
   const latest = useRef<Latest>({ assets, config, selected })
   latest.current = { assets, config, selected }
   useEffect(() => {
     onSelectRef.current = onSelect
-  }, [onSelect])
+    onMoveRef.current = onMove
+    onPlaceRef.current = placing ? onPlace : undefined
+    editableRef.current = editable
+  }, [onSelect, onMove, onPlace, placing, editable])
 
   // The map, once per mount.
   useEffect(() => {
@@ -221,6 +239,11 @@ export function MapView({
       }).addTo(map)
     }
     const layer = L.layerGroup().addTo(map)
+    // A click picks a position while the editor is placing (ADM-44); a symbol's click does not
+    // reach the map, so selecting stays selecting.
+    map.on('click', (event: L.LeafletMouseEvent) => {
+      onPlaceRef.current?.(event.latlng.lat, event.latlng.lng)
+    })
     mapRef.current = map
     layerRef.current = layer
     const placed = placedRef.current
@@ -274,7 +297,16 @@ export function MapView({
         marker.on('click', () => {
           onSelectRef.current(asset.id)
         })
+        // The admin's drag (ADM-44): selected while dragged, its drop reported.
+        marker.on('dragstart', () => {
+          onSelectRef.current(asset.id)
+        })
+        marker.on('dragend', () => {
+          const at = marker.getLatLng()
+          onMoveRef.current?.(asset.id, at.lat, at.lng)
+        })
         layer.addLayer(marker)
+        if (editableRef.current) marker.dragging?.enable()
         const element = marker.getElement()
         element?.setAttribute('data-asset', asset.id)
         if (asset.id === latest.current.selected) element?.classList.add(SELECTED_CLASS)
@@ -302,6 +334,14 @@ export function MapView({
     }
   }, [assets, tiles])
 
+  // Dragging, for the admin's editor only.
+  useEffect(() => {
+    for (const entry of placedRef.current.values()) {
+      if (editable) entry.marker.dragging?.enable()
+      else entry.marker.dragging?.disable()
+    }
+  }, [editable, assets, tiles])
+
   // The selection's outline.
   useEffect(() => {
     for (const [id, entry] of placedRef.current) {
@@ -328,7 +368,7 @@ export function MapView({
   return (
     <div
       ref={containerRef}
-      className="wrx-map__canvas"
+      className={placing ? 'wrx-map__canvas wrx-map__canvas--placing' : 'wrx-map__canvas'}
       role="region"
       aria-label={label}
       aria-roledescription="map"
