@@ -1,0 +1,3 @@
+<!-- admin sends 500000 bytes: {"sender":"admin","bytes":500000,"reflectedMs":116,"receivedMs":93,"pingAfterMs":13,"connectionUp":true} -->
+
+<message xmlns='jabber:client' to='RUN-admin-500000@conference.localhost' type='groupchat' id='s16-500000-2333c398'><body>S16:s16-500000-2333c398:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>

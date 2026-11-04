@@ -95,13 +95,18 @@ export function MessageListCore({
 
   // The last scroll position seen, to tell the reader scrolling up from rows growing under them.
   const lastTop = useRef(0)
+  // The content height at the last scroll, to tell the reader scrolling up from the browser
+  // clamping the scroll position when rows are measured shorter than estimated.
+  const lastHeight = useRef(0)
 
   const onScroll = () => {
     const el = ref.current
     if (el === null) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK
-    const movedUp = el.scrollTop < lastTop.current - 1
+    const shrank = el.scrollHeight < lastHeight.current
+    const movedUp = el.scrollTop < lastTop.current - 1 && !shrank
     lastTop.current = el.scrollTop
+    lastHeight.current = el.scrollHeight
     // Only the reader moving up leaves the bottom. Rows measured taller than estimated push the
     // bottom away without the reader doing anything; stay pinned and follow it.
     if (nearBottom) atBottom.current = true

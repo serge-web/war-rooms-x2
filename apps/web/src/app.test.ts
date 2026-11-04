@@ -154,6 +154,7 @@ describe('demo logins (NFR-6)', () => {
       ['blue-observer', 'demo-blue-observer'],
       ['red-co', 'demo-red-co'],
       ['white-observer', 'demo-white-observer'],
+      ['white-cell', 'demo-white-cell'],
       ['admin', 'demo-admin'],
     ])
     expect(demoLogins().at(-1)?.label).toBe('Umpire (White, admin)')

@@ -2,8 +2,10 @@
 //
 // The admin logs in to the game view as the umpire (the White Force, WP 2.11) and sees every
 // room; places Red HQ and the negotiation side by side; posts a clarification in Red HQ that Red
-// sees from the umpire; and amends Red's objectives, which Red's force panel shows live. Moved
-// here from column.spec.ts, with step 2 added. Both backends.
+// sees from the umpire; and amends Red's objectives, which Red's force panel shows live. Then
+// White Cell, a White Force role that is not an observer, amends them too, and Red's panel and
+// the umpire's show its edit, the newest by the server's order (§3 rule 14, WP 5.8). Moved here
+// from column.spec.ts, with steps 2 and 5 added. Both backends.
 import type { Page } from '@playwright/test'
 import { columns, drag } from '../layout.ts'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
@@ -17,7 +19,7 @@ const panel = (page: Page, name: string) => page.getByRole('region', { name, exa
 const RED_HQ = 'Red HQ'
 const TALKS = 'Blue–Red negotiation'
 
-test('SC-5: the admin, as umpire, sees every room, watches two side by side, posts as the umpire and amends Red’s objectives live (PLY-15, PLY-25, PLY-35)', async ({
+test('SC-5: the admin, as umpire, sees every room, watches two side by side, posts as the umpire and amends Red’s objectives live, and so does White Cell (PLY-15, PLY-25, PLY-35)', async ({
   context,
   backend,
 }) => {
@@ -100,6 +102,38 @@ test('SC-5: the admin, as umpire, sees every room, watches two side by side, pos
   await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
     'Hold the east bank until noon.',
   )
+
+  // 5. White Cell, in the White Force and not an observer, amends them too (PLY-35, D21). Its
+  // save is its own new item; Red and the umpire both show it, the newest edit.
+  const cell = await context.newPage()
+  const cellErrors = watchErrors(cell)
+  await cell.setViewportSize({ width: 1400, height: 900 })
+  await openApp(cell, backend)
+  await logInAs(cell, backend, 'white-cell')
+  await expect(cell.getByLabel('Logged in as White Cell, White')).toBeVisible({ timeout: 20_000 })
+  await forcePanel(cell).getByLabel('Show objectives for').selectOption({ label: 'Red' })
+  await expect(forcePanel(cell).getByRole('region', { name: 'Red objectives' })).toContainText(
+    'Hold the east bank until noon.',
+  )
+  await forcePanel(cell).getByRole('button', { name: 'Edit Red objectives' }).click()
+  const cellDialog = cell.getByRole('dialog', { name: 'Edit Red objectives' })
+  await cellDialog
+    .getByRole('textbox', { name: 'Objectives (Markdown)' })
+    .fill('1. Delay Blue.\n2. Hold the east bank until *two*.')
+  await expect(
+    cellDialog.getByRole('region', { name: 'Objectives preview' }).locator('em'),
+  ).toHaveText('two')
+  await cellDialog.getByRole('button', { name: 'Publish objectives' }).click()
+  await expect(cellDialog).toHaveCount(0)
+  await expect(redObjectives).toContainText('Hold the east bank until two.')
+  await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
+    'Hold the east bank until two.',
+  )
+  // Still the newest after a reload: read back in the server's order, not by any clock.
+  await red.reload()
+  await logInAs(red, backend, 'red-co')
+  await expect(redObjectives).toContainText('Hold the east bank until two.', { timeout: 20_000 })
   expect(redErrors).toEqual([])
   expect(umpireErrors).toEqual([])
+  expect(cellErrors).toEqual([])
 })

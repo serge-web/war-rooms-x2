@@ -8,8 +8,15 @@ import { userEvent } from '@testing-library/user-event'
 import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
-import { DEMO_VAULT_PASSPHRASE, MockServer, MockTransport, demoState } from '@wrx/mock-server'
-import { demoDesign, sampleDesign, tid } from '@wrx/schemas/fixtures'
+import {
+  DEMO_VAULT_PASSPHRASE,
+  MockServer,
+  MockTransport,
+  demoSeed,
+  demoState,
+} from '@wrx/mock-server'
+import type { DesignFile } from '@wrx/schemas'
+import { sampleDesign, tid } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -25,6 +32,9 @@ import type { PublishConnection } from './controller.ts'
 import { PublishSectionCore } from './PublishSection.tsx'
 import type { PublishSectionCoreProps } from './PublishSection.tsx'
 import { validateDraft } from '../draft/index.ts'
+
+/** The mock's demo design, as its seed holds it (a valid design file). */
+const demoDesign = (): DesignFile => demoSeed().design as DesignFile
 
 vi.setConfig({ testTimeout: 30_000 })
 afterEach(cleanup)
@@ -436,7 +446,7 @@ describe('on the mock’s demo seed, which starts published with its vault', () 
     await planAndWait(user, 'Check the server and plan')
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
     expect([...store.getSnapshot().draft.meta.publishedRoleIds].sort()).toEqual(
-      sampleDesign()
+      demoDesign()
         .roles.map((r) => r.id)
         .sort(),
     )

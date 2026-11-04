@@ -1,7 +1,8 @@
 // The demo scenario (PLY-21, PLY-34): the sample design from @wrx/schemas, "Exercise Northern
 // Gate", with its message templates and the Blue Reports room that offers them, free text off
-// (Annex A, `templatedDesign`), its map room with the admin's turn-1 world state (`demoDesign`,
-// D25), a short morning of message history, provisioned and published as the admin tooling
+// (Annex A, `templatedDesign`), White Cell, a White Force role that is not an observer (D21),
+// its map room with the admin's turn-1 world state (`demoDesign`, D25), a short morning of
+// message history, provisioned and published as the admin tooling
 // would leave it, observer vault included. Every password is a DEMO PASSWORD (NFR-6):
 // `demo-<loginName>`, and `demo-admin` for the admin; the vault opens with the DEMO passphrase
 // DEMO_VAULT_PASSPHRASE.

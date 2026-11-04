@@ -16,7 +16,7 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 - **Audit and repair.** Compares the live server with the design, rates each difference, and repairs what it can with the same steps a publish uses.
 - **Credentials.** Role passwords are generated randomly and listed on a credentials sheet for the admin's session, to print or hand out; they are never stored in the design or exported, and a role's password can be reset from the sheet.
 - **Import and export** of the design as one JSON file, without passwords. Files from before entity ids became GUIDs are converted on import.
-- **Objectives** are written by the admin only. Each force reads its own, and every White Force role reads all of them.
+- **Objectives** are written by the admin for each force, and during play the admin and White Force roles that are not observers amend any force's objectives from the player client, with a preview; the force sees each edit live, and the newest edit is what it reads. Each force reads its own, and every White Force role reads all of them; White Force observers only read. A role that leaves the White Force, or is deleted, has its edits removed by the next publish.
 
 **For players**
 
@@ -24,7 +24,7 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 - **Chat** with messages grouped by sender, date dividers, history that loads as you scroll, unread counts on tabs, and reconnection that fills any gap. Message text is always plain text. Each room's message entry collapses to a slim bar for players who only read, keeping any draft; each room remembers it, and observers start with it collapsed.
 - **The out-of-game column**: announcements from the admin and the player's force panel with its objectives. In narrow windows it becomes a tab of its own.
 - **Observers** read their rooms but never post. White Force observers see the rooms assigned to them, or every room when none is.
-- **The umpire** is the admin, playing in the White Force: it reads and writes in every room, reads every force's objectives and posts announcements.
+- **The umpire** is the admin, playing in the White Force: it reads and writes in every room, reads and amends every force's objectives and posts announcements.
 
 **For demonstrations**
 

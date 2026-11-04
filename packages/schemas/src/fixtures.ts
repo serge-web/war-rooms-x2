@@ -267,8 +267,7 @@ export function sampleDesign(): DesignFile {
 
 /**
  * The sample design plus a White Force role that is not an observer ("White Cell"), which
- * writes in every room and reads every force's objectives, but does not edit them (§3 rules 4
- * and 14, D21).
+ * writes in every room and reads and edits every force's objectives (§3 rules 4 and 14, D21).
  */
 export function sampleDesignWithWhiteCell(): DesignFile {
   const design = sampleDesign()
@@ -493,11 +492,13 @@ export function withSampleMapRoom(design: DesignFile): DesignFile {
 }
 
 /**
- * The demo design: the templated sample design (`templatedDesign`) with the game's map room. The
- * mock's demo seed posts `sampleWorldState()` to it as the admin.
+ * The demo design: the templated sample design (`templatedDesign`), White Cell, a White Force
+ * role that is not an observer (`sampleDesignWithWhiteCell`, D21), and the game's map room, every
+ * force a write entry (§3 rule 18). The mock's demo seed posts `sampleWorldState()` to it as the
+ * admin.
  */
 export function demoDesign(): DesignFile {
-  return withSampleMapRoom(templatedDesign())
+  return withSampleMapRoom({ ...templatedDesign(), roles: sampleDesignWithWhiteCell().roles })
 }
 
 function worldAsset(

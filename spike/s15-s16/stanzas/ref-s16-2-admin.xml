@@ -1,0 +1,7 @@
+<!-- admin sends 500000 bytes: {"sender":"admin","bytes":500000,"reflectedMs":138,"receivedMs":105,"pingAfterMs":21,"connectionUp":true} -->
+
+<message xmlns='jabber:client' to='RUN-admin-500000@conference.localhost' type='groupchat' id='s16-500000-e277c225'><body>S16:s16-500000-e277c225:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- admin sends 2000000 bytes: {"sender":"admin","bytes":2000000,"reflectedMs":457,"receivedMs":363,"pingAfterMs":61,"connectionUp":true} -->
+
+<message xmlns='jabber:client' to='RUN-admin-2000000@conference.localhost' type='groupchat' id='s16-2000000-cacab79d'><body>S16:s16-2000000-cacab79d:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>

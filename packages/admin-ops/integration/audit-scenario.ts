@@ -8,9 +8,11 @@
 //    tooling could have missed (R14): Red HQ unmoderated; Blue CO granted Red's objectives,
 //    subscribed, then its affiliation removed without its subscription (R-A); Blue Observer given
 //    voice back by a moderator while it is in Blue HQ (R-B); an extra account; Blue's objectives
-//    node opened to `open` access; Red's force document changed; White Cell made a publisher of
-//    White's objectives, as before WP 3.5, and its own item published there (D21); a template
-//    the design does not have published to `templates` (Annex A);
+//    node opened to `open` access; Red's force document changed; the White observer made a
+//    publisher of White's objectives (F5); an edit on Blue's objectives by Blue CO, left by a
+//    publisher affiliation since taken back (D21, §3 rule 14), beside White Cell's own edit
+//    there, which is allowed and stays; a template the design does not have published to
+//    `templates` (Annex A);
 // 3. the audit finds each, with its full JID for the subscription and the stored role through
 //    the vault login for the observer;
 // 4. repairing everything (destructive items confirmed) leaves a clean re-audit, and the effects
@@ -297,27 +299,53 @@ export function defineAuditIntegration(backend: AuditBackend): void {
           ),
           `change ${nodeName.force(tid('red'))}`,
         )
-        // White Cell an objectives publisher again, with its own item (D21: a publish before
-        // WP 3.5 left this).
+        // The White observer a publisher of White's objectives (review F5, D21).
         must(
           await session.pubsub.setAffiliations(nodeName.objectives(tid('white')), [
-            { jid: theOps().roleJid('white-cell'), affiliation: 'publisher' },
+            { jid: theOps().roleJid('white-observer'), affiliation: 'publisher' },
           ]),
-          'White Cell publishes objectives',
+          'the White observer publishes objectives',
         )
+        // White Cell edits Blue's objectives during play, as it may (§3 rule 14): not drift.
+        const objectivesOf = (force: string, markdown: string) =>
+          JSON.stringify({
+            schemaVersion: 1,
+            forceId: tid(force),
+            markdown,
+            updatedAt: '2026-10-30T09:00:00.000Z',
+          })
         const cell = await login('white-cell')
         must(
           await cell.pubsub.publish(
-            nodeName.objectives(tid('white')),
-            'white-cell',
-            JSON.stringify({
-              schemaVersion: 1,
-              forceId: tid('white'),
-              markdown: 'Umpire notes',
-              updatedAt: '2026-10-30T09:00:00.000Z',
-            }),
+            nodeName.objectives(tid('blue')),
+            'white-cell-e1',
+            objectivesOf('blue', 'Umpire’s amendment'),
           ),
-          'White Cell writes its own objectives item',
+          'White Cell edits Blue’s objectives',
+        )
+        // An edit by Blue CO, which may not publish there: it was made a publisher, wrote, and
+        // was set back to member, leaving its item (§3 rule 14: only the White Force's stay).
+        must(
+          await session.pubsub.setAffiliations(nodeName.objectives(tid('blue')), [
+            { jid: theOps().roleJid('blue-co'), affiliation: 'publisher' },
+          ]),
+          'Blue CO publishes, for a moment',
+        )
+        must(
+          await (
+            await login('blue-co')
+          ).pubsub.publish(
+            nodeName.objectives(tid('blue')),
+            'blue-co-e1',
+            objectivesOf('blue', 'Our own version'),
+          ),
+          'Blue CO edits its objectives',
+        )
+        must(
+          await session.pubsub.setAffiliations(nodeName.objectives(tid('blue')), [
+            { jid: theOps().roleJid('blue-co'), affiliation: 'member' },
+          ]),
+          'Blue CO back to member',
         )
         // A template the design does not have, published by hand (Annex A).
         must(
@@ -331,16 +359,23 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         drifted = await audit()
       }, 300_000)
 
-      it('finds White Cell publishing objectives, and its item (D21)', () => {
-        expect(item(`node-access:${nodeName.objectives(tid('white'))}:white-cell`)).toMatchObject({
+      it('finds the White observer publishing objectives, and Blue CO’s edit, not White Cell’s (D21)', () => {
+        expect(
+          item(`node-access:${nodeName.objectives(tid('white'))}:white-observer`),
+        ).toMatchObject({
           severity: 'critical',
           expected: 'member',
           found: 'publisher',
         })
-        expect(item(`stray-items:${nodeName.objectives(tid('white'))}`)).toMatchObject({
+        expect(item(`stray-items:${nodeName.objectives(tid('blue'))}:blue-co-e1`)).toMatchObject({
           severity: 'medium',
           repairable: true,
+          repair: [
+            { type: 'retract-item', node: nodeName.objectives(tid('blue')), itemId: 'blue-co-e1' },
+          ],
         })
+        const flagged = (drifted?.items ?? []).map((i) => i.id)
+        expect(flagged.some((id) => id.includes('white-cell-e1'))).toBe(false)
       })
 
       it('finds the unmoderated room', () => {
@@ -506,18 +541,21 @@ export function defineAuditIntegration(backend: AuditBackend): void {
         expect(ids).not.toContain(STRAY_TEMPLATE.id)
       })
 
-      it('White’s objectives hold the admin’s item only, and White Cell cannot publish (D21)', async () => {
+      it('Blue’s objectives keep the admin’s item and White Cell’s edit, newest last; the observer cannot publish (D21)', async () => {
         const items = must(
-          await theOps().session.pubsub.getItems(nodeName.objectives(tid('white'))),
-          nodeName.objectives(tid('white')),
+          await theOps().session.pubsub.getItems(nodeName.objectives(tid('blue'))),
+          nodeName.objectives(tid('blue')),
         )
-        expect(items.map((i) => i.id)).toEqual(
-          design.objectives.some((o) => o.forceId === 'white') ? ['admin'] : [],
-        )
-        const cell = await login('white-cell')
+        expect(items.map((i) => i.publisher)).toEqual([
+          theOps().roleJid('admin'),
+          theOps().roleJid('white-cell'),
+        ])
+        expect(items.at(-1)?.id).toBe('white-cell-e1')
+        const observer = await login('white-observer')
         expect(
-          errorOf(await cell.pubsub.publish(nodeName.objectives(tid('white')), 'white-cell', '{}'))
-            ?.condition,
+          errorOf(
+            await observer.pubsub.publish(nodeName.objectives(tid('white')), 'white-obs-1', '{}'),
+          )?.condition,
         ).toBe('forbidden')
       })
 

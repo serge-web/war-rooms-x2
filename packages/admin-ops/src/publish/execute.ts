@@ -191,8 +191,6 @@ async function runStep(
     }
     case 'delete-node':
       return none(await ops.deleteNode(action.node))
-    case 'purge-node':
-      return none(await ops.purgeNode(action.node))
     case 'retract-item':
       return none(await ops.retractItem(action.node, action.itemId))
   }
