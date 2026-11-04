@@ -10,10 +10,11 @@ export { AssetForm, readAssetForm } from './asset-form.tsx'
 export type { AssetFormProps } from './asset-form.tsx'
 export { WorldStateSummary, describeChange, summaryLine } from './change-summary.tsx'
 export type { WorldStateSummaryProps } from './change-summary.tsx'
-export { memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
+export { heldWorldDraft, memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
 export type {
   DraftSnapshot,
   DraftStorageLike,
+  HeldWorldDraft,
   JustPublished,
   WorldDraftStorage,
 } from './draft-storage.ts'

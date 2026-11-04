@@ -7,7 +7,7 @@
 // layout resets to the default with Red's rooms and the new one, with a notice (PLY-5, PLY-30);
 // a message being typed survives it. Renaming the new room and moving it up the list is not
 // structural (Nov 4, 2026): the layout stays. Then the admin deletes Red CO, who is told and
-// logged out.
+// logged out; a role removed is not structural either (WP 5.9), so Blue CO keeps its layout.
 // Both backends; on ejabberd the admin first imports the published design (admin.ts).
 import type { Page } from '@playwright/test'
 import { ROOM } from '@wrx/schemas/fixtures'
@@ -180,6 +180,8 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   await admin.getByRole('alertdialog').getByRole('button', { name: 'Delete role' }).click()
   await plan(admin, backend)
   await expect(region.getByLabel('Online roles affected').locator('strong')).toContainText('Red CO')
+  // A role removed is not structural (§3 rule 8, WP 5.9): no other role's access changes.
+  await expect(region).toContainText('no structural change')
   await publishPlan(admin, [/Delete Red CO/])
   // The publish removes the role's login with its documents; which of the two the client hears
   // of first decides the wording (PLY-29, PLY-50). Either way it says why, and logs out.
@@ -188,8 +190,9 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
     .filter({ hasText: /Your role was deleted|Your login was removed/ })
   await expect(notice).toBeVisible({ timeout: 30_000 })
   await expect(red.getByRole('heading', { name: 'Log in' })).toBeVisible()
-  // Blue CO, still online, is undisturbed.
+  // Blue CO, still online, is undisturbed, its layout included.
   await expect(blue.getByLabel('Logged in as Blue CO, Red')).toBeVisible()
+  await expect.poll(() => columns(blue)).toEqual([['Red HQ', TALKS], ['Map'], ['Red plans']])
   expect(blueErrors).toEqual([])
   expect(redErrors).toEqual([])
 })

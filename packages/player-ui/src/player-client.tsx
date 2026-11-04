@@ -7,6 +7,7 @@ import { BackendBadge } from './backend.tsx'
 import type { BackendInfo } from './backend.tsx'
 import { ForcedLogoutNotice } from './ended.tsx'
 import { LoginFormCore } from './login-form.tsx'
+import { preloadMapView } from './map/lazy.tsx'
 import type { DemoLogin } from './login-form.tsx'
 import { useAnonymousStore, usePlayerSession } from './session.ts'
 import type { AnonymousOptions, Connection, PlayerSession, SessionOptions } from './session.ts'
@@ -132,6 +133,10 @@ function SignedOut({
         error={state.phase === 'signed-out' ? state.error : undefined}
         demoLogins={demoLogins}
         onSubmit={(roleId, password) => {
+          // Every role has the map room (§3 rule 18): its chunk starts loading with the login,
+          // not only once the workspace is up, so an early first look at the map does not wait
+          // for it (NFR-11, WP 5.9).
+          preloadMapView()
           void session.login(roleId, password)
         }}
       />

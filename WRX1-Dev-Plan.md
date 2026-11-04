@@ -90,6 +90,7 @@ There are 40 work packages, including the spike S14 and the Phase 5 spike checks
 | 5.6 | World-state editor for the admin: add, move, edit and delete assets on the map; browser-only draft with an unpublished-edits indicator; change summary and publish at a phase change or at any time from a "Publish world state" action; the world state in design export and import | ADM-16, ADM-44–46, R25, R26 | 5.4, 5.5 |
 | 5.8 | Objectives edited by the White Force: one item per author, newest by server timestamp, publisher affiliations for White Force non-observers, cleanup when a role leaves the White Force or is deleted, umpire editing in the player client for those roles | D21, §3 rule 14, PLY-35, R10 | 5.1 |
 | 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6, 5.8 |
+| 5.9 | Phase 5 polish: the reviews' L3 (a phase change failing after its world state went out), M3 (discarding the world-state draft at a reset), L7 (roles added or removed not structural), A2 (one Tab stop for the asset table) and the margin of the map's first render at 600 assets | ADM-15, ADM-43, ADM-45, R25, R28, NFR-11, NFR-14 | 5.7 |
 | **After v1 — Annexes A and B** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
 
@@ -172,6 +173,7 @@ flowchart TB
         wp56["5.6 World-state editor"]
         wp58["5.8 White Force edits objectives"]
         wp57["5.7 Acceptance and review"]
+        wp59["5.9 Phase 5 polish"]
     end
     subgraph PX["After v1 — Annexes A and B"]
         direction LR
@@ -217,13 +219,14 @@ flowchart TB
     wp54 & wp55 --> wp56
     wp51 --> wp58
     wp53 & wp56 & wp58 --> wp57
+    wp57 --> wp59
     P5 -.-> G5
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58 todo
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58,wp59 todo
     class G0,G1,G2,G3,G4,G5 gate
 ```
 
@@ -238,6 +241,7 @@ flowchart TB
 | Phase 4 added: WPs 4.1 to 4.4 for message templates (Annex A A1 to A4), one phase PR, gate G4 | The product owner started Annex A on Nov 1, 2026 and deferred its open questions; Phase 4 builds on the recommended answers (`plan/decisions/annex-a-b-implementation.md`, "Provisional answers") |
 | Phase 5 added: WPs 5.1 to 5.8 for turns, the map and White Force objective editing (the product owner's Nov 3, 2026 revision), one phase PR, gate G5; FT-3 superseded; PLY-6 and PLY-41 retired from WPs 0.2 and 2.5 | The owner moved a turn model and a map room with an admin-edited world state into v1. v1's release now waits for G5 as well as the WP 3.3 hardware check |
 | WP 5.7 also narrows the structural change (§3 rule 8): only rooms added or removed, or a role's effective access to a room changing, move `designVersion` and reset layouts | The product owner's decision of Nov 4, 2026, made during WP 5.7; it changes `designStructure` in the publish planner (WP 5.3) |
+| WP 5.9 added after G5: Phase 5 polish, fixing review findings L3, M3, L7 and A2 and the map's first-render margin; roles added or removed are no longer structural (§3 rule 8) | The Phase 5 reviews' open findings small enough to close before v1 (decision of Nov 4, 2026) |
 
 ## CI gates and human checkpoints
 

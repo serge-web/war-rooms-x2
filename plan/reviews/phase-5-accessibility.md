@@ -19,6 +19,8 @@ The method is Phase 3's (`phase-3-accessibility.md`): axe-core 4.14.0 through `@
 | The design import with a world state, and its notice | `world-editor.spec.ts` |
 | **The map room when the world state is further back** ("Look further back") | `apps/web/e2e/scenarios/map-room.spec.ts` (both backends, WP 5.7) |
 | The objectives editor, as the umpire (the same dialog White Force roles get in WP 5.8; not scanned as one of them) | `a11y.spec.ts`, "objectives dialog" |
+| **The asset table at 600 assets, one Tab stop, with an asset's details** (WP 5.9) | `world-editor.spec.ts`, "the asset table is one Tab stop at 600 assets" |
+| **The reset's confirmation with the offer to discard the world-state draft** (WP 5.9) | `world-editor.spec.ts`, "a reset offers to discard the world-state draft" |
 
 Every scan passes with no violation.
 
@@ -36,9 +38,11 @@ The phase change with the summary is a Radix dialog (focus trapped, Escape close
 
 - **A1. The asset form did not take focus, and lost it on closing** (found by the keyboard test). After "Add asset…" or "Edit…", focus stayed on the button that opened the form, or fell to the page's body when that button went away (Edit… is replaced by the form). A keyboard or screen-reader user had to find the form by tabbing through the rest of the panel, and after saving was back at the top of the page. Now the form focuses its heading when it opens, as the confirmations already did, and on closing gives focus back to the opener if it is still there ("Add asset…") or to the first action of the panel that replaces the form (the asset's "Edit…"), never stealing it from elsewhere. `packages/player-ui/src/map/asset-form.tsx`; e2e above.
 
-## Findings that stay
+## Findings fixed in WP 5.9
 
-- **A2. From a table row to its "Edit…" a keyboard user tabs past every later row** (Low; Medium at scale). The details panel follows the table in the page, so at 600 assets an asset near the top is up to 600 tab stops from its own "Edit…" (Shift+Tab from the panel's end is shorter for rows near the bottom). Screen-reader users can follow the row's `aria-controls` to the details. Recommendation: a roving tab stop in the table (one Tab stop, arrow keys between rows), or the details placed before the table in the reading order. Not changed here: it reorders a WP 5.5 component used by every player.
+- **A2. From a table row to its "Edit…" a keyboard user tabbed past every later row** (Low; Medium at scale). The details panel follows the table in the page, so at 600 assets an asset near the top was up to 600 tab stops from its own "Edit…". Now the table's rows are one Tab stop (a roving tab index): the stop is the row last moved to, else the selected asset's, else the first; Up and Down move one row, Page Up and Page Down ten, Home and End to the ends, and the table's hidden caption says so. A click moves the stop too (Safari does not focus a clicked button). The row buttons keep `aria-pressed` and `aria-controls`; the order of the page is unchanged. Measured at 600 assets (`world-editor.spec.ts`): "Edit…" is **1** Tab press from its row for the first, the middle and the last asset (before: up to 600), Shift+Tab goes back to the row, and the table is reached from "Table" in at most 5 presses past the editor's tools. axe finds no violation. Players use the same table (WP 5.5), so they gain the same.
+
+## Findings that stay
 - **A3. "Place on map" needs a pointer** (accepted, WP 5.6). The keyboard path is "Add asset…", which opens the form at the assets' centre, and the form's latitude and longitude.
 - **A4. Dragging a symbol has no keyboard equivalent on the map itself**; the form is the alternative NFR-14 asks for (above). Symbols are hidden from assistive technology (`aria-hidden` on the marker pane), and the table is the accessible view of the same state.
 - **A5. The change summary for a very large draft** is a list of every change; at hundreds of changes it is long to read in the dialog. Its first line counts the changes ("4 assets: 1 added, 0 removed, 3 changed"). Not measured with a screen reader.

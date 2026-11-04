@@ -236,3 +236,14 @@
 .wrx-multi__admin-body .wrx-placeholder-page {
   min-height: 0;
 }
+
+/* The reset's offer to discard the admin's world-state draft (WP 5.9). */
+.wrx-mock-controls__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.wrx-mock-controls__choice input {
+  margin-top: 0.25rem;
+}

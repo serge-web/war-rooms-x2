@@ -12,6 +12,7 @@ import type { DesignFile } from '@wrx/schemas'
 import { expectNoViolations } from './a11y.ts'
 import { isTileNoise, mapPanel, openMap, stubTiles, symbols } from './map.ts'
 import { logIn } from './mock.ts'
+import { loadScale } from './scale.ts'
 
 const WIDE = { width: 1500, height: 950 }
 
@@ -314,6 +315,57 @@ test('the design export carries the world-state draft, and an import makes the f
   expect(errors).toEqual([])
 })
 
+test('a reset offers to discard the world-state draft held for the game, unticked (ADM-15, WP 5.9 M3)', async ({
+  context,
+}, testInfo) => {
+  test.setTimeout(150_000)
+  await stubTiles(context)
+  const umpire = await context.newPage()
+  const errors = watch(umpire)
+  const panel = await admin(umpire)
+  await editField(panel, 'Recce Troop', 'Health (%)', '5')
+  await expect(panel.getByText('Unpublished edits: 1 asset changed')).toBeVisible()
+
+  const backend = await context.newPage()
+  await backend.setViewportSize(WIDE)
+  await backend.goto('./#/admin')
+  await logIn(backend, 'admin', 'demo-admin')
+  await backend
+    .getByRole('navigation', { name: 'Admin sections' })
+    .getByRole('button', { name: 'Publish', exact: false })
+    .first()
+    .click()
+  await backend.getByRole('button', { name: 'Plan a reset' }).click()
+  const plan = backend.getByRole('region', { name: 'Reset plan' })
+  await expect(plan).toBeVisible({ timeout: 30_000 })
+  if (await backend.getByRole('button', { name: 'Unlock the vault' }).isVisible()) {
+    await backend.getByRole('button', { name: 'Unlock the vault' }).click()
+    const vault = backend.getByRole('alertdialog', { name: 'Unlock the vault' })
+    await vault.getByLabel('Passphrase', { exact: true }).fill('demo-observer-vault')
+    await vault.getByRole('button', { name: 'Unlock' }).click()
+    await expect(backend.getByText('Vault unlocked.')).toBeVisible({ timeout: 30_000 })
+  }
+  await plan.getByRole('button', { name: 'Reset the game…' }).click()
+  const confirm = backend.getByRole('alertdialog', { name: 'Reset the game?' })
+  const offer = confirm.getByRole('checkbox', {
+    name: /^Also discard the world-state draft held in this browser for this game \(6 assets, saved /,
+  })
+  await expect(offer).not.toBeChecked()
+  await expectNoViolations(backend, testInfo, 'reset confirmation with the draft offer', {
+    include: '.wrx-admin-dialog',
+  })
+  for (const box of await confirm.getByRole('checkbox').all()) await box.check()
+  await confirm.getByLabel(/to confirm/).fill('Exercise Northern Gate')
+  await confirm.getByRole('button', { name: 'Reset the game' }).click()
+  await expect(backend.getByText(/Reset complete/)).toBeVisible({ timeout: 30_000 })
+  // The draft is gone from this browser, in every tab.
+  const drafts = await backend.evaluate(
+    () => Object.keys(localStorage).filter((key) => key.includes('world-draft')).length,
+  )
+  expect(drafts).toBe(0)
+  expect(errors).toEqual([])
+})
+
 test('the keyboard alone adds an asset and moves one, then publishes (ADM-44, NFR-14)', async ({
   context,
 }, testInfo) => {
@@ -387,5 +439,81 @@ test('the keyboard alone adds an asset and moves one, then publishes (ADM-44, NF
   await confirm.getByRole('button', { name: 'Publish world state', exact: true }).focus()
   await key.press('Enter')
   await expect(panel.getByText(/Unpublished edits/)).toHaveCount(0, { timeout: 20_000 })
+  expect(errors).toEqual([])
+})
+
+// A2 (WP 5.9): at NFR-11's 600 assets, the table is one Tab stop; the arrow keys move between
+// rows, and an asset's "Edit…" is a few Tab presses from its row, wherever it is in the table.
+test('the asset table is one Tab stop at 600 assets; Edit… is a few Tab presses from any row (NFR-14, WP 5.9)', async ({
+  context,
+}, testInfo) => {
+  test.setTimeout(150_000)
+  await stubTiles(context)
+  const umpire = await context.newPage()
+  const errors = watch(umpire)
+  await umpire.setViewportSize(WIDE)
+  await loadScale(umpire, './', { messages: 200, worldAssets: 600 })
+  await logIn(umpire, 'admin', 'demo-admin')
+  const panel = await openMap(umpire, 600)
+  const key = umpire.keyboard
+  await panel.getByRole('button', { name: 'Table', exact: true }).focus()
+  await key.press('Enter')
+  const picks = panel.locator('.wrx-map__pick')
+  await expect(picks).toHaveCount(600)
+  await expect(panel.locator('.wrx-map__pick[tabindex="0"]')).toHaveCount(1)
+
+  /** Tab presses from the focused element to the details' "Edit…", at most `limit`. */
+  const tabsToEdit = async (limit: number): Promise<number> => {
+    for (let n = 1; n <= limit; n++) {
+      await key.press('Tab')
+      const text = await umpire.evaluate(() => document.activeElement?.textContent ?? '')
+      if (text === 'Edit…') return n
+    }
+    return Number.POSITIVE_INFINITY
+  }
+
+  // Into the table, past the editor's tools and the table's scrollable region, to its one row
+  // stop: the first row.
+  let into = 0
+  while (into < 8 && !(await picks.first().evaluate((b) => b === document.activeElement))) {
+    await key.press('Tab')
+    into++
+  }
+  await expect(picks.first()).toBeFocused()
+  expect(into).toBeLessThanOrEqual(5)
+  // The first row, the middle one and the last: each a few Tab presses from its "Edit…".
+  const presses: number[] = []
+  for (const move of [[], Array<string>(30).fill('PageDown'), ['End']]) {
+    for (const k of move) await key.press(k)
+    const title = await umpire.evaluate(() => document.activeElement?.textContent ?? '')
+    await key.press('Enter')
+    await expect(panel.getByRole('button', { name: title, exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    presses.push(await tabsToEdit(5))
+    await expect(side(panel).getByRole('heading', { name: title })).toBeVisible()
+    // Shift+Tab goes back into the table at the selected row, which kept the stop.
+    for (let n = presses.at(-1) ?? 0; n > 0; n--) await key.press('Shift+Tab')
+    await expect(panel.getByRole('button', { name: title, exact: true })).toBeFocused()
+  }
+  expect(
+    presses.every((n) => n <= 3),
+    JSON.stringify(presses),
+  ).toBe(true)
+  // The arrow keys: Home, Down, Up.
+  await key.press('Home')
+  await expect(picks.first()).toBeFocused()
+  await key.press('ArrowDown')
+  await expect(picks.nth(1)).toBeFocused()
+  await key.press('ArrowUp')
+  await expect(picks.first()).toBeFocused()
+  await expectNoViolations(umpire, testInfo, 'asset table at 600 assets, one Tab stop', {
+    include: '.wrx-map__body',
+  })
+  testInfo.annotations.push({
+    type: 'Tab presses from a row to its Edit… (first, middle, last of 600)',
+    description: presses.join(', '),
+  })
   expect(errors).toEqual([])
 })

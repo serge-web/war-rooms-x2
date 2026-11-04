@@ -244,6 +244,46 @@ describe('the mock database controls (PLY-21)', () => {
     expect(screen.getByRole('status').textContent).toContain('back at its seed')
   })
 
+  it('offers to discard the admin’s world-state draft with a reset, unticked (WP 5.9, M3)', async () => {
+    const onReset = vi.fn((_choice: { readonly discardWorldDraft: boolean }) =>
+      Promise.resolve(undefined),
+    )
+    let held: { assets: number; savedAt: string } | undefined = {
+      assets: 6,
+      savedAt: '2026-11-04T10:00:00.000Z',
+    }
+    render(
+      <MockControlsCore
+        onReset={onReset}
+        onExport={() => Promise.resolve({ ok: true, json: '{}' })}
+        onImport={() => Promise.resolve(undefined)}
+        heldWorldDraft={() => held}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to seed…' }))
+    let dialog = screen.getByRole('dialog', { name: 'Reset the mock to its seed?' })
+    const offer = within(dialog).getByRole<HTMLInputElement>('checkbox', {
+      name: 'Also discard the admin’s world-state draft held in this browser for the seed’s game (6 assets). Leave it unticked to keep it.',
+    })
+    expect(offer.checked).toBe(false)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset' }))
+    await act(() => flush())
+    expect(onReset).toHaveBeenLastCalledWith({ discardWorldDraft: false })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to seed…' }))
+    dialog = screen.getByRole('dialog', { name: 'Reset the mock to its seed?' })
+    fireEvent.click(within(dialog).getByRole('checkbox'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reset' }))
+    await act(() => flush())
+    expect(onReset).toHaveBeenLastCalledWith({ discardWorldDraft: true })
+
+    // No draft: nothing offered.
+    held = undefined
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to seed…' }))
+    dialog = screen.getByRole('dialog', { name: 'Reset the mock to its seed?' })
+    expect(within(dialog).queryByRole('checkbox')).toBeNull()
+  })
+
   it('saves the export as a dated file, and reports failures', async () => {
     const saveFile = vi.fn()
     const onExport = vi

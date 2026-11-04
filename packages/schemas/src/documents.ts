@@ -26,7 +26,7 @@ export const gameSetupSchema = z
       .int()
       .min(1)
       .describe(
-        'Incremented by a publish that changes the structure: a room added or removed, or a role’s effective access to a room (§3 rule 8); keys saved layouts (PLY-5)',
+        'Incremented by a publish that changes the structure: a room added or removed, or the effective access to a room of a role in both designs (§3 rule 8); keys saved layouts (PLY-5)',
       ),
     theme: themeSchema,
     roomTypeDefaults: z

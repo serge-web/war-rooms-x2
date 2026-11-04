@@ -11,13 +11,14 @@ import { SessionStoreProvider } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
 import { WORLD_ASSET, sampleDesign, sampleWorldState, tid } from '@wrx/schemas/fixtures'
 import type { WorldState } from '@wrx/schemas'
+import { err, ok } from '@wrx/transport'
 import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TurnPanel } from '../column/turn-panel.tsx'
 import { readAssetForm } from './asset-form.tsx'
 import { describeChange } from './change-summary.tsx'
-import { memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
+import { heldWorldDraft, memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
 import type { WorldDraftStorage } from './draft-storage.ts'
 import { MapPanel } from './map-panel.tsx'
 import { WorldDraftProvider, readPublishedWorldState, sizeRefusal } from './world-draft.tsx'
@@ -231,6 +232,45 @@ describe('the world-state editor (ADM-44, ADM-45)', () => {
     expect(storage.snapshot(KEY).text).toBeUndefined()
   })
 
+  it('says the world state went out when only the phase change fails, and retries the phase alone (L3, WP 5.9)', async () => {
+    const { h, storage } = await mount(
+      'admin',
+      <>
+        <TurnPanel />
+        {mapPanel}
+      </>,
+      undefined,
+      at(1, 'adjudication'),
+    )
+    await editHealth('Tank Company', '40')
+    h.session.stub('pubsub', 'publish', () => Promise.resolve(err('remote-server-timeout')))
+    fireEvent.click(screen.getByRole('button', { name: 'Start turn 2…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Start turn 2?' })
+    await waitFor(() => {
+      expect(dialog.textContent).toContain('Tank Company: health 100% → 40%')
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start turn 2' }))
+    const alert = await within(dialog).findByRole('alert')
+    expect(alert.textContent).toBe(
+      'The world state for turn 2 was published and players see it, but the phase did not move: the server did not answer. Try again. Confirm again to move the phase; the world state is not sent again.',
+    )
+    expect(alert.textContent).not.toMatch(/not published/)
+    // The draft was published: it is cleared, and the map shows no unpublished edits.
+    expect(storage.snapshot(KEY).text).toBeUndefined()
+    expect(screen.queryByText(/Unpublished edits/)).toBeNull()
+    // The confirmation stays, and now says only the phase is left.
+    expect(screen.getByRole('dialog', { name: 'Start turn 2?' })).toBe(dialog)
+    expect(dialog.textContent).toContain('confirming now moves only the phase')
+    expect(dialog.textContent).not.toContain('Tank Company: health 100% → 40%')
+    h.session.stub('pubsub', 'publish', () => Promise.resolve(ok(undefined)))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start turn 2' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    const writes = h.session.calls.filter((c) => c.op === 'send' || c.op === 'publish')
+    expect(writes.map((c) => c.op)).toEqual(['send', 'publish', 'publish'])
+  })
+
   it('says a phase change with no edits publishes no world state', async () => {
     const storage = memoryWorldDraftStorage()
     // A draft equal to the published state: nothing to publish.
@@ -408,5 +448,24 @@ describe('the editor’s parts', () => {
     expect(storage.snapshot('k').published?.replacing).toBe('s-1')
     stop()
     expect(seen).toEqual(['one', 'two', 'two', undefined])
+  })
+
+  it('describes a held draft for the reset’s offer (WP 5.9, M3)', () => {
+    const storage = memoryWorldDraftStorage()
+    expect(heldWorldDraft(storage, 'k')).toBeUndefined()
+    storage.save(
+      'k',
+      serialiseWorldDraft({
+        state: sampleWorldState(),
+        baseStanzaId: undefined,
+        savedAt: '2026-11-04T10:00:00.000Z',
+      }),
+    )
+    expect(heldWorldDraft(storage, 'k')).toEqual({
+      assets: 6,
+      savedAt: '2026-11-04T10:00:00.000Z',
+    })
+    storage.save('k', 'not a draft')
+    expect(heldWorldDraft(storage, 'k')).toEqual({ assets: undefined, savedAt: undefined })
   })
 })

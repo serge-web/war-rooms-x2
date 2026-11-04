@@ -145,7 +145,7 @@ export function publishChangedDesign(): DesignFile {
   }
 }
 
-/** Step 4: a renamed room and a new role, on top of step 3. */
+/** Step 4: a renamed room and new roles, on top of step 3: not structural (§3 rule 8, WP 5.9). */
 function thirdDesign(): DesignFile {
   const base = publishChangedDesign()
   return {
@@ -778,7 +778,8 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the re-run plans what is left, with the same version', () => {
-        expect(rerun?.designVersion).toBe(5)
+        // New roles and a renamed room are not structural (§3 rule 8, WP 5.9): version 4 stays.
+        expect(rerun?.designVersion).toBe(4)
         expect(rerun?.steps.map((s) => s.id)).toContain('account:red-obs')
         // The account the first run made exists: it is neither created again nor reset (F3).
         expect(rerun?.steps.map((s) => s.id)).not.toContain('account:red-xo')
@@ -792,7 +793,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         const done = await apply(rerun ?? (await plan(thirdDesign())))
         expect(done.ok).toBe(true)
         expect(done.passwordsSet).not.toContain('red-xo')
-        expect(await gameVersion()).toBe(5)
+        expect(await gameVersion()).toBe(4)
         expect((await plan(thirdDesign())).steps).toEqual([])
         expect(await postResult('red-xo', tid('red-hq'))).toMatchObject({ posted: 'ok' })
         await expectReadOnly('red-obs', tid('red-hq'))

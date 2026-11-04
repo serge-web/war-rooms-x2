@@ -60,9 +60,17 @@ export interface ApplyDialogProps {
   readonly acknowledgements: readonly Acknowledgement[]
   /** When set, the admin types this text to confirm (ADM-15). */
   readonly typed?: string
+  /**
+   * Tick boxes the admin may leave unticked, e.g. discarding a world-state draft with a reset
+   * (WP 5.9, review M3). Unticked when the dialog opens.
+   */
+  readonly choices?: readonly Acknowledgement[]
   readonly confirmLabel: string
-  /** Called with the ids of the ticked acknowledgements (all of them, by then). */
-  readonly onConfirm: (ticked: ReadonlySet<string>) => void
+  /**
+   * Called with the ids of the ticked acknowledgements (all of them, by then), and of the
+   * choices ticked.
+   */
+  readonly onConfirm: (ticked: ReadonlySet<string>, chosen: ReadonlySet<string>) => void
 }
 
 /** Confirms applying a plan: enabled once every tick box is ticked and any typed text matches. */
@@ -73,11 +81,13 @@ export function ApplyDialog({
   children,
   acknowledgements,
   typed,
+  choices = [],
   confirmLabel,
   onConfirm,
 }: ApplyDialogProps) {
   const [open, setOpen] = useState(false)
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set())
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set())
   const [text, setText] = useState('')
   const typedId = useId()
   const ready =
@@ -89,6 +99,7 @@ export function ApplyDialog({
         setOpen(next)
         if (!next) {
           setTicked(new Set())
+          setChosen(new Set())
           setText('')
         }
       }}
@@ -121,6 +132,27 @@ export function ApplyDialog({
           ))}
         </fieldset>
       )}
+      {choices.length > 0 && (
+        <fieldset className="wrx-admin-fieldset">
+          <legend>Your choice</legend>
+          {choices.map((c) => (
+            <div key={c.id} className="wrx-admin-field wrx-admin-field-check">
+              <input
+                id={`${typedId}-choice-${c.id}`}
+                type="checkbox"
+                checked={chosen.has(c.id)}
+                onChange={(e) => {
+                  const next = new Set(chosen)
+                  if (e.target.checked) next.add(c.id)
+                  else next.delete(c.id)
+                  setChosen(next)
+                }}
+              />
+              <label htmlFor={`${typedId}-choice-${c.id}`}>{c.label}</label>
+            </div>
+          ))}
+        </fieldset>
+      )}
       {typed !== undefined && (
         <div className="wrx-admin-field">
           <label htmlFor={typedId}>
@@ -148,8 +180,9 @@ export function ApplyDialog({
           onClick={() => {
             setOpen(false)
             setTicked(new Set())
+            setChosen(new Set())
             setText('')
-            onConfirm(ticked)
+            onConfirm(ticked, chosen)
           }}
         >
           {confirmLabel}

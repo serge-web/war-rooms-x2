@@ -70,4 +70,4 @@ A design export carries the world state: the admin's draft if this browser holds
 
 ## Layouts and design changes
 
-Players arrange their rooms in a dockable workspace, saved in their browser. A design change resets every online player's layout to the default, with a notice, only when it is **structural**: a room added or removed, or a change to which rooms a role can see or write in. Renaming, re-ordering, themes, objectives and templates never reset a layout.
+Players arrange their rooms in a dockable workspace, saved in their browser. A design change resets every online player's layout to the default, with a notice, only when it is **structural**: a room added or removed, or a change to which rooms a role can see or write in. Renaming, re-ordering, themes, objectives and templates never reset a layout, and nor does adding or removing a role: only the rooms of roles already in the game are compared.

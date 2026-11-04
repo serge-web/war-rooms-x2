@@ -103,6 +103,9 @@ export function MapPanelCore({
   const [task, setTask] = useState<Task | undefined>(undefined)
   const [placing, setPlacing] = useState(false)
   const [editError, setEditError] = useState<string | undefined>(undefined)
+  // The table's one Tab stop among its rows (A2, WP 5.9): the row last moved to with the arrow
+  // keys, else the selected asset's, else the first.
+  const [rowStop, setRowStop] = useState<string | undefined>(undefined)
   const detailsId = useId()
   const rows = useMemo(() => (state === undefined ? [] : assetRows(state, forces)), [state, forces])
   // A selection the newer state no longer holds is gone.
@@ -316,6 +319,14 @@ export function MapPanelCore({
     )
   }
 
+  const ids = new Set(rows.map((r) => r.asset.id))
+  const tabStop =
+    rowStop !== undefined && ids.has(rowStop)
+      ? rowStop
+      : selected !== undefined && ids.has(selected)
+        ? selected
+        : rows[0]?.asset.id
+
   const addAt = () => {
     const bounds = assetBounds(Object.values(state.assets))
     const centre =
@@ -473,7 +484,8 @@ export function MapPanelCore({
             ) : (
               <table className="wrx-map__table">
                 <caption className="wrx-visually-hidden">
-                  Assets in the world state for turn {state.turn}, by force
+                  Assets in the world state for turn {state.turn}, by force. The up and down arrow
+                  keys move between assets; Tab leaves the table.
                 </caption>
                 <thead>
                   <tr>
@@ -486,7 +498,21 @@ export function MapPanelCore({
                     <th scope="col">Position</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody
+                  onKeyDown={(event) => {
+                    const to = rowKeyTarget(
+                      event.key,
+                      rows.map((r) => r.asset.id),
+                      (event.target as HTMLElement).closest('tr')?.dataset.asset,
+                    )
+                    if (to === undefined) return
+                    event.preventDefault()
+                    setRowStop(to)
+                    event.currentTarget
+                      .querySelector<HTMLButtonElement>(`tr[data-asset="${CSS.escape(to)}"] button`)
+                      ?.focus()
+                  }}
+                >
                   {rows.map(({ asset: a, forceName }) => (
                     <tr
                       key={a.id}
@@ -499,7 +525,13 @@ export function MapPanelCore({
                           className="wrx-map__pick"
                           aria-pressed={a.id === selected}
                           aria-controls={a.id === selected ? detailsId : undefined}
+                          tabIndex={a.id === tabStop ? 0 : -1}
+                          onFocus={() => {
+                            setRowStop(a.id)
+                          }}
                           onClick={() => {
+                            // Safari does not focus a clicked button: the stop follows the click.
+                            setRowStop(a.id)
                             setTask(undefined)
                             setPicked(a.id === selected ? undefined : a.id)
                           }}
@@ -609,4 +641,36 @@ export function MapPanel({ roomId, room, config }: PlayerPanelProps) {
       }
     />
   )
+}
+
+/** How far Page Up and Page Down move in the asset table. */
+const ROW_PAGE = 10
+
+/**
+ * The row the asset table's arrow keys move to from `from` (A2, WP 5.9): up and down by one,
+ * Page Up and Page Down by ten, Home and End to the ends. Undefined for any other key.
+ */
+export function rowKeyTarget(
+  key: string,
+  ids: readonly string[],
+  from: string | undefined,
+): string | undefined {
+  if (ids.length === 0) return undefined
+  const at = from === undefined ? -1 : ids.indexOf(from)
+  const last = ids.length - 1
+  const index =
+    key === 'ArrowDown'
+      ? Math.min(at + 1, last)
+      : key === 'ArrowUp'
+        ? Math.max(at - 1, 0)
+        : key === 'PageDown'
+          ? Math.min(at + ROW_PAGE, last)
+          : key === 'PageUp'
+            ? Math.max(at - ROW_PAGE, 0)
+            : key === 'Home'
+              ? 0
+              : key === 'End'
+                ? last
+                : undefined
+  return index === undefined ? undefined : ids[index]
 }

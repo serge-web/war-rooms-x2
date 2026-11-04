@@ -3,6 +3,7 @@ import { LIMITS, nodeName } from '@wrx/schemas'
 import { sampleWorldState } from '@wrx/schemas/fixtures'
 import type { WorldState } from '@wrx/schemas'
 import type { RoomMessage } from '@wrx/transport'
+import { err } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import {
   DOMAIN,
@@ -226,17 +227,19 @@ describe('world state (D25, PLY-58, PLY-59)', () => {
     release()
   })
 
-  it('looks once the room, already joined for another reason, is watched for it', async () => {
+  it('watches a map room for its world state from its first join, whoever joins it (WP 5.9)', async () => {
     const h = await mapHarness(
       [
         world(stateAt(1)),
         ...Array.from({ length: 6 }, () => message('map', { body: chatBody('x') })),
       ],
-      { pageSize: 3 },
+      { pageSize: 50, worldStatePageSize: 3 },
     )
+    // Joined for another reason (the online list joins every room): small pages, and the search.
     const plain = h.store.acquireRoom(tid('map'))
     await flush(20)
-    expect(queries(h)).toHaveLength(1)
+    expect(queries(h).length).toBeGreaterThan(1)
+    expect(h.store.worldState(tid('map')).data?.state?.turn).toBe(1)
     const watched = h.store.acquireWorldState(tid('map'))
     await flush(20)
     expect(h.store.worldState(tid('map')).data?.state?.turn).toBe(1)
@@ -347,6 +350,27 @@ describe('a phase change with the world state (ADM-45, WP 5.6)', () => {
     expect(ops.map((c) => c.op)).toEqual(['send', 'publish'])
     expect((JSON.parse(String(ops[0]?.args[1])) as { content: unknown }).content).toEqual(state)
     expect(JSON.parse(String(ops[1]?.args[2]))).toEqual(at(2, 'planning'))
+    release()
+  })
+
+  it('says the world state went out when only the phase change then fails (L3, WP 5.9)', async () => {
+    const { h, release } = await adminAt(1, 'adjudication')
+    h.session.stub('pubsub', 'publish', () => Promise.resolve(err('forbidden')))
+    const state = stateAt(2)
+    const result = await h.store.advancePhase({
+      from: at(1, 'adjudication'),
+      worldState: { roomId: tid('map'), state },
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.code).toBe('not-permitted')
+    expect(result.error.message).toMatch(/the world state was published, but the phase did not/)
+    expect(result.error.worldStateSent?.state).toEqual(state)
+    expect(typeof result.error.worldStateSent?.stanzaId).toBe('string')
+    expect(writes(h).map((c) => c.op)).toEqual(['send', 'publish'])
+    // Without a world state, a failed change carries none.
+    const plain = await h.store.advancePhase({ from: at(1, 'adjudication') })
+    expect(plain.ok || plain.error.worldStateSent).toBeUndefined()
     release()
   })
 

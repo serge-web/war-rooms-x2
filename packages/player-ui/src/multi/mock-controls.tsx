@@ -1,13 +1,23 @@
 // The mock database controls (PLY-21, PLY-34): reset to the seed, export the whole database to a
 // file, and import one. An export holds the message history, so a rehearsal can be saved and
 // loaded again as the starting point of the next demo. Every tab of the deployment shares the
-// database (PLY-22), so each action applies to all of them.
+// database (PLY-22), so each action applies to all of them. The reset offers to discard the
+// admin's world-state draft for the seed's game, held in this browser (WP 5.9, review M3).
 import { Button, Dialog, DialogClose } from '@wrx/ui'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { HeldWorldDraft } from '../map/draft-storage.ts'
 
 export interface MockControlsCoreProps {
-  /** Resolves with an error message, or undefined when done. */
-  readonly onReset: () => Promise<string | undefined>
+  /**
+   * Resolves with an error message, or undefined when done. `discardWorldDraft`: the admin chose
+   * to discard the world-state draft `heldWorldDraft` reported, once the reset is done.
+   */
+  readonly onReset: (choice: { readonly discardWorldDraft: boolean }) => Promise<string | undefined>
+  /**
+   * The admin's world-state draft this browser holds for the seed's game, if any, read when the
+   * reset is confirmed (the seed's map room keeps its id, so the draft would apply again).
+   */
+  readonly heldWorldDraft?: () => HeldWorldDraft | undefined
   readonly onExport: () => Promise<
     { readonly ok: true; readonly json: string } | { readonly ok: false; readonly error: string }
   >
@@ -38,12 +48,16 @@ export function MockControlsCore({
   onReset,
   onExport,
   onImport,
+  heldWorldDraft,
   saveFile = download,
   now = () => new Date(),
 }: MockControlsCoreProps) {
   const [busy, setBusy] = useState<'reset' | 'export' | 'import' | undefined>(undefined)
   const [status, setStatus] = useState<Status>(undefined)
   const [confirming, setConfirming] = useState<'reset' | { readonly json: string } | undefined>()
+  const [held, setHeld] = useState<HeldWorldDraft | undefined>(undefined)
+  const [discard, setDiscard] = useState(false)
+  const discardId = useId()
   const fileInput = useRef<HTMLInputElement>(null)
   const mounted = useRef(true)
   useEffect(() => {
@@ -62,9 +76,9 @@ export function MockControlsCore({
     setStatus(result)
   }
 
-  const reset = () =>
+  const reset = (discardWorldDraft: boolean) =>
     run('reset', async () => {
-      const error = await onReset()
+      const error = await onReset({ discardWorldDraft })
       return error === undefined
         ? { tone: 'ok', text: 'The mock is back at its seed. Every pane and tab reconnects to it.' }
         : { tone: 'error', text: `Not reset: ${error}` }
@@ -96,6 +110,8 @@ export function MockControlsCore({
         busy={busy === 'reset'}
         disabled={busy !== undefined}
         onClick={() => {
+          setHeld(heldWorldDraft?.())
+          setDiscard(false)
           setConfirming('reset')
         }}
       >
@@ -165,7 +181,7 @@ export function MockControlsCore({
               onClick={() => {
                 const pending = confirming
                 setConfirming(undefined)
-                if (pending === 'reset') void reset()
+                if (pending === 'reset') void reset(held !== undefined && discard)
                 else if (pending !== undefined) void importDb(pending.json)
               }}
             >
@@ -173,7 +189,27 @@ export function MockControlsCore({
             </Button>
           </>
         }
-      />
+      >
+        {confirming === 'reset' && held !== undefined ? (
+          <div className="wrx-mock-controls__choice">
+            <input
+              id={discardId}
+              type="checkbox"
+              checked={discard}
+              onChange={(event) => {
+                setDiscard(event.target.checked)
+              }}
+            />
+            <label htmlFor={discardId}>
+              Also discard the admin’s world-state draft held in this browser for the seed’s game
+              {held.assets === undefined
+                ? ''
+                : ` (${String(held.assets)} ${held.assets === 1 ? 'asset' : 'assets'})`}
+              . Leave it unticked to keep it.
+            </label>
+          </div>
+        ) : undefined}
+      </Dialog>
     </div>
   )
 }
