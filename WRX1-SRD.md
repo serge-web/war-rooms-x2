@@ -829,7 +829,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 
 **Assumptions to confirm**
 
-- White Force roles keep posting during adjudication (PLY-56).
+- Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
 - The initial world state is published at the first phase change, like any other edit, rather than at game publish.
 - The map room's participants follow rule 4 like any room; a typical game names every force.
 - World state is excluded from the design export (ADM-16).
