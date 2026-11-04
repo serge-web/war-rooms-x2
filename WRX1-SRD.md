@@ -172,7 +172,7 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 **Design portability**
 
-- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export. Import SHALL also accept design files from before GUID ids (§3 rule 1), giving each entity a new GUID and keeping each old role id as its login name. A game already published with the old ids is moved by export, import, reset (ADM-15) and publish; its room history is not kept.
+- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export. Import SHALL also accept design files from before GUID ids (§3 rule 1), giving each entity a new GUID and keeping each old role id as its login name. A game already published with the old ids is moved by export, import, reset (ADM-15) and publish; its room history is not kept. The export SHALL include a world state: the admin's draft if one is held in this browser, otherwise the latest published state; importing loads it as the admin's draft, which reaches the map room only when the admin publishes it (ADM-45), so a game can be set up again on another server with its map (product owner, Nov 4, 2026).
 
 **Monitoring**
 
@@ -833,7 +833,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
 - Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
 - Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
-- World state is excluded from the design export (ADM-16).
+- Decided (Nov 4, 2026): the design export includes a world state, imported as the admin's draft (ADM-16).
 
 ## Annex A. Message templates (built in Phase 4)
 
