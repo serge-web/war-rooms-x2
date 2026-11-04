@@ -371,7 +371,11 @@ export interface SessionStore {
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
-  /** Re-lists nodes and retries failed ones; run after a design change and on reconnection. */
+  /**
+   * Retries the nodes that failed and picks up what the directory names; run after a design
+   * change and on reconnection. Nodes are never listed: rooms, forces and roles are found from
+   * `directory` (PLY-60).
+   */
   refresh(): Promise<void>
   /** Leaves rooms, releases subscriptions, clears data and disconnects (PLY-3). Idempotent. */
   logout(): Promise<DomainResult<void>>
@@ -479,7 +483,6 @@ class Store implements SessionStore {
   private readonly memos = new Map<string, { deps: readonly unknown[]; value: unknown }>()
   private readonly offSession: Unsubscribe[] = []
   private readonly readyWaiters: ((status: StoreStatus) => void)[] = []
-  private listed = new Set<string>()
   private currentStatus: StoreStatus = { state: 'starting' }
   /** The first load has finished; until then, coming back online means `starting` again. */
   private booted = false
@@ -575,8 +578,8 @@ class Store implements SessionStore {
   }
 
   private async start(): Promise<void> {
-    if (!this.identity.anonymous) await this.listNodes()
-    // Each pass may reveal nodes to add: the role's force, then that force's objectives.
+    // Each pass may reveal nodes to add: the directory's forces, roles and rooms, then the
+    // role's force, then that force's objectives.
     for (let pass = 0; pass < 4 && !this.isEnded(); pass++) {
       const before = this.core.size
       this.reconcileCore()
@@ -798,8 +801,8 @@ class Store implements SessionStore {
     const doc = latest(entry)
     if (doc?.kind === 'game-setup') {
       const version = doc.value.designVersion
-      // Publishing bumps designVersion whenever the design changes (rule 8): the signal to look
-      // for new forces, roles and rooms, since PubSub does not announce new nodes.
+      // A structural change (rule 8): retry what failed, since access may have changed. New
+      // forces, roles and rooms come from the directory, which is read live (PLY-60).
       if (this.designVersion !== undefined && version !== this.designVersion) void this.refresh()
       this.designVersion = version
     }
@@ -847,15 +850,6 @@ class Store implements SessionStore {
     return this.directory()?.roles.find((r) => r.loginName === login)?.id
   }
 
-  private async listNodes(): Promise<void> {
-    const listed = await this.session.pubsub.listNodes()
-    if (!listed.ok) {
-      this.logger.warn('Could not list nodes', { error: listed.error })
-      return
-    }
-    this.listed = new Set(listed.value)
-  }
-
   /** The nodes the store itself holds: everything the session's documents need. */
   private desiredCore(): Set<string> {
     const desired = new Set<string>([SINGLETON_NODES.gameSetup])
@@ -872,6 +866,11 @@ class Store implements SessionStore {
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
+    // PLY-60: every force, role and room the directory names, read and kept live by
+    // subscription; the directory itself is subscribed, so one created or deleted during the
+    // session is picked up (or dropped) when the admin publishes the new directory. Nodes are
+    // never listed. Each room document is read, and the role's rooms are those rule 4 gives it
+    // (`me`). With no directory the role finds nothing (failing closed).
     const directory = this.directory()
     if (directory !== undefined) {
       for (const f of directory.forces) add(safeNodeName('force', f))
@@ -881,12 +880,6 @@ class Store implements SessionStore {
     const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
-    for (const node of this.listed) {
-      const spec = nodeSpec(node)
-      if (spec === undefined) continue
-      if (spec.kind === 'force' || spec.kind === 'role' || spec.kind === 'room') desired.add(node)
-      if (spec.kind === 'objectives' && allObjectives) desired.add(node)
-    }
     if (allObjectives) {
       for (const force of this.collection('force')) add(safeNodeName('objectives', force.id))
     }
@@ -922,14 +915,13 @@ class Store implements SessionStore {
     }
   }
 
-  async refresh(): Promise<void> {
-    if (this.isEnded() || this.identity.anonymous) return
-    await this.listNodes()
-    if (this.isEnded()) return
+  refresh(): Promise<void> {
+    if (this.isEnded() || this.identity.anonymous) return Promise.resolve()
     this.reconcileCore()
     for (const entry of this.nodes.values()) {
       if (entry.status === 'error' && entry.loading === undefined) void this.loadNode(entry)
     }
+    return Promise.resolve()
   }
 
   // ---- Document getters -------------------------------------------------------------------
@@ -2058,7 +2050,6 @@ class Store implements SessionStore {
     this.roomEntries.clear()
     this.core.clear()
     this.memos.clear()
-    this.listed = new Set()
     this.docsVersion++
     this.setStatus(
       text === undefined ? { state: 'ended', reason } : { state: 'ended', reason, text },
