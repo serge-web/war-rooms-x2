@@ -38,7 +38,7 @@ None of these is near a budget. The CI guard fails at 250 ms for the three toget
 
 | Measure | Value | Target |
 | --- | --: | --: |
-| Map tab's first render, chunk preloaded: click to the frame with all 600 symbols, MAM search included | 853 ms (this run); 730–900 ms in WP 5.5's runs | 1,000 ms |
+| Map tab's first render, chunk preloaded: click to the frame with all 600 symbols, MAM search included | 853 ms alone; 961 ms in the full parallel suite; 730–900 ms in WP 5.5's runs | 1,000 ms |
 | A new 600-asset state from the admin, every symbol replaced: send to the frame showing it, on a player's map | 322 ms (this run); 140–400 ms in WP 5.5's runs | 1,000 ms |
 | Admin: an edit saved from the asset form to the frame showing the draft's banner | 66 ms | 100 ms (typing-class response) |
 | Admin: "Publish world state…" to the change summary on screen | 34 ms | 1,000 ms |
