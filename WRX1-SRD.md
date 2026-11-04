@@ -484,6 +484,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [ ] Air-gapped host install verified on real hardware (S8, NFR-23)
 - [x] Follow-up spike S13: failed, so ADM-37 uses the encrypted vault (§10)
 - [x] Repo visibility: repos stay public; exposure accepted (R18)
+- [x] Server certificates: chosen per install, the organisation's CA or a small internal one, so each site keeps its own security model; the scripts support both (Nov 4, 2026)
 - [ ] Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers), §10
 - [x] Welcome page: before login, via anonymous read access (D20)
 - [x] Objectives: admin-written per force, force read-only, the White Force reads all and, except its observers, may edit (D21, Nov 3, 2026)

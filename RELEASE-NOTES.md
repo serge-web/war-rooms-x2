@@ -2,7 +2,7 @@
 
 ## v1 (release candidate, not yet released)
 
-The product owner's Nov 3, 2026 revision moved a turn model and a map room into v1, so v1 now waits for Phase 5 (turns and the map) as well as one check: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. How the customer issues server certificates is also still open. Both are deployment steps; neither is expected to change the code. This page will give the release date once the check is done.
+The product owner's Nov 3, 2026 revision moved a turn model and a map room into v1, so v1 now waits for Phase 5 (turns and the map) as well as one check: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. The install is a deployment step and is not expected to change the code. This page will give the release date once the check is done.
 
 ### What v1 does
 
@@ -53,7 +53,7 @@ The reference deployment is one container: the official ejabberd 26.09 image, pi
 3. On the host, `ops/offline-install.sh` checks the bundle, installs it, starts the server, creates the admin account and runs the deployment checks. Running it again with a newer bundle upgrades, after a backup.
 4. `ops/backup.sh` and `ops/restore.sh` save and restore everything on the server while it runs.
 
-The full guide, with the checklist for the first install on real hardware, is `ops/README.md`. The real-hardware run is still to be done, and the choice between the customer's CA and an internal one is still to be made.
+The full guide, with the checklist for the first install on real hardware, is `ops/README.md`. The real-hardware run is still to be done, and the certificate authority is chosen per install: the organisation's own CA or a small internal one, whichever suits each site's security model (product owner, Nov 4, 2026).
 
 ### Moving a game from an earlier build
 
@@ -70,7 +70,7 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 
 ### Known limits
 
-- **Pending checks:** the real-hardware install (WP 3.3) and the certificate decision, above.
+- **Pending check:** the real-hardware install (WP 3.3), above.
 - **Safari:** dragging room tabs with the mouse is unverified in a real Safari (the automated WebKit tests cannot drag them); moving a tab with the keyboard works.
 - **Unread counts** start again at each login.
 - **One game per server.**
