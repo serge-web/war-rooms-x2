@@ -1,6 +1,6 @@
 # WP 5.3 — Design and publishing changes
 
-**SRD ids:** §3 rules 4, 8 and 15; D6, PLY-5, PLY-30, PLY-40, PLY-42, PLY-60, ADM-9, R24, R28 (retires PLY-6 and PLY-41) · **Depends on:** 5.2 · **Blocks:** 5.7 · **Status:** in progress
+**SRD ids:** §3 rules 4, 8 and 15; D6, PLY-5, PLY-30, PLY-40, PLY-42, PLY-60, ADM-9, R24, R28 (retires PLY-6 and PLY-41) · **Depends on:** 5.2 · **Blocks:** 5.7 · **Status:** done
 
 ## Goal
 
@@ -41,3 +41,12 @@ The transport interface (no change). WP 5.2's `game-state` and map room, unchang
 
 - **What counts as structural.** Rule 8 names adding, removing or moving forces, roles or rooms, and changing room participants. "Moving" is read as a role changing force and any change of order (the default layout follows room order). The observer flag and the White Force flag are counted too: they change rooms' effective participants (rule 4) and so the rooms a role sees. Room type and config changes are not.
 - **Resets during a publish.** Access is granted, then revoked, then documents and `game-setup` are published last, so a player whose rooms change sees the layout rebuilt as each room comes or goes, and then once more, with the notice, when the version arrives. Each rebuild keeps the room panels mounted, so drafts survive.
+
+## Notes (done)
+
+- **Structure** is `designStructure` in `packages/admin-ops/src/target.ts`, carried as `TargetState.structure`; the planner compares it with the published documents' and sets `PublishPlan.structural`. A text-only change to `game-setup` republishes it at the version it has; drift repairs (a missing turn state, an account, an affiliation) no longer move the version. The publish scenario's versions fell from 6 and 7 to 4 and 5 accordingly.
+- **The marker** is written for every publish that runs steps, at `designVersion ?? publishedVersion`, and is pending while not below the published version. A marker whose clear failed after a publish that kept the version now makes the next plan re-check read-only members and republish `game-setup` once.
+- **Store.** `listNodes` is no longer called; `refresh()` reconciles and retries failed nodes. The test harness serves a directory derived from its documents unless a test sets one, and `publishDirectory()` notifies a new one.
+- **Workspace.** `reconcile`, `reconcilePlan`, `addToFewest` and `pickFewest` are gone; `fitsRooms` and `syncTabs` replace them. `WorkspaceCore` takes `resetKey` (the design version) and `onReset`; `Workspace` shows the "Layout reset" toast. Popped-out rooms are saved under `detached` even without state, so a saved layout with a popout still fits its rooms after a reload.
+- **Admin.** `accessHighlights` (in `@wrx/domain`) gives the rule 4 consequences; the access section marks the cells and lists them. The rooms section and its name field carry the R24 warning; the publish view says whether layouts reset.
+- **E2E outside the two named specs:** `column.spec.ts` (an objectives-only publish is now one step) and SC-10 (deleting a role resets the layout, so the negotiation tab is selected again after the notice).

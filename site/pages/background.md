@@ -51,7 +51,7 @@ The admin may change a published game while players are online, and changes appl
 
 ### Layouts stay in the browser
 
-Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout.
+Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout. The layout survives theme and text edits, but when the admin adds, removes or moves forces, roles or rooms, or changes who is in a room, every player's layout goes back to the default, and they are told.
 
 ### No turns in v1
 
