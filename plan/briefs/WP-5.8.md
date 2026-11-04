@@ -1,6 +1,6 @@
 # WP 5.8 — White Force edits objectives
 
-**SRD ids:** D21, §3 rule 14, PLY-35, R10 (also ADM-23, ADM-24, ADM-41, ARC-11, NFR-22, SC-5) · **Depends on:** 5.1 · **Blocks:** 5.7 · **Status:** in progress · **Security review required**
+**SRD ids:** D21, §3 rule 14, PLY-35, R10 (also ADM-23, ADM-24, ADM-41, ARC-11, NFR-22, SC-5) · **Depends on:** 5.1 · **Blocks:** 5.7 · **Status:** done · **Security review required**
 
 ## Goal
 
@@ -37,3 +37,14 @@ The transport interface (no change). WP 5.2 edits `store.ts`, the hooks and the 
 - **Security-critical.** It widens who may publish on a confidential node (R10). Reviewers check: no White Force observer and no role outside the White Force gets `publisher`; a role that leaves the White Force or is deleted loses `publisher` before its items are retracted; nothing a non-editor publishes can be shown (the server refuses it).
 - A publisher can retract only its own items, and cannot overwrite another's (S14, contract S02), so one editor cannot remove another's text; the newest edit shows.
 - "The admin too": the admin owns every objectives node, which already lets it publish; no extra affiliation is set.
+
+## Notes (done)
+
+- **Readers.** `latest` in `packages/domain/src/store.ts` now returns the last item the store holds; fetched items keep the transport's order and live items are appended (delete, then set). `NodeItem` lost `receivedAt` and `arrival`, and the store its `arrivals` counter and `clockMs`: nothing reads a time any more.
+- **Draft item ids.** `objectivesDraftItemId` (FNV-1a over the payload, in `@wrx/domain` so the mock's seed and `targetState` agree) keeps the planner pure; it skips any id already on the node. The store's ids are `<loginName|admin>-<uuid>`.
+- **Found while porting S15:** through the transport, `getItems` with `max` is answered as an RSM page from the oldest item, because StanzaJS sends an RSM `<set/>` beside `max_items`; the spike's raw `max_items` gave the newest. No reader uses `max`; `PubsubApi.getItems` documents it, the mock matches it and contract S15-2 asserts it.
+- **Demo.** The mock's demo seed gains White Cell (`white-cell`, White Force, not an observer), so SC-5's new step and the demo show the feature on both backends. The demo logins list and the admin UI's demo publish test changed with it.
+- **SRD.** SC-5 gains step 5 and a second actor (its "Traces to" line is unchanged); the glossary's White Force line, still saying only the admin edits, follows D21; a §14 note records both.
+- **Spike.** `spike/s15-s16/` keeps its raw S15 checks as the record; its README points to the contract versions.
+- **Security notes:** `plan/reviews/phase-5-security-notes.md`, with the weak points (a publish re-sends the draft over the admin's own game-view edit; a departed role's edits stay until the next publish; the order rests on ejabberd's choice).
+

@@ -19,7 +19,7 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-de
 | Admin | The XMPP server's `admin` account: the sole game designer and controller, and in play the umpire, a member of the White Force |
 | Force | A side in the game; a PubSub document plus its roles' room and node affiliations |
 | Role | A player position; one XMPP user account |
-| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4). Every White Force role reads every force's objectives, but only the admin edits the game, objectives included (D21) |
+| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4). Every White Force role reads every force's objectives; the admin and its non-observer roles edit them during play (D21) |
 | GUID | A random, lowercase UUID: the id of every force, role, room and asset (§3 rule 1) |
 | Login name | The readable name a player types to log in as a role; the role's XMPP account name, separate from its GUID (§3 rule 1) |
 | Observer | A role that can read, but not post in, its rooms |
@@ -620,14 +620,15 @@ Nine end-to-end scenarios walk each actor through v1, SC-10 through message temp
 
 ### SC-5 Umpire monitors the game
 
-**Actor:** The admin, as umpire.
+**Actors:** The admin, as umpire; a White Force role that is not an observer.
 
 1. Logs in to the game view and sees every room.
 2. Places Red HQ and the negotiation room side by side in the workspace.
 3. Posts a clarification in Red HQ, which Red sees attributed to the umpire.
 4. Opens Red's objectives, amends one, and Red's force panel updates live.
+5. The White Force role amends Red's objectives too; Red's force panel and the umpire's show its edit live, and Red still shows it after logging in again.
 
-**Outcome:** the umpire sees all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
+**Outcome:** the umpire, and the White Force roles that are not observers, see all play and can adjust any force's objectives; the newest edit is the one shown. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
 
 ### SC-6 Admin changes the game during play
 
@@ -845,6 +846,11 @@ Changes from WP 5.1, the follow-up checks S15 and S16 (Nov 4, 2026):
 - §10: both outcomes added; the open issue and P7 are closed.
 - §3 rule 14: S15 failed, so readers order objectives by the server's item order, not a delay stamp, and each save publishes a new item with a fresh id to a node keeping one item per publisher.
 - R15: the per-player rate limit is a byte-rate shaper, and S16 confirmed it applies to WebSocket sessions; no config change.
+
+Changes from WP 5.8, White Force edits objectives (Nov 4, 2026):
+
+- SC-5: a fifth step, in which a White Force role that is not an observer amends Red's objectives too, and Red shows the newest edit; a second actor.
+- Glossary, White Force: its non-observer roles edit objectives (D21), as decided on Nov 3; the line still said only the admin.
 
 ## Annex A. Message templates (built in Phase 4)
 

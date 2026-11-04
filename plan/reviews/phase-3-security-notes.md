@@ -4,6 +4,8 @@ For the tech-lead review of WP 3.5 in the v1 security review (WP 3.4). Not for t
 
 ## WP 3.5, objectives by the admin only (D21, §3 rule 14, R10)
 
+WP 5.8 reversed this rule: White Force roles that are not observers publish objectives again, a new item per save, and the purge step below is gone (`phase-5-security-notes.md`).
+
 - **Who publishes.** `targetState` (`packages/admin-ops/src/target.ts`) and the mock's seed give every White Force role, observer or not, `member` (read) on every `objectives:<forceId>` node, and no role `publisher`. The admin, the node's owner, is the only publisher. `OBJECTIVES_MAX_ITEMS` is 1: the admin's single item, id `admin` (`OBJECTIVES_ITEM_ID` in `@wrx/domain`), replaced on each edit. This reverses the Phase 2 rule that let White Force roles that are not observers publish their own items; F5 (White observers never publish) is now a special case of it.
 - **A server published before WP 3.5** holds White Force editors' `publisher` affiliations and their own items, on nodes keeping 10 or more. The next publish corrects it, in this order (`packages/admin-ops/src/publish/plan.ts`):
   1. `node:objectives:<id>` sets `max_items` to 1 (ejabberd may then drop items itself; nothing relies on which);
