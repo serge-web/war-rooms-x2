@@ -11,6 +11,7 @@ import type {
   RoomConfig,
   RoomJid,
   RoomMessage,
+  SendOptions,
   Unsubscribe,
 } from '@wrx/transport'
 import { JID } from 'stanza'
@@ -227,12 +228,12 @@ export class XmppMuc implements MucApi {
     })
   }
 
-  send(room: RoomJid, body: string): Outcome<{ readonly stanzaId: string }> {
+  send(room: RoomJid, body: string, options?: SendOptions): Outcome<{ readonly stanzaId: string }> {
     const client = this.core.client
     const id = client.nextId()
     const message: XMPP.Stanzas.Message = { id, originId: id, to: room, type: 'groupchat', body }
     const serialised = client.stanzas.export('message', message)?.toString() ?? ''
-    if (!messageWithinCap(serialised)) {
+    if (!messageWithinCap(serialised, options?.maxBytes)) {
       return Promise.resolve(
         err('too-large', `message stanza is ${serialised.length} characters, over the cap`),
       )

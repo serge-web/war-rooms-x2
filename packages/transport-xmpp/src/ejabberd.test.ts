@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { backoffDelay, DEFAULT_BACKOFF } from './backoff.ts'
 import { ejabberd } from './ejabberd.ts'
 import { booleanField, listField, stringField, submitForm } from './forms.ts'
-import { PUBSUB_PAYLOAD_CAP_BYTES, messageWithinCap, payloadWithinCap } from './size.ts'
+import { PUBSUB_PAYLOAD_CAP_BYTES, messageWithinCap, payloadWithinCap, stanzaCap } from './size.ts'
 
 /** Parses an XML stanza the way the live transport does, with StanzaJS's registry. */
 function parse(xml: string): unknown {
@@ -219,6 +219,16 @@ describe('size caps (PLY-53)', () => {
     expect(messageWithinCap('x'.repeat(65_536))).toBe(true)
     expect(messageWithinCap('x'.repeat(65_537))).toBe(false)
     expect(messageWithinCap('é'.repeat(32_769))).toBe(false)
+  })
+
+  it('takes a larger cap when asked, never over 500,000 bytes (the map room, D25)', () => {
+    expect(messageWithinCap('x'.repeat(100_000), 500_000)).toBe(true)
+    expect(messageWithinCap('x'.repeat(500_000), 500_000)).toBe(true)
+    expect(messageWithinCap('x'.repeat(500_001), 500_000)).toBe(false)
+    expect(messageWithinCap('x'.repeat(500_001), 10_000_000)).toBe(false)
+    expect(stanzaCap(Number.POSITIVE_INFINITY)).toBe(65_536)
+    expect(stanzaCap(undefined)).toBe(65_536)
+    expect(stanzaCap(1_000)).toBe(1_000)
   })
 
   it('caps item payloads at the item limit less the XML overhead', () => {

@@ -10,6 +10,7 @@
 //   changes, so they can be passed straight to `useSyncExternalStore`.
 import {
   LIMITS,
+  MAP_ROOM_TYPE,
   SINGLETON_NODES,
   checkItemSize,
   chatRoomConfigReader,
@@ -22,12 +23,14 @@ import type {
   Directory,
   Force,
   GameSetup,
+  GameState,
   Objectives,
   Retired,
   Role,
   Room,
   Template,
   TemplateValue,
+  WorldState,
 } from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator, templatesFor } from '@wrx/templates'
 import type { TemplateCheck, TemplateValidator } from '@wrx/templates'
@@ -60,7 +63,7 @@ import { consoleLogger } from './logger.ts'
 import type { Logger } from './logger.ts'
 import { defaultRoomTypes, roomConfig } from './registry.ts'
 import type { RoomTypeRegistry } from './registry.ts'
-import { fitsInStanza } from './size.ts'
+import { fitsInStanza, fitsWorldStateStanza } from './size.ts'
 import { Timeline, timeKey } from './timeline.ts'
 import type { ReadableEntry, Sender, TimelineEntry } from './timeline.ts'
 
@@ -236,6 +239,29 @@ export interface RoomTemplates {
   readonly templates: readonly Template[]
 }
 
+/**
+ * The map room's world state as this client accepts it (D25, PLY-58, PLY-59): the newest valid
+ * world-state message from the admin's real JID, found by paging back through MAM on joining and
+ * replaced live by later ones. Messages from anyone else, and invalid ones, are ignored.
+ */
+export interface WorldStateView {
+  readonly roomId: string
+  /** The newest accepted world state; undefined while none has been found. */
+  readonly state: WorldState | undefined
+  /** The stanza-id and server time of the message it came in. */
+  readonly stanzaId: string | undefined
+  readonly timestamp: string | undefined
+  /** Still paging back through the archive for one. */
+  readonly searching: boolean
+  /**
+   * The archive was searched to its start, or to the page limit, and held no valid world state
+   * from the admin: the admin has not published one yet (or it is older than the limit).
+   */
+  readonly none: boolean
+  /** Messages in the room that were not accepted: not from the admin, or not a valid state. */
+  readonly ignored: number
+}
+
 export interface RoomWatch {
   readonly joined: Joined
   readonly release: Release
@@ -244,6 +270,13 @@ export interface RoomWatch {
 export interface SessionStoreOptions {
   readonly session: Session
   readonly logger?: Logger
+  /**
+   * MAM page size in the map room, whose messages are full world states of up to 500 KB each
+   * (D25): small pages, so the newest is found without fetching megabytes. Default 5.
+   */
+  readonly worldStatePageSize?: number
+  /** Most pages paged back for a world state before giving up (PLY-59). Default 40. */
+  readonly worldStatePageLimit?: number
   /** Room types, for validating message bodies per room. Defaults to {@link defaultRoomTypes}. */
   readonly registry?: RoomTypeRegistry
   /** MAM page size. Default 50. */
@@ -274,6 +307,8 @@ export interface SessionStore {
   /** The newest valid document in a node. */
   document(node: string): Snapshot<LiveDocument | undefined>
   gameSetup(): Snapshot<GameSetup | undefined>
+  /** The turn state, `game-state` (D7, PLY-55): turn number and phase, live. */
+  gameState(): Snapshot<GameState | undefined>
   forces(): Snapshot<readonly Force[]>
   roles(): Snapshot<readonly Role[]>
   rooms(): Snapshot<readonly Room[]>
@@ -326,6 +361,18 @@ export interface SessionStore {
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
+  /**
+   * Joins the map room and looks for its world state (PLY-59): reference-counted like
+   * `acquireRoom`, with small MAM pages, paging back to the newest valid one from the admin.
+   */
+  acquireWorldState(roomId: string): Release
+  /** The map room's accepted world state (PLY-58, PLY-59); see {@link WorldStateView}. */
+  worldState(roomId: string): Snapshot<WorldStateView | undefined>
+  /**
+   * Posts the full world state to the map room, as the admin only (D25): checked against the
+   * schema, the room's type and the 500 KB map-room cap (PLY-53) before it is sent.
+   */
+  sendWorldState(roomId: string, state: WorldState): Promise<DomainResult<{ stanzaId: string }>>
   /** The admin only (§3 rule 14, D21); refused for every role before anything is sent. */
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
@@ -389,6 +436,12 @@ interface RoomEntry {
   generation: number
   unsent: UnsentMessage | undefined
   unsentTemplate: UnsentTemplateMessage | undefined
+  /** Watched for its world state (`acquireWorldState`): small pages, and the search below. */
+  world: boolean
+  /** The search back through MAM for a world state, while it runs. */
+  seeking: Promise<void> | undefined
+  /** A search has finished since the last join. */
+  sought: boolean
 }
 
 const LOADING: Snapshot<undefined> = Object.freeze({
@@ -416,6 +469,8 @@ class Store implements SessionStore {
   private readonly logger: Logger
   private readonly registry: RoomTypeRegistry
   private readonly pageSize: number
+  private readonly worldStatePageSize: number
+  private readonly worldStatePageLimit: number
   private readonly gapPageLimit: number
   private readonly now: () => string
   private readonly newId: () => string
@@ -449,6 +504,8 @@ class Store implements SessionStore {
     this.logger = options.logger ?? consoleLogger()
     this.registry = options.registry ?? defaultRoomTypes()
     this.pageSize = options.pageSize ?? 50
+    this.worldStatePageSize = options.worldStatePageSize ?? 5
+    this.worldStatePageLimit = options.worldStatePageLimit ?? 40
     this.gapPageLimit = options.gapPageLimit ?? 20
     this.now = options.now ?? (() => new Date().toISOString())
     this.newId = options.newId ?? (() => globalThis.crypto.randomUUID())
@@ -827,6 +884,8 @@ class Store implements SessionStore {
     desired.add(SINGLETON_NODES.directory)
     // Message templates, read by every role (Annex A, TPL-1).
     desired.add(SINGLETON_NODES.templates)
+    // The turn state, read by every role (D7, §3 rule 15).
+    desired.add(SINGLETON_NODES.gameState)
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
@@ -926,6 +985,10 @@ class Store implements SessionStore {
 
   gameSetup(): Snapshot<GameSetup | undefined> {
     return this.typedDocument('game-setup', SINGLETON_NODES.gameSetup)
+  }
+
+  gameState(): Snapshot<GameState | undefined> {
+    return this.typedDocument('game-state', SINGLETON_NODES.gameState)
   }
 
   force(forceId: string): Snapshot<Force | undefined> {
@@ -1249,6 +1312,9 @@ class Store implements SessionStore {
       generation: 0,
       unsent: undefined,
       unsentTemplate: undefined,
+      world: false,
+      seeking: undefined,
+      sought: false,
     }
   }
 
@@ -1279,6 +1345,7 @@ class Store implements SessionStore {
     entry.status = 'joining'
     entry.closeReason = undefined
     entry.error = undefined
+    entry.sought = false
     this.attachRoom(entry)
     this.roomChanged(entry)
     const nick = this.identity.loginName ?? localpart(this.identity.bareJid) ?? 'admin'
@@ -1308,6 +1375,7 @@ class Store implements SessionStore {
         this.logger.warn('Could not load history', { room: entry.roomId, error: history.error })
         this.roomChanged(entry)
       }
+      if (current() && entry.world) void this.seekWorldState(entry)
       return domainOk(joined.value)
     }
     const joining = run()
@@ -1327,7 +1395,7 @@ class Store implements SessionStore {
   }
 
   private async loadLatest(entry: RoomEntry, current: () => boolean): Promise<DomainResult<void>> {
-    const page = await this.session.mam.queryRoom(entry.jid, { max: this.pageSize })
+    const page = await this.session.mam.queryRoom(entry.jid, { max: this.pageSizeOf(entry) })
     if (!current()) return domainOk(undefined)
     if (!page.ok) return { ok: false, error: fromTransport(page.error, 'Loading history') }
     this.mergeMessages(entry, page.value.messages)
@@ -1341,8 +1409,9 @@ class Store implements SessionStore {
   private async fillGap(entry: RoomEntry, current: () => boolean): Promise<DomainResult<void>> {
     const pages: (readonly RoomMessage[])[] = []
     let before: string | undefined
+    const max = this.pageSizeOf(entry)
     for (let i = 0; i < this.gapPageLimit; i++) {
-      const query = before === undefined ? { max: this.pageSize } : { before, max: this.pageSize }
+      const query = before === undefined ? { max } : { before, max }
       const page = await this.session.mam.queryRoom(entry.jid, query)
       if (!current()) return domainOk(undefined)
       if (!page.ok)
@@ -1400,7 +1469,21 @@ class Store implements SessionStore {
     const roomType = this.docOf('room', entry.roomId)?.roomType
     const definition = roomType === undefined ? undefined : this.registry.get(roomType)
     if (definition !== undefined && !definition.messageSchema.safeParse(parsed.value).success) {
+      if (roomType === MAP_ROOM_TYPE) {
+        this.logger.warn('Ignoring a map-room message that is not a world state', {
+          room: entry.roomId,
+          stanzaId: message.stanzaId,
+        })
+      }
       return { ...base, kind: 'unreadable', reason: `not a ${definition.type} message` }
+    }
+    // PLY-58: only the admin's world states count; anyone else's is ignored, and logged.
+    if (parsed.value.type === 'world-state' && !base.sender.isAdmin) {
+      this.logger.warn('Ignoring a world state not from the admin', {
+        room: entry.roomId,
+        stanzaId: message.stanzaId,
+        from: base.sender.jid,
+      })
     }
     return { ...base, kind: 'message', body: parsed.value }
   }
@@ -1514,6 +1597,172 @@ class Store implements SessionStore {
     })
   }
 
+  // ---- The map room's world state (D25, PLY-58, PLY-59) ----------------------------------
+
+  /** MAM page size for a room: small in a room watched for its world state. */
+  private pageSizeOf(entry: RoomEntry): number {
+    return entry.world ? this.worldStatePageSize : this.pageSize
+  }
+
+  acquireWorldState(roomId: string): Release {
+    const existing = this.roomEntries.get(roomId)
+    const release = this.acquireRoom(roomId)
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined) return release
+    if (!entry.world) {
+      entry.world = true
+      // Joined already, for another reason: look now. A join under way looks when it is done.
+      if (existing !== undefined && entry.status === 'joined' && entry.historyLoaded) {
+        void this.seekWorldState(entry)
+      }
+    }
+    return release
+  }
+
+  /**
+   * Pages back from the oldest message held until a valid world state from the admin is among
+   * them, the archive ends, or the page limit is reached (PLY-59). Once is enough per join: live
+   * messages then keep the timeline current.
+   */
+  private seekWorldState(entry: RoomEntry): Promise<void> {
+    if (entry.seeking !== undefined) return entry.seeking
+    const generation = entry.generation
+    const run = async () => {
+      for (let page = 0; page < this.worldStatePageLimit; page++) {
+        if (entry.generation !== generation || entry.status !== 'joined') return
+        if (this.acceptedWorldState(entry) !== undefined || !entry.hasOlder) return
+        const older = await this.loadOlder(entry.roomId)
+        if (!older.ok) {
+          this.logger.warn('Could not page back for the world state', {
+            room: entry.roomId,
+            error: older.error,
+          })
+          return
+        }
+      }
+      if (this.acceptedWorldState(entry) === undefined && entry.hasOlder) {
+        this.logger.warn('No world state within the page limit', {
+          room: entry.roomId,
+          pages: this.worldStatePageLimit,
+        })
+      }
+    }
+    const seeking = run().finally(() => {
+      if (entry.seeking === seeking) entry.seeking = undefined
+      if (entry.generation === generation) entry.sought = true
+      this.roomChanged(entry)
+    })
+    entry.seeking = seeking
+    this.roomChanged(entry)
+    return seeking
+  }
+
+  /** The newest timeline entry that is a valid world state from the admin's real JID. */
+  private acceptedWorldState(
+    entry: RoomEntry,
+  ): (ReadableEntry & { readonly body: { readonly type: 'world-state' } }) | undefined {
+    const entries = entry.timeline.entries()
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const candidate = entries[i]
+      if (candidate?.kind !== 'message') continue
+      // The body passed the message schema (refinements included) when it was merged.
+      if (candidate.body.type === 'world-state' && candidate.sender.isAdmin) {
+        return candidate as ReadableEntry & { readonly body: { readonly type: 'world-state' } }
+      }
+    }
+    return undefined
+  }
+
+  worldState(roomId: string): Snapshot<WorldStateView | undefined> {
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined) return LOADING
+    return this.memo(`world-state:${roomId}`, [entry, entry.version], () => {
+      const accepted = this.acceptedWorldState(entry)
+      const total = entry.timeline.size
+      const view: WorldStateView = Object.freeze({
+        roomId,
+        state: accepted?.body.type === 'world-state' ? accepted.body.content : undefined,
+        stanzaId: accepted?.id,
+        timestamp: accepted?.timestamp,
+        searching: entry.seeking !== undefined,
+        none: accepted === undefined && entry.sought,
+        ignored: total - this.acceptedCount(entry),
+      })
+      const settled = accepted !== undefined || entry.sought
+      const status: LoadStatus =
+        entry.status === 'joined'
+          ? settled
+            ? 'ready'
+            : 'loading'
+          : entry.status === 'joining'
+            ? 'loading'
+            : 'error'
+      const error =
+        entry.status === 'closed'
+          ? { code: 'not-joined' as const, message: `closed: ${entry.closeReason ?? 'removed'}` }
+          : entry.error
+      return Object.freeze({ data: view, status, error })
+    })
+  }
+
+  /** How many messages in the room are valid world states from the admin. */
+  private acceptedCount(entry: RoomEntry): number {
+    let n = 0
+    for (const e of entry.timeline.entries()) {
+      if (e.kind === 'message' && e.body.type === 'world-state' && e.sender.isAdmin) n++
+    }
+    return n
+  }
+
+  async sendWorldState(
+    roomId: string,
+    state: WorldState,
+  ): Promise<DomainResult<{ stanzaId: string }>> {
+    if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
+    // D25: clients accept world states only from the admin, so nobody else may post one.
+    if (!this.identity.isAdmin) {
+      return domainErr('not-permitted', 'only the admin publishes the world state (D25)')
+    }
+    const entry = this.roomEntries.get(roomId)
+    if (entry?.status !== 'joined' || entry.joined === undefined) {
+      return domainErr('not-joined', 'the room is not joined')
+    }
+    if (this.docOf('room', roomId)?.roomType !== MAP_ROOM_TYPE) {
+      return domainErr('invalid', 'world states go to the map room only')
+    }
+    const candidate = parseDocument('message', {
+      type: 'world-state',
+      schemaVersion: 1,
+      content: state,
+    })
+    if (!candidate.ok || candidate.value.type !== 'world-state') {
+      return domainErr(
+        'invalid',
+        candidate.ok ? 'not a world state' : `not a valid world state: ${candidate.error.message}`,
+      )
+    }
+    const json = JSON.stringify(candidate.value)
+    // PLY-53: the map-room cap, for world states only; the transport enforces it again.
+    const size = fitsWorldStateStanza(json)
+    if (!size.ok) {
+      return domainErr(
+        'too-large',
+        `the world state is ${size.bytes} bytes; the limit is ${size.limitBytes}`,
+      )
+    }
+    const sent = await this.session.muc.send(entry.jid, json, {
+      maxBytes: LIMITS.worldStateStanzaBytes,
+    })
+    if (!sent.ok) {
+      const error = fromTransport(sent.error, 'Publishing the world state')
+      return {
+        ok: false,
+        error: error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error,
+      }
+    }
+    return domainOk({ stanzaId: sent.value.stanzaId })
+  }
+
   // ---- Operations -------------------------------------------------------------------------
 
   async watchRoom(roomId: string): Promise<DomainResult<RoomWatch>> {
@@ -1554,8 +1803,9 @@ class Store implements SessionStore {
     if (entry.older !== undefined) return entry.older
     const generation = entry.generation
     const before = entry.olderCursor ?? entry.timeline.oldest()?.id
+    const max = this.pageSizeOf(entry)
     const run = async (): Promise<DomainResult<{ added: number; complete: boolean }>> => {
-      const query = before === undefined ? { max: this.pageSize } : { before, max: this.pageSize }
+      const query = before === undefined ? { max } : { before, max }
       const page = await this.session.mam.queryRoom(entry.jid, query)
       if (entry.generation !== generation || this.isEnded()) {
         return domainErr('not-joined', 'the room closed while loading')

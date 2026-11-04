@@ -152,8 +152,10 @@ export class FakeSession implements Session {
       return this.call('muc', 'join', [room, nick], joined)
     },
     leave: (room) => this.call('muc', 'leave', [room], undefined),
-    send: (room, body) =>
-      this.call('muc', 'send', [room, body], { stanzaId: `fake-${this.calls.length}` }),
+    send: (room, body, options) =>
+      this.call('muc', 'send', options === undefined ? [room, body] : [room, body, options], {
+        stanzaId: `fake-${this.calls.length}`,
+      }),
     onMessage: (room, listener) => this.messageListeners.add(room, listener),
     onOccupant: (room, listener) => this.occupantListeners.add(room, listener),
     occupants: (room) => [...(this.occupantsByRoom.get(room)?.values() ?? [])],

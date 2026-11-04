@@ -1,5 +1,5 @@
-import { messageBodySchema } from '@wrx/schemas'
-import { blueReportsConfig } from '@wrx/schemas/fixtures'
+import { messageBodySchema, worldStateMessageBodySchema } from '@wrx/schemas'
+import { blueReportsConfig, sampleWorldState } from '@wrx/schemas/fixtures'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { game, room } from './fixtures.ts'
 import {
@@ -7,6 +7,7 @@ import {
   chatRoomType,
   createRoomTypeRegistry,
   defaultRoomTypes,
+  mapRoomType,
   roomConfig,
   withSlots,
 } from './registry.ts'
@@ -16,7 +17,7 @@ describe('room-type registry (ARC-5)', () => {
   it('registers chat, with its config version 2 and chat and templated messages', () => {
     const registry = defaultRoomTypes()
     const chat = registry.get('chat')
-    expect(registry.list().map((d) => d.type)).toEqual(['chat'])
+    expect(registry.list().map((d) => d.type)).toEqual(['chat', 'map'])
     expect(chat?.messageSchema).toBe(messageBodySchema)
     expect(chat?.configSchema.safeParse({}).success).toBe(true)
     expect(chat?.configSchema.safeParse(blueReportsConfig()).success).toBe(true)
@@ -24,7 +25,22 @@ describe('room-type registry (ARC-5)', () => {
     expect(chat?.playerComponent).toBeUndefined()
     expect(chat?.adminEditor).toBeUndefined()
     expect(chat?.icon).toBe('chat')
-    expect(registry.get('map')).toBeUndefined()
+    expect(registry.get('poll')).toBeUndefined()
+  })
+
+  it('registers map, with its config and world-state messages only (ARC-5, D25)', () => {
+    const map = defaultRoomTypes().get('map')
+    expect(map?.label).toBe('Map')
+    expect(map?.icon).toBe('map')
+    expect(map?.messageSchema).toBe(worldStateMessageBodySchema)
+    expect(map?.playerComponent).toBeUndefined()
+    expect(map?.configSchema.safeParse({}).success).toBe(true)
+    expect(map?.configSchema.safeParse({ schemaVersion: 1, zoom: 8 }).success).toBe(true)
+    expect(map?.configSchema.safeParse({ zoom: -1 }).success).toBe(false)
+    const state = { type: 'world-state', schemaVersion: 1, content: sampleWorldState() }
+    expect(mapRoomType.messageSchema.safeParse(state).success).toBe(true)
+    const chat = { type: 'chat', schemaVersion: 1, content: { text: 'hi' } }
+    expect(mapRoomType.messageSchema.safeParse(chat).success).toBe(false)
   })
 
   it('validates chat bodies with the message schema', () => {
@@ -49,7 +65,7 @@ describe('room-type registry (ARC-5)', () => {
   })
 
   it('refuses slots for an unknown type, bad type ids and duplicates', () => {
-    expect(() => withSlots(defaultRoomTypes(), { map: { playerComponent: 1 } })).toThrow(
+    expect(() => withSlots(defaultRoomTypes(), { poll: { playerComponent: 1 } })).toThrow(
       /not registered/,
     )
     expect(() => createRoomTypeRegistry([{ ...chatRoomType, type: 'Not A Slug' }])).toThrow(
@@ -75,9 +91,13 @@ describe('room-type registry (ARC-5)', () => {
       ok: true,
       value: blueReportsConfig(),
     })
-    expect(roomConfig(registry, { ...chat, roomType: 'map' }, undefined)).toEqual({
+    expect(roomConfig(registry, { ...chat, roomType: 'poll' }, undefined)).toEqual({
       ok: false,
-      error: 'room type "map" is not supported',
+      error: 'room type "poll" is not supported',
+    })
+    expect(roomConfig(registry, { ...chat, roomType: 'map' }, undefined)).toEqual({
+      ok: true,
+      value: { schemaVersion: 1 },
     })
     const off = { schemaVersion: 2, freeText: false, templates: [] }
     const withDefaults = { ...game(), roomTypeDefaults: { chat: off } }

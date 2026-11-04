@@ -6,7 +6,12 @@ import { fromTransport } from './errors.ts'
 import { force, objectives, tid } from './fixtures.ts'
 import { bareJid, domainpart, localpart } from './jid.ts'
 import { consoleLogger } from './logger.ts'
-import { escapedByteLength, fitsInStanza } from './size.ts'
+import {
+  escapedByteLength,
+  fitsInStanza,
+  fitsWorldStateStanza,
+  textEscapedByteLength,
+} from './size.ts'
 
 describe('node specs and items (ARC-6, NFR-5)', () => {
   it('maps every WRX1 node to its document kind', () => {
@@ -54,7 +59,10 @@ describe('node specs and items (ARC-6, NFR-5)', () => {
 
   it('parses every kind', () => {
     const cases: [Parameters<typeof parseItem>[0], unknown][] = [
-      [{ kind: 'game-state', id: undefined }, { schemaVersion: 1 }],
+      [
+        { kind: 'game-state', id: undefined },
+        { schemaVersion: 1, turn: 1, phase: 'planning' },
+      ],
       [
         { kind: 'announcement', id: undefined },
         { schemaVersion: 1, text: 'Lunch', postedAt: '2026-10-24T12:00:00Z' },
@@ -143,6 +151,15 @@ describe('errors, JIDs, size and logging', () => {
     expect(escapedByteLength('é')).toBe(2)
     expect(fitsInStanza('x'.repeat(1_000)).ok).toBe(true)
     expect(fitsInStanza('<'.repeat(LIMITS.messageStanzaBytes / 4)).ok).toBe(false)
+  })
+
+  it('measures world states as the transports do: quotes unescaped, 500,000 bytes (PLY-53)', () => {
+    expect(textEscapedByteLength('"<\'')).toBe('"&lt;\''.length)
+    const quotes = '"'.repeat(200_000)
+    expect(fitsInStanza(quotes, LIMITS.worldStateStanzaBytes).ok).toBe(false)
+    expect(fitsWorldStateStanza(quotes).ok).toBe(true)
+    expect(fitsWorldStateStanza('x'.repeat(LIMITS.worldStateStanzaBytes)).ok).toBe(false)
+    expect(fitsWorldStateStanza('<'.repeat(130_000)).ok).toBe(false)
   })
 
   it('logs warnings to the console, and debug nowhere', () => {

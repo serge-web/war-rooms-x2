@@ -94,6 +94,16 @@ export interface AffiliationEntry {
   readonly affiliation: MucAffiliation
 }
 
+/** Options of one `send`. */
+export interface SendOptions {
+  /**
+   * The stanza cap for this message, in bytes (UTF-8 after XML escaping, the whole element).
+   * Default `LIMITS.messageStanzaBytes`; never above `LIMITS.worldStateStanzaBytes`, which only
+   * world-state messages in the map room use (PLY-53, D25).
+   */
+  readonly maxBytes?: number
+}
+
 export interface MucApi {
   /** Joins with this nickname. Several sessions of one role share a nick (D22). */
   join(room: RoomJid, nick: string): Outcome<Joined>
@@ -101,9 +111,10 @@ export interface MucApi {
   /**
    * Sends a groupchat body. Resolves when the server's reflection arrives, with its stanza-id;
    * fails `forbidden` when the session has no voice (PLY-12), `not-acceptable` if not in the
-   * room, and `too-large` before sending if over the cap (PLY-53).
+   * room, and `too-large` before sending if over the cap (PLY-53): 65,536 bytes, or
+   * `options.maxBytes` up to the world-state cap.
    */
-  send(room: RoomJid, body: string): Outcome<{ readonly stanzaId: string }>
+  send(room: RoomJid, body: string, options?: SendOptions): Outcome<{ readonly stanzaId: string }>
   onMessage(room: RoomJid, listener: (message: RoomMessage) => void): Unsubscribe
   onOccupant(room: RoomJid, listener: (event: OccupantEvent) => void): Unsubscribe
   /** Occupants currently known in a joined room, this session included. */
