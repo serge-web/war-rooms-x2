@@ -331,14 +331,41 @@ describe('PubSub behaviour not covered by contract', () => {
     expect(events.map((e) => e.items.map((i) => i.id))).toEqual([['leak']])
   })
 
-  it('keeps max items, newest first, and an overwrite moves the item to newest', async () => {
+  // As ejabberd 26.09 answers the transport (spike check S15, contract S15): creation order,
+  // oldest first; `max` the first page of that order; a re-published item stays where it was.
+  it('keeps max items, oldest created first, and an overwrite does not move the item', async () => {
     const env = setup()
     const admin = await env.login('admin')
     unwrap(await admin.pubsub.createNode('n', { ...NODE, maxItems: 2 }))
     for (const id of ['a', 'b', 'c']) unwrap(await admin.pubsub.publish('n', id, '{}'))
-    expect(unwrap(await admin.pubsub.getItems('n')).map((i) => i.id)).toEqual(['c', 'b'])
+    expect(unwrap(await admin.pubsub.getItems('n')).map((i) => i.id)).toEqual(['b', 'c'])
     unwrap(await admin.pubsub.publish('n', 'b', '{"again":true}'))
+    expect(unwrap(await admin.pubsub.getItems('n')).map((i) => i.id)).toEqual(['b', 'c'])
     expect(unwrap(await admin.pubsub.getItems('n', { max: 1 })).map((i) => i.id)).toEqual(['b'])
+  })
+
+  it('keeps max items per publisher, and announces each trimmed item as a retract', async () => {
+    const env = setup()
+    const admin = await env.login('admin')
+    await env.users(admin, 'u')
+    unwrap(await admin.pubsub.createNode('n', { ...NODE, maxItems: 1 }))
+    unwrap(
+      await admin.pubsub.setAffiliations('n', [{ jid: `u@${domain}`, affiliation: 'publisher' }]),
+    )
+    const u = await env.login('u')
+    unwrap(await admin.pubsub.subscribe('n'))
+    const events = collect<ItemsEvent>((l) => admin.pubsub.onItems('n', l))
+    unwrap(await admin.pubsub.publish('n', 'a1', '{}'))
+    unwrap(await u.pubsub.publish('n', 'u1', '{}'))
+    unwrap(await admin.pubsub.publish('n', 'a2', '{}'))
+    await settle()
+    expect(unwrap(await admin.pubsub.getItems('n')).map((i) => `${i.id}:${i.publisher}`)).toEqual([
+      `u1:u@${domain}`,
+      `a2:admin@${domain}`,
+    ])
+    expect(
+      events.map((e) => [...e.items.map((i) => i.id), ...e.retracted.map((r) => `-${r}`)]),
+    ).toEqual([['a1'], ['u1'], ['a2'], ['-a1']])
   })
 
   it('unsubscribing without a subscription is unexpected-request', async () => {
