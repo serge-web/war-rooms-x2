@@ -299,7 +299,7 @@ function checkTemplates(
 
 /**
  * §3 rule 18: at most one map room (the draft always has exactly one; a design without one, such
- * as one from before Phase 5, is still valid), its participants fixed to every force as a read
+ * as one from before Phase 5, is still valid), its participants fixed to every force as a write
  * entry, and its config a map room config.
  */
 function checkMapRoom(design: DesignFile, error: (path: string, message: string) => void): void {

@@ -382,3 +382,52 @@ test('NFR-11: a world state of 600 assets renders on the map in under 1 s', asyn
   expect(cold).toBeLessThan(1000 * MARGIN)
   expect(live).toBeLessThan(1000 * MARGIN)
 })
+
+// WP 5.7: the admin's editor at NFR-11's 600 assets. An edit saved from the form to the frame
+// showing the draft's banner; "Publish world state…" to the change summary; and the publish, from
+// the confirmation to the frame showing the published state (the 170 KB message through the mock,
+// echoed back by the map room). Recorded in plan/reviews/phase-5-performance.md.
+test('the admin edits and publishes a 600-asset world state (NFR-11, ADM-44–46)', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await loadScale(page, './', { messages: 200, worldAssets: 600 })
+  await asUmpire(page)
+  await page.locator('.flexlayout__layout_main [role="tab"][aria-label="Map"]').click()
+  await expect(page.locator('img.wrx-map__symbol')).toHaveCount(600, { timeout: 20_000 })
+  const panel = page.getByRole('group', { name: 'Map: world state', exact: true })
+  await panel.getByRole('button', { name: 'Table', exact: true }).click()
+  await panel.locator('.wrx-map__pick').first().click()
+  await panel.getByRole('button', { name: 'Edit…' }).click()
+  await panel.getByLabel('Health (%)', { exact: true }).fill('7')
+  const edit = await timeToFrame(
+    page,
+    'map-600-edit',
+    { click: '.wrx-asset-form button[type="submit"]' },
+    { selector: '.wrx-map__draft', text: 'Unpublished edits: 1 asset changed' },
+  )
+  const summary = await timeToFrame(
+    page,
+    'map-600-summary',
+    { click: '.wrx-map__editor button', text: 'Publish world state…' },
+    { selector: '.wrx-map__confirm', text: '1 asset: 0 added, 0 removed, 1 changed' },
+  )
+  const publish = await timeToFrame(
+    page,
+    'map-600-publish',
+    { click: '.wrx-map__confirm button', text: 'Publish world state' },
+    { selector: '.wrx-map__turn', text: 'World state for turn 1: 600 assets' },
+  )
+  await expect(panel.getByText(/Unpublished edits/)).toHaveCount(0)
+  await record(testInfo, [
+    { name: 'edit saved to the draft (600 assets)', value: edit, unit: 'ms', target: 100 },
+    { name: 'change summary shown', value: summary, unit: 'ms', target: 1000 },
+    { name: 'published and shown', value: publish, unit: 'ms', target: 1000 },
+  ])
+  expect(edit).toBeLessThan(100 * MARGIN * 2)
+  expect(summary).toBeLessThan(1000 * MARGIN)
+  expect(publish).toBeLessThan(1000 * MARGIN)
+})
