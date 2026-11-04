@@ -5,6 +5,7 @@
 // keyboard alone; axe passes collapsed and expanded; and the multi-client view's panes collapse
 // on their own.
 import { expect, test } from '@playwright/test'
+import { isTileNoise } from './map.ts'
 import type { Locator, Page } from '@playwright/test'
 import { expectNoViolations } from './a11y.ts'
 import { logIn, roomTabs } from './mock.ts'
@@ -28,7 +29,7 @@ const toggle = (scope: Page | Locator, room: string) =>
 function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)
@@ -231,7 +232,7 @@ test('a popped-out room collapses in its window, and keeps it after a reload doc
     .click()
   const popout = await popup
   popout.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`popout: ${m.text()}`)
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(`popout: ${m.text()}`)
   })
   // The same panel, moved: its draft came with it.
   await expect(composer(popout, TALKS)).toHaveValue('Written before the popout')

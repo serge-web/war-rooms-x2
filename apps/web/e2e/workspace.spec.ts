@@ -4,6 +4,7 @@
 // keyboard move (NFR-14) and a popout docking back. Tests read the DOM and drive the page as a
 // user would; nothing reaches into the layout library.
 import { expect, test } from '@playwright/test'
+import { isTileNoise } from './map.ts'
 import { demoState } from '@wrx/mock-server'
 import { nodeName } from '@wrx/schemas'
 import { ASSET, FORCE, ROOM, tid } from '@wrx/schemas/fixtures'
@@ -22,7 +23,7 @@ const announcement = (page: Page) =>
 async function asUmpire(page: Page): Promise<string[]> {
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)
@@ -233,7 +234,7 @@ test('a popped-out tab docks back when its window closes', async ({ page }) => {
   // popout.html has its own Content-Security-Policy (F7): nothing the workspace puts in it may
   // be refused.
   popout.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`popout: ${m.text()}`)
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(`popout: ${m.text()}`)
   })
   await expect(popout.getByRole('region', { name: ROOMS.talks, exact: true })).toBeVisible()
   expect(

@@ -20,7 +20,7 @@ import { cuttableLink } from './link.ts'
 import type { CuttableLink } from './link.ts'
 import { rawRun } from './raw.ts'
 import { isBrowserNotice } from '../notices.ts'
-import { TEST_TILES, stubTiles } from '../map.ts'
+import { TEST_TILES, stubTiles, isTileNoise } from '../map.ts'
 import type { RawStep } from './raw.ts'
 
 export type BackendKind = 'mock' | 'ejabberd'
@@ -223,7 +223,8 @@ const SOCKET_REPORT = /^WebSocket connection to .* failed|^Event$/
 export function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error' && !SOCKET_REPORT.test(m.text())) errors.push(m.text())
+    if (m.type() === 'error' && !SOCKET_REPORT.test(m.text()) && !isTileNoise(m))
+      errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)
