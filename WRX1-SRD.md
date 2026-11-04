@@ -126,7 +126,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 
 16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
 17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
-18. There SHALL be exactly one map room per game in v1. Its participant list follows rule 4; every participant reads it, and clients treat only the admin's messages as world state.
+18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a read entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); clients treat only the admin's messages as world state.
 
 ## 4. Functional requirements — admin backend
 
@@ -412,7 +412,7 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 | Collab / RFI workflow rooms | Registry; message `type` discriminator; Serge's model as reference |
 | Air-gapped mapping | Tile URL is runtime config (NFR-9); point it at a local tile server |
 | World-state snapshots plus JSON Patch deltas, and gzip compression | Assets keyed by id (§3 rule 16); message `type` discriminator |
-| Fog of war: per-force world-state views | One world-state room per force; members-only, admin-sender check already in place (D25) |
+| Fog of war: per-force world-state views | One map room per force, each showing that force's view; the main map room then becomes visible only to the White Force and observers (§3 rule 18 fixes v1's main map room to every role); members-only, admin-sender check already in place (D25) |
 | Orders | Form rooms and templates (Annex A); `game-state` phases already exist |
 | Automated reconciliation: Python SDK, per-game reconcilers, automatic / review / interactive modes, plug-in umpire UI, Pyodide | External clients (D26); schemas exportable as JSON Schema; registry for umpire panels |
 | In-app reconciler editor with live preview | Fast follow-up after the SDK; reconciler code storable in PubSub |
@@ -832,7 +832,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 
 - Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
 - Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
-- The map room's participants follow rule 4 like any room; a typical game names every force.
+- Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
 - World state is excluded from the design export (ADM-16).
 
 ## Annex A. Message templates (built in Phase 4)
