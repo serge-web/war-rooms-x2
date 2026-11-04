@@ -24,7 +24,12 @@ test('player shell, logged in', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+    'Map',
+  ])
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await shoot(page, 'player-shell')
 })
@@ -37,12 +42,13 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  // PLY-40: one column per room; the game info panel opened from the strip (PLY-8).
+  // PLY-40: up to three columns of rooms; the game info panel opened from the strip (PLY-8).
   await expect(roomTabs(page)).toHaveText([
     'Blue HQ',
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByRole('tab', { name: 'Game info', exact: true }).click()
@@ -96,4 +102,22 @@ test('player chat panel, composer collapsed', { tag: '@screenshot' }, async ({ p
   })
   await page.mouse.move(0, 0)
   await shoot(page, 'player-chat-collapsed')
+})
+
+test('player map room, the placeholder until the map', { tag: '@screenshot' }, async ({ page }) => {
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  await page.getByLabel('Login name').fill('blue-co')
+  await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  // WP 5.2: the world state the client accepts, the admin's newest (PLY-58, PLY-59), listed by
+  // force until WP 5.5 draws the map.
+  await page.getByRole('tab', { name: 'Map', exact: true }).click()
+  const room = page.getByRole('region', { name: 'Map', exact: true })
+  await expect(room).toContainText('World state for turn 1: 6 assets.')
+  await expect(room.getByRole('region', { name: 'Red' })).toContainText('Tank Company')
+  await page.mouse.move(0, 0)
+  await shoot(page, 'player-map-placeholder')
 })

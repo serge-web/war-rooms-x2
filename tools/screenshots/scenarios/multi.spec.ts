@@ -23,7 +23,7 @@ test('multi-client view, three panes', { tag: '@screenshot' }, async ({ page }) 
     await expect(pane.getByRole('tab', { name: 'Out of game', exact: true })).toBeVisible()
   }
   const umpire = page.getByRole('region', { name: 'Pane 3', exact: true })
-  await expect(roomTabs(umpire)).toHaveCount(4)
+  await expect(roomTabs(umpire)).toHaveCount(5)
   await page.mouse.move(0, 0)
   await shoot(page, 'multi-client-view')
 
@@ -67,7 +67,12 @@ test('admin game view, previewing a role', { tag: '@screenshot' }, async ({ page
   await welcomeLoaded(page)
   await demoLogIn(page, 'admin')
   await page.getByLabel('View as').selectOption({ label: 'Blue CO (Blue)' })
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+    'Map',
+  ])
   await expect(page.getByRole('region', { name: 'Force panel' })).toContainText('crossing')
   await page.mouse.move(0, 0)
   await shoot(page, 'admin-preview-as-role')
