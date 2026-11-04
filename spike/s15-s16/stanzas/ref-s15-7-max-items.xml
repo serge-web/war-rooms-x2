@@ -1,0 +1,35 @@
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh31-42'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-max1'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#publish_model'><value>publishers</value></field><field var='pubsub#max_items'><value>1</value></field><field var='pubsub#notify_retract'><value>true</value></field><field var='pubsub#persist_items'><value>true</value></field><field var='pubsub#deliver_payloads'><value>true</value></field><field var='pubsub#notify_delete'><value>true</value></field><field var='pubsub#send_last_published_item'><value>never</value></field><field var='pubsub#itemreply'><value>publisher</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbh31-42'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-max1'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh39-43'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN-max1'><affiliation jid='RUN-umpire@localhost' affiliation='publisher'/><affiliation jid='RUN-reader@localhost' affiliation='member'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbh39-43'/>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh73-44'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='admin'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"a1","updatedAt":"2026-11-04T07:45:55.407Z"}</json></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbh73-44'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='admin'/></publish></pubsub></iq>
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh79-45'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='umpire'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"u1","updatedAt":"2026-11-04T07:45:55.413Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbh3h-xxmde' from='pubsub.localhost' type='result' id='s14-mw1tbh79-45'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='umpire'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh7j-47'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='admin-2'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"a2","updatedAt":"2026-11-04T07:45:55.423Z"}</json></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbh7j-47'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='admin-2'/></publish></pubsub></iq>
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbh7t-49'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='umpire'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"u2","updatedAt":"2026-11-04T07:45:55.433Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbh3h-xxmde' from='pubsub.localhost' type='result' id='s14-mw1tbh7t-49'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-max1'><item id='umpire'/></publish></pubsub></iq>

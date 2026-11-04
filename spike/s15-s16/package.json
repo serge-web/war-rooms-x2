@@ -1,0 +1,17 @@
+{
+  "name": "wrx1-spike-s15-s16",
+  "version": "0.0.0",
+  "private": true,
+  "description": "S15 (PubSub item timestamps and order) and S16 (WebSocket byte shaping) on ejabberd 26.09. Uses the workspace's transport, the contract-suite types and spike/s14's raw PubSub helpers by relative import; no dependencies of its own.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "up": "sh scripts/up.sh",
+    "down": "sh scripts/down.sh",
+    "run:ref": "node scripts/run.ts ref",
+    "run:tight": "node scripts/run.ts tight",
+    "typecheck": "../../node_modules/.bin/tsc -p tsconfig.json"
+  }
+}

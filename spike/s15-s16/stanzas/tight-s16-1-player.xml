@@ -1,0 +1,15 @@
+<!-- player sends 65536 bytes: {"sender":"player","bytes":65536,"reflectedMs":719,"receivedMs":715,"pingAfterMs":689,"connectionUp":true,"rateBytesPerSecond":63332,"predictedMs":2277} -->
+
+<message xmlns='jabber:client' to='RUN-player-65536@conference.localhost' type='groupchat' id='s16-65536-5e3b6679'><body>S16:s16-65536-5e3b6679:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 150000 bytes: {"sender":"player","bytes":150000,"reflectedMs":3996,"receivedMs":3990,"pingAfterMs":3961,"connectionUp":true,"rateBytesPerSecond":32533,"predictedMs":6500} -->
+
+<message xmlns='jabber:client' to='RUN-player-150000@conference.localhost' type='groupchat' id='s16-150000-53af1985'><body>S16:s16-150000-53af1985:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 300000 bytes: {"sender":"player","bytes":300000,"reflectedMs":10580,"receivedMs":10598,"pingAfterMs":10516,"connectionUp":true,"rateBytesPerSecond":26465,"predictedMs":14000} -->
+
+<message xmlns='jabber:client' to='RUN-player-300000@conference.localhost' type='groupchat' id='s16-300000-ff10e78a'><body>S16:s16-300000-ff10e78a:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 600000 bytes: {"sender":"player","bytes":600000,"reflectedMs":27104,"receivedMs":27143,"pingAfterMs":26910,"connectionUp":true,"rateBytesPerSecond":21399,"predictedMs":29000} -->
+
+<message xmlns='jabber:client' to='RUN-player-600000@conference.localhost' type='groupchat' id='s16-600000-7de46cab'><body>S16:s16-600000-7de46cab:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
