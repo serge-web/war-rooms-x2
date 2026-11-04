@@ -26,9 +26,7 @@ const target = targetState(design)
 const readOnly = target.readOnlyRoles
 /**
  * Role and room pairs the audit reads the stored role of: every membership of a role the vault
- * holds, read-only (it must be a visitor) or writer (it must not be). Blue CO and Red CO are in
- * the vault because the map room makes them read-only there (§3 rule 18), so their chat rooms
- * are checked too.
+ * holds, read-only (it must be a visitor) or writer (it must not be).
  */
 const checkedPairs = target.rooms.flatMap((r) =>
   [...r.access.keys()].filter((login) => readOnly.includes(login)),

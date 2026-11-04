@@ -154,9 +154,8 @@ function RoomForm({
       />
       {map ? (
         <Notice tone="info">
-          This is the game’s map room. Every game has exactly one: every role sees the map, read
-          only, and the White Force’s writers can post. Its type and participants are fixed; players
-          see only the admin’s world states on it.
+          This is the game’s map room. Every game has exactly one, and every role sees it. Its type
+          and participants are fixed; players see only the admin’s world states on it.
         </Notice>
       ) : (
         <SelectField

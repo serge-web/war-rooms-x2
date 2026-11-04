@@ -179,11 +179,9 @@ describe('stateFromDesign', () => {
       'red-co@d.mock member',
       'white-observer@d.mock member',
     ])
-    // Read entries: every role outside the White Force's writers is stored as a visitor.
+    // Write entries (D25): only the observers are stored as visitors, as in every room.
     expect(map?.storedRoles.map((r) => r.jid).sort()).toEqual([
-      'blue-co@d.mock',
       'blue-observer@d.mock',
-      'red-co@d.mock',
       'white-observer@d.mock',
     ])
     expect(map?.archive.map((m) => m.from)).toEqual(['admin@d.mock'])

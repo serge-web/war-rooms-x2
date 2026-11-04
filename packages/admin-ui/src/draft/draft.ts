@@ -9,7 +9,7 @@
 // records its last name in the design's `retired` list, which also holds its login name for good.
 //
 // The draft always has exactly one map room (§3 rule 18): a new draft, an import and a stored
-// draft gain one if they have none, its participants follow the forces (every force, read only),
+// draft gain one if they have none, its participants follow the forces (every force, write),
 // and it cannot be deleted, retyped, duplicated or given other participants.
 import { byOrderThenId } from '@wrx/domain'
 import {
@@ -827,7 +827,7 @@ function withDesign(draft: Draft, changes: Partial<DesignFile>): Draft {
   return { ...draft, design }
 }
 
-/** The map room's participants follow the forces: every force, read only (§3 rule 18). */
+/** The map room's participants follow the forces: every force, write (§3 rule 18). */
 function withMapParticipants(design: DesignFile): DesignFile {
   if (design.rooms.every((r) => !isMapRoom(r) || hasMapParticipants(r, design.forces))) {
     return design

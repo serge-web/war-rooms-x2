@@ -286,7 +286,7 @@ function checkMapRoom(design: DesignFile, error: (path: string, message: string)
     if (!hasMapParticipants(room, design.forces)) {
       error(
         `rooms[${i}].participants`,
-        'the map room’s participants are fixed: every force, read only (§3 rule 18)',
+        'the map room’s participants are fixed: every force, with write access (§3 rule 18)',
       )
     }
     const config = mapRoomConfigReader.safeParse(room.config)
@@ -301,7 +301,7 @@ export const MAP_ROOM_NAME = 'Map'
 
 /**
  * The design with exactly one map room as far as it can tell (§3 rule 18): every map room's
- * participants set to the fixed set (every force, read only), and a new map room, named
+ * participants set to the fixed set (every force, write), and a new map room, named
  * {@link MAP_ROOM_NAME} with the id `newId()` gives, added last when there is none. The same
  * design is returned when nothing changes. A second map room is left for `checkDesign` to report.
  */

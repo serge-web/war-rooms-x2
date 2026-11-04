@@ -440,9 +440,9 @@ describe('rooms (ADM-6, ADM-7)', () => {
     expect(within(form).queryByRole('button', { name: 'Delete Map' })).toBeNull()
     expect(within(form).queryByLabelText('Room type')).toBeNull()
     expect(room(store, ROOM.map)?.participants.map((p) => p.access)).toEqual([
-      'read',
-      'read',
-      'read',
+      'write',
+      'write',
+      'write',
     ])
     // No second map room can be added: the type picker offers chat only, so it is not shown.
     expect(screen.queryByLabelText('Room type')).toBeNull()

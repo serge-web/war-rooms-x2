@@ -199,12 +199,12 @@ describe('map room config (ARC-5)', () => {
 })
 
 describe('the map room (§3 rule 18)', () => {
-  it('has every force as a read entry, in force order', () => {
+  it('has every force as a write entry, in force order (D25: members keep voice)', () => {
     const design = sampleDesign()
     expect(mapParticipants(design.forces)).toEqual([
-      { kind: 'force', id: FORCE.blue, access: 'read' },
-      { kind: 'force', id: FORCE.red, access: 'read' },
-      { kind: 'force', id: FORCE.white, access: 'read' },
+      { kind: 'force', id: FORCE.blue, access: 'write' },
+      { kind: 'force', id: FORCE.red, access: 'write' },
+      { kind: 'force', id: FORCE.white, access: 'write' },
     ])
     const reversed = { participants: [...mapParticipants(design.forces)].reverse() }
     expect(hasMapParticipants(reversed, design.forces)).toBe(true)
@@ -234,9 +234,9 @@ describe('the map room (§3 rule 18)', () => {
   it.each([
     ['a missing force', (p: ReturnType<typeof mapParticipants>) => p.slice(1)],
     [
-      'a write entry',
+      'a read entry',
       (p: ReturnType<typeof mapParticipants>) =>
-        p.map((e, i) => (i === 0 ? { ...e, access: 'write' as const } : e)),
+        p.map((e, i) => (i === 0 ? { ...e, access: 'read' as const } : e)),
     ],
     [
       'a role entry',

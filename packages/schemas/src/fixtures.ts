@@ -474,7 +474,7 @@ export function templatedDesign(): DesignFile {
   return { ...design, rooms: [...design.rooms, reports], templates: sampleTemplates() }
 }
 
-/** The map room for a design's forces (§3 rule 18): every force, read only. */
+/** The map room for a design's forces (§3 rule 18): every force, with write access. */
 export function mapRoom(design: Pick<DesignFile, 'forces' | 'rooms'>, id: string = ROOM.map): Room {
   return {
     schemaVersion: 1,

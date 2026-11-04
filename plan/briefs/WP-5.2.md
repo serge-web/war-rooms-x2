@@ -16,7 +16,7 @@ The model the turn and map work packages build on: schemas for the turn state an
   - The message-body union takes the world-state body; a chat room refuses it, a map room takes nothing else.
 - **JSON Schema export (D26, ARC-6, P8):** a script writes JSON Schema 2020-12 files for the world-state message body, the asset, the turn state, the room document and the map and chat room configs to `docs/json-schema/`, with `--check` in `pnpm check`; a test checks the export covers each schema and accepts and refuses what zod does on samples.
 - **`map` room type (ARC-5):** registered beside `chat`, with its config schema, its message schema and the icon name `map`; the app registers a placeholder player panel that WP 5.5 replaces.
-- **One map room per game (rule 18):** its participants are every force as a read entry (the White Force's writers write under rule 4).
+- **One map room per game (rule 18):** its participants are every force as a write entry, plus the White Force under rule 4.
   - `checkDesign` refuses a second map room, and a map room whose participants are not that set.
   - The draft always has exactly one: a new draft, an import and a stored draft gain one if they have none. Adding or deleting a force re-syncs its participants. Participant edits, a type change to or from `map`, a second map room and deleting it are refused.
   - The room editor says so, instead of offering those controls.
@@ -32,14 +32,14 @@ The model the turn and map work packages build on: schemas for the turn state an
   - `worldState(roomId)` and `useWorldState(roomId)` join the map room and page back through MAM, in small pages, to the newest valid world-state message from the admin's real JID. Messages from anyone else, or invalid ones, are ignored and logged (PLY-58, PLY-59), and later valid ones replace it live.
   - `sendWorldState(roomId, state)` gives WP 5.6 the cap-checked send.
   - Unit tests for each.
-- **Mock:** the same node, document, room and cap; the demo seed gains the map room and an initial world state of a few assets per force, posted by the admin. The demo vault is regenerated for the roles the map room makes read-only.
+- **Mock:** the same node, document, room and cap; the demo seed gains the map room and an initial world state of a few assets per force, posted by the admin.
 - **Contract tests (both backends):** every role reads `game-state`, no role but the admin publishes it, anonymous sessions read nothing; a world-state message near 500 KB round-trips live and through MAM; one over the limit, and a 100 KB message without the larger limit, are refused before sending.
 - **Gates:** `pnpm check`, build plus `check:bundle`, `CI=1 pnpm e2e`, `e2e:mock-host`, `e2e:admin-ui`, `e2e:theme`, site build plus `check:site`, screenshots `--repeat`, and on ejabberd the contract, admin-ops, publish and audit suites.
 
 ## Notes
 
 - **A design with no map room stays valid** for `checkDesign`, so designs from before Phase 5 and test designs still publish. The draft is what guarantees exactly one, since the admin designs only through it. A second map room, or one with other participants, is an error.
-- **Read entries make every role outside the White Force read-only in the map room**, so publishing needs those roles' passwords in the observer vault (ADM-37), as for observers. This is what rule 18 says; the product owner should confirm it, since it means every game now needs the vault. The alternative, write entries, would give every role voice, with clients ignoring non-admin messages (D25).
+- **The map room's fixed participants are write entries** for every force, plus the White Force under rule 4. Members keep voice, so the map room adds no role to the observer vault, and clients accept only the admin's world states (D25, PLY-58). The SRD's first wording, read entries, was a drafting error, corrected on Nov 4 (§3 rule 18, §14).
 - **The turn state is published once.** The planner leaves an existing valid `game-state` item alone, so republishing a design never moves the game back to turn 1.
 - **The transport interface gains an optional third argument**, `send(room, body, {maxBytes})`. It is additive, so callers that pass nothing keep the 64 KiB cap.
 - **The seed's world state lives in `DesignSeed`, not in the design file.** WP 5.6 adds it to the design file and export (ADM-16), and can reuse the fixture `sampleWorldState()`.

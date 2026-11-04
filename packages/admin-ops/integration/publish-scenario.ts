@@ -16,8 +16,9 @@
 // 5b. message templates (Annex A): published before the room that offers them and locked; each
 //    role offered its own; a templated message sent and checked valid on receipt; a change to a
 //    locked template refused; an unlocked one the design drops retracted;
-// 5c. the map room and the turn state (WP 5.2): the map room added, every role read only there
-//    (§3 rule 18), the vault taking the passwords that needs; the admin posts a world state near
+// 5c. the map room and the turn state (WP 5.2): the map room added, every force a write entry
+//    (§3 rule 18), so the vault gains nobody and only observers are read only; the admin posts a
+//    world state near
 //    500 KB (PLY-53); the turn the admin advanced survives a publish, and a missing one is set
 //    to turn 1 again;
 // 6. reset removes everything (ADM-15), the templates node, the turn state and the map room
@@ -882,17 +883,21 @@ export function definePublishIntegration(backend: PublishBackend): void {
         return items.map((i) => JSON.parse(i.payload) as unknown)
       }
 
-      it('adds the map room, every role read only there, and the vault holds them all (§3 rule 18)', async () => {
+      it('adds the map room with every role, the observers read only, and nobody new in the vault (§3 rule 18, D25)', async () => {
         const added = await plan(design())
         expect(added.steps.map((s) => s.id)).toContain(`room:${ROOM.map}`)
         expect((await apply(added)).ok).toBe(true)
         const config = must(await theOps().session.muc.getRoomConfig(room(ROOM.map)), 'config')
         expect(config).toMatchObject({ membersOnly: true, moderated: true, archive: true })
-        const roles = design().roles.map((r) => r.loginName)
-        expect(vault?.roles()).toEqual([...roles].sort())
-        for (const role of ['blue-co', 'red-xo', 'blue-observer']) {
-          await expectReadOnly(role, ROOM.map)
-        }
+        const before = vault?.roles()
+        expect(added.steps.some((s) => s.id.startsWith('password:'))).toBe(false)
+        expect(vault?.roles()).toEqual(before)
+        for (const role of ['blue-observer', 'white-cell']) await expectReadOnly(role, ROOM.map)
+        // A writer has voice (D25); clients accept only the admin's world states (PLY-58).
+        expect(await postResult('red-xo', ROOM.map)).toMatchObject({
+          role: 'participant',
+          posted: 'ok',
+        })
         await closeAll()
         expect((await plan(design())).steps).toEqual([])
       })

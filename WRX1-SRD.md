@@ -126,7 +126,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 
 16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
 17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
-18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a read entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); clients treat only the admin's messages as world state.
+18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a write entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); members keep voice, so the map room adds no role to the observer vault, and clients accept only the admin's messages as world state (D25, PLY-58).
 
 ## 4. Functional requirements — admin backend
 
@@ -834,6 +834,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
 - Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
 - Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
+- Corrected (Nov 4, 2026, WP 5.2): §3 rule 18 said "every force as a read entry"; the forces are write entries, as D25 assumed (members keep voice, clients ignore non-admin senders, PLY-58), so the map room adds no role to the observer vault.
 - Decided (Nov 4, 2026): the design export includes a world state, imported as the admin's draft (ADM-16).
 
 ## Annex A. Message templates (built in Phase 4)

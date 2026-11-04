@@ -135,14 +135,16 @@ export type MapRoomConfig = z.infer<typeof mapRoomConfigSchema>
 
 /**
  * The fixed participants of the map room (§3 rule 18, product owner Nov 4, 2026): every force as
- * a read entry, in the forces' order. The White Force's writers still write, under rule 4.
+ * a write entry, in the forces' order, plus the White Force under rule 4 (its observers stay read
+ * only). Members keep voice, so the map room adds nobody to the observer vault; clients accept
+ * only the admin's messages as world state (D25, PLY-58).
  */
 export function mapParticipants(
   forces: readonly { readonly id: string; readonly order: number }[],
-): { kind: 'force'; id: string; access: 'read' }[] {
+): { kind: 'force'; id: string; access: 'write' }[] {
   return [...forces]
     .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    .map((f) => ({ kind: 'force' as const, id: f.id, access: 'read' as const }))
+    .map((f) => ({ kind: 'force' as const, id: f.id, access: 'write' as const }))
 }
 
 /** Whether a room's participants are the map room's fixed set, in any order. */

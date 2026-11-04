@@ -142,7 +142,7 @@ describe('the turn state and the map room (WP 5.2)', () => {
     }
   })
 
-  it('provisions the map room like any room, every role read only but the White Force’s writers', () => {
+  it('provisions the map room like any room: every writer has voice, only observers are read only (D25)', () => {
     const design = withSampleMapRoom(sampleDesignWithWhiteCell())
     const plan = planPublish(design, emptyView())
     expect(step(plan, `room:${ROOM.map}`).action).toMatchObject({
@@ -150,12 +150,20 @@ describe('the turn state and the map room (WP 5.2)', () => {
       create: true,
     })
     expect(step(plan, `grant-room:${ROOM.map}`).details).toEqual([
+      'Blue CO: becomes a member with voice',
+      'Red CO: becomes a member with voice',
       'White Cell: becomes a member with voice',
     ])
-    for (const role of ['blue-co', 'blue-observer', 'red-co', 'white-observer']) {
+    for (const role of ['blue-observer', 'white-observer']) {
       const readOnly = step(plan, `read-only-grant:${role}`).action
       expect(readOnly.type === 'read-only' && readOnly.roomIds).toContain(ROOM.map)
     }
+    // The map room adds nobody to the vault: no read-only step for a writer.
+    expect(
+      ids(plan)
+        .filter((id) => id.startsWith('read-only-grant:'))
+        .sort(),
+    ).toEqual(['read-only-grant:blue-observer', 'read-only-grant:white-observer'])
     expect(ids(planPublish(design, publishedView(design)))).toEqual([])
   })
 })

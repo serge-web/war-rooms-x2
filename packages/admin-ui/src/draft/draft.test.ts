@@ -115,7 +115,7 @@ describe('createDraft', () => {
         id: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
         name: 'Map',
         roomType: 'map',
-        participants: [{ kind: 'force', id: tid('white'), access: 'read' }],
+        participants: [{ kind: 'force', id: tid('white'), access: 'write' }],
         config: {},
         order: 0,
       },
@@ -625,7 +625,7 @@ describe('rooms', () => {
 describe('the map room (§3 rule 18)', () => {
   const map = (draft: Draft) => draft.design.rooms.find((r) => r.roomType === 'map')
   const every = (draft: Draft) =>
-    draft.design.forces.map((f) => ({ kind: 'force', id: f.id, access: 'read' }))
+    draft.design.forces.map((f) => ({ kind: 'force', id: f.id, access: 'write' }))
 
   it('is added to a design without one, once, and is valid', () => {
     const draft = sample()
@@ -657,7 +657,7 @@ describe('the map room (§3 rule 18)', () => {
     expect(map(added.draft)?.participants).toContainEqual({
       kind: 'force',
       id: GREEN,
-      access: 'read',
+      access: 'write',
     })
     const deleted = deleteForce(added.draft, GREEN)
     if (!deleted.ok) throw new Error(deleted.error)

@@ -226,7 +226,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Unlock' }))
     await waitFor(
       () => {
-        expect(screen.getByText(/Voice checked through 12 role logins/)).toBeTruthy()
+        expect(screen.getByText(/Voice checked through 6 role logins/)).toBeTruthy()
       },
       { timeout: 20_000 },
     )

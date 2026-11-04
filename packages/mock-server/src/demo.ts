@@ -77,8 +77,9 @@ const VAULT_KEY = 'wrx-observer-vault'
 
 /**
  * The demo vault as the admin tooling stores it in the admin's private storage: the demo design's
- * read-only roles with their demo passwords (the observers, and Blue CO and Red CO, read only in
- * the map room, §3 rule 18), AES-GCM under a PBKDF2 key from DEMO_VAULT_PASSPHRASE (the vault's
+ * read-only roles (`blue-observer`, `white-observer`) with their demo passwords; the map room
+ * adds none, its entries being write (§3 rule 18). AES-GCM under a PBKDF2 key from
+ * DEMO_VAULT_PASSPHRASE (the vault's
  * minimum 100,000 iterations, so it opens quickly). Fixed, so the seed is the same on every start.
  * packages/admin-ops/src/demo-vault.test.ts checks it still matches the demo design, and prints a
  * new one when it does not.
@@ -90,11 +91,11 @@ const DEMO_VAULT_ENVELOPE = JSON.stringify({
     name: 'PBKDF2',
     hash: 'SHA-256',
     iterations: 100000,
-    salt: 'j/HXzsfyPm2UZjST0zXYoQ==',
+    salt: 'HvpDJ4guQyehB6VNmiU1CQ==',
   },
-  cipher: { name: 'AES-GCM', iv: '5Ngrgx/W/5Q0KOE7' },
+  cipher: { name: 'AES-GCM', iv: 'ULiC8yDlQ3DtgV0L' },
   ciphertext:
-    'Zhapi+5owrT6drnNpQFhzJIRIlmcZralrGlg1zvsJDEbWjFwJLbmYulrDFYwMoZIuqdgZD4JbXos6CreAnpy8rc8g6g5pAd5rFAd5jkTwuJhRrGxj83lXwEIfY0knBK4dL9F9jhdDpobZ/v1RDgKp95r0AejuqFnUtENimY4cNqob5VItWbXJO2g4y41kZYCRY23eQESy7GL5tE=',
+    'xCp+3aHfzTLK1TIxqKWxk7Bl31vo6mwMt+IBvLPHVA2/0R/kLBUi5TQLmF9uEDkmdbgeOhbNhpT4BWm8jjz2pOpA9gOVK2z/tc3yz7g2wNR/a1lKvhR/xrbwzldoPDqe5Sh+kKKTR/EtGhg=',
 })
 
 /**
