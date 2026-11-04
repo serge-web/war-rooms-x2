@@ -1,30 +1,30 @@
 // The layout model and its rules, headless in Node (NFR-15): FlexLayout's Model and Actions run
-// without a DOM, so PLY-40/41/42, D6/PLY-6 reconciliation, saving and restoring, popout dock-back
-// and the keyboard move are all checked here.
+// without a DOM, so PLY-40 and PLY-42, whether a layout fits the rooms (PLY-5), saving and
+// restoring, popout dock-back and the keyboard move are all checked here.
 import { Actions, DockLocation, Model } from 'flexlayout-react'
 import { describe, expect, it } from 'vitest'
 import { panelTabId, parseTabId, roomTabId, specialTabId, tabIds } from './ids.ts'
 import {
-  addToFewest,
   borderTabs,
   closedPopout,
   defaultModel,
   detachedTabs,
   dockDetached,
+  fitsRooms,
   mainTabsets,
   moveTab,
-  reconcile,
   restoreLayout,
   roomTabState,
   SPECIAL_TAB_CLASS,
   serialiseLayout,
   specialTab,
   structure,
+  syncTabs,
   tabIdsIn,
   updateRoomTabState,
 } from './model.ts'
 import type { LayoutSpec, TabSpec } from './model.ts'
-import { defaultColumns, pickFewest, reconcilePlan } from './rules.ts'
+import { defaultColumns, sameRooms } from './rules.ts'
 import { layoutKey, memoryLayoutStorage, webLayoutStorage } from './storage.ts'
 
 const ids = tabIds('ws0')
@@ -65,14 +65,12 @@ describe('rules', () => {
     expect(defaultColumns(range(30)).map((c) => c.length)).toEqual([10, 10, 10])
   })
 
-  it('PLY-41: picks the first of the smallest counts', () => {
-    expect(pickFewest([])).toBe(-1)
-    expect(pickFewest([2, 1, 1])).toBe(1)
-    expect(pickFewest([0, 0])).toBe(0)
-  })
-
-  it('PLY-6: plans removals and additions', () => {
-    expect(reconcilePlan(['a', 'b', 'c'], ['c', 'd', 'a'])).toEqual({ remove: ['b'], add: ['d'] })
+  it('PLY-5: a layout fits the same rooms in any arrangement, and no others', () => {
+    expect(sameRooms([], [])).toBe(true)
+    expect(sameRooms(['a', 'b'], ['b', 'a'])).toBe(true)
+    expect(sameRooms(['a', 'b'], ['a'])).toBe(false)
+    expect(sameRooms(['a'], ['a', 'b'])).toBe(false)
+    expect(sameRooms(['a', 'c'], ['a', 'b'])).toBe(false)
   })
 })
 
@@ -120,72 +118,69 @@ describe('the default layout (PLY-40, PLY-8)', () => {
   })
 })
 
-describe('rooms added during play (PLY-41)', () => {
-  it('go to the first tabset with the fewest tabs, without changing the selection', () => {
+describe('a layout and the role’s rooms (PLY-5; PLY-6 and PLY-41 retired)', () => {
+  it('fits the same rooms wherever the player put them, and no others', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
-    addToFewest(model, room(5), ids)
-    expect(tabsOf(model)).toEqual([r(1, 2), r(3, 5), r(4)])
-    addToFewest(model, room(6), ids)
-    expect(tabsOf(model)).toEqual([r(1, 2), r(3, 5), r(4, 6)])
-    addToFewest(model, room(7), ids)
-    expect(tabsOf(model)).toEqual([r(1, 2, 7), r(3, 5), r(4, 6)])
-    expect(selectedOf(model)).toEqual(r(1, 3, 4))
-  })
-
-  it('follow the user’s arrangement', () => {
-    const model = defaultModel(spec(1, 2, 3), ids)
-    move(model, 'room:r1', 2)
-    expect(tabsOf(model)).toEqual([r(2), r(3, 1)])
-    addToFewest(model, room(4), ids)
-    expect(tabsOf(model)).toEqual([r(2, 4), r(3, 1)])
-  })
-
-  it('start a column when every tab was dragged to the strip', () => {
-    const model = defaultModel(spec(1), ids)
-    const border = model.getNodeById('border_bottom')
-    expect(border).toBeDefined()
+    move(model, 'room:r4', 0)
+    expect(fitsRooms(model, spec(1, 2, 3, 4), ids)).toBe(true)
+    expect(fitsRooms(model, spec(4, 3, 2, 1), ids)).toBe(true)
+    // A room gained or lost: the workspace replaces it with the default, never adapts it.
+    expect(fitsRooms(model, spec(1, 2, 3, 4, 5), ids)).toBe(false)
+    expect(fitsRooms(model, spec(1, 2, 3), ids)).toBe(false)
+    // Rooms dragged to the strip or popped out are still the player's.
     model.doAction(
       Actions.moveNode(ids.toModel('room:r1'), 'border_bottom', DockLocation.CENTER, -1),
     )
-    expect(tabsOf(model)).toEqual([[]])
-    addToFewest(model, room(2), ids)
-    expect(tabsOf(model)).toEqual([r(2)])
+    model.doAction(Actions.popoutTab(ids.toModel('room:r2')))
+    expect(fitsRooms(model, spec(1, 2, 3, 4), ids)).toBe(true)
   })
-})
 
-describe('reconciliation (D6, PLY-6)', () => {
-  it('closes lost rooms, adds new ones by PLY-41 and relabels renamed ones, keeping the rest', () => {
+  it('a rename relabels the tab in place, and nothing moves', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
     move(model, 'room:r4', 0)
     model.doAction(Actions.selectTab(ids.toModel('room:r2')))
-    expect(tabsOf(model)).toEqual([r(1, 2, 4), r(3)])
-    reconcile(
+    const before = { tabs: tabsOf(model), selected: selectedOf(model) }
+    syncTabs(
       model,
-      {
-        rooms: [{ id: 'room:r1', name: 'Renamed' }, ...rooms(2, 4, 5)],
-        panels: PANELS,
-      },
+      { rooms: [{ id: 'room:r1', name: 'Renamed' }, ...rooms(2, 3, 4)], panels: PANELS },
       ids,
     )
-    // r3's tabset closed when it emptied; r5 joined the smaller one.
-    expect(tabsOf(model)).toEqual([r(1, 2, 4, 5)])
-    expect(selectedOf(model)).toEqual(r(2))
+    expect({ tabs: tabsOf(model), selected: selectedOf(model) }).toEqual(before)
     expect(model.getNodeById(ids.toModel('room:r1'))?.toJson()).toMatchObject({ name: 'Renamed' })
-    reconcile(model, spec(2, 4, 5, 6), ids)
-    expect(tabsOf(model)).toEqual([r(2, 4, 5, 6)])
+  })
+
+  it('never adds or removes a room tab in place', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    syncTabs(model, spec(2, 3), ids)
+    expect(tabsOf(model)).toEqual([r(1), r(2)])
   })
 
   it('is a no-op when nothing changed', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
     const before = JSON.stringify(model.toJson())
-    reconcile(model, spec(1, 2, 3, 4), ids)
+    syncTabs(model, spec(1, 2, 3, 4), ids)
     expect(JSON.stringify(model.toJson())).toBe(before)
   })
 
-  it('puts a missing panel back in the strip', () => {
+  it('puts a missing panel back in the strip, and takes an unknown one away', () => {
     const model = defaultModel({ rooms: rooms(1), panels: PANELS.slice(0, 1) }, ids)
-    reconcile(model, spec(1), ids)
+    syncTabs(model, spec(1), ids)
     expect(borderTabs(model, ids)).toEqual(['panel:game-info', 'panel:online'])
+    syncTabs(model, { rooms: rooms(1), panels: PANELS.slice(1) }, ids)
+    expect(borderTabs(model, ids)).toEqual(['panel:online'])
+  })
+
+  it('a panel with no strip left goes to the first column, or starts one', () => {
+    const model = defaultModel({ rooms: rooms(1, 2), panels: [] }, ids)
+    // The strip cannot be removed by the player; a model without one is built by hand.
+    const bare = Model.fromJson({
+      global: {},
+      borders: [],
+      layout: { type: 'row', children: [{ type: 'tabset', children: [] }] },
+    })
+    syncTabs(bare, { rooms: [], panels: PANELS.slice(0, 1) }, ids)
+    expect(tabsOf(bare)).toEqual([['panel:game-info']])
+    expect(tabsOf(model)).toEqual([r(1), r(2)])
   })
 })
 
@@ -210,13 +205,15 @@ describe('saving and restoring (PLY-5, D6)', () => {
     expect(serialiseLayout(restored, other)).toBe(saved)
   })
 
-  it('reconciles a saved layout with the rooms of today before it is used', () => {
+  it('restores a saved layout only for the same rooms: any other rooms get the default (PLY-5)', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
     move(model, 'room:r3', 0)
     const saved = serialiseLayout(model, ids)
-    const restored = restoreLayout(saved, spec(1, 3, 4, 5), ids)
+    expect(restoreLayout(saved, spec(1, 3, 4, 5), ids)).toBeUndefined()
+    expect(restoreLayout(saved, spec(1, 2, 3), ids)).toBeUndefined()
+    const restored = restoreLayout(saved, spec(1, 2, 3, 4), ids)
     if (restored === undefined) throw new Error('not restored')
-    expect(tabsOf(restored)).toEqual([r(1, 3), r(4, 5)])
+    expect(tabsOf(restored)).toEqual([r(1, 2, 3), r(4)])
   })
 
   it('passing the model on screen keeps matching tabs (and their panels) in place', () => {
@@ -262,9 +259,11 @@ describe('saving and restoring (PLY-5, D6)', () => {
         ],
       },
     })
-    const restored = restoreLayout(hostile, spec(1, 2, 3), ids)
+    // A nameless tab is dropped, so the layout holds rooms 1 and 3: it fits only them.
+    expect(restoreLayout(hostile, spec(1, 2, 3), ids)).toBeUndefined()
+    const restored = restoreLayout(hostile, spec(1, 3), ids)
     if (restored === undefined) throw new Error('not restored')
-    expect(tabsOf(restored)).toEqual([r(1, 3, 2)])
+    expect(tabsOf(restored)).toEqual([r(1, 3)])
     expect(selectedOf(restored)).toEqual(r(1))
     const json = restored.toJson()
     expect(json.global?.tabEnableClose).toBe(false)
@@ -322,11 +321,12 @@ describe('a room tab’s own state (PLY-54)', () => {
     const restored = restoreLayout(saved, spec(1, 2), ids)
     if (restored === undefined) throw new Error('not restored')
     expect(restored.getNodeById(ids.toModel('room:r1'))?.toJson()).not.toHaveProperty('config')
+    // The panel, saved in a tabset, stays there.
     expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: false })
     expect(restored.getNodeById(ids.toModel('panel:online'))?.toJson()).not.toHaveProperty('config')
   })
 
-  it('a popped-out room keeps its state across a save, docked again', () => {
+  it('a popped-out room keeps its state across a save, docked again at the end of the first column', () => {
     const model = defaultModel(spec(1, 2, 3), ids)
     model.doAction(Actions.popoutTab(ids.toModel('room:r2')))
     updateRoomTabState(model, ids, 'r2', { composerCollapsed: true })
@@ -334,13 +334,17 @@ describe('a room tab’s own state (PLY-54)', () => {
     const restored = restoreLayout(serialiseLayout(model, ids), spec(1, 2, 3), ids)
     if (restored === undefined) throw new Error('not restored')
     expect(detachedTabs(restored, ids)).toEqual([])
+    expect(tabsOf(restored)).toEqual([r(1, 2), r(3)])
+    expect(restored.getNodeById(ids.toModel('room:r2'))?.toJson()).toMatchObject({ name: 'Room 2' })
     expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: true })
   })
 
-  it('goes back to the defaults on reset (PLY-42)', () => {
+  it('goes back to the defaults on reset (PLY-42), and on a design change’s reset (PLY-5)', () => {
     const model = defaultModel(spec(1, 2), ids)
     updateRoomTabState(model, ids, 'r1', { composerCollapsed: true })
     expect(roomTabState(defaultModel(spec(1, 2), ids, model), ids, 'r1')).toEqual({})
+    // The same reset when the rooms changed: a room kept is back to its default too.
+    expect(roomTabState(defaultModel(spec(1, 3), ids, model), ids, 'r1')).toEqual({})
   })
 })
 
@@ -358,7 +362,7 @@ describe('the special tab (FT-1)', () => {
   it('is added first in the strip, unselected, and removed again, leaving the rooms', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
     const before = { tabs: tabsOf(model), selected: selectedOf(model) }
-    reconcile(model, narrow(1, 2, 3, 4), ids)
+    syncTabs(model, narrow(1, 2, 3, 4), ids)
     // Not in a tabset, whose strip scrolls and could hide it: the wide strip along the bottom.
     expect(borderTabs(model, ids)).toEqual([SPECIAL.id, 'panel:game-info', 'panel:online'])
     expect({ tabs: tabsOf(model), selected: selectedOf(model) }).toEqual(before)
@@ -367,7 +371,7 @@ describe('the special tab (FT-1)', () => {
     expect(node?.isEnableClose()).toBe(false)
     expect(node?.isEnablePopout()).toBe(false)
     expect(node?.getClassName()).toBe(SPECIAL_TAB_CLASS)
-    reconcile(model, spec(1, 2, 3, 4), ids)
+    syncTabs(model, spec(1, 2, 3, 4), ids)
     expect({ tabs: tabsOf(model), selected: selectedOf(model) }).toEqual(before)
     expect(borderTabs(model, ids)).toEqual(['panel:game-info', 'panel:online'])
     expect(specialTab(model, narrow(1, 2, 3, 4), ids)).toBeUndefined()
@@ -384,7 +388,7 @@ describe('the special tab (FT-1)', () => {
 
   it('is never saved, nor restored from bad storage', () => {
     const model = defaultModel(spec(1, 2), ids)
-    reconcile(model, narrow(1, 2), ids)
+    syncTabs(model, narrow(1, 2), ids)
     // Dragged in with the rooms and selected, as when the player is reading the column there.
     dragToLastTabset(model)
     expect(selectedOf(model)).toEqual(['room:r1', SPECIAL.id])
@@ -405,7 +409,7 @@ describe('the special tab (FT-1)', () => {
 
   it('a column made for it is not saved, so switching back leaves no empty column', () => {
     const model = defaultModel(spec(1, 2), ids)
-    reconcile(model, narrow(1, 2), ids)
+    syncTabs(model, narrow(1, 2), ids)
     // The player drags the tab into a column of its own.
     const last = mainTabsets(model).at(-1)
     if (last === undefined) throw new Error('no tabset')
@@ -416,13 +420,13 @@ describe('the special tab (FT-1)', () => {
     const restored = restoreLayout(serialiseLayout(model, ids), spec(1, 2), ids)
     expect(restored === undefined ? undefined : tabsOf(restored)).toEqual([r(1), r(2)])
     // On screen, taking the tab away removes its column too.
-    reconcile(model, spec(1, 2), ids)
+    syncTabs(model, spec(1, 2), ids)
     expect(tabsOf(model)).toEqual([r(1), r(2)])
   })
 
   it('open in the strip, it is saved with the strip closed and the panels kept', () => {
     const model = defaultModel(spec(1), ids)
-    reconcile(model, narrow(1), ids)
+    syncTabs(model, narrow(1), ids)
     model.doAction(Actions.selectTab(ids.toModel(SPECIAL.id)))
     expect(specialTab(model, narrow(1), ids)?.isSelected()).toBe(true)
     const saved = JSON.parse(serialiseLayout(model, ids)) as {
@@ -438,7 +442,7 @@ describe('the special tab (FT-1)', () => {
 })
 
 describe('popouts (layout-library.md, weakness 2)', () => {
-  it('a closed popout’s tabs dock back into the tabset with the fewest tabs', () => {
+  it('a closed popout’s tabs dock back at the end of the first tabset', () => {
     const model = defaultModel(spec(1, 2, 3, 4), ids)
     let closed: string | undefined
     model.addChangeListener({
@@ -457,8 +461,9 @@ describe('popouts (layout-library.md, weakness 2)', () => {
     // ...so the workspace docks it back.
     dockDetached(model, closed)
     expect(detachedTabs(model, ids)).toEqual([])
-    // Its own tabset closed when it popped out, so it joins the smaller of the two left.
-    expect(tabsOf(model)).toEqual([r(1, 2), r(3, 4)])
+    // Its own tabset closed when it popped out; it joins the first column, unselected.
+    expect(tabsOf(model)).toEqual([r(1, 2, 4), r(3)])
+    expect(selectedOf(model)).toEqual(r(1, 3))
   })
 
   it('a saved layout never reopens popouts: their tabs come back docked', () => {

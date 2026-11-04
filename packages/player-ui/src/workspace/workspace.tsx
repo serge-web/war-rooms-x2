@@ -1,12 +1,13 @@
 // The workspace slot of the player shell (WP 2.5): WorkspaceCore over the pane's store. One tab
 // per room the role can see (PLY-4), each the room type's player component in the room's theme,
 // plus the game info and online panels (PLY-8). The layout is saved per server, role and design
-// version (PLY-5) in the storage the host passes in.
+// version (PLY-5) in the storage the host passes in; a new design version during the session (a
+// structural change, §3 rule 8) resets it to the default, with a notice (PLY-5, R28).
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import { useGameSetup, useMe } from '@wrx/hooks'
 import type { AdminEditor, PlayerPanel, ReactRoomTypeRegistry } from '@wrx/hooks'
 import { Spinner, useOptionalToast } from '@wrx/ui'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { GameInfoPanel, OnlinePanel, RoomPanel } from './panels.tsx'
 import { layoutKey } from './storage.ts'
 import type { LayoutStorage } from './storage.ts'
@@ -33,8 +34,8 @@ export interface WorkspaceProps {
 
 /**
  * PLY-30: a room the role loses during play (a force move, a participant change, the room
- * removed) closes, and the player is told which, in a toast, so the layout around it stays as
- * it is. Only for rooms seen in this session: the first room list after login says nothing.
+ * removed) closes, and the player is told which, in a toast. Only for rooms seen in this
+ * session: the first room list after login says nothing.
  */
 function useClosedRoomNotice(
   rooms: readonly { readonly room: { readonly id: string; readonly name: string } }[] | undefined,
@@ -58,10 +59,25 @@ function useClosedRoomNotice(
   }, [rooms, toast])
 }
 
+/** PLY-5, R28: the notice for a layout reset by a structural change of the game. */
+function useLayoutResetNotice(): () => void {
+  const toast = useOptionalToast()
+  return useCallback(() => {
+    toast?.show({
+      tone: 'info',
+      title: 'Layout reset',
+      description:
+        'The admin changed the game’s forces, roles or rooms, so your workspace is back to the default layout.',
+      durationMs: 12_000,
+    })
+  }, [toast])
+}
+
 /** The dockable workspace over the pane's store; needs a SessionStoreProvider. */
 export function Workspace({ storage, registry = EMPTY_REGISTRY, tabBadge }: WorkspaceProps) {
   const me = useMe()
   const setup = useGameSetup()
+  const onReset = useLayoutResetNotice()
   // Not while the role itself is gone (PLY-29): that logout says why.
   const known = me.status === 'ready' && (me.data.role !== undefined || me.data.identity.isAdmin)
   useClosedRoomNotice(known ? me.data.rooms : undefined)
@@ -91,6 +107,8 @@ export function Workspace({ storage, registry = EMPTY_REGISTRY, tabBadge }: Work
       ]}
       storage={storage}
       layoutKey={key}
+      resetKey={setup.data?.designVersion}
+      onReset={onReset}
       tabBadge={tabBadge}
       emptyState={
         rooms.length === 0 ? (
