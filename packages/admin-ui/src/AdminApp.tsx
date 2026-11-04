@@ -20,6 +20,7 @@ import type { ThemesSlot } from './sections/ThemesSection.tsx'
 import type { PublishConnection } from './publish/controller.ts'
 import { PublishSection } from './publish/PublishSection.tsx'
 import { usePublish } from './publish/usePublish.ts'
+import type { WorldStateTransfer } from './publish/transfer.ts'
 import { AuditSection } from './audit/AuditSection.tsx'
 import { useAudit } from './audit/useAudit.ts'
 import { useDraft, useDraftValidation } from './useDraft.ts'
@@ -84,12 +85,25 @@ export interface AdminAppProps {
    * only import and export.
    */
   readonly publish?: PublishConnection
+  /**
+   * The world state in design export and import (ADM-16, WP 5.6): the admin's world-state draft
+   * or the published state. Without it, design files carry no world state.
+   */
+  readonly worldState?: WorldStateTransfer
   /** For tests: file downloads and printing. */
   readonly download?: (name: string, text: string) => void
   readonly print?: () => void
 }
 
-export function AdminApp({ store, registry, publish, download, print, ...rest }: AdminAppProps) {
+export function AdminApp({
+  store,
+  registry,
+  publish,
+  download,
+  print,
+  worldState,
+  ...rest
+}: AdminAppProps) {
   const snapshot = useDraft(store)
   const validation = useDraftValidation(snapshot.draft, registry)
   const matrix = useDesignAccess(snapshot.draft.design)
@@ -123,6 +137,7 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
             validation={validation}
             {...(download === undefined ? {} : { download })}
             {...(print === undefined ? {} : { print })}
+            {...(worldState === undefined ? {} : { worldState })}
           />
         }
         auditPanel={

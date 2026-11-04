@@ -16,7 +16,8 @@ import {
   demoState,
 } from '@wrx/mock-server'
 import type { DesignFile } from '@wrx/schemas'
-import { sampleDesign, tid } from '@wrx/schemas/fixtures'
+import { sampleDesign, sampleWorldState, tid } from '@wrx/schemas/fixtures'
+import type { WorldState } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -29,6 +30,8 @@ import {
 } from '../draft/index.ts'
 import type { DraftStore } from '../draft/index.ts'
 import type { PublishConnection } from './controller.ts'
+import { mapRoomIdOf } from './transfer.ts'
+import type { WorldStateTransfer } from './transfer.ts'
 import { PublishSectionCore } from './PublishSection.tsx'
 import type { PublishSectionCoreProps } from './PublishSection.tsx'
 import { validateDraft } from '../draft/index.ts'
@@ -61,7 +64,7 @@ async function connected(): Promise<{ connection: PublishConnection; transport: 
   }
 }
 
-async function setup() {
+async function setup(worldState?: WorldStateTransfer) {
   const { connection, transport } = await connected()
   const store = createDraftStore({
     persistence: memoryDraftPersistence(),
@@ -77,6 +80,7 @@ async function setup() {
       publish: connection,
       download,
       print,
+      ...(worldState === undefined ? {} : { worldState }),
     }),
   )
   return { user: userEvent.setup(), store, connection, transport, download, print }
@@ -536,6 +540,49 @@ describe('design export and import (ADM-16)', () => {
     expect(screen.getByText('broken.json was not imported.')).toBeTruthy()
     expect(screen.getByText(new RegExp(`unknown force "${tid('nowhere')}"`))).toBeTruthy()
     expect(store.getSnapshot().draft.design.game.name).toBe('Imported game')
+  })
+
+  it('exports the world state the host gives, and imports a file’s as the draft (WP 5.6)', async () => {
+    const kept: { roomId: string; state: WorldState }[] = []
+    const forExport = vi.fn((_roomId: string) => Promise.resolve(sampleWorldState()))
+    const { user, download, store } = await setup({
+      forExport,
+      importDraft: (roomId, state) => {
+        kept.push({ roomId, state })
+        return undefined
+      },
+    })
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledTimes(1)
+    })
+    const mapRoomId = mapRoomIdOf(store.getSnapshot().draft)
+    expect(forExport).toHaveBeenCalledWith(mapRoomId)
+    const [, text] = download.mock.calls[0] ?? []
+    const exported = JSON.parse(text ?? '{}') as DesignFile
+    expect(exported).toMatchObject({ schemaVersion: 3, worldState: sampleWorldState() })
+
+    const moved = { ...sampleWorldState(), turn: 4 }
+    const file = { ...exported, worldState: moved, game: { ...exported.game, name: 'Moved game' } }
+    await user.upload(
+      screen.getByLabelText('Import a design…'),
+      new File([JSON.stringify(file)], 'moved.json'),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
+    expect(screen.getByText('Imported moved.json.')).toBeTruthy()
+    expect(screen.getByText(/is now your world-state draft, held in this browser/)).toBeTruthy()
+    expect(kept).toEqual([{ roomId: mapRoomId, state: moved }])
+    expect('worldState' in store.getSnapshot().draft.design).toBe(false)
+
+    // A version 2 file, from before world states, imports with none.
+    const v2 = { ...sampleDesign(), schemaVersion: 2 }
+    await user.upload(
+      screen.getByLabelText('Import a design…'),
+      new File([JSON.stringify(v2)], 'old.json'),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
+    expect(screen.getByText('Imported old.json.')).toBeTruthy()
+    expect(kept).toHaveLength(1)
   })
 })
 

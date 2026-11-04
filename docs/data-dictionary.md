@@ -338,7 +338,7 @@ A complete game design, as exported and imported by the admin.
 | Field | Type | Required | Rules | Description |
 | --- | --- | --- | --- | --- |
 | `format` | constant | yes | = "wrx1-design" |  |
-| `schemaVersion` | constant | yes | = 2 |  |
+| `schemaVersion` | constant | yes | = 3 |  |
 | `exportedAt` | string | yes | format date-time | ISO 8601 date-time |
 | `game` | object | yes |  | The game setup document |
 | `forces` | array of object | yes |  | Force documents |
@@ -348,3 +348,4 @@ A complete game design, as exported and imported by the admin.
 | `assets` | array of object | yes |  | Asset documents |
 | `retired` | array of object | yes |  | The last names of deleted forces and roles that were published, kept so old messages show them (§3 rule 1) |
 | `templates` | array of object | yes |  | Message templates (Annex A); a file from before templates has none. Each locks when a published room makes it available (TPL-4) |
+| `worldState` | object | no |  | The world state to set the map up with (ADM-16): the admin’s draft when exported, else the latest published state. Imported as the admin’s draft, published only by the admin (ADM-45) |

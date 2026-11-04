@@ -265,8 +265,8 @@ export interface WorldStateView {
 }
 
 /**
- * What the admin asks for when moving the game on (ADM-43). An object so that WP 5.6 can add
- * "publish this world state with the change" without changing callers.
+ * What the admin asks for when moving the game on (ADM-43), and optionally the world state to
+ * publish with the change (ADM-45, WP 5.6).
  */
 export interface AdvancePhaseOptions {
   /**
@@ -274,6 +274,11 @@ export interface AdvancePhaseOptions {
    * the time the change is sent (another admin tab moved it first), nothing is sent: `stale`.
    */
   readonly from: GameState
+  /**
+   * A full world state to publish to the map room with the change (ADM-45), sent with
+   * `sendWorldState` before `game-state` moves. If it is refused, the phase does not change.
+   */
+  readonly worldState?: { readonly roomId: string; readonly state: WorldState }
 }
 
 /** A phase change the admin made: from where, to where. */
@@ -401,7 +406,8 @@ export interface SessionStore {
    * The admin only (ADM-43): moves the game from `options.from` to its next phase
    * (`nextGameState`) and publishes it to `game-state`. Refused before sending for any role,
    * when `game-state` no longer holds `from` (`stale`), when none is published (`not-found`), and
-   * after the last turn (`invalid`).
+   * after the last turn (`invalid`). With `options.worldState`, publishes it first (ADM-45), and
+   * refuses the change if it is refused.
    */
   advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>>
   /**
@@ -2051,7 +2057,20 @@ class Store implements SessionStore {
     if (next === undefined) return domainErr('invalid', 'the last turn has no next phase')
     const parsed = parseDocument('game-state', next)
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    // WP 5.6 publishes the world state here, before the turn moves, when the options carry one.
+    // ADM-45: the world state first, so players never see the new phase with the old map. If it
+    // is refused (too large, not joined), the phase stays where it is.
+    if (options.worldState !== undefined) {
+      const sent = await this.sendWorldState(options.worldState.roomId, options.worldState.state)
+      if (!sent.ok) {
+        return {
+          ok: false,
+          error: {
+            ...sent.error,
+            message: `the world state was not published, so the phase did not change: ${sent.error.message}`,
+          },
+        }
+      }
+    }
     const published = await this.publish(
       SINGLETON_NODES.gameState,
       DOCUMENT_ITEM_ID,

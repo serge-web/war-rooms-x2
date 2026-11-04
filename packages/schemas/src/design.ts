@@ -18,16 +18,26 @@ import {
   templateSchema,
 } from './template.ts'
 import type { Template } from './template.ts'
-import { MAP_ROOM_TYPE, hasMapParticipants, mapParticipants, mapRoomConfigReader } from './world.ts'
+import {
+  MAP_ROOM_TYPE,
+  hasMapParticipants,
+  mapParticipants,
+  mapRoomConfigReader,
+  worldStateSchema,
+} from './world.ts'
 
-/** The design file's current `schemaVersion`: 2 since GUID ids (§3 rule 1, WP 3.5). */
-export const DESIGN_FILE_VERSION = 2
+/**
+ * The design file's current `schemaVersion`: 2 since GUID ids (§3 rule 1, WP 3.5), 3 since it
+ * may carry a world state (ADM-16, WP 5.6).
+ */
+export const DESIGN_FILE_VERSION = 3
 
 /**
  * The design export file (ADM-16): everything publishing provisions, in one versioned JSON
- * document that moves between mock and real backends. A `password` field on a role is
- * rejected, so a file carrying passwords cannot be imported (§3 rule 9). Version 1 files, from
- * before GUID ids, are read by `readDesignFile` (legacy.ts), which converts them.
+ * document that moves between mock and real backends, and the world state to set the map up
+ * with. A `password` field on a role is rejected, so a file carrying passwords cannot be
+ * imported (§3 rule 9). Older files are read by `readDesignFile` (legacy.ts): version 1, from
+ * before GUID ids, is converted; version 2 is version 3 without a world state.
  */
 export const designFileSchema = z
   .object({
@@ -56,6 +66,11 @@ export const designFileSchema = z
       .default([])
       .describe(
         'Message templates (Annex A); a file from before templates has none. Each locks when a published room makes it available (TPL-4)',
+      ),
+    worldState: worldStateSchema
+      .optional()
+      .describe(
+        'The world state to set the map up with (ADM-16): the admin’s draft when exported, else the latest published state. Imported as the admin’s draft, published only by the admin (ADM-45)',
       ),
   })
   .describe('A complete game design, as exported and imported by the admin')
@@ -182,6 +197,18 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
   })
 
   checkTemplates(design, forceIds, roleIds, error, warn)
+
+  // ADM-16: a world state whose asset belongs to no force here would show as "Unknown force".
+  if (design.worldState !== undefined) {
+    for (const asset of Object.values(design.worldState.assets)) {
+      if (!forceIds.has(asset.forceId)) {
+        warn(
+          `worldState.assets.${asset.id}.forceId`,
+          `the world state’s asset "${asset.title}" belongs to no force in this design`,
+        )
+      }
+    }
+  }
 
   const limit = options.assetLimitBytes ?? LIMITS.assetDefaultBytes
   design.assets.forEach((a, i) => {

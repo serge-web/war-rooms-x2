@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { LIMITS, isId } from './common.ts'
 import { checkDesign, designFileSchema, publicAssetIds } from './design.ts'
 import type { DesignFile } from './design.ts'
-import { ASSET, FORCE, ROLE, ROOM, pixelAsset, sampleDesign, sampleDesignV1 } from './fixtures.ts'
+import {
+  ASSET,
+  FORCE,
+  ROLE,
+  ROOM,
+  pixelAsset,
+  sampleDesign,
+  sampleDesignV1,
+  sampleWorldState,
+} from './fixtures.ts'
 import { convertDesignV1, readDesignFile } from './legacy.ts'
 
 /** Ids that no entity of the sample design has. */
@@ -218,7 +227,7 @@ describe('design files from before GUID ids (ADM-16, §3 rule 1)', () => {
     const { design, ids } = convertDesignV1(v1, { newId })
     expect(designFileSchema.safeParse(design).success).toBe(true)
     expect(checkDesign(design)).toEqual([])
-    expect(design.schemaVersion).toBe(2)
+    expect(design.schemaVersion).toBe(3)
     expect(design.retired).toEqual([])
     // Every id is a new GUID, and the maps say which.
     const all = [
@@ -268,7 +277,7 @@ describe('design files from before GUID ids (ADM-16, §3 rule 1)', () => {
     expect(design.objectives.map((o) => o.markdown)).toEqual(v1.objectives.map((o) => o.markdown))
   })
 
-  it('round-trips: a converted file reads back unchanged as version 2', () => {
+  it('round-trips: a converted file reads back unchanged as version 3', () => {
     const read = readDesignFile(JSON.parse(JSON.stringify(everyIdField())))
     if (!read.ok) throw new Error('not converted')
     expect(read.value.converted).toBeDefined()
@@ -276,12 +285,49 @@ describe('design files from before GUID ids (ADM-16, §3 rule 1)', () => {
     expect(again).toEqual({ ok: true, value: { design: read.value.design } })
   })
 
-  it('reads a version 2 file as it is, and refuses a version 1 file with a password', () => {
+  it('reads a version 3 file as it is, and refuses a version 1 file with a password', () => {
     expect(readDesignFile(sampleDesign())).toEqual({ ok: true, value: { design: sampleDesign() } })
     const v1 = sampleDesignV1()
     const withPassword = { ...v1, roles: v1.roles.map((r) => ({ ...r, password: 'x' })) }
     expect(readDesignFile(withPassword).ok).toBe(false)
-    expect(readDesignFile({ ...sampleDesign(), schemaVersion: 3 }).ok).toBe(false)
+    expect(readDesignFile({ ...sampleDesign(), schemaVersion: 4 }).ok).toBe(false)
+  })
+
+  it('reads a version 3 file with its world state, and checks its forces (ADM-16, WP 5.6)', () => {
+    const design = { ...sampleDesign(), worldState: sampleWorldState() }
+    expect(readDesignFile(JSON.parse(JSON.stringify(design)))).toEqual({
+      ok: true,
+      value: { design },
+    })
+    expect(checkDesign(design)).toEqual(checkDesign(sampleDesign()))
+    const [asset] = Object.values(design.worldState.assets)
+    if (asset === undefined) throw new Error('fixture')
+    const stray = {
+      ...design,
+      worldState: {
+        turn: 1,
+        assets: { [asset.id]: { ...asset, forceId: 'f0000000-0000-4000-8000-00000000dead' } },
+      },
+    }
+    expect(checkDesign(stray).filter((i) => i.path.startsWith('worldState'))).toEqual([
+      {
+        severity: 'warning',
+        path: `worldState.assets.${asset.id}.forceId`,
+        message: `the world state’s asset "${asset.title}" belongs to no force in this design`,
+      },
+    ])
+    expect(readDesignFile({ ...design, worldState: { turn: 0, assets: {} } }).ok).toBe(false)
+  })
+
+  it('upgrades a version 2 file, which has no world state (WP 5.6)', () => {
+    const v2 = { ...sampleDesign(), schemaVersion: 2 }
+    expect(readDesignFile(JSON.parse(JSON.stringify(v2)))).toEqual({
+      ok: true,
+      value: { design: sampleDesign() },
+    })
+    expect(readDesignFile({ ...v2, worldState: sampleWorldState() }).ok).toBe(false)
+    const withPassword = { ...v2, roles: v2.roles.map((r) => ({ ...r, password: 'x' })) }
+    expect(readDesignFile(withPassword).ok).toBe(false)
   })
 
   it('keeps an unknown reference unknown, so the check still reports it', () => {

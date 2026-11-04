@@ -163,6 +163,15 @@ export function convertDesignV1(
   }
 }
 
+/**
+ * A version 2 design file: version 3 without a world state (WP 5.6). Read as it is, then given
+ * version 3; a `worldState` in it is refused, as version 2 never had one.
+ */
+export const designFileV2Schema = designFileSchema.omit({ worldState: true }).extend({
+  schemaVersion: z.literal(2),
+  worldState: z.never().optional(),
+})
+
 export interface ReadDesign {
   readonly design: DesignFile
   /** Set when the file was version 1 and was converted. */
@@ -170,8 +179,9 @@ export interface ReadDesign {
 }
 
 /**
- * Reads a design file of any supported version (ADM-16): version 2 as it is, version 1 through
- * `convertDesignV1`. Fails with the schema's issues; a file with a `password` is refused.
+ * Reads a design file of any supported version (ADM-16): version 3 as it is, version 2 upgraded
+ * (it has no world state), version 1 through `convertDesignV1`. Fails with the schema's issues;
+ * a file with a `password` is refused.
  */
 export function readDesignFile(
   json: unknown,
@@ -188,6 +198,12 @@ export function readDesignFile(
     const checked = designFileSchema.safeParse(design)
     if (!checked.success) return { ok: false, error: checked.error.issues }
     return { ok: true, value: { design: checked.data, converted: ids } }
+  }
+  if (version === 2) {
+    const old = designFileV2Schema.safeParse(json)
+    if (!old.success) return { ok: false, error: old.error.issues }
+    const { worldState: _none, ...rest } = old.data
+    return { ok: true, value: { design: { ...rest, schemaVersion: DESIGN_FILE_VERSION } } }
   }
   const parsed = designFileSchema.safeParse(json)
   if (!parsed.success) return { ok: false, error: parsed.error.issues }

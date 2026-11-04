@@ -95,7 +95,7 @@ describe('createDraft', () => {
     const draft = createDraft({ name: 'Exercise', now: NOW, whiteForceId: tid('white') })
     expect(draft.design.game.name).toBe('Exercise')
     expect(draft.design.exportedAt).toBe(NOW.toISOString())
-    expect(draft.design.schemaVersion).toBe(2)
+    expect(draft.design.schemaVersion).toBe(3)
     expect(draft.design.forces).toEqual([
       {
         schemaVersion: 1,

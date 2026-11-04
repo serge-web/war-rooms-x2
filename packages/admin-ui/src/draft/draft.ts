@@ -163,8 +163,15 @@ export function draftFromDesign(
   meta: Partial<DraftMeta> = {},
   newId: IdSource = newEntityId,
 ): Draft {
+  // The world state is never part of the design draft: an import hands it to the admin's
+  // world-state draft (ADM-16, ADM-45), and export adds it back.
+  let rest = design
+  if (design.worldState !== undefined) {
+    const { worldState: _worldState, ...withoutWorld } = design
+    rest = withoutWorld
+  }
   return {
-    design: normalise(withMapRoom(design, newId)),
+    design: normalise(withMapRoom(rest, newId)),
     meta: {
       publishedRoleIds: meta.publishedRoleIds ?? EMPTY_META.publishedRoleIds,
       publishedForceIds: meta.publishedForceIds ?? EMPTY_META.publishedForceIds,

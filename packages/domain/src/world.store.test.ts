@@ -298,3 +298,53 @@ describe('sending the world state (D25, PLY-53)', () => {
     release()
   })
 })
+
+describe('a phase change with the world state (ADM-45, WP 5.6)', () => {
+  const at = (turn: number, phase: 'planning' | 'adjudication') =>
+    ({ schemaVersion: 1, turn, phase }) as const
+
+  async function adminAt(turn: number, phase: 'planning' | 'adjudication') {
+    const docs = mapDocuments()
+    docs.set('game-state', [at(turn, phase)])
+    const h = harness({ docs, roleId: 'admin' })
+    await h.store.ready()
+    const release = h.store.acquireWorldState(tid('map'))
+    await flush(20)
+    return { h, release }
+  }
+
+  const writes = (h: ReturnType<typeof harness>) =>
+    h.session.calls.filter((c) => c.op === 'send' || c.op === 'publish')
+
+  it('sends the world state first, then moves the phase', async () => {
+    const { h, release } = await adminAt(1, 'adjudication')
+    const state = stateAt(2)
+    const result = await h.store.advancePhase({
+      from: at(1, 'adjudication'),
+      worldState: { roomId: tid('map'), state },
+    })
+    expect(result.ok).toBe(true)
+    const ops = writes(h)
+    expect(ops.map((c) => c.op)).toEqual(['send', 'publish'])
+    expect((JSON.parse(String(ops[0]?.args[1])) as { content: unknown }).content).toEqual(state)
+    expect(JSON.parse(String(ops[1]?.args[2]))).toEqual(at(2, 'planning'))
+    release()
+  })
+
+  it('does not move the phase when the world state is refused, nor send it when stale', async () => {
+    const { h, release } = await adminAt(1, 'planning')
+    const refused = await h.store.advancePhase({
+      from: at(1, 'planning'),
+      worldState: { roomId: tid('map'), state: { turn: 0, assets: {} } },
+    })
+    expect(refused.ok || refused.error.code).toBe('invalid')
+    expect(refused.ok || refused.error.message).toMatch(/the phase did not change/)
+    const stale = await h.store.advancePhase({
+      from: at(3, 'planning'),
+      worldState: { roomId: tid('map'), state: sampleWorldState() },
+    })
+    expect(stale.ok || stale.error.code).toBe('stale')
+    expect(writes(h)).toEqual([])
+    release()
+  })
+})

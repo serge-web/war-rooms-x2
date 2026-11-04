@@ -23,7 +23,8 @@ import { describeError } from './controller.ts'
 import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
-import { exportDesign, importDesign, newDesign } from './transfer.ts'
+import { exportDesign, importDesign, mapRoomIdOf, newDesign } from './transfer.ts'
+import type { WorldStateTransfer } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
@@ -61,6 +62,8 @@ export interface PublishSectionProps {
   readonly download?: (name: string, text: string) => void
   /** Prints the page; default `window.print`. */
   readonly print?: () => void
+  /** The world state in the design file (ADM-16, WP 5.6); without it, files carry none. */
+  readonly worldState?: WorldStateTransfer
 }
 
 export function PublishSection({
@@ -69,6 +72,7 @@ export function PublishSection({
   demoVaultPassphrase,
   store,
   download,
+  worldState,
   ...rest
 }: PublishSectionProps) {
   const { snapshot, controller } = publish
@@ -91,15 +95,38 @@ export function PublishSection({
       onUnlockVault={(p) => controller?.unlockVault(p) ?? notConnected()}
       onLockVault={() => controller?.lockVault()}
       onResetPassword={(id) => controller?.resetPassword(id) ?? notConnected()}
-      onExport={() => {
-        const file = exportDesign(store.getSnapshot().draft)
+      onExport={async () => {
+        const draft = store.getSnapshot().draft
+        const mapRoomId = mapRoomIdOf(draft)
+        // ADM-16: the admin's world-state draft, else the latest published state.
+        const state =
+          worldState === undefined || mapRoomId === undefined
+            ? undefined
+            : await worldState.forExport(mapRoomId)
+        const file = exportDesign(draft, new Date(), state)
         save(file.name, file.text)
       }}
       onImport={(text) => {
         const imported = importDesign(text, store.getSnapshot().draft)
         if (!imported.ok) return imported.error
         store.commit(imported.value.draft)
-        return imported.value.warnings
+        const world = imported.value.worldState
+        if (world === undefined || worldState === undefined) return imported.value.warnings
+        const problem = worldState.importDraft(world.mapRoomId, world.state)
+        const note: DesignIssue =
+          problem === undefined
+            ? {
+                severity: 'warning',
+                path: '',
+                message:
+                  'The file’s world state is now your world-state draft, held in this browser. Players see it only when you publish it from the map room (ADM-45).',
+              }
+            : {
+                severity: 'warning',
+                path: '',
+                message: `The file’s world state was not kept as your world-state draft: ${problem}`,
+              }
+        return [...imported.value.warnings, note]
       }}
       onNewDesign={() => {
         store.commit(newDesign(store.getSnapshot().draft))
@@ -135,7 +162,7 @@ export interface PublishSectionCoreProps {
   readonly onUnlockVault: (passphrase: string) => Promise<string | undefined>
   readonly onLockVault: () => void
   readonly onResetPassword: (roleId: string) => Promise<string | undefined>
-  readonly onExport: () => void
+  readonly onExport: () => void | Promise<void>
   /** Imports a file's text; returns the blocking issues, or the warnings when it was imported. */
   readonly onImport: (text: string) => readonly DesignIssue[]
   /** Replaces the draft with an empty design (SC-1: designing a game from nothing). */
@@ -680,12 +707,13 @@ function DesignTransfer({
   onImport,
   onNewDesign,
 }: {
-  readonly onExport: () => void
+  readonly onExport: () => void | Promise<void>
   readonly onImport: (text: string) => readonly DesignIssue[]
   readonly onNewDesign?: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
+  const [exporting, setExporting] = useState(false)
   const [outcome, setOutcome] = useState<
     | { readonly ok: boolean; readonly issues: readonly DesignIssue[]; readonly name: string }
     | 'new'
@@ -718,10 +746,23 @@ function DesignTransfer({
       <h3 id={`${id}-h`}>Export and import the design</h3>
       <p>
         A design file moves a game between the mock and a server, or between servers. It never holds
-        passwords.
+        passwords. It holds the world state too: your world-state draft if this browser has one,
+        otherwise the latest published one. An import makes the file’s world state your draft;
+        players see it only when you publish it from the map room.
       </p>
       <div className="wrx-publish-toolbar">
-        <Button onClick={onExport}>Export the design</Button>
+        <Button
+          aria-busy={exporting}
+          disabled={exporting}
+          onClick={() => {
+            setExporting(true)
+            void Promise.resolve(onExport()).finally(() => {
+              setExporting(false)
+            })
+          }}
+        >
+          Export the design
+        </Button>
         <label className="wrx-admin-button wrx-admin-button-secondary" htmlFor={id}>
           Import a design…
         </label>
