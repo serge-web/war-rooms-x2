@@ -2,7 +2,7 @@
 
 ## v1 (release candidate, not yet released)
 
-The product owner's Nov 3, 2026 revision moved a turn model and a map room into v1, so v1 now waits for Phase 5 (turns and the map) as well as one check: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. The install is a deployment step and is not expected to change the code. This page will give the release date once the check is done.
+The product owner's Nov 3, 2026 revision moved a turn model and a map room into v1. Phase 5 built them (gate G5, Nov 4, 2026), so v1 now waits for one check: installing the reference deployment on the real hardware (WP 3.3, NFR-23), which is with the product owner. The install is a deployment step and is not expected to change the code. This page will give the release date once the check is done. Message templates (Phase 4, SRD Annex A) are in this build too, described under "Message templates".
 
 ### What v1 does
 
@@ -16,13 +16,18 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 - **Audit and repair.** Compares the live server with the design, rates each difference, and repairs what it can with the same steps a publish uses.
 - **Credentials.** Role passwords are generated randomly and listed on a credentials sheet for the admin's session, to print or hand out; they are never stored in the design or exported, and a role's password can be reset from the sheet.
 - **Import and export** of the design as one JSON file, without passwords. Files from before entity ids became GUIDs are converted on import.
+- **Turns.** The game runs in numbered turns, each a planning then an adjudication phase. Only the admin moves it on, from the turn panel in the game view or the admin backend's header, after a confirmation.
+- **The world state.** In the umpire's game view the admin adds, moves (by dragging, or in the form from the keyboard), edits and deletes the map's assets. Edits are a draft held only in that browser, with a banner saying so and a warning if the game was reset since the draft began. The admin publishes the draft with a phase change or at any time with "Publish world state", after a summary of what changes. Each publish sends the whole state as one message of at most 500 KB (about 1,700 typical assets).
 - **Objectives** are written by the admin for each force, and during play the admin and White Force roles that are not observers amend any force's objectives from the player client, with a preview; the force sees each edit live, and the newest edit is what it reads. Each force reads its own, and every White Force role reads all of them; White Force observers only read. A role that leaves the White Force, or is deleted, has its edits removed by the next publish.
 
 **For players**
 
 - **Welcome page and login**, then a workspace of room tabs that each player docks, splits and pops out, remembered per browser and per design version.
 - **Chat** with messages grouped by sender, date dividers, history that loads as you scroll, unread counts on tabs, and reconnection that fills any gap. Message text is always plain text. Each room's message entry collapses to a slim bar for players who only read, keeping any draft; each room remembers it, and observers start with it collapsed.
-- **The out-of-game column**: announcements from the admin and the player's force panel with its objectives. In narrow windows it becomes a tab of its own.
+- **The out-of-game column**: the turn panel with the turn and phase, announcements from the admin and the player's force panel with its objectives. In narrow windows it becomes a tab of its own.
+- **Adjudication.** While the umpires adjudicate, roles outside the White Force cannot post: their message entry pauses with a note, keeping any draft. This is applied by the client, not the server.
+- **The map room.** Every game has one, which every role sees: the latest world state from the admin, each asset a MIL-STD-2525/APP-6 symbol over a base map, with its details on selection and a table of every asset for keyboard use. A reload finds the newest state in the room's history; posts from anyone but the admin are ignored.
+- **Layouts** reset to the default, with a notice, only on a structural change: a room added or removed, or a role's access to a room changing. Renaming, re-ordering, themes and text keep them.
 - **Observers** read their rooms but never post. White Force observers see the rooms assigned to them, or every room when none is.
 - **The umpire** is the admin, playing in the White Force: it reads and writes in every room, reads and amends every force's objectives and posts announcements.
 
@@ -30,6 +35,10 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 
 - **The mock server** runs the whole game in the browser with no XMPP server, with a demo game, and can be reset, exported and imported.
 - **The multi-client view** shows two to four players side by side in one window, each with their own login.
+
+### Message templates (Phase 4)
+
+Rooms can take structured messages: the admin builds forms in the design editor, offers them per room to forces and roles, and players send them as cards. Every client checks each message against its template; a template locks once a published room offers it, and changes go through a copy. See the site's message templates page.
 
 ### Supported browsers
 
@@ -75,5 +84,9 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 - **Unread counts** start again at each login.
 - **One game per server.**
 - **One account per role:** players sharing a role share its login.
-- **Not in v1** (the design keeps each cheap to add later): structured form rooms and message templates, a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
+- **The world-state draft** is held only in the admin's browser (in its local storage, readable by anyone with that browser profile until it is published or discarded) and is not tied to the admin login; two admin tabs editing it at once overwrite each other's edits. Server-side drafts are post-v1.
+- **The map's base tiles** come from a tile server the deployment names, which learns which area each player looks at; without one the map has no background. The demo uses OpenStreetMap's tiles.
+- **Adjudication is advisory:** a modified client can still post during it.
+- **A role added that sees any room** counts as a structural change, so every online player's layout resets.
+- **Not in v1** (the design keeps each cheap to add later): structured form rooms, image and asset pickers in templates, fog of war (per-force maps), world-state snapshots and deltas, a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
 - **Operating the server:** the umpire plays with the server's admin account, so play it on a machine only the umpire uses; `ops/README.md` says what else to look after.

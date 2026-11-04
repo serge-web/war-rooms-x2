@@ -19,7 +19,7 @@ WRX1 keeps Serge's way of describing a game and War Rooms X's XMPP transport, an
 - **A multi-client view** that shows two to four independent clients on one page, so a demo can show several players at once.
 - **This site**, which explains the project and hosts a live build of every pull request.
 
-Other kinds of room (structured forms, maps, requests for information) and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers just one, `chat`.
+Other kinds of room (structured forms, requests for information) and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers two, `chat` and `map`. [Turns and the map](./turns-and-map) describes the second in full.
 
 ## Key decisions
 
@@ -51,7 +51,7 @@ The admin may change a published game while players are online, and changes appl
 
 ### Layouts stay in the browser
 
-Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout. The layout survives theme and text edits, but when the admin adds, removes or moves forces, roles or rooms, or changes who is in a room, every player's layout goes back to the default, and they are told.
+Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout. The layout survives theme and text edits, renaming and re-ordering, but when the admin adds or removes a room, or changes which rooms a role can see or write in, every player's layout goes back to the default, and they are told.
 
 ### Turns, moved on by the admin
 
@@ -67,7 +67,7 @@ Edits build up as a draft, kept only in the admin's browser until published: the
 
 ### Offline and air-gapped
 
-The client is a static build with every font, icon and library bundled, and makes no calls to the internet. It can be served next to the XMPP server, from a separate static host, or as plain files with the mock backend.
+The client is a static build with every font, icon, library and map symbol bundled, and makes no calls to the internet. The one exception is the map's background, which comes from a tile server the deployment names; without one, the map shows the assets on a plain background. The client can be served next to the XMPP server, from a separate static host, or as plain files with the mock backend.
 
 ### A mock that behaves like the server
 
@@ -79,4 +79,4 @@ All code is strict TypeScript, and the types for every stored document come from
 
 ## How it is built
 
-WRX1 is built in four phases, each ending in a reviewed gate: foundations; contracts and transports; features; and acceptance. Work packages within a phase run in parallel, each on its own branch, and every pull request gets a live preview listed in the [PR index](./prs). The [blog](./blog/) reports progress, including work that hasn't yet passed its gate.
+WRX1 is built in phases, each ending in a reviewed gate: foundations; contracts and transports; features; acceptance; message templates; and turns and the map. Work packages within a phase run in parallel, each on its own branch, and every pull request gets a live preview listed in the [PR index](./prs). The [blog](./blog/) reports progress, including work that hasn't yet passed its gate.
