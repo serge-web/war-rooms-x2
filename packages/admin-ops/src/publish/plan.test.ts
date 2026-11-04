@@ -732,13 +732,15 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
   it.each<[string, (d: DesignFile) => DesignFile]>([
     ['a force removed', (d) => ({ ...d, forces: d.forces.filter((f) => f.id !== tid('red')) })],
     [
-      'a role added',
+      'a role added while another’s access changes',
       (d) => ({
         ...d,
-        roles: [...d.roles, { ...role('red-co'), id: tid('red-xo'), loginName: 'red-xo' }],
+        roles: [
+          ...d.roles.map((r) => (r.loginName === 'white-cell' ? { ...r, isObserver: true } : r)),
+          { ...role('red-co'), id: tid('red-xo'), loginName: 'red-xo' },
+        ],
       }),
     ],
-    ['a role removed', (d) => ({ ...d, roles: d.roles.filter((r) => r.loginName !== 'red-co') })],
     [
       'a role moved to another force',
       (d) => ({
@@ -837,6 +839,21 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
             : o,
         ),
       }),
+      false,
+    ],
+    // Not structural since Nov 4, 2026 (WP 5.9, review L7): a role added or removed changes no
+    // other role's access; layouts are saved per role.
+    [
+      'a role added',
+      (d) => ({
+        ...d,
+        roles: [...d.roles, { ...role('red-co'), id: tid('red-xo'), loginName: 'red-xo' }],
+      }),
+      false,
+    ],
+    [
+      'a role removed',
+      (d) => ({ ...d, roles: d.roles.filter((r) => r.loginName !== 'red-co') }),
       false,
     ],
     // Not structural since Nov 4, 2026: a force with no roles changes no role's access, and

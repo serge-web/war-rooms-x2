@@ -11,6 +11,7 @@ import {
   RETIRED_MAX_ITEMS,
   TEMPLATES_MAX_ITEMS,
   designStructure,
+  structuralChange,
   targetState,
 } from './target.ts'
 
@@ -168,8 +169,8 @@ describe('targetState(sampleDesign())', () => {
   it('gives the design’s structure: its rooms and every role’s access, which only structural edits change (§3 rule 8)', () => {
     const design = withWhiteRoles()
     const structure = targetState(design).structure
-    const same = (d: typeof design) => targetState(d).structure === structure
-    expect(structure).toBe(designStructure(design))
+    const same = (d: typeof design) => !structuralChange(structure, targetState(d).structure)
+    expect(structure).toEqual(designStructure(design))
     // Text, themes, objectives and templates are not structure.
     expect(
       same({
@@ -221,10 +222,38 @@ describe('targetState(sampleDesign())', () => {
         ),
       }),
     ).toBe(true)
-    // Rooms added or removed, and any role's access to a room changed, are.
+    // A role added or removed is not (WP 5.9, review L7): no other role's access changes.
+    const blueXo = { ...blueCo, id: tid('blue-xo'), loginName: 'blue-xo', name: 'Blue XO' }
+    expect(same({ ...design, roles: [...design.roles, blueXo] })).toBe(true)
+    expect(same({ ...design, roles: design.roles.filter((r) => r.id !== blueCo.id) })).toBe(true)
+    // Nor both at once, in either direction.
+    const swapped = {
+      ...design,
+      roles: [...design.roles.filter((r) => r.id !== blueCo.id), blueXo],
+    }
+    expect(same(swapped)).toBe(true)
+    expect(structuralChange(targetState(swapped).structure, structure)).toBe(false)
+    // Rooms added or removed, and the access of a role in both designs changed, are.
     expect(same({ ...design, rooms: design.rooms.slice(1) })).toBe(false)
-    expect(same({ ...design, roles: design.roles.slice(1) })).toBe(false)
+    expect(
+      same({
+        ...design,
+        rooms: [...design.rooms, { ...design.rooms[0]!, id: tid('press'), name: 'Press' }],
+      }),
+    ).toBe(false)
     expect(same({ ...design, forces: design.forces.slice(1) })).toBe(false)
+    // A role added together with an access change for a role in both still counts.
+    expect(
+      same({
+        ...design,
+        roles: [
+          ...design.roles.map((r) =>
+            r.loginName === 'white-cell' ? { ...r, isObserver: true } : r,
+          ),
+          blueXo,
+        ],
+      }),
+    ).toBe(false)
     expect(
       same({
         ...design,

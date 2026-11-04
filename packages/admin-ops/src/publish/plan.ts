@@ -50,7 +50,13 @@ import {
 import type { DesignFile, Force, GameSetup, Retired, Role, Room, Template } from '@wrx/schemas'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 import type { NodeAccessChange, RoomAccessChange } from '../ops.ts'
-import { ROOM_SETTINGS, designStructure, sameRoomConfig, targetState } from '../target.ts'
+import {
+  ROOM_SETTINGS,
+  designStructure,
+  sameRoomConfig,
+  structuralChange,
+  targetState,
+} from '../target.ts'
 import type { NodeAccess, TargetNode } from '../target.ts'
 import { roleIdOf } from './view.ts'
 import type { NodeView, ServerView } from './view.ts'
@@ -351,8 +357,9 @@ export interface PublishPlan {
   /** The version `game-setup` gets, when the plan publishes it; else undefined. */
   readonly designVersion: number | undefined
   /**
-   * Whether the design's structure changes (§3 rule 8: forces, roles, rooms, participants), so
-   * `designVersion` moves and online players' layouts reset (PLY-5). False for a reset.
+   * Whether the design's structure changes (§3 rule 8, `structuralChange`: rooms added or
+   * removed, or the access of a role in both designs), so `designVersion` moves and online
+   * players' layouts reset (PLY-5). False for a reset.
    */
   readonly structural: boolean
   /** The version on the server now, if a game is published. */
@@ -1133,8 +1140,10 @@ export function planPublish(
     canonicalJson({ ...published.game, designVersion: 0 }) !==
       canonicalJson({ ...design.game, designVersion: 0 })
   // Rule 8: only a structural change moves the version, so saved layouts outlive theme and
-  // text edits (D6). Compared with the published documents, so a first publish is structural.
-  const structural = published.game === undefined || target.structure !== designStructure(published)
+  // text edits, and roles added or removed (D6, WP 5.9). Compared with the published documents,
+  // so a first publish is structural.
+  const structural =
+    published.game === undefined || structuralChange(designStructure(published), target.structure)
   const owed = pending ? marker.designVersion : undefined
   const next =
     publishedVersion === undefined

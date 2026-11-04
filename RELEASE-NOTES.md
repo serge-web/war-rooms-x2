@@ -27,7 +27,7 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 - **The out-of-game column**: the turn panel with the turn and phase, announcements from the admin and the player's force panel with its objectives. In narrow windows it becomes a tab of its own.
 - **Adjudication.** While the umpires adjudicate, roles outside the White Force cannot post: their message entry pauses with a note, keeping any draft. This is applied by the client, not the server.
 - **The map room.** Every game has one, which every role sees: the latest world state from the admin, each asset a MIL-STD-2525/APP-6 symbol over a base map, with its details on selection and a table of every asset for keyboard use. A reload finds the newest state in the room's history; posts from anyone but the admin are ignored.
-- **Layouts** reset to the default, with a notice, only on a structural change: a room added or removed, or a role's access to a room changing. Renaming, re-ordering, themes and text keep them.
+- **Layouts** reset to the default, with a notice, only on a structural change: a room added or removed, or an existing role's access to a room changing. Renaming, re-ordering, themes, text and roles added or removed keep them.
 - **Observers** read their rooms but never post. White Force observers see the rooms assigned to them, or every room when none is.
 - **The umpire** is the admin, playing in the White Force: it reads and writes in every room, reads and amends every force's objectives and posts announcements.
 
@@ -88,6 +88,5 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 - **The map's base tiles** come from a tile server the deployment names, which learns which area each player looks at; without one the map has no background. The demo uses OpenStreetMap's tiles.
 - **Adjudication is advisory:** a modified client can still post during it.
 - **Map-room flooding:** a modified player client can post enough messages to the map room to hide the latest world state from players who reload; they click "Look further back" to find it, and the next publish ends it. The admin cannot be led into wiping the map.
-- **A role added that sees any room** counts as a structural change, so every online player's layout resets.
 - **Not in v1** (the design keeps each cheap to add later): structured form rooms, image and asset pickers in templates, fog of war (per-force maps), world-state snapshots and deltas, a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
 - **Operating the server:** the umpire plays with the server's admin account, so play it on a machine only the umpire uses; `ops/README.md` says what else to look after.

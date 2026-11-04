@@ -165,9 +165,10 @@ export interface TargetState {
   readonly loginNames: ReadonlyMap<string, string>
   /**
    * The design's structure (§3 rule 8, `designStructure`): what, when it changes, makes a
-   * publish increment `designVersion` and so reset players' layouts (PLY-5).
+   * publish increment `designVersion` and so reset players' layouts (PLY-5). Compare two with
+   * `structuralChange`.
    */
-  readonly structure: string
+  readonly structure: DesignStructure
 }
 
 /** The documents a design's structure is read from: a design file, or the published documents. */
@@ -178,31 +179,56 @@ export interface StructureInput {
 }
 
 /**
- * §3 rule 8: the structure of a design, as canonical text. Two designs with the same text
- * differ only in what does not move `designVersion`, so players' layouts survive it (PLY-5, D6).
- *
- * Structural are only (product owner, Nov 4, 2026): a room added or removed, and a change to any
- * role's effective access to any room (none, read or write, as `effectiveAccess` computes it).
- * Re-ordering forces, roles or rooms is not structural. Moving a role to another force, its
- * observer flag and a force's White Force flag count only through the access they change; so do
- * participant entries. Themes, names, descriptions, the briefing, objectives, templates, room
- * types and configs never count. A role added or removed counts through its access: one that
- * sees no room changes nothing, and one that sees a room moves the version, so every online
- * player's layout resets although their own access is unchanged (layouts are saved per role, so
- * the new role itself has none to lose).
+ * §3 rule 8: the structure of a design: its room ids, sorted, and each role's effective access
+ * to them (none, read or write, as `effectiveAccess` computes it) as canonical text. Two designs
+ * are compared with `structuralChange`.
  */
-export function designStructure(design: StructureInput): string {
+export interface DesignStructure {
+  readonly rooms: readonly string[]
+  /** By role id: the rooms the role reads or writes, as canonical text. */
+  readonly access: ReadonlyMap<string, string>
+}
+
+/** The structure of a design (§3 rule 8), for `structuralChange`. */
+export function designStructure(design: StructureInput): DesignStructure {
   const matrix = effectiveAccess(design)
   const sorted = (ids: Iterable<string>) => [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   const rooms = sorted(matrix.roomIds)
-  const access = sorted(matrix.roleIds).map((roleId) => [
-    roleId,
-    rooms.flatMap((roomId) => {
-      const cell = accessOf(matrix, roomId, roleId)
-      return cell === 'none' ? [] : [`${roomId}:${cell}`]
-    }),
-  ])
-  return JSON.stringify({ rooms, access })
+  const access = new Map(
+    sorted(matrix.roleIds).map((roleId) => [
+      roleId,
+      JSON.stringify(
+        rooms.flatMap((roomId) => {
+          const cell = accessOf(matrix, roomId, roleId)
+          return cell === 'none' ? [] : [`${roomId}:${cell}`]
+        }),
+      ),
+    ]),
+  )
+  return { rooms, access }
+}
+
+/**
+ * §3 rule 8: whether publishing `after` over `before` is a structural change, which moves
+ * `designVersion` and so resets every online player's layout (PLY-5, D6).
+ *
+ * Structural are only (product owner, Nov 4, 2026): a room added or removed, and a change to the
+ * effective access to any room (none, read or write, as `effectiveAccess` computes it) of a role
+ * present in both designs. A role added or removed is not (WP 5.9, review L7): layouts are saved
+ * per role, so a new role has none to lose and a deleted one is logged out, and no other role's
+ * rooms change. Re-ordering forces, roles or rooms is not structural. Moving a role to another
+ * force, its observer flag and a force's White Force flag count only through the access they
+ * change; so do participant entries. Themes, names, descriptions, the briefing, objectives,
+ * templates, room types and configs never count.
+ */
+export function structuralChange(before: DesignStructure, after: DesignStructure): boolean {
+  if (before.rooms.length !== after.rooms.length) return true
+  if (before.rooms.some((roomId, i) => after.rooms[i] !== roomId)) return true
+  for (const [roleId, rooms] of after.access) {
+    const was = before.access.get(roleId)
+    if (was !== undefined && was !== rooms) return true
+  }
+  return false
 }
 
 /** The state publishing `design` should leave on the server. Assumes a design that passed `checkDesign`. */

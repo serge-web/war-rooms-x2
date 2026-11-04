@@ -17,7 +17,7 @@ Game properties and the game theme.
 | `name` | string | yes | length ≥ 1; length ≤ 120 | Display name |
 | `description` | string | yes | length ≤ 1000 | Short description |
 | `briefing` | string | yes | length ≤ 20000 | Public Markdown briefing for the welcome page (PLY-46–48) |
-| `designVersion` | integer | yes | ≥ 1 | Incremented by a publish that changes the structure: a room added or removed, or a role’s effective access to a room (§3 rule 8); keys saved layouts (PLY-5) |
+| `designVersion` | integer | yes | ≥ 1 | Incremented by a publish that changes the structure: a room added or removed, or the effective access to a room of a role in both designs (§3 rule 8); keys saved layouts (PLY-5) |
 | `theme` | object | yes |  | Theme: tokens plus optional logo and icon assets |
 | `theme.tokens` | object | yes |  | Design tokens; an unset token inherits from the game theme, then the default |
 | `theme.tokens.primary` | string | no | pattern `^#[0-9a-fA-F]{6}$` | Colour as #rrggbb |
