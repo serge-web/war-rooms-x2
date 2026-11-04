@@ -134,7 +134,7 @@ test('objectives the admin writes in the editor reach the player live on publish
   await plan.getByRole('button', { name: /^Publish \d+ changes?…$/ }).click()
   const confirm = admin.getByRole('alertdialog', { name: 'Publish these changes?' })
   await confirm.getByRole('button', { name: 'Publish', exact: true }).click()
-  await expect(admin.getByText(/Publish complete: \d+ steps applied/)).toBeVisible({
+  await expect(admin.getByText(/Publish complete: \d+ steps? applied/)).toBeVisible({
     timeout: 60_000,
   })
 

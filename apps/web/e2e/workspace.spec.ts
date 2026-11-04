@@ -1,8 +1,10 @@
 // The dockable workspace against the mock (WP 2.5): the PLY-40 default, a real drag saved and
-// restored after a reload (PLY-5), a room added live going to the fewest-tab tabset (PLY-41),
-// reset (PLY-42), the keyboard move (NFR-14) and a popout docking back. Tests read the DOM and
-// drive the page as a user would; nothing reaches into the layout library.
+// restored after a reload (PLY-5), a room added live, found from the directory (PLY-60), with
+// the structural change resetting the layout with a notice (PLY-5, WP 5.3), reset (PLY-42), the
+// keyboard move (NFR-14) and a popout docking back. Tests read the DOM and drive the page as a
+// user would; nothing reaches into the layout library.
 import { expect, test } from '@playwright/test'
+import { demoState } from '@wrx/mock-server'
 import { nodeName } from '@wrx/schemas'
 import { ASSET, FORCE, ROOM, tid } from '@wrx/schemas/fixtures'
 import type { Page } from '@playwright/test'
@@ -39,6 +41,17 @@ async function asUmpire(page: Page): Promise<string[]> {
 }
 
 const DEFAULT = [[ROOMS.blue], [ROOMS.red], [ROOMS.talks]]
+
+/** The demo's directory with `rooms` added, as a publish writes it (PLY-60). */
+function directory(...rooms: string[]) {
+  const node = demoState().nodes.find((n) => n.name === 'directory')
+  const doc = JSON.parse(node?.items[0]?.payload ?? '{}') as { rooms: string[] }
+  return {
+    op: 'publish',
+    node: 'directory',
+    payload: JSON.stringify({ ...doc, rooms: [...doc.rooms, ...rooms].sort() }),
+  } as const
+}
 
 /** The demo's game-setup at a new design version, as a publish writes it. */
 function gameSetup(designVersion: number) {
@@ -94,14 +107,14 @@ test('a dragged tab stays where it was put after a reload (PLY-5, D6)', async ({
   expect(errors).toEqual([])
 })
 
-test('a room the admin adds during play goes to the tabset with the fewest tabs (PLY-41, PLY-6)', async ({
+test('a room the admin adds during play appears from the directory, and the structural change resets the layout with a notice (PLY-5, PLY-60)', async ({
   page,
 }) => {
   const errors = await asUmpire(page)
   await drag(page, tab(page, ROOMS.talks), panel(page, ROOMS.blue))
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
-  // What a publish does: the node, the new room's document, and a new design version (§3
-  // rule 8), since PubSub does not announce new nodes.
+  // What a publish does: the node, the new room's document, the directory naming it, and a new
+  // design version (§3 rule 8).
   await asMockAdmin(page, [
     { op: 'create-node', node: nodeName.room(tid('press')), members: ['blue-co'] },
     {
@@ -117,20 +130,53 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
         order: 3,
       }),
     },
+    directory(tid('press')),
     gameSetup(2),
   ])
+  // The default for four rooms: the drag is undone, never the room fitted in.
   await expect
     .poll(() => columns(page))
-    .toEqual([
-      [ROOMS.blue, ROOMS.talks],
-      [ROOMS.red, 'Press room'],
-    ])
-  // The visible tabs did not change.
-  await expect(tab(page, ROOMS.red)).toHaveAttribute('aria-selected', 'true')
-  // The room is withdrawn again: its tab closes, the rest stays. The node's deletion is
-  // announced, so no new design version is needed.
-  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(tid('press')) }])
+    .toEqual([[ROOMS.blue, ROOMS.red], [ROOMS.talks], ['Press room']])
+  const toasts = page.getByRole('region', { name: /^Notifications/ })
+  await expect(toasts).toContainText('Layout reset')
+  await expect(toasts).toContainText('so your workspace is back to the default layout')
+  // The room is withdrawn again: its node is deleted (which is announced), and the next
+  // version's layout is the default for three rooms.
+  await drag(page, tab(page, ROOMS.talks), panel(page, ROOMS.blue))
+  await asMockAdmin(page, [
+    { op: 'delete-node', node: nodeName.room(tid('press')) },
+    directory(),
+    gameSetup(3),
+  ])
+  await expect.poll(() => columns(page)).toEqual(DEFAULT)
+  expect(errors).toEqual([])
+})
+
+test('a change that is not structural keeps the layout (§3 rule 8, D6)', async ({ page }) => {
+  const errors = await asUmpire(page)
+  await drag(page, tab(page, ROOMS.talks), panel(page, ROOMS.blue))
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
+  // A rename publishes the room's document and keeps the design version.
+  await asMockAdmin(page, [
+    {
+      op: 'publish',
+      node: nodeName.room(ROOM.redHq),
+      payload: JSON.stringify({
+        schemaVersion: 1,
+        id: ROOM.redHq,
+        name: 'Red headquarters',
+        roomType: 'chat',
+        participants: [{ kind: 'force', id: FORCE.red, access: 'write' }],
+        config: {},
+        order: 1,
+      }),
+    },
+  ])
+  await expect(tab(page, 'Red headquarters')).toBeVisible()
+  await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], ['Red headquarters']])
+  await expect(page.getByRole('region', { name: /^Notifications/ })).not.toContainText(
+    'Layout reset',
+  )
   expect(errors).toEqual([])
 })
 
