@@ -489,7 +489,9 @@ export function definePublishIntegration(backend: PublishBackend): void {
         mustOps(await theOps().setNodeAccess(node, 'white-cell', 'read'), 'WP 3.5 reader')
         expect((await items()).map((i) => i.id)).toEqual(['admin'])
         const corrected = await plan(sampleDesignWithWhiteCell())
-        expect(corrected.steps.map((s) => s.id).slice(0, -1)).toEqual([`grant-node:${node}`])
+        // An access fix, not a structural change: the design version stays (§3 rule 8).
+        expect(corrected.steps.map((s) => s.id)).toEqual([`grant-node:${node}`])
+        expect(corrected.designVersion).toBeUndefined()
         expect(corrected.steps.find((s) => s.id === `grant-node:${node}`)?.action).toEqual({
           type: 'node-access',
           node,
@@ -596,8 +598,15 @@ export function definePublishIntegration(backend: PublishBackend): void {
       let result: ExecutionResult | undefined
       let posted = 0
       let blue: Session | undefined
+      /** Blue CO's client, online through the publish, finding rooms by the directory alone. */
+      let client: ReturnType<typeof createSessionStore> | undefined
 
       beforeAll(async () => {
+        client = createSessionStore({
+          session: withoutListing(await login('blue-co')),
+          logger: quiet,
+        })
+        await client.ready()
         blue = await login('blue-co')
         must(await blue.muc.join(room(tid('blue-hq')), 'blue-co'), 'join blue-hq')
         must(await blue.pubsub.subscribe(nodeName.objectives(tid('blue'))), 'subscribe')
@@ -615,6 +624,19 @@ export function definePublishIntegration(backend: PublishBackend): void {
       }, 300_000)
 
       afterAll(closeAll)
+
+      it('the online client finds the new room from the directory, without logging in again (PLY-60)', async () => {
+        const store = client
+        if (store === undefined) throw new Error('no client')
+        const rooms = () => store.me().data.rooms.map((r) => r.room.id)
+        await expect.poll(rooms, { timeout: 20_000 }).toContain(tid('joint'))
+        await expect.poll(rooms, { timeout: 20_000 }).not.toContain(tid('blue-hq'))
+        expect(rooms()).toContain(tid('red-hq'))
+        // The destroyed room's document went with it.
+        expect(store.rooms().data.map((r) => r.id)).not.toContain(tid('negotiation'))
+        await expect.poll(() => store.gameSetup().data?.designVersion, { timeout: 20_000 }).toBe(4)
+        await store.logout()
+      })
 
       it('shows the online roles it affects before applying (ADM-17, ADM-25)', () => {
         expect(changed?.affectedOnline).toEqual(['blue-co'])
@@ -656,8 +678,10 @@ export function definePublishIntegration(backend: PublishBackend): void {
         )
         expect(at('delete-role:red-co')).toBeLessThan(at(`destroy-room:${tid('negotiation')}`))
         expect(ids.at(-1)).toBe('doc:game-setup:current')
-        // Step 2 published four times: versions 2 to 5.
-        expect(changed?.designVersion).toBe(6)
+        // Step 2's objectives and access fixes kept the version (§3 rule 8); White Cell moving
+        // out of the White Force and back made versions 2 and 3.
+        expect(changed?.designVersion).toBe(4)
+        expect(changed?.structural).toBe(true)
         expect(result?.ok).toBe(true)
       })
 
@@ -726,7 +750,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('documents and version are published; again plans nothing', async () => {
-        expect(await gameVersion()).toBe(6)
+        expect(await gameVersion()).toBe(4)
         expect((await plan(publishChangedDesign())).steps).toEqual([])
       })
     })
@@ -754,7 +778,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the re-run plans what is left, with the same version', () => {
-        expect(rerun?.designVersion).toBe(7)
+        expect(rerun?.designVersion).toBe(5)
         expect(rerun?.steps.map((s) => s.id)).toContain('account:red-obs')
         // The account the first run made exists: it is neither created again nor reset (F3).
         expect(rerun?.steps.map((s) => s.id)).not.toContain('account:red-xo')
@@ -768,7 +792,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
         const done = await apply(rerun ?? (await plan(thirdDesign())))
         expect(done.ok).toBe(true)
         expect(done.passwordsSet).not.toContain('red-xo')
-        expect(await gameVersion()).toBe(7)
+        expect(await gameVersion()).toBe(5)
         expect((await plan(thirdDesign())).steps).toEqual([])
         expect(await postResult('red-xo', tid('red-hq'))).toMatchObject({ posted: 'ok' })
         await expectReadOnly('red-obs', tid('red-hq'))
@@ -988,10 +1012,8 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(await turnState()).toEqual([advanced])
         must(await theOps().session.pubsub.retract('game-state', 'current'), 'retract')
         const again = await plan(design())
-        expect(again.steps.map((s) => s.id)).toEqual([
-          'doc:game-state:current',
-          'doc:game-setup:current',
-        ])
+        // A repair: the design version stays (§3 rule 8).
+        expect(again.steps.map((s) => s.id)).toEqual(['doc:game-state:current'])
         expect((await apply(again)).ok).toBe(true)
         expect(await turnState()).toEqual([INITIAL_GAME_STATE])
       })

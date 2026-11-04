@@ -14,7 +14,7 @@ import {
   nodeName,
   publicAssetIds,
 } from '@wrx/schemas'
-import type { DesignFile } from '@wrx/schemas'
+import type { DesignFile, Force, Role, Room } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 
@@ -157,6 +157,40 @@ export interface TargetState {
   readonly nodes: readonly TargetNode[]
   /** Each role's login name, by role GUID. */
   readonly loginNames: ReadonlyMap<string, string>
+  /**
+   * The design's structure (§3 rule 8, `designStructure`): what, when it changes, makes a
+   * publish increment `designVersion` and so reset players' layouts (PLY-5).
+   */
+  readonly structure: string
+}
+
+/** The documents a design's structure is read from: a design file, or the published documents. */
+export interface StructureInput {
+  readonly forces: readonly Pick<Force, 'id' | 'order' | 'isUmpire'>[]
+  readonly roles: readonly Pick<Role, 'id' | 'forceId' | 'order' | 'isObserver'>[]
+  readonly rooms: readonly Pick<Room, 'id' | 'order' | 'participants'>[]
+}
+
+/**
+ * §3 rule 8: the structure of a design, as canonical text. Two designs with the same text
+ * differ only in what does not move `designVersion`: themes, names, descriptions, the
+ * briefing, objectives, templates, room types and configs.
+ *
+ * Structural are adding and removing forces, roles and rooms; moving them, read as a role
+ * changing force and any change of order (the default layout follows room order, PLY-40); and
+ * changing room participants. A role's observer flag and a force's White Force flag count
+ * too: they change rooms' effective participants (rule 4), and so which rooms a role sees.
+ * Participant entries are compared as a set, so their order does not count.
+ */
+export function designStructure(design: StructureInput): string {
+  const byId = <T extends { readonly id: string }>(list: readonly T[]) =>
+    [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const entry = (p: Room['participants'][number]) => `${p.kind}:${p.id}:${p.access}`
+  return JSON.stringify({
+    forces: byId(design.forces).map((f) => [f.id, f.order, f.isUmpire]),
+    roles: byId(design.roles).map((r) => [r.id, r.forceId, r.order, r.isObserver]),
+    rooms: byId(design.rooms).map((r) => [r.id, r.order, r.participants.map(entry).sort()]),
+  })
 }
 
 /** The state publishing `design` should leave on the server. Assumes a design that passed `checkDesign`. */
@@ -252,8 +286,9 @@ export function targetState(design: DesignFile): TargetState {
       access: everyRole('read'),
       documents: [doc(role)],
     })),
-    // §3: room participants SHOULD read their room's document and all users MAY; the client's
-    // store reads every room document, so every role does (as the mock's seed).
+    // §3 rule 15, PLY-60: every role reads every room document, since the client finds its
+    // rooms by reading each room the directory names; room names are therefore visible to every
+    // role (R24). As the mock's seed.
     ...design.rooms.map((room) => ({
       node: nodeName.room(room.id),
       config: whitelist1,
@@ -297,5 +332,6 @@ export function targetState(design: DesignFile): TargetState {
     rooms,
     nodes,
     loginNames,
+    structure: designStructure(design),
   }
 }

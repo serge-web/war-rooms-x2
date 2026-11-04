@@ -12,6 +12,7 @@ function planOf(steps: readonly PlanStep[]): PublishPlan {
     errors: [],
     steps,
     designVersion: undefined,
+    structural: false,
     publishedVersion: undefined,
     warnings: [],
     affectedOnline: [],

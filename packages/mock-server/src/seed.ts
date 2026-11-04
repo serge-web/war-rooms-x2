@@ -288,8 +288,8 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
   for (const room of design.rooms) {
-    // §3: room participants SHOULD read their room's document and all users MAY; the store
-    // reads every room document, so every role does.
+    // §3 rule 15, PLY-60: every role reads every room document (the client finds its rooms by
+    // reading each one the directory names), so room names are visible to every role (R24).
     addNode(
       nodeName.room(room.id),
       gameNode('whitelist', 1),
