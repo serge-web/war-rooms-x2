@@ -4,6 +4,7 @@
 // changes: the map room's editor, the turn panel and the admin backend's export, and other tabs
 // of this browser through the `storage` event. A write that the browser refuses (blocked or full
 // storage) is reported, and the draft then lasts until reload.
+import { parseWorldDraft } from '@wrx/domain'
 import type { WorldState } from '@wrx/schemas'
 
 /** The subset of the Web Storage API used. */
@@ -196,4 +197,25 @@ export function memoryWorldDraftStorage(
     ),
     { entries },
   )
+}
+
+/** A world-state draft held in this browser, described for a confirmation (WP 5.9, review M3). */
+export interface HeldWorldDraft {
+  /** How many assets it holds; undefined when the stored draft cannot be read. */
+  readonly assets: number | undefined
+  /** When it was last saved, as stored (ISO 8601); undefined when it cannot be read. */
+  readonly savedAt: string | undefined
+}
+
+/** The draft `storage` holds under `key`, if any, readable or not. */
+export function heldWorldDraft(
+  storage: WorldDraftStorage,
+  key: string,
+): HeldWorldDraft | undefined {
+  const text = storage.snapshot(key).text
+  if (text === undefined) return undefined
+  const parsed = parseWorldDraft(text)
+  return parsed.ok
+    ? { assets: Object.keys(parsed.value.state.assets).length, savedAt: parsed.value.savedAt }
+    : { assets: undefined, savedAt: undefined }
 }

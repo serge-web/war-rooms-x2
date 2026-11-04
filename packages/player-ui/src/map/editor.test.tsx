@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { TurnPanel } from '../column/turn-panel.tsx'
 import { readAssetForm } from './asset-form.tsx'
 import { describeChange } from './change-summary.tsx'
-import { memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
+import { heldWorldDraft, memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
 import type { WorldDraftStorage } from './draft-storage.ts'
 import { MapPanel } from './map-panel.tsx'
 import { WorldDraftProvider, readPublishedWorldState, sizeRefusal } from './world-draft.tsx'
@@ -448,5 +448,24 @@ describe('the editor’s parts', () => {
     expect(storage.snapshot('k').published?.replacing).toBe('s-1')
     stop()
     expect(seen).toEqual(['one', 'two', 'two', undefined])
+  })
+
+  it('describes a held draft for the reset’s offer (WP 5.9, M3)', () => {
+    const storage = memoryWorldDraftStorage()
+    expect(heldWorldDraft(storage, 'k')).toBeUndefined()
+    storage.save(
+      'k',
+      serialiseWorldDraft({
+        state: sampleWorldState(),
+        baseStanzaId: undefined,
+        savedAt: '2026-11-04T10:00:00.000Z',
+      }),
+    )
+    expect(heldWorldDraft(storage, 'k')).toEqual({
+      assets: 6,
+      savedAt: '2026-11-04T10:00:00.000Z',
+    })
+    storage.save('k', 'not a draft')
+    expect(heldWorldDraft(storage, 'k')).toEqual({ assets: undefined, savedAt: undefined })
   })
 })

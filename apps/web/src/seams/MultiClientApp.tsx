@@ -3,8 +3,18 @@
 // backend (AdminRoute), so no in-memory state is shared between panes (D15, PLY-17). On the mock,
 // the toolbar has the database controls (PLY-21). Presets are kept per backend under this
 // deployment's namespace (DOC-10).
+import { worldDraftKey } from '@wrx/domain'
 import { basePathOf, hostNames, mockNamespace } from '@wrx/mock-host'
-import { AppBarCore, MockControlsCore, MultiClientView, webPresetStorage } from '@wrx/player-ui'
+import { demoSeed } from '@wrx/mock-server'
+import {
+  AppBarCore,
+  MockControlsCore,
+  MultiClientView,
+  heldWorldDraft,
+  useWorldDraftStorage,
+  webPresetStorage,
+} from '@wrx/player-ui'
+import { MAP_ROOM_TYPE, designFileSchema } from '@wrx/schemas'
 import { useMemo } from 'react'
 import { AdminRoute } from '../AdminRoute.tsx'
 import type { RouteProps } from './types.ts'
@@ -16,6 +26,14 @@ export function MultiClientApp(props: RouteProps) {
     const names = mockHost?.names ?? hostNames(mockNamespace(basePathOf(document.baseURI)))
     return webPresetStorage(() => localStorage, names.storageKey(`multi-presets-${backendId}`))
   }, [mockHost, backendId])
+  // The admin's world-state draft for the seed's game (WP 5.9, review M3): the seed's map room
+  // keeps its id across a reset, so a draft from before would apply again.
+  const drafts = useWorldDraftStorage()
+  const seedDraftKey = useMemo(() => {
+    const design = designFileSchema.parse(demoSeed().design)
+    const mapRoom = design.rooms.find((r) => r.roomType === MAP_ROOM_TYPE)
+    return mapRoom === undefined ? undefined : worldDraftKey(connection.endpoint.domain, mapRoom.id)
+  }, [connection.endpoint.domain])
   return (
     <MultiClientView
       connection={connection}
@@ -32,10 +50,15 @@ export function MultiClientApp(props: RouteProps) {
       mockControls={
         mockHost === undefined ? undefined : (
           <MockControlsCore
-            onReset={async () => {
+            onReset={async ({ discardWorldDraft }) => {
               const result = await mockHost.resetToSeed()
-              return result.ok ? undefined : result.error
+              if (!result.ok) return result.error
+              if (discardWorldDraft && seedDraftKey !== undefined) drafts?.remove(seedDraftKey)
+              return undefined
             }}
+            {...(drafts === undefined || seedDraftKey === undefined
+              ? {}
+              : { heldWorldDraft: () => heldWorldDraft(drafts, seedDraftKey) })}
             onExport={async () => {
               const result = await mockHost.exportDatabase()
               return result.ok ? { ok: true, json: result.value } : result

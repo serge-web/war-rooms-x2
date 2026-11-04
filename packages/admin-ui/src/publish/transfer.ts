@@ -66,6 +66,21 @@ export interface WorldStateTransfer {
    * by the admin (ADM-45). Returns why it could not be kept, if it could not.
    */
   importDraft(mapRoomId: string, state: WorldState): string | undefined
+  /**
+   * The world-state draft this browser holds for the game whose map room is `mapRoomId`, if any:
+   * offered for discarding in the reset's confirmation (ADM-15; WP 5.9, review M3).
+   */
+  heldDraft(mapRoomId: string): HeldWorldStateDraft | undefined
+  /** Discards that draft. */
+  discardDraft(mapRoomId: string): void
+}
+
+/** A world-state draft held in this browser, as the reset's confirmation describes it. */
+export interface HeldWorldStateDraft {
+  /** How many assets it holds; undefined when the stored draft cannot be read. */
+  readonly assets: number | undefined
+  /** When it was last saved (ISO 8601); undefined when it cannot be read. */
+  readonly savedAt: string | undefined
 }
 
 /** Most bytes an import may be; designs with large assets stay well under it. */

@@ -417,6 +417,58 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     // The next publish is a new design version.
     expect(store.getSnapshot().draft.design.game.designVersion).toBe(2)
   })
+
+  it('offers to discard the world-state draft held for the game, unticked (WP 5.9, M3)', async () => {
+    const held = new Map<string, { assets: number; savedAt: string }>()
+    const transfer: WorldStateTransfer = {
+      forExport: () => Promise.resolve({ source: 'none' }),
+      importDraft: () => undefined,
+      heldDraft: (roomId) => held.get(roomId),
+      discardDraft: (roomId) => {
+        held.delete(roomId)
+      },
+    }
+    const ctx = await setup(transfer)
+    const mapRoomId = mapRoomIdOf(ctx.store.getSnapshot().draft) ?? ''
+    held.set(mapRoomId, { assets: 6, savedAt: '2026-11-04T10:00:00.000Z' })
+    held.set('another-game', { assets: 1, savedAt: '2026-11-04T10:00:00.000Z' })
+    await firstPublish(ctx)
+    const { user } = ctx
+    const reset = async (choose: boolean) => {
+      await user.click(screen.getByRole('button', { name: 'Close' }))
+      await user.click(screen.getByRole('button', { name: 'Plan a reset' }))
+      await waitFor(() => {
+        expect(screen.getByRole('region', { name: 'Reset plan' })).toBeTruthy()
+      })
+      await user.click(screen.getByRole('button', { name: 'Reset the game…' }))
+      const dialog = screen.getByRole('alertdialog', { name: 'Reset the game?' })
+      const offer = within(dialog).getByRole<HTMLInputElement>('checkbox', {
+        name: /^Also discard the world-state draft held in this browser for this game \(6 assets, saved /,
+      })
+      // Offered, never ticked for the admin; only this game's draft.
+      expect(offer.checked).toBe(false)
+      expect(within(dialog).queryByRole('checkbox', { name: /1 asset/ })).toBeNull()
+      for (const box of within(dialog).getAllByRole('checkbox')) {
+        if (box !== offer) await user.click(box)
+      }
+      if (choose) await user.click(offer)
+      await user.type(within(dialog).getByLabelText(/to confirm/), 'Exercise Northern Gate')
+      await user.click(within(dialog).getByRole('button', { name: 'Reset the game' }))
+      await waitFor(() => {
+        expect(screen.getByText(/Reset complete/)).toBeTruthy()
+      })
+    }
+    // Left unticked, the draft is kept.
+    await reset(false)
+    expect(held.has(mapRoomId)).toBe(true)
+    // Publish again, reset again, and choose to discard it.
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await planAndWait(user, /Plan again|Check the server and plan/)
+    await publishAll(user)
+    await reset(true)
+    expect(held.has(mapRoomId)).toBe(false)
+    expect(held.has('another-game')).toBe(true)
+  })
 })
 
 describe('on the mock’s demo seed, which starts published with its vault', () => {
@@ -553,6 +605,8 @@ describe('design export and import (ADM-16)', () => {
         kept.push({ roomId, state })
         return undefined
       },
+      heldDraft: () => undefined,
+      discardDraft: () => undefined,
     })
     await user.click(screen.getByRole('button', { name: 'Export the design' }))
     await waitFor(() => {
@@ -595,6 +649,8 @@ describe('design export and import (ADM-16)', () => {
     const { user, download } = await setup({
       forExport: () => Promise.resolve(answers.shift() ?? { source: 'none' }),
       importDraft: () => undefined,
+      heldDraft: () => undefined,
+      discardDraft: () => undefined,
     })
     await user.click(screen.getByRole('button', { name: 'Export the design' }))
     expect(await screen.findByText('The file holds your world-state draft.')).toBeTruthy()

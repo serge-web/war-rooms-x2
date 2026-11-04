@@ -12,6 +12,7 @@ import type {
   PublishPlan,
   ServerCheck,
 } from '@wrx/admin-ops'
+import { MAP_ROOM_TYPE } from '@wrx/schemas'
 import type { DesignFile, DesignIssue } from '@wrx/schemas'
 import { useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -24,7 +25,7 @@ import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
 import { exportDesign, importDesign, mapRoomIdOf, newDesign } from './transfer.ts'
-import type { WorldStateForExport, WorldStateTransfer } from './transfer.ts'
+import type { HeldWorldStateDraft, WorldStateForExport, WorldStateTransfer } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
@@ -89,7 +90,23 @@ export function PublishSection({
       snapshot={snapshot}
       onPlan={() => void controller?.plan()}
       onPlanReset={() => void controller?.planReset()}
-      onApply={(confirmed) => void controller?.apply(confirmed)}
+      heldWorldDrafts={
+        worldState === undefined
+          ? undefined
+          : (mapRoomIds) =>
+              mapRoomIds.flatMap((mapRoomId) => {
+                const held = worldState.heldDraft(mapRoomId)
+                return held === undefined ? [] : [{ mapRoomId, held }]
+              })
+      }
+      onApply={(confirmed, discardWorldDrafts) => {
+        if (controller === undefined) return
+        void controller.apply(confirmed).then(() => {
+          // M3: the drafts the admin chose to discard go once the reset is complete.
+          if (worldState === undefined || controller.getSnapshot().result?.ok !== true) return
+          for (const mapRoomId of discardWorldDrafts) worldState.discardDraft(mapRoomId)
+        })
+      }}
       onDismiss={() => controller?.dismiss()}
       onCreateVault={(p) => controller?.createVault(p) ?? notConnected()}
       onUnlockVault={(p) => controller?.unlockVault(p) ?? notConnected()}
@@ -188,8 +205,17 @@ export interface PublishSectionCoreProps {
   readonly snapshot: PublishSnapshot
   readonly onPlan: () => void
   readonly onPlanReset: () => void
-  /** Applies the plan, with the confirmation keys the admin ticked. */
-  readonly onApply: (confirmed: ReadonlySet<string>) => void
+  /**
+   * Applies the plan, with the confirmation keys the admin ticked, and for a reset the map rooms
+   * whose world-state drafts the admin chose to discard once it is complete (WP 5.9, M3).
+   */
+  readonly onApply: (confirmed: ReadonlySet<string>, discardWorldDrafts: readonly string[]) => void
+  /** The world-state drafts this browser holds for these map rooms; without it, none. */
+  readonly heldWorldDrafts?:
+    | ((
+        mapRoomIds: readonly string[],
+      ) => readonly { readonly mapRoomId: string; readonly held: HeldWorldStateDraft }[])
+    | undefined
   readonly onDismiss: () => void
   readonly onCreateVault: (passphrase: string) => Promise<string | undefined>
   readonly onUnlockVault: (passphrase: string) => Promise<string | undefined>
@@ -423,6 +449,22 @@ function PlanPanel(
   const headingId = useId()
   const blocked = plan.vault === 'create' || plan.vault === 'unlock' || plan.uncounted.length > 0
   const gameName = design.game.name.trim() === '' ? 'reset' : design.game.name
+  // M3 (WP 5.9): a reset offers to discard the world-state draft this browser holds for the game,
+  // which would otherwise apply again when the same design is published (its map room keeps its
+  // id). The design's map room and every room the reset destroys are looked up.
+  const heldDrafts =
+    !reset || props.heldWorldDrafts === undefined
+      ? []
+      : props.heldWorldDrafts([
+          ...new Set([
+            ...design.rooms.filter((r) => r.roomType === MAP_ROOM_TYPE).map((r) => r.id),
+            ...plan.warnings.flatMap((w) => (w.kind === 'room-destroyed' ? [w.roomId] : [])),
+          ]),
+        ])
+  const choices = heldDrafts.map(({ mapRoomId, held }) => ({
+    id: mapRoomId,
+    label: `Also discard the world-state draft held in this browser for this game (${heldDraftWords(held)}). Leave it unticked to keep it for the next game.`,
+  }))
 
   return (
     <section className="wrx-publish-panel" aria-labelledby={headingId}>
@@ -489,8 +531,11 @@ function PlanPanel(
               title={reset ? 'Reset the game?' : 'Publish these changes?'}
               acknowledgements={acknowledgements}
               {...(reset ? { typed: gameName } : {})}
+              choices={choices}
               confirmLabel={reset ? 'Reset the game' : 'Publish'}
-              onConfirm={props.onApply}
+              onConfirm={(ticked, chosen) => {
+                props.onApply(ticked, [...chosen])
+              }}
             >
               <p>
                 {plural(plan.steps.length, 'change')} will be applied in order, stopping at the
@@ -513,6 +558,16 @@ function PlanPanel(
       )}
     </section>
   )
+}
+
+/** "6 assets, saved 4 Nov 2026, 10:00", or that it cannot be read. */
+function heldDraftWords(held: HeldWorldStateDraft): string {
+  if (held.assets === undefined) return 'it cannot be read'
+  const saved = held.savedAt === undefined ? Number.NaN : Date.parse(held.savedAt)
+  const when = Number.isNaN(saved)
+    ? ''
+    : `, saved ${new Date(saved).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`
+  return `${plural(held.assets, 'asset')}${when}`
 }
 
 function OnlineRoles({

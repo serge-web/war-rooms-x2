@@ -5,7 +5,8 @@
 // in this browser under a key per backend: the mock deployment's own namespace for the mock
 // (DOC-10), the server's domain otherwise. The publish marker is kept on the server. A design
 // export carries the world state: the admin's world-state draft from this browser, else the
-// latest published state; an import makes the file's the draft (ADM-16, WP 5.6).
+// latest published state; an import makes the file's the draft (ADM-16, WP 5.6). A reset offers
+// to discard the draft held for the game (WP 5.9).
 import { AdminOps, privateMarkerStore, storageMarkerStore } from '@wrx/admin-ops'
 import {
   AdminApp as AdminEditorApp,
@@ -28,6 +29,7 @@ import { DEMO_VAULT_PASSPHRASE, demoSeed } from '@wrx/mock-server'
 import {
   AppBarCore,
   TurnPanel,
+  heldWorldDraft,
   readPublishedWorldState,
   useWorldDraftStorage,
 } from '@wrx/player-ui'
@@ -90,6 +92,11 @@ export function AdminApp({
             savedAt: new Date().toISOString(),
           }),
         ),
+      // M3 (WP 5.9): the reset's confirmation offers to discard it.
+      heldDraft: (mapRoomId) => heldWorldDraft(drafts, key(mapRoomId)),
+      discardDraft: (mapRoomId) => {
+        drafts.remove(key(mapRoomId))
+      },
     }
   })
   const [publish] = useState((): PublishConnection => ({

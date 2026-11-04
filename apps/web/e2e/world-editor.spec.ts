@@ -314,6 +314,57 @@ test('the design export carries the world-state draft, and an import makes the f
   expect(errors).toEqual([])
 })
 
+test('a reset offers to discard the world-state draft held for the game, unticked (ADM-15, WP 5.9 M3)', async ({
+  context,
+}, testInfo) => {
+  test.setTimeout(150_000)
+  await stubTiles(context)
+  const umpire = await context.newPage()
+  const errors = watch(umpire)
+  const panel = await admin(umpire)
+  await editField(panel, 'Recce Troop', 'Health (%)', '5')
+  await expect(panel.getByText('Unpublished edits: 1 asset changed')).toBeVisible()
+
+  const backend = await context.newPage()
+  await backend.setViewportSize(WIDE)
+  await backend.goto('./#/admin')
+  await logIn(backend, 'admin', 'demo-admin')
+  await backend
+    .getByRole('navigation', { name: 'Admin sections' })
+    .getByRole('button', { name: 'Publish', exact: false })
+    .first()
+    .click()
+  await backend.getByRole('button', { name: 'Plan a reset' }).click()
+  const plan = backend.getByRole('region', { name: 'Reset plan' })
+  await expect(plan).toBeVisible({ timeout: 30_000 })
+  if (await backend.getByRole('button', { name: 'Unlock the vault' }).isVisible()) {
+    await backend.getByRole('button', { name: 'Unlock the vault' }).click()
+    const vault = backend.getByRole('alertdialog', { name: 'Unlock the vault' })
+    await vault.getByLabel('Passphrase', { exact: true }).fill('demo-observer-vault')
+    await vault.getByRole('button', { name: 'Unlock' }).click()
+    await expect(backend.getByText('Vault unlocked.')).toBeVisible({ timeout: 30_000 })
+  }
+  await plan.getByRole('button', { name: 'Reset the game…' }).click()
+  const confirm = backend.getByRole('alertdialog', { name: 'Reset the game?' })
+  const offer = confirm.getByRole('checkbox', {
+    name: /^Also discard the world-state draft held in this browser for this game \(6 assets, saved /,
+  })
+  await expect(offer).not.toBeChecked()
+  await expectNoViolations(backend, testInfo, 'reset confirmation with the draft offer', {
+    include: '.wrx-admin-dialog',
+  })
+  for (const box of await confirm.getByRole('checkbox').all()) await box.check()
+  await confirm.getByLabel(/to confirm/).fill('Exercise Northern Gate')
+  await confirm.getByRole('button', { name: 'Reset the game' }).click()
+  await expect(backend.getByText(/Reset complete/)).toBeVisible({ timeout: 30_000 })
+  // The draft is gone from this browser, in every tab.
+  const drafts = await backend.evaluate(
+    () => Object.keys(localStorage).filter((key) => key.includes('world-draft')).length,
+  )
+  expect(drafts).toBe(0)
+  expect(errors).toEqual([])
+})
+
 test('the keyboard alone adds an asset and moves one, then publishes (ADM-44, NFR-14)', async ({
   context,
 }, testInfo) => {
