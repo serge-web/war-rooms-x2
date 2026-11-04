@@ -1,6 +1,6 @@
 # WP 5.4 — Turns: phase control, the turn panel, composers paused in adjudication
 
-**SRD ids:** D7, ADM-43, PLY-55, PLY-56, R27 (also PLY-36, PLY-54, PLY-12, PLY-33, NFR-14) · **Depends on:** 5.2 · **Blocks:** 5.6 · **Status:** in progress
+**SRD ids:** D7, ADM-43, PLY-55, PLY-56, R27 (also PLY-36, PLY-54, PLY-12, PLY-33, NFR-14) · **Depends on:** 5.2 · **Blocks:** 5.6 · **Status:** done
 
 ## Goal
 
@@ -42,3 +42,12 @@ The game moves through numbered turns, each a planning phase then an adjudicatio
 - **Who is paused** is "outside the White Force" (PLY-56, confirmed Nov 4). White Force observers were already read-only (PLY-12); their explanation stays the observer one.
 - **No double advance.** Two admin tabs that confirm the same change: the second is refused as stale once the first change has reached it. Two confirmations at the same instant can still both publish (no compare-and-set on PubSub); the result is one phase further than meant, which the admin sees at once and can live with in v1.
 - **The admin's preview** shows the role's paused composer, since a preview shows exactly what the role sees (ADM-30); the advance control is not offered there.
+
+## Notes (done)
+
+- **The hook for WP 5.6.** `SessionStore.advancePhase(options: AdvancePhaseOptions)` in `packages/domain/src/store.ts`: 5.6 adds an optional `worldState` to `AdvancePhaseOptions` and sends it with `sendWorldState` where the comment marks it, before `game-state` is published, refusing the phase change if the world state is refused. The UI side is `TurnPanelCore`'s `confirmDetails` slot (the confirmation's body, for the change summary), passed through `TurnPanel`; the confirm button already waits on `onAdvance`, so a longer publish shows as busy.
+- **New error codes.** `DomainErrorCode` gains `paused` (a post refused in adjudication) and `stale` (a phase change from a state the game has left). The switches over it in `player-ui` say each in words.
+- **A missing `game-state` node** reads as "No turn yet", not as an error: it is what a server holds before the first publish.
+- **The admin backend's control** sits in its header through a new optional `headerItems` slot on `AdminApp`; the app's admin seam passes `<TurnPanel variant="bar" />`.
+- **Found by axe:** a disabled template form whose fields overflow could not be scrolled from the keyboard, since its fields cannot take focus. The form's fieldset now takes focus while disabled (`templates/theme.tsx`), with a focus ring. Observers did not meet it before, because their composers start collapsed.
+- **Not built:** a server-side check (R27, accepted); a separate announcement of the phase change (the turn panel's status is a polite live region instead).
