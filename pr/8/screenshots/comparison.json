@@ -80,7 +80,11 @@
     "status": "changed"
   },
   {
-    "name": "player-map-placeholder",
+    "name": "player-map",
+    "status": "new"
+  },
+  {
+    "name": "player-map-table",
     "status": "new"
   },
   {
