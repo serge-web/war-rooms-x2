@@ -2,16 +2,19 @@
 // The workspace over a store, rendered (happy-dom): tabs per visible room, room panels in their
 // theme, the registry and badge slots, saving and restoring, live reconciliation, reset, the
 // keyboard move, two instances on one page, and the non-room panels.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
-import { flush, game, harness, room, selfPresence } from '@wrx/domain/fixtures'
+import { flush, game, harness, role, room, selfPresence } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
 import { SessionStoreProvider } from '@wrx/hooks'
 import type { AdminEditor, PlayerPanel, PlayerPanelProps } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
+import { ToastProvider } from '@wrx/ui'
 import { StrictMode } from 'react'
 import type { ReactNode } from 'react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { ChatPanel } from '../chat/chat-panel.tsx'
 import { OnlinePanelCore } from './panels.tsx'
 import { layoutKey, memoryLayoutStorage } from './storage.ts'
 import type { LayoutStorage } from './storage.ts'
@@ -33,7 +36,8 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
-const KEY = (role: string) => layoutKey({ server: 'wrx.test', role, designVersion: 1 })
+// Layouts are keyed by the role's GUID (PLY-5), so one saved before GUID ids is not found.
+const KEY = (role: string) => layoutKey({ server: 'wrx.test', role: tid(role), designVersion: 1 })
 
 async function mount(
   props: WorkspaceProps = {},
@@ -108,18 +112,22 @@ describe('Workspace', () => {
     })
     await mount({ registry })
     expect(screen.getByText('Chat for blue-hq')).toBeTruthy()
-    expect(seen.at(-1)).toMatchObject({ roomId: 'negotiation', config: {} })
+    expect(seen.at(-1)).toMatchObject({ roomId: tid('negotiation'), config: {} })
   })
 
   it('fills the unread badge slot on room tabs only (PLY-11)', async () => {
     const Badge = ({ roomId }: RoomTabBadgeProps) => (
-      <UnreadBadge count={roomId === 'red-hq' ? 4 : roomId === 'blue-hq' ? 120 : 0} />
+      <UnreadBadge count={roomId === tid('red-hq') ? 4 : roomId === tid('blue-hq') ? 120 : 0} />
     )
     await mount({ tabBadge: Badge })
-    expect(within(tab('red-hq')).getByLabelText('4 unread').textContent).toBe('4')
-    expect(within(tab('blue-hq')).getByLabelText('99+ unread')).toBeTruthy()
+    expect(within(tab('red-hq')).getByLabelText('4 unread messages').textContent).toBe('4')
+    expect(within(tab('blue-hq')).getByLabelText('99+ unread messages')).toBeTruthy()
     expect(within(tab('negotiation')).queryByText(/unread/)).toBeNull()
     expect(document.querySelectorAll('[role="tab"] .wrx-unread')).toHaveLength(2)
+    // NFR-14: the count is the tab's description; its name stays the room's name.
+    const badge = within(tab('red-hq')).getByRole('img', { name: '4 unread messages' })
+    expect(tab('red-hq').getAttribute('aria-describedby')).toBe(badge.id)
+    expect(tab('negotiation').hasAttribute('aria-describedby')).toBe(false)
   })
 
   it('reconciles live: a new room goes to the fewest-tab tabset, a lost one closes (PLY-6, PLY-41)', async () => {
@@ -131,7 +139,7 @@ describe('Workspace', () => {
     // PubSub does not announce new nodes: publishing bumps the design version (§3 rule 8).
     act(() => {
       h.publish(
-        nodeName.room('press'),
+        nodeName.room(tid('press')),
         room('press', [{ kind: 'force', id: 'blue', access: 'write' }], { order: 3 }),
       )
       h.publish('game-setup', game(2))
@@ -143,7 +151,7 @@ describe('Workspace', () => {
     ])
     act(() => {
       h.publish(
-        nodeName.room('red-hq'),
+        nodeName.room(tid('red-hq')),
         room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }], { name: 'Red Main' }),
       )
     })
@@ -152,6 +160,29 @@ describe('Workspace', () => {
       ['blue-hq', 'press'],
       ['Red Main', 'negotiation'],
     ])
+  })
+
+  it('says which rooms closed when the role loses them during play, and not on login (PLY-30)', async () => {
+    const h = harness({ roleId: 'blue-co' })
+    render(
+      <ToastProvider>
+        <SessionStoreProvider store={h.store}>
+          <Workspace />
+        </SessionStoreProvider>
+      </ToastProvider>,
+    )
+    await act(() => h.store.ready())
+    await act(() => flush())
+    expect(columns()).toEqual([['blue-hq'], ['negotiation']])
+    expect(screen.queryByText(/closed$/)).toBeNull()
+    // Blue CO moves to Red: Blue's room goes, Red's comes, the negotiation stays.
+    act(() => {
+      h.publish(nodeName.role(tid('blue-co')), role('blue-co', 'red'))
+    })
+    await act(() => flush())
+    expect(columns().flat().sort()).toEqual(['negotiation', 'red-hq'])
+    expect(screen.getByText('blue-hq closed')).toBeTruthy()
+    expect(screen.getByText('Your role no longer has access to blue-hq.')).toBeTruthy()
   })
 
   it('saves per server, role and design version, and restores on the next login (PLY-5)', async () => {
@@ -179,19 +210,22 @@ describe('Workspace', () => {
       h.publish('game-setup', game(2))
     })
     await act(() => flush())
-    const v2 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 2 })
+    const v2 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 2 })
     expect(storage.entries.get(v2)).toBe(storage.entries.get(KEY('white-1')))
     expect(columns()).toEqual([['blue-hq', 'red-hq'], ['negotiation']])
 
     // Version 3 has a saved layout of its own: it replaces the one on screen.
-    const v3 = layoutKey({ server: 'wrx.test', role: 'white-1', designVersion: 3 })
+    const v3 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 3 })
     storage.save(
       v3,
       JSON.stringify({
         layout: {
           type: 'row',
           children: [
-            { type: 'tabset', children: [{ type: 'tab', id: 'room:negotiation', name: 'n' }] },
+            {
+              type: 'tabset',
+              children: [{ type: 'tab', id: `room:${tid('negotiation')}`, name: 'n' }],
+            },
           ],
         },
       }),
@@ -211,12 +245,15 @@ describe('Workspace', () => {
           {
             type: 'tabset',
             children: [
-              { type: 'tab', id: 'room:gone', name: 'Gone' },
-              { type: 'tab', id: 'room:negotiation', name: 'negotiation' },
+              { type: 'tab', id: `room:${tid('gone')}`, name: 'Gone' },
+              { type: 'tab', id: `room:${tid('negotiation')}`, name: 'negotiation' },
               { type: 'tab', id: 'panel:online', name: 'Online' },
             ],
           },
-          { type: 'tabset', children: [{ type: 'tab', id: 'room:blue-hq', name: 'blue-hq' }] },
+          {
+            type: 'tabset',
+            children: [{ type: 'tab', id: `room:${tid('blue-hq')}`, name: 'blue-hq' }],
+          },
         ],
       },
     })
@@ -276,11 +313,11 @@ describe('Workspace', () => {
     const h = await mount({}, { roleId: 'blue-co' })
     act(() => {
       h.publish(
-        nodeName.room('blue-hq'),
+        nodeName.room(tid('blue-hq')),
         room('blue-hq', [{ kind: 'force', id: 'red', access: 'write' }]),
       )
       h.publish(
-        nodeName.room('negotiation'),
+        nodeName.room(tid('negotiation')),
         room('negotiation', [{ kind: 'role', id: 'red-co', access: 'write' }]),
       )
     })
@@ -314,6 +351,55 @@ describe('Workspace', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent),
     ).toEqual(['blue-coBLUE(you)', 'red-coRED'])
+  })
+})
+
+describe('the collapsed composer, remembered per room (PLY-54)', () => {
+  const CHAT = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
+    chat: { playerComponent: ChatPanel },
+  })
+  const panel = (name: string) => screen.getByRole('region', { name })
+  const toggleIn = (name: string) => within(panel(name)).getByRole('button', { name: /message/ })
+
+  it('is saved in the room’s tab, per room, and restored on the next login', async () => {
+    const storage = memoryLayoutStorage()
+    const first = await mount({ storage, registry: CHAT })
+    expect(toggleIn('blue-hq').textContent).toBe('Hide message entry')
+    fireEvent.click(toggleIn('blue-hq'))
+    await act(() => flush())
+    expect(toggleIn('blue-hq').textContent).toBe('Write a message')
+    expect(toggleIn('red-hq').textContent).toBe('Hide message entry')
+    const saved = JSON.parse(storage.entries.get(KEY('white-1')) ?? '{}') as unknown
+    expect(JSON.stringify(saved)).toContain('"config":{"composerCollapsed":true}')
+    first.unmount()
+
+    await mount({ storage, registry: CHAT })
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('false')
+    expect(toggleIn('red-hq').getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('Reset layout returns every room to its default, keeping what was typed (PLY-42)', async () => {
+    const storage = memoryLayoutStorage()
+    await mount({ storage, registry: CHAT })
+    fireEvent.change(within(panel('blue-hq')).getByRole('textbox'), {
+      target: { value: 'Kept' },
+    })
+    fireEvent.click(toggleIn('blue-hq'))
+    await act(() => flush())
+    expect(within(panel('blue-hq')).getByText('Draft not sent')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset layout' }))
+    await act(() => flush())
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('true')
+    expect(within(panel('blue-hq')).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Kept')
+    expect(storage.entries.get(KEY('white-1'))).not.toContain('composerCollapsed')
+  })
+
+  it('starts collapsed for an observer, who can still expand it', async () => {
+    await mount({ registry: CHAT }, { roleId: 'blue-observer' })
+    const toggle = within(panel('blue-hq')).getByRole('button', { name: 'Show message entry' })
+    fireEvent.click(toggle)
+    await act(() => flush())
+    expect(within(panel('blue-hq')).getByText(/You are observing this game/)).toBeTruthy()
   })
 })
 

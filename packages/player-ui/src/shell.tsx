@@ -1,15 +1,18 @@
-// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the fixed
-// out-of-game column on the right (PLY-36, WP 2.7). Each part has a *Core that takes plain props
-// and a wrapper that reads @wrx/hooks (NFR-18).
+// The player shell: a header, the workspace slot (the dockable workspace of WP 2.5) and the
+// out-of-game column on the right (PLY-36, WP 2.7). In a narrow client the column becomes a
+// workspace tab instead (FT-1). Each part has a *Core that takes plain props and a wrapper that
+// reads @wrx/hooks (NFR-18).
 import { UMPIRE_NAME } from '@wrx/domain'
 import type { StoreStatus } from '@wrx/domain'
 import { useGameSetup, useMe, useSessionStatus } from '@wrx/hooks'
 import type { ThemeTokens } from '@wrx/schemas'
 import { Banner, Button, Spinner, ThemeScope } from '@wrx/ui'
-import { useId } from 'react'
-import type { ReactNode } from 'react'
-import { OutOfGameColumn } from './column/index.ts'
-import { Workspace } from './workspace/index.ts'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
+import { OutOfGameColumn, useUnseenAnnouncements } from './column/index.ts'
+import { UnreadBadge, Workspace, WorkspaceSpecialProvider } from './workspace/index.ts'
+import type { WorkspaceSpecialSlot } from './workspace/index.ts'
 
 // ---- Connection status (PLY-2) ------------------------------------------------------------
 
@@ -113,6 +116,104 @@ export interface ShellCoreProps {
   readonly headerItems?: ReactNode
   /** A notice under the header, e.g. that the admin is previewing as a role. */
   readonly notice?: ReactNode
+  /**
+   * FT-1: where the out-of-game column goes. `auto` (the default) makes it a workspace tab while
+   * the client is narrower than `columnBreakpoint`, and the fixed column otherwise.
+   */
+  readonly columnForm?: ColumnForm
+  /** FT-1: the client width, in rem, below which the column becomes a tab. */
+  readonly columnBreakpoint?: number
+  /** FT-1: shown on the tab after its name, e.g. the unread announcements badge. */
+  readonly columnBadge?: ReactNode
+  /** FT-1: told whether the column's content is on screen (always, as the fixed column). */
+  readonly onColumnShownChange?: (shown: boolean) => void
+}
+
+export type ColumnForm = 'auto' | 'column' | 'tab'
+
+/**
+ * FT-1: below this client width (rem) the out-of-game column becomes a tab. The column is 18rem
+ * wide (13rem in a multi-client pane), so at 45rem it takes at most 40% of the client and leaves
+ * the workspace 27rem, about one chat room. Measured on the client, not the screen, so each
+ * multi-client pane switches on its own width; rem, so browser zoom and font size count.
+ */
+export const COLUMN_BREAKPOINT_REM = 45
+
+/** The tab's name and the region it holds. */
+export const COLUMN_TAB_NAME = 'Out of game'
+
+/** Whether the element is narrower than `breakpointRem`; false until it has been laid out. */
+function useNarrow(ref: RefObject<HTMLElement | null>, breakpointRem: number): boolean {
+  const [narrow, setNarrow] = useState(false)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (element === null) return undefined
+    const measure = () => {
+      const width = element.getBoundingClientRect().width
+      const view = element.ownerDocument.defaultView
+      const rem =
+        Number.parseFloat(
+          view?.getComputedStyle(element.ownerDocument.documentElement).fontSize ?? '',
+        ) || 16
+      setNarrow(width > 0 && width < breakpointRem * rem)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => {
+      observer.disconnect()
+    }
+  }, [ref, breakpointRem])
+  return narrow
+}
+
+/** A megaphone: the tab holds the admin's announcements (decorative; the name is the label). */
+function OutOfGameIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" focusable="false">
+      <path d="M1.5 6.25h3.25L11.5 2.5v11L4.75 9.75H1.5z" />
+      <path d="M5 10.5h2l1 3.5H6z" />
+      <path d="M13 6h1.75v4H13z" />
+    </svg>
+  )
+}
+
+type Place = 'aside' | 'tab' | 'stash'
+
+/**
+ * FT-1: renders the column once, into a node of its own, and moves that node between the fixed
+ * column, the workspace tab and a hidden stash (no workspace yet, or a tab never opened). The
+ * column's React tree never remounts, so its state (a half-written announcement, the force
+ * shown, an open editor) survives the switch.
+ */
+function useColumnHome(asTab: boolean) {
+  const [holder] = useState(() => {
+    const element = document.createElement('div')
+    element.className = 'wrx-shell__column-content'
+    return element
+  })
+  const places = useRef<Record<Place, HTMLElement | null>>({ aside: null, tab: null, stash: null })
+  const asTabRef = useRef(asTab)
+  asTabRef.current = asTab
+  const settle = useCallback(() => {
+    const p = places.current
+    const target = (asTabRef.current ? p.tab : p.aside) ?? p.stash
+    if (target !== null && holder.parentElement !== target) target.appendChild(holder)
+  }, [holder])
+  const place = useCallback(
+    (key: Place) => (element: HTMLElement | null) => {
+      places.current[key] = element
+      settle()
+    },
+    [settle],
+  )
+  const refs = useMemo(
+    () => ({ aside: place('aside'), tab: place('tab'), stash: place('stash') }),
+    [place],
+  )
+  useLayoutEffect(settle)
+  return { holder, refs }
 }
 
 export function ShellCore({
@@ -129,8 +230,51 @@ export function ShellCore({
   title,
   headerItems,
   notice,
+  columnForm = 'auto',
+  columnBreakpoint = COLUMN_BREAKPOINT_REM,
+  columnBadge,
+  onColumnShownChange,
 }: ShellCoreProps) {
   const starting = status.state === 'starting' || game === 'loading'
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const narrow = useNarrow(bodyRef, columnBreakpoint)
+  const hasColumn = column !== undefined && column !== null && column !== false
+  const wantTab = hasColumn && (columnForm === 'tab' || (columnForm === 'auto' && narrow))
+  // A tab only where a workspace is mounted to hold it (not while loading or with no game).
+  const [claims, setClaims] = useState(0)
+  const claim = useCallback(() => {
+    setClaims((n) => n + 1)
+    return () => {
+      setClaims((n) => n - 1)
+    }
+  }, [])
+  const asTab = wantTab && claims > 0
+  const [tabShown, setTabShown] = useState(false)
+  const shown = !asTab || tabShown
+  useEffect(() => {
+    onColumnShownChange?.(shown)
+  }, [shown, onColumnShownChange])
+  const { holder, refs } = useColumnHome(asTab)
+  const tabContent = useMemo(
+    () => <section ref={refs.tab} className="wrx-shell__column-tab" aria-label={COLUMN_TAB_NAME} />,
+    [refs.tab],
+  )
+  const slot = useMemo<WorkspaceSpecialSlot>(
+    () => ({
+      tab: wantTab
+        ? {
+            id: 'out-of-game',
+            name: COLUMN_TAB_NAME,
+            content: tabContent,
+            icon: <OutOfGameIcon />,
+            badge: columnBadge,
+          }
+        : undefined,
+      claim,
+      onShownChange: setTabShown,
+    }),
+    [wantTab, tabContent, columnBadge, claim],
+  )
   return (
     <ThemeScope tokens={theme} className="wrx-shell">
       <header className="wrx-shell__header">
@@ -163,21 +307,25 @@ export function ShellCore({
       </header>
       {notice}
       <ConnectionIndicatorCore status={status} />
-      <div className="wrx-shell__body">
+      <div className="wrx-shell__body" ref={bodyRef} data-column={asTab ? 'tab' : 'column'}>
         <main className="wrx-shell__workspace" aria-label="Workspace">
-          {starting ? (
-            <div className="wrx-shell__loading">
-              <Spinner label="Loading the game" />
-            </div>
-          ) : game === 'none' ? (
-            <NoGameCore />
-          ) : (
-            workspace
-          )}
+          <WorkspaceSpecialProvider value={slot}>
+            {starting ? (
+              <div className="wrx-shell__loading">
+                <Spinner label="Loading the game" />
+              </div>
+            ) : game === 'none' ? (
+              <NoGameCore />
+            ) : (
+              workspace
+            )}
+          </WorkspaceSpecialProvider>
         </main>
-        <aside className="wrx-shell__column" aria-label="Out-of-game column">
-          {column}
-        </aside>
+        {asTab ? null : (
+          <aside ref={refs.aside} className="wrx-shell__column" aria-label="Out-of-game column" />
+        )}
+        <div ref={refs.stash} className="wrx-shell__column-stash" hidden />
+        {hasColumn ? createPortal(column, holder) : null}
       </div>
     </ThemeScope>
   )
@@ -202,6 +350,9 @@ export interface ShellProps {
   readonly notice?: ReactNode
   /** Who the header names; default the session's role, or "Umpire" for the admin. */
   readonly role?: ShellRole
+  /** FT-1: see `ShellCoreProps`. */
+  readonly columnForm?: ColumnForm
+  readonly columnBreakpoint?: number
 }
 
 /** The shell over the pane's store; needs a SessionStoreProvider. */
@@ -215,7 +366,13 @@ export function Shell({
   headerItems,
   notice,
   role: roleOverride,
+  columnForm,
+  columnBreakpoint,
 }: ShellProps) {
+  // FT-1: announcements that arrive while the column's tab is hidden are counted on the tab.
+  const [columnShown, setColumnShown] = useState(true)
+  const unseen = useUnseenAnnouncements(columnShown)
+  const columnBadge = useMemo(() => <UnreadBadge count={unseen} />, [unseen])
   const status = useSessionStatus().data
   const me = useMe().data
   const setup = useGameSetup()
@@ -243,6 +400,10 @@ export function Shell({
       title={title}
       headerItems={headerItems}
       notice={notice}
+      columnBadge={columnBadge}
+      onColumnShownChange={setColumnShown}
+      {...(columnForm === undefined ? {} : { columnForm })}
+      {...(columnBreakpoint === undefined ? {} : { columnBreakpoint })}
     />
   )
 }

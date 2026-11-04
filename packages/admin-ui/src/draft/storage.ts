@@ -2,9 +2,13 @@
 // the key, so each server, or each mock deployment, has its own draft (mock-host's
 // `names.storageKey`). Reading and writing go through a `DraftPersistence`, so tests inject one.
 import {
+  convertDesignV1,
   designFileSchema,
+  designFileV1Schema,
   forceSchema,
   gameSetupSchema,
+  idSchema,
+  isoDateTimeSchema,
   objectivesSchema,
   participantSchema,
   roleSchema,
@@ -33,27 +37,84 @@ const draftDesignSchema = designFileSchema.extend({
   roles: z.array(roleSchema.extend({ name: z.string(), password: z.never().optional() })),
   rooms: z.array(roomSchema.extend({ name: z.string(), participants: z.array(participantSchema) })),
   objectives: z.array(objectivesSchema.extend({ markdown: z.string() })),
+  // A template being edited may be outside the WRX profile (the raw editor, WP 4.3): its
+  // structure only; `validateDraft` reports the profile's issues.
+  templates: z
+    .array(
+      z.object({
+        schemaVersion: z.literal(1),
+        id: idSchema,
+        name: z.string(),
+        description: z.string().optional(),
+        schema: z.record(z.string(), z.unknown()),
+        uiSchema: z.record(z.string(), z.unknown()).optional(),
+        createdAt: isoDateTimeSchema,
+        lockedAt: isoDateTimeSchema.optional(),
+      }),
+    )
+    .default([]),
 })
 
-const idList = z.array(slugSchema)
+const idList = z.array(idSchema)
+
+/** The stored draft's version: 2 since GUID ids (§3 rule 1, WP 3.5). */
+export const DRAFT_VERSION = 2
 
 const storedDraftSchema = z.object({
   format: z.literal(DRAFT_FORMAT),
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(DRAFT_VERSION),
   design: draftDesignSchema,
-  meta: z.object({
-    retiredIds: z.object({ forces: idList, roles: idList, rooms: idList }),
-    publishedRoleIds: idList,
+  meta: z.object({ publishedRoleIds: idList, publishedForceIds: idList }),
+})
+
+/**
+ * A draft saved before GUID ids: a version 1 design, possibly mid-edit, and the slug ids it had
+ * retired or published. Its design is checked with the same leniency as today's.
+ */
+const v1Lenient = designFileV1Schema.shape
+const storedDraftV1Schema = z.object({
+  format: z.literal(DRAFT_FORMAT),
+  schemaVersion: z.literal(1),
+  design: designFileV1Schema.extend({
+    game: v1Lenient.game.extend({
+      name: z.string(),
+      description: z.string(),
+      briefing: z.string(),
+    }),
+    forces: z.array(v1Lenient.forces.element.extend({ name: z.string(), colour: z.string() })),
+    roles: z.array(v1Lenient.roles.element.extend({ name: z.string() })),
+    rooms: z.array(v1Lenient.rooms.element.extend({ name: z.string() })),
+    objectives: z.array(v1Lenient.objectives.element.extend({ markdown: z.string() })),
   }),
+  meta: z.object({ publishedRoleIds: z.array(slugSchema) }).loose(),
 })
 
 export function serialiseDraft(draft: Draft): string {
   return JSON.stringify({
     format: DRAFT_FORMAT,
-    schemaVersion: 1,
+    schemaVersion: DRAFT_VERSION,
     design: draft.design,
     meta: draft.meta,
   })
+}
+
+/**
+ * Converts a draft saved before GUID ids the way an import converts a version 1 file (ADM-16):
+ * new GUIDs, references rewritten, each role's old id its login name. Roles it had published
+ * stay published, by their new ids, so their login names stay fixed while the server still has
+ * their accounts; their forces count as published too.
+ */
+function migrateDraftV1(stored: z.infer<typeof storedDraftV1Schema>): Draft {
+  // Names may be empty mid-edit: the conversion only rewrites ids.
+  const { design, ids } = convertDesignV1(stored.design)
+  const publishedRoleIds = stored.meta.publishedRoleIds.flatMap((old) => {
+    const id = ids.roles.get(old)
+    return id === undefined ? [] : [id]
+  })
+  const publishedForceIds = [
+    ...new Set(design.roles.filter((r) => publishedRoleIds.includes(r.id)).map((r) => r.forceId)),
+  ]
+  return draftFromDesign(design, { publishedRoleIds, publishedForceIds })
 }
 
 /** Reads a saved draft; fails on text that is not one, without throwing. */
@@ -63,6 +124,16 @@ export function parseStoredDraft(text: string): Result<Draft, string> {
     json = JSON.parse(text)
   } catch {
     return { ok: false, error: 'the saved draft is not valid JSON' }
+  }
+  if (typeof json === 'object' && json !== null && 'schemaVersion' in json) {
+    if (json.schemaVersion === 1) {
+      const old = storedDraftV1Schema.safeParse(json)
+      if (old.success) return { ok: true, value: migrateDraftV1(old.data) }
+      return {
+        ok: false,
+        error: `the saved draft, from before GUID ids, is not readable: ${z.prettifyError(old.error)}`,
+      }
+    }
   }
   const parsed = storedDraftSchema.safeParse(json)
   if (!parsed.success) {

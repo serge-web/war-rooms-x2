@@ -60,6 +60,7 @@
 }
 
 .wrx-chat__you,
+.wrx-chat__deleted,
 .wrx-chat__force {
   color: var(--wrx-muted);
   font-weight: 400;
@@ -209,6 +210,46 @@
 .wrx-chat__text--unreadable {
   color: var(--wrx-muted);
   font-style: italic;
+}
+
+/* ---- The composer's collapse bar (PLY-54) ---- */
+
+/* A slim bar above the composer, or alone at the foot of the panel when it is collapsed, where
+   the message list takes the freed height (the list is the one flexible child). */
+.wrx-chat__entry-bar {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-top: 1px solid var(--wrx-border);
+  background: var(--wrx-surface);
+}
+
+.wrx-chat__entry-bar--collapsed {
+  padding: 0.25rem 0.5rem;
+}
+
+.wrx-chat__entry-note {
+  margin-right: auto;
+  padding-left: 0.25rem;
+  color: var(--wrx-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* The wrapper adds no box, so the composer stays a direct flex child of the panel and its
+   percentage height (templates.css) still measures the panel. Hidden, it is not rendered. */
+.wrx-chat__entry:not([hidden]) {
+  display: contents;
+}
+
+/* The bar draws the line between the list and the composer. */
+.wrx-chat__entry > .wrx-composer {
+  border-top: 0;
+  padding-top: 0.25rem;
 }
 
 /* ---- The composer (PLY-44, PLY-12, PLY-33, PLY-53) ---- */

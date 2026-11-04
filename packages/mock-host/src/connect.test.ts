@@ -1,5 +1,6 @@
 // The leader-tab path in Node (D17, R7): several "tabs" of one fake browser profile, sharing
 // Web Locks, BroadcastChannels and storage. The SharedWorker path runs in Playwright (e2e/).
+import { tid } from '@wrx/schemas/fixtures'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connectMockTransport } from './connect.ts'
@@ -9,7 +10,7 @@ import { migrateMockState } from './migrate.ts'
 import { hostNames, mockNamespace } from './namespace.ts'
 import type { LogEntry } from './wire.ts'
 
-const ROOM = 'negotiation@conference.wrx.mock'
+const ROOM = `${tid('negotiation')}@conference.wrx.mock`
 const endpoint = { websocketUrl: 'mock://test', domain: 'wrx.mock' }
 
 const open: MockHost[] = []
@@ -100,6 +101,33 @@ describe('connectMockTransport, leader tab (D17, ARC-7, R7)', () => {
       expect(blue.texts()).toContain('Red is ready.')
       expect(red.texts()).toContain('Blue too.')
     })
+  })
+
+  it('drops one tab’s sessions while its network is away, and they catch up when it is back (PLY-2)', async () => {
+    const browser = new FakeBrowser()
+    const one = await tab(browser)
+    const two = await tab(browser)
+    const blue = await player(one.host, 'blue-co')
+    const red = await player(two.host, 'red-co')
+    const states: string[] = []
+    red.session.onStatus((s) => states.push(s.state))
+    two.host.setNetworkOnline(false)
+    await vi.waitFor(() => {
+      expect(red.session.status().state).toBe('reconnecting')
+    })
+    // Blue's tab is unaffected.
+    await blue.send('While Red is away.')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(red.texts()).not.toContain('While Red is away.')
+    expect(red.session.status().state).toBe('reconnecting')
+    two.host.setNetworkOnline(true)
+    await vi.waitFor(() => {
+      expect(red.recoveries()).toBe(1)
+      expect(red.texts()).toContain('While Red is away.')
+    })
+    expect(red.session.status().state).toBe('online')
+    expect(blue.recoveries()).toBe(0)
+    expect(states).toContain('reconnecting')
   })
 
   it('keeps messages flowing when the leader tab closes mid-conversation', async () => {

@@ -10,6 +10,7 @@ import {
   knownRoles,
   preparePublish,
   prepareReset,
+  publishedDesign,
   targetState,
 } from '@wrx/admin-ops'
 import type {
@@ -23,7 +24,12 @@ import type {
   StepState,
 } from '@wrx/admin-ops'
 import type { Draft } from '../draft/index.ts'
-import { markPublished, markRolesPublished } from '../draft/index.ts'
+import {
+  markPublished,
+  markRolesPublished,
+  mergeRetired,
+  mergeTemplateLocks,
+} from '../draft/index.ts'
 
 /** How the admin UI reaches the server; the host builds it after the admin logs in. */
 export interface PublishConnection {
@@ -39,7 +45,21 @@ export interface PublishConnection {
    * (NFR-6). Only for `mock`; the host leaves it out of a real-server build.
    */
   readonly demoVaultPassphrase?: string
+  /**
+   * Review F12: the unlocked vault locks itself after this long without admin activity (ms).
+   * Default `VAULT_IDLE_LOCK_MS`; `Infinity` turns it off.
+   */
+  readonly vaultIdleLockMs?: number
 }
+
+/** F12: the default idle time before the unlocked vault locks itself, 15 minutes. */
+export const VAULT_IDLE_LOCK_MS = 15 * 60_000
+
+/** Activity notes closer together than this do not restart the idle timer (ms). */
+const ACTIVITY_THROTTLE_MS = 1_000
+
+/** While a run is using the vault, an idle lock waits and checks again after this long (ms). */
+const BUSY_RECHECK_MS = 5_000
 
 export type VaultState = 'unknown' | 'none' | 'locked' | 'unlocked'
 
@@ -63,6 +83,8 @@ export interface PublishSnapshot {
   /** A failure outside a step: reading the server, the vault. */
   readonly error: string | undefined
   readonly vault: VaultState
+  /** F12: the vault was locked by the idle timer, not by the admin. */
+  readonly vaultIdleLocked?: boolean
   readonly credentials: readonly Credential[]
   /** Role ids online at the last read (ADM-17). */
   readonly online: readonly string[]
@@ -75,7 +97,27 @@ export interface PublishControllerOptions {
   readonly getDraft: () => Draft
   readonly commit: (next: Draft) => void
   readonly now?: () => Date
+  /** The idle lock's timer and clock (F12); tests pass their own. */
+  readonly timers?: IdleTimers
 }
+
+/** What the vault's idle lock needs of the platform. */
+export interface IdleTimers {
+  /** Runs `run` after `ms`; the returned function cancels it. */
+  after(run: () => void, ms: number): () => void
+  /** Milliseconds, for throttling activity notes. */
+  now(): number
+}
+
+const PLATFORM_TIMERS: IdleTimers = Object.freeze({
+  after: (run: () => void, ms: number) => {
+    const handle = setTimeout(run, ms)
+    return () => {
+      clearTimeout(handle)
+    }
+  },
+  now: () => Date.now(),
+})
 
 const INITIAL: PublishSnapshot = Object.freeze({
   busy: undefined,
@@ -101,6 +143,9 @@ export class PublishController {
   private snapshot: PublishSnapshot = INITIAL
   private readonly listeners = new Set<() => void>()
   private vault: ObserverVault | undefined
+  private cancelIdleLock: (() => void) | undefined
+  private readonly timers: IdleTimers
+  private lastActivity = 0
   readonly book: CredentialsBook
   private readonly connection: PublishConnection
   private readonly getDraft: () => Draft
@@ -112,11 +157,12 @@ export class PublishController {
     this.getDraft = options.getDraft
     this.commit = options.commit
     this.now = options.now ?? (() => new Date())
+    this.timers = options.timers ?? PLATFORM_TIMERS
     this.book = new CredentialsBook(this.connection.kind === 'mock' ? 'demo' : 'random', this.now)
     this.book.subscribe(() => {
       this.set({ credentials: this.book.list() })
     })
-    this.knowDemoPasswords(this.getDraft().meta.publishedRoleIds)
+    this.knowDemoPasswords(publishedLogins(this.getDraft()))
   }
 
   /**
@@ -124,9 +170,9 @@ export class PublishController {
    * other there, and the demo seed starts with them. So the sheet shows them for published roles
    * without a reset. Nothing on a real server.
    */
-  private knowDemoPasswords(roleIds: readonly string[]): void {
+  private knowDemoPasswords(loginNames: readonly string[]): void {
     if (this.connection.kind !== 'mock') return
-    for (const roleId of roleIds) {
+    for (const roleId of loginNames) {
       if (this.book.get(roleId) !== undefined) continue
       this.book.restore({
         roleId,
@@ -189,10 +235,16 @@ export class PublishController {
     let planned = draft
     if (kind === 'publish') {
       // Roles the server already has are published, whichever browser published them (or the
-      // mock's demo seed): their login ids are fixed (ADM-5) and the sheet lists them.
-      planned = markRolesPublished(draft, knownRoles(view))
+      // mock's demo seed): their login names are fixed (ADM-5) and the sheet lists them. The
+      // server's deleted-role records keep their login names from new roles (§3 rule 1).
+      // Templates the server holds locked are locked in the draft too (TD6).
+      const published = publishedDesign(view)
+      planned = mergeTemplateLocks(
+        mergeRetired(markRolesPublished(draft, knownRoles(view)), published.retired),
+        published.templates,
+      )
       if (planned !== draft) this.commit(planned)
-      this.knowDemoPasswords(planned.meta.publishedRoleIds)
+      this.knowDemoPasswords(publishedLogins(planned))
     }
     this.set({
       busy: undefined,
@@ -246,7 +298,7 @@ export class PublishController {
     if (!result.ok) return
     const draft = this.getDraft()
     if (plan.kind === 'publish') {
-      // The draft now matches the server: its roles' login ids are fixed (ADM-5), and it carries
+      // The draft now matches the server: its roles' login names are fixed (ADM-5), and it carries
       // the published version, so the next change is published as the one after it.
       const version = plan.designVersion ?? draft.design.game.designVersion
       this.commit(
@@ -257,7 +309,7 @@ export class PublishController {
       )
     } else {
       // After a reset the next publish starts a new design version, so saved layouts of the old
-      // game are not reused (PLY-5). Ids stay retired (§3 rule 1).
+      // game are not reused (PLY-5). The draft keeps its `retired` records (§3 rule 1).
       const version = Math.max(plan.publishedVersion ?? 0, draft.design.game.designVersion) + 1
       this.commit({
         ...draft,
@@ -274,6 +326,17 @@ export class PublishController {
     if (!after.ok) {
       this.set({ error: `Reading the server back failed: ${describeError(after.error)}` })
       return
+    }
+    // The publish may have recorded deleted entities the draft did not (§3 rule 1), and locked
+    // the templates its rooms offer (TD6).
+    if (plan.kind === 'publish') {
+      const current = this.getDraft()
+      const published = publishedDesign(after.value.view)
+      const merged = mergeTemplateLocks(
+        mergeRetired(current, published.retired),
+        published.templates,
+      )
+      if (merged !== current) this.commit(merged)
     }
     this.set({
       checks: await checkServer(this.connection.ops, after.value.view),
@@ -323,7 +386,8 @@ export class PublishController {
     this.vault?.lock()
     this.vault = opened.value
     this.connection.ops.useVault(opened.value)
-    this.set({ busy: undefined, vault: 'unlocked' })
+    this.set({ busy: undefined, vault: 'unlocked', vaultIdleLocked: false })
+    this.armIdleLock(this.idleLockMs())
     const kind = this.snapshot.plan?.kind
     if (kind !== undefined) await this.prepare(kind)
     return undefined
@@ -331,15 +395,58 @@ export class PublishController {
 
   /** The vault, while it is unlocked here; the audit (WP 2.10) checks voice with it. */
   currentVault(): ObserverVault | undefined {
-    return this.vault?.unlocked === true ? this.vault : undefined
+    if (this.vault?.unlocked !== true) return undefined
+    this.noteActivity()
+    return this.vault
   }
 
   /** Drops the vault's key and passwords from memory. */
   lockVault(): void {
+    this.clearIdleLock()
     this.vault?.lock()
     this.vault = undefined
     this.connection.ops.useVault(undefined)
-    this.set({ vault: this.snapshot.vault === 'unknown' ? 'unknown' : 'locked' })
+    this.set({
+      vault: this.snapshot.vault === 'unknown' ? 'unknown' : 'locked',
+      vaultIdleLocked: false,
+    })
+  }
+
+  /**
+   * F12: the admin did something (a key or a click in the admin app): the idle lock starts
+   * counting again. Cheap enough to call on every event.
+   */
+  noteActivity(): void {
+    if (this.vault?.unlocked !== true) return
+    const now = this.timers.now()
+    if (now - this.lastActivity < ACTIVITY_THROTTLE_MS) return
+    this.lastActivity = now
+    this.armIdleLock(this.idleLockMs())
+  }
+
+  private idleLockMs(): number {
+    const ms = this.connection.vaultIdleLockMs ?? VAULT_IDLE_LOCK_MS
+    return ms > 0 ? ms : VAULT_IDLE_LOCK_MS
+  }
+
+  private armIdleLock(ms: number): void {
+    this.clearIdleLock()
+    if (!Number.isFinite(ms) || this.vault?.unlocked !== true) return
+    this.cancelIdleLock = this.timers.after(() => {
+      this.cancelIdleLock = undefined
+      // A publish or repair may be using the vault: lock once it has finished.
+      if (this.snapshot.busy !== undefined) {
+        this.armIdleLock(BUSY_RECHECK_MS)
+        return
+      }
+      this.lockVault()
+      this.set({ vaultIdleLocked: true })
+    }, ms)
+  }
+
+  private clearIdleLock(): void {
+    this.cancelIdleLock?.()
+    this.cancelIdleLock = undefined
   }
 
   /**
@@ -347,6 +454,7 @@ export class PublishController {
    * vault. Resolves with an error message, or undefined.
    */
   async resetPassword(roleId: string): Promise<string | undefined> {
+    // `roleId` is the login name: passwords belong to accounts (§3 rule 1).
     if (this.snapshot.busy !== undefined) return 'busy'
     const readOnly =
       targetState(this.getDraft().design).readOnlyRoles.includes(roleId) ||
@@ -385,4 +493,11 @@ function vaultMessage(error: AdminOpsError): string {
     default:
       return describeError(error)
   }
+}
+
+/** Login names of the draft's published roles: the credentials book is keyed by account. */
+function publishedLogins(draft: Draft): string[] {
+  return draft.design.roles
+    .filter((r) => draft.meta.publishedRoleIds.includes(r.id))
+    .map((r) => r.loginName)
 }

@@ -1,9 +1,15 @@
 // Seeds (PLY-21, PLY-34): a design provisioned as the admin tooling would, checked through the
 // transport as players see it, and the demo scenario.
-import { nodeName } from '@wrx/schemas'
+import { nodeName, parseDocument } from '@wrx/schemas'
 import type { RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
-import { sampleDesign, sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
+import {
+  TEMPLATE,
+  sampleDesign,
+  sampleDesignWithWhiteCell,
+  templatedDesign,
+  tid,
+} from '../../schemas/src/fixtures.ts'
 import { DEMO_VAULT_PASSPHRASE, demoSeed, demoState } from './demo.ts'
 import { demoPassword, stateFromDesign } from './seed.ts'
 import { MockServer } from './server.ts'
@@ -26,7 +32,7 @@ function demo() {
         credentials: { kind: 'password', username: id, password: demoPassword(id) },
       }),
     )
-  const room = (id: string) => `${id}@conference.${state.domain}`
+  const room = (id: string) => `${tid(id)}@conference.${state.domain}`
   return { state, server, transport, endpoint, login, room }
 }
 
@@ -72,7 +78,7 @@ describe('stateFromDesign', () => {
 
   it('makes every room NFR-3, with the White observer everywhere and observers stored as visitors', () => {
     const state = unwrap(stateFromDesign({ design: sampleDesign(), domain: 'd.mock' }))
-    const blueHq = state.rooms.find((r) => r.jid === 'blue-hq@conference.d.mock')
+    const blueHq = state.rooms.find((r) => r.jid === `${tid('blue-hq')}@conference.d.mock`)
     expect(blueHq?.config).toMatchObject({
       membersOnly: true,
       moderated: true,
@@ -90,7 +96,7 @@ describe('stateFromDesign', () => {
       { jid: 'blue-observer@d.mock', role: 'visitor' },
       { jid: 'white-observer@d.mock', role: 'visitor' },
     ])
-    const negotiation = state.rooms.find((r) => r.jid.startsWith('negotiation@'))
+    const negotiation = state.rooms.find((r) => r.jid.startsWith(`${tid('negotiation')}@`))
     expect(negotiation?.affiliations.map((a) => a.jid).sort()).toEqual([
       'admin@d.mock',
       'blue-co@d.mock',
@@ -105,37 +111,39 @@ describe('stateFromDesign', () => {
     const access = Object.fromEntries(state.nodes.map((n) => [n.name, n.config.accessModel]))
     expect(access).toMatchObject({
       'game-setup': 'open',
-      'assets:game-logo': 'open',
+      [nodeName.asset(tid('game-logo'))]: 'open',
       announcements: 'whitelist',
       'game-state': 'whitelist',
-      'forces:blue': 'whitelist',
-      'roles:blue-co': 'whitelist',
-      'rooms:negotiation': 'whitelist',
-      'objectives:blue': 'whitelist',
+      [nodeName.force(tid('blue'))]: 'whitelist',
+      [nodeName.role(tid('blue-co'))]: 'whitelist',
+      [nodeName.room(tid('negotiation'))]: 'whitelist',
+      [nodeName.objectives(tid('blue'))]: 'whitelist',
     })
-    const objectives = state.nodes.find((n) => n.name === nodeName.objectives('blue'))
+    const objectives = state.nodes.find((n) => n.name === nodeName.objectives(tid('blue')))
     expect(objectives?.affiliations).toEqual([
       { jid: 'admin@d.mock', affiliation: 'owner' },
       { jid: 'blue-co@d.mock', affiliation: 'member' },
       { jid: 'blue-observer@d.mock', affiliation: 'member' },
-      // The White observer reads every force's objectives, and never publishes (F5).
+      // Every White Force role reads every force's objectives; only the admin publishes (D21).
       { jid: 'white-observer@d.mock', affiliation: 'member' },
     ])
+    expect(objectives?.config.maxItems).toBe(1)
     const withCell = unwrap(
       stateFromDesign({ design: sampleDesignWithWhiteCell(), domain: 'd.mock' }),
     )
-    expect(withCell.nodes.find((n) => n.name === nodeName.objectives('red'))?.affiliations).toEqual(
-      [
-        { jid: 'admin@d.mock', affiliation: 'owner' },
-        { jid: 'white-cell@d.mock', affiliation: 'publisher' },
-        { jid: 'red-co@d.mock', affiliation: 'member' },
-        { jid: 'white-observer@d.mock', affiliation: 'member' },
-      ],
-    )
-    // §3 rule 14: one item per author; the design's text is the admin's.
+    expect(
+      withCell.nodes.find((n) => n.name === nodeName.objectives(tid('red')))?.affiliations,
+    ).toEqual([
+      { jid: 'admin@d.mock', affiliation: 'owner' },
+      { jid: 'red-co@d.mock', affiliation: 'member' },
+      { jid: 'white-observer@d.mock', affiliation: 'member' },
+      { jid: 'white-cell@d.mock', affiliation: 'member' },
+    ])
+    // §3 rule 14: one item, the admin's, holding the design's text.
     expect(objectives?.items.map((i) => i.id)).toEqual(['admin'])
     expect(state.nodes.find((n) => n.name === 'game-state')?.items).toEqual([])
-    const role = state.nodes.find((n) => n.name === 'roles:blue-co')?.items[0]?.payload ?? ''
+    const role =
+      state.nodes.find((n) => n.name === nodeName.role(tid('blue-co')))?.items[0]?.payload ?? ''
     expect(JSON.parse(role)).not.toHaveProperty('password')
   })
 
@@ -144,13 +152,28 @@ describe('stateFromDesign', () => {
       stateFromDesign({
         design: sampleDesign(),
         history: [
-          { room: 'blue-hq', author: 'blue-co', body: '{"n":2}', at: '2026-10-24T08:00:01.000Z' },
-          { room: 'blue-hq', author: 'admin', body: '{"n":1}', at: '2026-10-24T08:00:00.000Z' },
-          { room: 'blue-hq', author: 'admin', body: '{"n":3}', at: '2026-10-24T08:00:01.000Z' },
+          {
+            room: tid('blue-hq'),
+            author: 'blue-co',
+            body: '{"n":2}',
+            at: '2026-10-24T08:00:01.000Z',
+          },
+          {
+            room: tid('blue-hq'),
+            author: 'admin',
+            body: '{"n":1}',
+            at: '2026-10-24T08:00:00.000Z',
+          },
+          {
+            room: tid('blue-hq'),
+            author: 'admin',
+            body: '{"n":3}',
+            at: '2026-10-24T08:00:01.000Z',
+          },
         ],
       }),
     )
-    const archive = state.rooms.find((r) => r.jid.startsWith('blue-hq@'))?.archive ?? []
+    const archive = state.rooms.find((r) => r.jid.startsWith(`${tid('blue-hq')}@`))?.archive ?? []
     expect(archive.map((m) => m.body)).toEqual(['{"n":1}', '{"n":2}', '{"n":3}'])
     expect(archive.map((m) => m.stanzaId)).toEqual([
       '1792828800000000',
@@ -171,7 +194,7 @@ describe('stateFromDesign', () => {
     for (const author of ['blue-observer', 'red-co']) {
       const r = stateFromDesign({
         design: sampleDesign(),
-        history: [{ room: 'blue-hq', author, body: '{}', at: '2026-10-24T08:00:00Z' }],
+        history: [{ room: tid('blue-hq'), author, body: '{}', at: '2026-10-24T08:00:00Z' }],
       })
       expect(r.ok ? undefined : r.error).toMatch(/cannot post/)
     }
@@ -201,21 +224,39 @@ describe('the demo seed', () => {
     const anon = unwrap(await transport.connect({ endpoint, credentials: { kind: 'anonymous' } }))
     const setup = unwrap(await anon.pubsub.getItems('game-setup'))
     expect(JSON.parse(setup[0]?.payload ?? '{}')).toMatchObject({ name: 'Exercise Northern Gate' })
-    unwrap(await anon.pubsub.getItems('assets:game-logo'))
-    const forces = await anon.pubsub.getItems('forces:blue')
+    unwrap(await anon.pubsub.getItems(nodeName.asset(tid('game-logo'))))
+    const forces = await anon.pubsub.getItems(nodeName.force(tid('blue')))
     expect(forces.ok ? undefined : forces.error.condition).toBe('not-allowed')
+  })
+
+  it('holds the templates, locked as a publish leaves them, read by every role and published by the admin only (Annex A)', async () => {
+    const { login, transport, endpoint } = demo()
+    const red = await login('red-co')
+    const items = unwrap(await red.pubsub.getItems('templates'))
+    expect(items.map((i) => i.id).sort()).toEqual(
+      [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support].sort(),
+    )
+    for (const item of items) {
+      const parsed = parseDocument('template', item.payload)
+      expect(parsed.ok && parsed.value.lockedAt).toBe(templatedDesign().exportedAt)
+    }
+    const post = await red.pubsub.publish('templates', TEMPLATE.sitrep, items[0]!.payload)
+    expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
+    const anon = unwrap(await transport.connect({ endpoint, credentials: { kind: 'anonymous' } }))
+    const read = await anon.pubsub.getItems('templates')
+    expect(read.ok ? undefined : read.error.condition).toBe('not-allowed')
   })
 
   it('lets the White observer read every force’s objectives but not publish them (F5)', async () => {
     const { login } = demo()
     const observer = await login('white-observer')
-    const node = nodeName.objectives('red')
+    const node = nodeName.objectives(tid('red'))
     expect(unwrap(await observer.pubsub.getItems(node)).map((i) => i.id)).toEqual(['admin'])
     const post = await observer.pubsub.publish(node, 'white-observer', '{"markdown":"new"}')
     expect(post.ok ? undefined : post.error.condition).toBe('forbidden')
   })
 
-  it('lets a White Force writer publish objectives under its own item, beside the admin’s', async () => {
+  it('lets a White Force writer read objectives but not publish them (D21, §3 rule 14)', async () => {
     const state = unwrap(stateFromDesign({ design: sampleDesignWithWhiteCell() }))
     const transport = new MockTransport(new MockServer({ seed: state }))
     const cell = unwrap(
@@ -224,12 +265,12 @@ describe('the demo seed', () => {
         credentials: { kind: 'password', username: 'white-cell', password: 'demo-white-cell' },
       }),
     )
-    const node = nodeName.objectives('red')
-    unwrap(await cell.pubsub.publish(node, 'white-cell', '{"markdown":"new"}'))
-    const ids = unwrap(await cell.pubsub.getItems(node)).map((i) => i.id)
-    expect(ids.sort()).toEqual(['admin', 'white-cell'])
-    const overwrite = await cell.pubsub.publish(node, 'admin', '{}')
-    expect(overwrite.ok ? undefined : overwrite.error.condition).toBe('forbidden')
+    const node = nodeName.objectives(tid('red'))
+    expect(unwrap(await cell.pubsub.getItems(node)).map((i) => i.id)).toEqual(['admin'])
+    for (const itemId of ['white-cell', 'admin']) {
+      const post = await cell.pubsub.publish(node, itemId, '{"markdown":"new"}')
+      expect(post.ok ? undefined : post.error.condition, itemId).toBe('forbidden')
+    }
   })
 
   it('exports a state that seeds a new server (PLY-34), and resets to its seed', async () => {

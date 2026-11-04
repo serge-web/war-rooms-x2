@@ -1,4 +1,5 @@
-import { pixelAsset, sampleDesign } from '@wrx/schemas/fixtures'
+import { isId } from '@wrx/schemas'
+import { pixelAsset, sampleDesign, tid } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { draftFromDesign, validateDraft } from '../draft/index.ts'
 import {
@@ -17,8 +18,8 @@ import {
   themeTargets,
 } from './themeDraft.ts'
 
-const blue = { kind: 'force', id: 'blue' } as const
-const red = { kind: 'force', id: 'red' } as const
+const blue = { kind: 'force', id: tid('blue') } as const
+const red = { kind: 'force', id: tid('red') } as const
 
 function draft() {
   return draftFromDesign(sampleDesign())
@@ -29,10 +30,10 @@ describe('theme targets', () => {
     const d = draft()
     const keys = themeTargets(d.design).map((t) => t.key)
     expect(keys[0]).toBe('game')
-    expect(keys).toContain('force:blue')
+    expect(keys).toContain(`force:${tid('blue')}`)
     expect(keys.some((k) => k.startsWith('room:'))).toBe(true)
-    expect(targetFromKey(d.design, 'force:blue')).toEqual(blue)
-    expect(targetFromKey(d.design, 'force:nope')).toBeUndefined()
+    expect(targetFromKey(d.design, `force:${tid('blue')}`)).toEqual(blue)
+    expect(targetFromKey(d.design, `force:${tid('nope')}`)).toBeUndefined()
     expect(themePath(d.design, GAME_TARGET)).toBe('game.theme')
     expect(themePath(d.design, blue)).toMatch(/^forces\[\d\]\.theme$/)
   })
@@ -69,15 +70,15 @@ describe('editing tokens (ADM-18)', () => {
 describe('images (§3 rule 12)', () => {
   it('stores an asset and references it by id; replacing removes the orphan', () => {
     let d = draft()
-    const id = newAssetId(d.design, blue, 'logo')
-    expect(id).toBe('force-blue-logo')
+    const id = newAssetId()
+    expect(isId(id)).toBe(true)
     d = setThemeImage(putAsset(d, pixelAsset(id)), blue, 'logo', id)
     expect(themeOf(d.design, blue)?.logoAssetId).toBe(id)
     expect(d.design.assets.map((a) => a.id)).toContain(id)
     expect(validateDraft(d.design).errorCount).toBe(0)
 
-    const second = newAssetId(d.design, blue, 'logo')
-    expect(second).toBe('force-blue-logo-2')
+    const second = newAssetId()
+    expect(second).not.toBe(id)
     d = setThemeImage(putAsset(d, pixelAsset(second)), blue, 'logo', second)
     expect(d.design.assets.map((a) => a.id)).not.toContain(id)
 
@@ -87,10 +88,10 @@ describe('images (§3 rule 12)', () => {
   })
 
   it('keeps an asset that something else still uses', () => {
-    let d = setThemeImage(draft(), blue, 'icon', 'game-logo')
+    let d = setThemeImage(draft(), blue, 'icon', tid('game-logo'))
     d = setThemeImage(d, blue, 'icon', undefined)
-    expect(d.design.assets.map((a) => a.id)).toContain('game-logo')
-    expect(referencedAssetIds(d.design).has('game-logo')).toBe(true)
+    expect(d.design.assets.map((a) => a.id)).toContain(tid('game-logo'))
+    expect(referencedAssetIds(d.design).has(tid('game-logo'))).toBe(true)
   })
 })
 

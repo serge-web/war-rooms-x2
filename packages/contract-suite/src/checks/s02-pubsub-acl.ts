@@ -2,7 +2,9 @@
 // written by publishers only. Port of spike S02-pubsub-acl.test.ts.
 import { describe, expect, it } from 'vitest'
 import type { Ctx } from '../context.ts'
-import { errorOf, json, must } from '../harness.ts'
+import type { ItemsEvent } from '@wrx/transport'
+import { CURRENT } from '../fixture.ts'
+import { errorOf, json, must, record } from '../harness.ts'
 
 export function s02(ctx: Ctx): void {
   describe('S02 PubSub access control', () => {
@@ -38,19 +40,73 @@ export function s02(ctx: Ctx): void {
       )
     })
 
-    // §3 rule 14: White Force roles that are not observers read and publish every force's
-    // objectives.
-    it('the umpire reads and publishes both forces’ objectives', async () => {
+    // §3 rule 14, D21: White Force roles that are not observers read every force's objectives,
+    // and only the admin publishes them (WP 3.5; before, they published their own items).
+    it('the umpire reads both forces’ objectives but cannot publish them', async () => {
       const fx = ctx.fx()
       const umpire = await ctx.login(fx.users.umpire)
       for (const node of [fx.nodes.objectivesBlue, fx.nodes.objectivesRed]) {
         must(await umpire.pubsub.getItems(node), `read ${node}`)
-        must(
-          await umpire.pubsub.publish(node, 'umpire', json({ text: 'umpire' })),
-          `publish ${node}`,
-        )
-        must(await umpire.pubsub.publish(node, 'umpire', json({ text: 'again' })), 'overwrite own')
+        for (const itemId of ['umpire', CURRENT]) {
+          expect(
+            errorOf(await umpire.pubsub.publish(node, itemId, json({ text: 'umpire' }))),
+            `${node} ${itemId}`,
+          ).toMatchObject({ condition: 'forbidden', type: 'auth' })
+        }
       }
+    })
+
+    // XEP-0060 §8.5, D21: publish purges an objectives node that holds a former editor's items,
+    // after taking the editor's publisher affiliation. The owner's purge removes every item and
+    // keeps the node, its config and its affiliations; subscribers are told; the former
+    // publisher can neither publish again nor read anything left of its text.
+    it('the owner purges a node after a publisher becomes a reader (D21)', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const node = fx.nodes.objectivesRed
+      const jid = ctx.jid(fx.users.umpire)
+      must(await admin.pubsub.setAffiliations(node, [{ jid, affiliation: 'publisher' }]), 'grant')
+      const umpire = await ctx.login(fx.users.umpire)
+      must(await umpire.pubsub.publish(node, 'umpire', json({ text: 'old edit' })), 'old edit')
+      const red = await ctx.login(fx.users.redCo)
+      must(await red.pubsub.subscribe(node), 'red subscribes')
+      const heard = record<ItemsEvent>((l) => red.pubsub.onItems(node, l))
+      // Before: two items, one each.
+      const before = must(await admin.pubsub.getItems(node), 'items before')
+      expect(before.map((i) => i.id).sort()).toEqual([CURRENT, 'umpire'])
+
+      must(await admin.pubsub.setAffiliations(node, [{ jid, affiliation: 'member' }]), 'revoke')
+      expect(
+        errorOf(await umpire.pubsub.publish(node, 'umpire', json({ text: 'no' })))?.condition,
+      ).toBe('forbidden')
+      must(await admin.pubsub.purgeNode(node), 'purge')
+      expect(must(await admin.pubsub.getItems(node), 'items after')).toEqual([])
+      expect(must(await umpire.pubsub.getItems(node), 'former publisher reads')).toEqual([])
+      await heard.next((e) => e.deleted)
+      expect(heard.events.filter((e) => e.deleted)).toHaveLength(1)
+      const affiliations = must(await admin.pubsub.getAffiliations(node), 'affiliations')
+      expect(affiliations).toContainEqual({ jid, affiliation: 'member' })
+      expect(must(await admin.pubsub.getNodeConfig(node), 'config')).toMatchObject({
+        accessModel: 'whitelist',
+      })
+      // The owner's item goes back; the former publisher still cannot write.
+      must(await admin.pubsub.publish(node, CURRENT, json({ seed: node })), 'republish')
+      expect(must(await red.pubsub.getItems(node), 'red reads').map((i) => i.id)).toEqual([CURRENT])
+      expect(
+        errorOf(await umpire.pubsub.publish(node, 'umpire', json({ text: 'no' })))?.condition,
+      ).toBe('forbidden')
+      heard.stop()
+    })
+
+    it('a player cannot purge a node', async () => {
+      const fx = ctx.fx()
+      const umpire = await ctx.login(fx.users.umpire)
+      expect(errorOf(await umpire.pubsub.purgeNode(fx.nodes.objectivesBlue))?.condition).toBe(
+        'forbidden',
+      )
+      expect(must(await ctx.admin().pubsub.getItems(fx.nodes.objectivesBlue), 'kept')).not.toEqual(
+        [],
+      )
     })
 
     // §3 rule 14, review F5: a White Force observer is a member, not a publisher, of every
@@ -72,8 +128,13 @@ export function s02(ctx: Ctx): void {
     // published it, or by the owner (WP 1.3 probe).
     it('a publisher cannot overwrite or retract an item another entity published', async () => {
       const fx = ctx.fx()
-      const umpire = await ctx.login(fx.users.umpire)
       const node = fx.nodes.objectivesRed
+      const jid = ctx.jid(fx.users.umpire)
+      must(
+        await ctx.admin().pubsub.setAffiliations(node, [{ jid, affiliation: 'publisher' }]),
+        'make the umpire a publisher, for this check only',
+      )
+      const umpire = await ctx.login(fx.users.umpire)
       // `current` was seeded by the admin, the node's owner.
       const overwrite = await umpire.pubsub.publish(node, 'current', json({ text: 'mine now' }))
       expect(errorOf(overwrite)).toMatchObject({ condition: 'forbidden', type: 'auth' })
@@ -81,6 +142,11 @@ export function s02(ctx: Ctx): void {
       // The owner can overwrite an item a publisher made.
       must(await umpire.pubsub.publish(node, 'by-umpire', json({ v: 1 })), 'umpire publishes')
       must(await ctx.admin().pubsub.publish(node, 'by-umpire', json({ v: 2 })), 'owner overwrites')
+      must(await ctx.admin().pubsub.retract(node, 'by-umpire'), 'owner retracts')
+      must(
+        await ctx.admin().pubsub.setAffiliations(node, [{ jid, affiliation: 'member' }]),
+        'reset',
+      )
     })
 
     // §3 rule 15, PLY-37: every role reads announcements; only the admin publishes.

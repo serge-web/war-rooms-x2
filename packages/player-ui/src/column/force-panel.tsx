@@ -246,7 +246,7 @@ export function ForcePanel() {
   const store = useSessionStore()
   const me = useMe().data
   const forces = useForces().data
-  // White Force observers read every force's objectives; only editors edit (PLY-35, F5).
+  // Every White Force role reads every force's objectives; only the admin edits (PLY-35, D21).
   const canChoose = me.isUmpire || me.identity.isAdmin
   const canEdit = me.canEditObjectives
   const ownForce = me.force

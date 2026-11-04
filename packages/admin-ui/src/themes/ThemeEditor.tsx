@@ -158,7 +158,7 @@ export function ThemeEditor({
                 image === 'logo' ? resolved.logoAssetId : resolved.iconAssetId,
               )}
               onUpload={async (file) => {
-                const id = newAssetId(latest.current.design, target, image)
+                const id = newAssetId()
                 const result = await assetFromFile(file, id, assetOptions)
                 if (!result.ok) return result.error.message
                 const asset = result.value
@@ -223,7 +223,7 @@ function TokenField({
       {source === 'own' && (
         <Button
           variant="quiet"
-          aria-label={`${isGame ? 'Use the default' : 'Inherit'} for ${label}`}
+          aria-label={`${isGame ? 'Use default' : 'Inherit'} for ${label}`}
           onClick={() => {
             onChange(undefined)
           }}

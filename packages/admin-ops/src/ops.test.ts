@@ -1,6 +1,8 @@
 // Unit tests of AdminOps against FakeSession: the order of requests each rule depends on (R-A to
 // R-F), fail-closed behaviour, and typed results. Effects on a real server are checked by the
 // integration runs (integration/scenario.ts).
+import { nodeName } from '@wrx/schemas'
+import { tid } from '@wrx/schemas/fixtures'
 import { err, ok } from '@wrx/transport'
 import type { SubscriptionEntry } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
@@ -28,7 +30,7 @@ describe('R-A: revoking node access', () => {
       reads++
       return Promise.resolve(ok(reads === 1 ? subs : subs.slice(3)))
     })
-    const result = await adminOps.applyNodeAccess('objectives:blue', [
+    const result = await adminOps.applyNodeAccess(nodeName.objectives(tid('blue')), [
       { roleId: 'blue-co', access: 'none' },
       { roleId: 'umpire-1', access: 'publish' },
     ])
@@ -54,14 +56,14 @@ describe('R-A: revoking node access', () => {
     const { admin, ops: adminOps } = await rig()
     const left = [{ jid: `${jid('blue-co')}/p`, subscription: 'subscribed' as const }]
     admin.stub('pubsub', 'getSubscriptions', () => Promise.resolve(ok(left)))
-    const result = await adminOps.setNodeAccess('roles:blue-co', 'blue-co', 'none')
+    const result = await adminOps.setNodeAccess(nodeName.role(tid('blue-co')), 'blue-co', 'none')
     expect(result.ok ? undefined : result.error.code).toBe('verify-failed')
   })
 
   it('reports a server refusal as a typed error, without throwing', async () => {
     const { admin, ops: adminOps, progress } = await rig()
     admin.stub('pubsub', 'setAffiliations', () => Promise.resolve(err('forbidden', 'no', 'auth')))
-    const result = await adminOps.setNodeAccess('roles:blue-co', 'blue-co', 'read')
+    const result = await adminOps.setNodeAccess(nodeName.role(tid('blue-co')), 'blue-co', 'read')
     expect(result).toMatchObject({
       ok: false,
       error: { code: 'refused', step: 'grant affiliation', cause: { condition: 'forbidden' } },
@@ -73,7 +75,7 @@ describe('R-A: revoking node access', () => {
 describe('R-B: read-only room access (the vault route)', () => {
   it('grants membership, then at once the role joins and the admin revokes its voice, then verifies', async () => {
     const { ops: adminOps, log, logins } = await rig()
-    const result = await adminOps.makeReadOnly('blue-observer', ['blue-hq'])
+    const result = await adminOps.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(result).toEqual({ ok: true, value: undefined })
     expect(logins).toEqual(['blue-observer:observer-password'])
     expect(ops(log)).toEqual([
@@ -89,12 +91,12 @@ describe('R-B: read-only room access (the vault route)', () => {
       'role.disconnect',
     ])
     expect(log[2]).toContain('"member"')
-    expect(log[4]).toContain('["blue-hq@conference.wrx.test","blue-observer","visitor"')
+    expect(log[4]).toContain(`["${tid('blue-hq')}@conference.wrx.test","blue-observer","visitor"`)
   })
 
   it('re-applies voice revocation after an affiliation change (read access via applyRoomAccess)', async () => {
     const { ops: adminOps, log } = await rig()
-    const result = await adminOps.applyRoomAccess('blue-hq', [
+    const result = await adminOps.applyRoomAccess(tid('blue-hq'), [
       { roleId: 'blue-co', access: 'write' },
       { roleId: 'blue-observer', access: 'read' },
       { roleId: 'red-co', access: 'none' },
@@ -125,7 +127,7 @@ describe('R-B: read-only room access (the vault route)', () => {
       log.push('role.muc.join')
       return joined(String(r), String(n), 'visitor')
     })
-    expect((await adminOps.makeReadOnly('blue-observer', ['blue-hq'])).ok).toBe(true)
+    expect((await adminOps.makeReadOnly('blue-observer', [tid('blue-hq')])).ok).toBe(true)
     const affs = log.filter((l) => l.startsWith('admin.muc.setAffiliations'))
     expect(affs.map((l) => (l.includes('"none"') ? 'none' : 'member'))).toEqual(['none', 'member'])
     expect(ops(log).indexOf('admin.muc.setAffiliations')).toBeLessThan(ops(log).indexOf('connect'))
@@ -136,7 +138,7 @@ describe('R-B: read-only room access (the vault route)', () => {
   it('fails closed: a refused voice revocation takes the membership away again', async () => {
     const { admin, ops: adminOps, log } = await rig()
     admin.stub('muc', 'setRole', () => Promise.resolve(err('not-allowed', 'no', 'cancel')))
-    const result = await adminOps.makeReadOnly('blue-observer', ['blue-hq'])
+    const result = await adminOps.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(result).toMatchObject({ ok: false, error: { code: 'refused', rolledBack: true } })
     const affs = log.filter((l) => l.startsWith('admin.muc.setAffiliations'))
     expect(affs.at(-1)).toContain('"none"')
@@ -146,18 +148,18 @@ describe('R-B: read-only room access (the vault route)', () => {
   it('fails closed when the rejoin shows the role still has voice', async () => {
     const { admin, ops: adminOps, log } = await rig()
     admin.stub('muc', 'setRole', () => Promise.resolve(ok(undefined)))
-    const result = await adminOps.makeReadOnly('blue-observer', ['blue-hq'])
+    const result = await adminOps.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(result).toMatchObject({ ok: false, error: { code: 'verify-failed', rolledBack: true } })
     expect(log.filter((l) => l.startsWith('admin.muc.setAffiliations')).at(-1)).toContain('"none"')
   })
 
   it('grants nothing when the vault has no password for the role, or is not attached', async () => {
     const { ops: adminOps, log } = await rig()
-    const missing = await adminOps.makeReadOnly('red-liaison', ['red-hq'])
+    const missing = await adminOps.makeReadOnly('red-liaison', [tid('red-hq')])
     expect(missing.ok ? undefined : missing.error.code).toBe('no-password')
     const locked = await (
       await rig({ vault: false })
-    ).ops.makeReadOnly('blue-observer', ['blue-hq'])
+    ).ops.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(locked.ok ? undefined : locked.error.code).toBe('vault-locked')
     expect(log).toEqual([])
   })
@@ -172,7 +174,7 @@ describe('R-B: read-only room access (the vault route)', () => {
       },
       ...(vault === undefined ? {} : { vault }),
     })
-    const result = await failing.makeReadOnly('blue-observer', ['blue-hq'])
+    const result = await failing.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(result.ok ? undefined : result.error.code).toBe('login-failed')
     expect(log.filter((l) => l.includes('setAffiliations'))).toEqual([])
   })
@@ -186,9 +188,9 @@ describe('R-B: read-only room access (the vault route)', () => {
       log.push('role.muc.join')
       return joined(String(r), String(n), 'visitor')
     })
-    expect((await adminOps.setRoomAccess('blue-hq', 'blue-observer', 'write', 'read')).ok).toBe(
-      true,
-    )
+    expect(
+      (await adminOps.setRoomAccess(tid('blue-hq'), 'blue-observer', 'write', 'read')).ok,
+    ).toBe(true)
     expect(log.find((l) => l.startsWith('admin.muc.setRole'))).toContain('"participant"')
   })
 
@@ -197,7 +199,9 @@ describe('R-B: read-only room access (the vault route)', () => {
     admin.stub('muc', 'getAffiliations', () =>
       Promise.resolve(ok([{ jid: jid('red-liaison'), affiliation: 'member' as const }])),
     )
-    expect((await adminOps.setRoomAccess('red-hq', 'red-liaison', 'write', 'read')).ok).toBe(true)
+    expect((await adminOps.setRoomAccess(tid('red-hq'), 'red-liaison', 'write', 'read')).ok).toBe(
+      true,
+    )
     const affs = log.filter((l) => l.startsWith('admin.muc.setAffiliations'))
     expect(affs.map((l) => (l.includes('"none"') ? 'none' : 'member'))).toEqual(['none', 'member'])
   })
@@ -229,7 +233,7 @@ describe('R-B: write to read fails closed (security review F1)', () => {
   it('a refused role login takes an existing membership away first', async () => {
     const { admin, vault, log } = await rig()
     memberOf(admin, 'blue-observer')
-    const result = await refusingLogin(admin, vault).applyRoomAccess('blue-hq', [
+    const result = await refusingLogin(admin, vault).applyRoomAccess(tid('blue-hq'), [
       { roleId: 'blue-observer', access: 'read' },
     ])
     expect(result).toMatchObject({ ok: false, error: { code: 'login-failed', rolledBack: true } })
@@ -240,13 +244,13 @@ describe('R-B: write to read fails closed (security review F1)', () => {
   it('no vault password, or a locked vault, takes an existing membership away', async () => {
     const { admin, ops: adminOps, log } = await rig()
     memberOf(admin, 'red-co')
-    const result = await adminOps.makeReadOnly('red-co', ['blue-hq', 'red-hq'])
+    const result = await adminOps.makeReadOnly('red-co', [tid('blue-hq'), tid('red-hq')])
     expect(result).toMatchObject({ ok: false, error: { code: 'no-password', rolledBack: true } })
     expect(dropped(log, 'red-co')).toHaveLength(2)
 
     const locked = await rig({ vault: false })
     memberOf(locked.admin, 'blue-observer')
-    const lockedResult = await locked.ops.makeReadOnly('blue-observer', ['blue-hq'])
+    const lockedResult = await locked.ops.makeReadOnly('blue-observer', [tid('blue-hq')])
     expect(lockedResult.ok ? undefined : lockedResult.error.code).toBe('vault-locked')
     expect(dropped(locked.log, 'blue-observer')).toHaveLength(1)
   })
@@ -254,7 +258,9 @@ describe('R-B: write to read fails closed (security review F1)', () => {
   it('takes every membership away before the role logs in', async () => {
     const { admin, ops: adminOps, log } = await rig()
     memberOf(admin, 'blue-observer')
-    expect((await adminOps.makeReadOnly('blue-observer', ['blue-hq', 'red-hq'])).ok).toBe(true)
+    expect((await adminOps.makeReadOnly('blue-observer', [tid('blue-hq'), tid('red-hq')])).ok).toBe(
+      true,
+    )
     const steps = ops(log)
     const login = steps.indexOf('connect')
     expect(steps.slice(0, login)).toEqual([
@@ -277,7 +283,7 @@ describe('R-B: write to read fails closed (security review F1)', () => {
     const visitorIn = new Set<string>()
     admin.stub('muc', 'setRole', (r, ...rest) => {
       log.push(`admin.muc.setRole ${JSON.stringify([r, ...rest])}`)
-      if (String(r).startsWith('blue-hq@') || String(r).startsWith('red-hq@')) {
+      if (String(r).startsWith(`${tid('blue-hq')}@`) || String(r).startsWith(`${tid('red-hq')}@`)) {
         return Promise.resolve(err('not-allowed', 'no', 'cancel'))
       }
       visitorIn.add(String(r))
@@ -287,17 +293,25 @@ describe('R-B: write to read fails closed (security review F1)', () => {
       log.push(`role.muc.join ${JSON.stringify([r, n])}`)
       return joined(String(r), String(n), visitorIn.has(String(r)) ? 'visitor' : 'participant')
     })
-    const result = await adminOps.makeReadOnly('blue-observer', ['blue-hq', 'red-hq', 'umpire-hq'])
+    const result = await adminOps.makeReadOnly('blue-observer', [
+      tid('blue-hq'),
+      tid('red-hq'),
+      'umpire-hq',
+    ])
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.error).toMatchObject({ code: 'refused', target: 'blue-hq', rolledBack: true })
-    expect(result.error.failures?.map((f) => f.target)).toEqual(['blue-hq', 'red-hq'])
+    expect(result.error).toMatchObject({
+      code: 'refused',
+      target: tid('blue-hq'),
+      rolledBack: true,
+    })
+    expect(result.error.failures?.map((f) => f.target)).toEqual([tid('blue-hq'), tid('red-hq')])
     // umpire-hq was still handled: the role joined it and the admin set it to visitor.
     expect(log.some((l) => l.startsWith('admin.muc.setRole') && l.includes('umpire-hq@'))).toBe(
       true,
     )
     // Each failed room ends with the membership taken away.
-    for (const room of ['blue-hq', 'red-hq']) {
+    for (const room of [tid('blue-hq'), tid('red-hq')]) {
       expect(
         log
           .filter((l) => l.startsWith('admin.muc.setAffiliations') && l.includes(`${room}@`))
@@ -309,7 +323,7 @@ describe('R-B: write to read fails closed (security review F1)', () => {
   it('applyRoomAccess runs the other changes after a read-only change fails', async () => {
     const { admin, vault, log } = await rig()
     memberOf(admin, 'blue-observer')
-    const result = await refusingLogin(admin, vault).applyRoomAccess('blue-hq', [
+    const result = await refusingLogin(admin, vault).applyRoomAccess(tid('blue-hq'), [
       { roleId: 'blue-observer', access: 'read' },
       { roleId: 'red-co', access: 'none' },
     ])
@@ -322,14 +336,14 @@ describe('R-C: rooms', () => {
   it('creates a missing room with the NFR-3 config, moderated', async () => {
     const { admin, ops: adminOps, log } = await rig()
     let exists = false
-    admin.stub('muc', 'listRooms', () => Promise.resolve(ok(exists ? [room('blue-hq')] : [])))
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok(exists ? [room(tid('blue-hq'))] : [])))
     admin.stub('muc', 'createRoom', (...args) => {
       log.push(`admin.muc.createRoom ${JSON.stringify(args)}`)
       exists = true
       return Promise.resolve(ok(undefined))
     })
     admin.stub('muc', 'getRoomConfig', () => Promise.resolve(ok(gameRoomConfig('Blue HQ'))))
-    expect(await adminOps.ensureRoom('blue-hq', { name: 'Blue HQ' })).toEqual({
+    expect(await adminOps.ensureRoom(tid('blue-hq'), { name: 'Blue HQ' })).toEqual({
       ok: true,
       value: 'created',
     })
@@ -349,14 +363,32 @@ describe('R-C: rooms', () => {
 
   it('reconfigures an unmoderated room, and fails verify when it stays unmoderated', async () => {
     const { admin, ops: adminOps } = await rig()
-    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room('blue-hq')])))
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room(tid('blue-hq'))])))
     admin.stub('muc', 'getRoomConfig', () =>
       Promise.resolve(ok({ ...gameRoomConfig('Blue HQ'), moderated: false })),
     )
-    const result = await adminOps.ensureRoom('blue-hq', { name: 'Blue HQ' })
+    const result = await adminOps.ensureRoom(tid('blue-hq'), { name: 'Blue HQ' })
     expect(admin.calls.find((c) => c.op === 'configureRoom')?.args[1]).toMatchObject({
       moderated: true,
     })
+    expect(result.ok ? undefined : result.error.code).toBe('verify-failed')
+  })
+
+  it('reconfigures a room whose only drift is an open side channel (review F6)', async () => {
+    const { admin, ops: adminOps } = await rig()
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room(tid('blue-hq'))])))
+    admin.stub('muc', 'getRoomConfig', () =>
+      Promise.resolve(ok({ ...gameRoomConfig('Blue HQ'), subscriptions: true })),
+    )
+    const result = await adminOps.ensureRoom(tid('blue-hq'), { name: 'Blue HQ' })
+    expect(admin.calls.find((c) => c.op === 'configureRoom')?.args[1]).toMatchObject({
+      visitorPrivateMessages: 'nobody',
+      visitorStatus: false,
+      visitorNickChange: false,
+      voiceRequests: false,
+      subscriptions: false,
+    })
+    // The stub still answers with MUC/Sub on, so the read-back check fails.
     expect(result.ok ? undefined : result.error.code).toBe('verify-failed')
   })
 
@@ -372,12 +404,12 @@ describe('R-D: moving a role', () => {
     const { ops: adminOps, log } = await rig()
     const result = await adminOps.moveRole('blue-co', {
       rooms: [
-        { roomId: 'blue-hq', access: 'none' },
-        { roomId: 'red-hq', access: 'write' },
+        { roomId: tid(tid('blue-hq')), access: 'none' },
+        { roomId: tid(tid('red-hq')), access: 'write' },
       ],
       nodes: [
-        { node: 'objectives:blue', access: 'none' },
-        { node: 'objectives:red', access: 'read' },
+        { node: nodeName.objectives(tid('blue')), access: 'none' },
+        { node: nodeName.objectives(tid('red')), access: 'read' },
       ],
     })
     expect(result.ok).toBe(true)
@@ -388,8 +420,8 @@ describe('R-D: moving a role', () => {
           `${l.includes('muc') ? 'room' : 'node'} ${l.includes('"none"') ? 'revoke' : 'grant'}`,
       ),
     ).toEqual(['room grant', 'node grant', 'room revoke', 'node revoke'])
-    expect(changes[0]).toContain('red-hq')
-    expect(changes[2]).toContain('blue-hq')
+    expect(changes[0]).toContain(tid('red-hq'))
+    expect(changes[2]).toContain(tid('blue-hq'))
   })
 
   it('stops before revoking anything when a grant fails', async () => {
@@ -397,10 +429,10 @@ describe('R-D: moving a role', () => {
     admin.stub('pubsub', 'setAffiliations', () => Promise.resolve(err('forbidden')))
     const result = await adminOps.moveRole('blue-co', {
       rooms: [
-        { roomId: 'blue-hq', access: 'none' },
-        { roomId: 'red-hq', access: 'write' },
+        { roomId: tid(tid('blue-hq')), access: 'none' },
+        { roomId: tid(tid('red-hq')), access: 'write' },
       ],
-      nodes: [{ node: 'objectives:red', access: 'read' }],
+      nodes: [{ node: nodeName.objectives(tid('red')), access: 'read' }],
     })
     expect(result.ok).toBe(false)
     expect(log.filter((l) => l.includes('"none"'))).toEqual([])
@@ -431,8 +463,8 @@ describe('R-E: deleting a role', () => {
     })
     const before = storage.get(VAULT_STORAGE_KEY)
     const result = await adminOps.deleteRole('blue-observer', {
-      rooms: ['blue-hq', 'gone'],
-      nodes: ['roles:blue-observer'],
+      rooms: [tid('blue-hq'), 'gone'],
+      nodes: [nodeName.role(tid('blue-observer'))],
     })
     expect(result).toEqual({ ok: true, value: undefined })
     expect(ops(log)).toEqual([
@@ -453,18 +485,21 @@ describe('R-E: deleting a role', () => {
     admin.stub('muc', 'setAffiliations', () => Promise.resolve(err('item-not-found')))
     admin.stub('pubsub', 'setAffiliations', () => Promise.resolve(err('item-not-found')))
     expect(
-      (await adminOps.deleteRole('red-co', { rooms: ['x'], nodes: ['roles:red-co'] })).ok,
+      (await adminOps.deleteRole('red-co', { rooms: ['x'], nodes: [nodeName.role(tid('red-co'))] }))
+        .ok,
     ).toBe(true)
   })
 
   it('discovers rooms and nodes when no scope is given', async () => {
     const { admin, ops: adminOps, log } = await rig()
-    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room('blue-hq'), 'x@elsewhere'])))
-    admin.stub('pubsub', 'listNodes', () => Promise.resolve(ok(['roles:red-co', 'not-ours'])))
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room(tid('blue-hq')), 'x@elsewhere'])))
+    admin.stub('pubsub', 'listNodes', () =>
+      Promise.resolve(ok([nodeName.role(tid('red-co')), 'not-ours'])),
+    )
     expect((await adminOps.deleteRole('red-co')).ok).toBe(true)
     expect(log.filter((l) => l.includes('setAffiliations')).map((l) => l.split('"')[1])).toEqual([
-      room('blue-hq'),
-      'roles:red-co',
+      room(tid('blue-hq')),
+      nodeName.role(tid('red-co')),
     ])
   })
 
@@ -482,7 +517,7 @@ describe('R-E: deleting a role', () => {
       await adminOps.deleteRole('admin'),
       await adminOps.deleteAccount('admin'),
       await adminOps.setPassword('admin', 'x'),
-      await adminOps.setRoomAccess('blue-hq', 'admin', 'none'),
+      await adminOps.setRoomAccess(tid('blue-hq'), 'admin', 'none'),
     ]) {
       expect(result.ok ? undefined : result.error.code).toBe('invalid')
     }
@@ -506,7 +541,7 @@ describe('R-F: destroying a room', () => {
     const { admin, ops: adminOps, log, progress } = await rig()
     const page = (n: number, complete: boolean, first: string) => ({
       messages: Array.from({ length: n }, (_, i) => ({
-        room: room('negotiation'),
+        room: room(tid('negotiation')),
         stanzaId: `${first}${i}`,
         nick: 'x',
         from: undefined,
@@ -523,14 +558,14 @@ describe('R-F: destroying a room', () => {
         ok(before === undefined ? page(100, false, 'p1') : page(7, true, 'p2')),
       )
     })
-    expect(await adminOps.roomMessageCount('negotiation')).toEqual({ ok: true, value: 107 })
-    const changed = await adminOps.destroyRoom('negotiation', { messageCount: 100 })
+    expect(await adminOps.roomMessageCount(tid('negotiation'))).toEqual({ ok: true, value: 107 })
+    const changed = await adminOps.destroyRoom(tid('negotiation'), { messageCount: 100 })
     expect(changed).toMatchObject({
       ok: false,
       error: { code: 'count-changed', messageCount: 107 },
     })
     expect(ops(log)).not.toContain('admin.muc.destroyRoom')
-    const done = await adminOps.destroyRoom('negotiation', { messageCount: 107 })
+    const done = await adminOps.destroyRoom(tid('negotiation'), { messageCount: 107 })
     expect(done).toEqual({ ok: true, value: { messageCount: 107 } })
     const counted = progress.findIndex((e) => e.step === 'count messages' && e.messageCount === 107)
     const destroyed = progress.findIndex((e) => e.step === 'destroy room' && e.state === 'done')
@@ -552,7 +587,9 @@ describe('nodes are created before publishing', () => {
       created = true
       return Promise.resolve(ok(undefined))
     })
-    expect((await adminOps.publishDocument('roles:blue-co', config, 'current', '{}')).ok).toBe(true)
+    expect(
+      (await adminOps.publishDocument(nodeName.role(tid('blue-co')), config, 'current', '{}')).ok,
+    ).toBe(true)
     expect(ops(log)).toEqual(['admin.pubsub.createNode', 'admin.pubsub.publish'])
   })
 
@@ -563,7 +600,7 @@ describe('nodes are created before publishing', () => {
     expect(
       (
         await adminOps.publishDocument(
-          'roles:blue-co',
+          nodeName.role(tid('blue-co')),
           gameNodeConfig('whitelist', 1),
           'current',
           '{}',
@@ -584,7 +621,7 @@ describe('nodes are created before publishing', () => {
       fixed = true
       return Promise.resolve(ok(undefined))
     })
-    expect(await adminOps.ensureNode('roles:blue-co', wanted)).toEqual({
+    expect(await adminOps.ensureNode(nodeName.role(tid('blue-co')), wanted)).toEqual({
       ok: true,
       value: 'updated',
     })
@@ -636,7 +673,7 @@ describe('accounts and the vault', () => {
 describe('reading state', () => {
   it('reads rooms with every affiliation and nodes with subscriptions', async () => {
     const { admin, ops: adminOps } = await rig()
-    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room('blue-hq')])))
+    admin.stub('muc', 'listRooms', () => Promise.resolve(ok([room(tid('blue-hq'))])))
     admin.stub('muc', 'getAffiliations', (_r, a) =>
       Promise.resolve(
         ok(a === 'member' ? [{ jid: jid('blue-co'), affiliation: 'member' as const }] : []),
@@ -645,14 +682,22 @@ describe('reading state', () => {
     admin.stub('pubsub', 'getSubscriptions', () =>
       Promise.resolve(ok([{ jid: `${jid('blue-co')}/p`, subscription: 'subscribed' as const }])),
     )
-    const state = await adminOps.readState({ rooms: ['blue-hq', 'gone'], nodes: ['roles:blue-co'] })
+    const state = await adminOps.readState({
+      rooms: [tid('blue-hq'), 'gone'],
+      nodes: [nodeName.role(tid('blue-co'))],
+    })
     expect(state).toMatchObject({
       ok: true,
       value: {
         rooms: [
-          { roomId: 'blue-hq', affiliations: [{ jid: jid('blue-co'), affiliation: 'member' }] },
+          {
+            roomId: tid(tid('blue-hq')),
+            affiliations: [{ jid: jid('blue-co'), affiliation: 'member' }],
+          },
         ],
-        nodes: [{ node: 'roles:blue-co', subscriptions: [{ jid: `${jid('blue-co')}/p` }] }],
+        nodes: [
+          { node: nodeName.role(tid('blue-co')), subscriptions: [{ jid: `${jid('blue-co')}/p` }] },
+        ],
         missingRooms: ['gone'],
         missingNodes: [],
       },

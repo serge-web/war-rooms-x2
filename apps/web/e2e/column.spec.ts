@@ -1,12 +1,13 @@
-// The out-of-game column against the mock (WP 2.7, WP 2.11): the admin, as umpire, sees every
-// room, posts as the umpire and edits a force's objectives, which that force's player sees live
-// (SC-5, PLY-15, PLY-35); a White Force observer reads but cannot edit; the admin posts an
-// announcement from the game view and players see it arrive highlighted (ADM-29, PLY-37,
-// PLY-38); objectives written in the admin editor reach players on publish (ADM-23, ADM-24); and
-// the server enforces who may post where (PLY-15, PLY-39). Pages of one browser context share
-// the mock, as separate tabs do (D17).
+// The out-of-game column against the mock (WP 2.7, WP 2.11); the umpire's own walk through it,
+// posting as the umpire and editing a force's objectives live, is the SC-5 scenario
+// (scenarios/sc-5-umpire-monitors.spec.ts). A White Force observer reads but cannot edit; the
+// admin posts an announcement from the game view and players see it arrive highlighted (ADM-29,
+// PLY-37, PLY-38); objectives written in the admin editor reach players on publish (ADM-23,
+// ADM-24); and the server enforces who may post where (PLY-15, PLY-39). Pages of one browser
+// context share the mock, as separate tabs do (D17).
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { DOMAIN, logIn, roomTabs } from './mock.ts'
 
 const column = (page: Page) => page.getByRole('complementary', { name: 'Out-of-game column' })
@@ -51,64 +52,18 @@ test('the column sits outside the workspace: game time, admin panel, force panel
   await expect(forcePanel(page).getByRole('button', { name: /Edit/ })).toHaveCount(0)
 })
 
-test('SC-5: the admin, as umpire, sees every room, posts as the umpire and amends Red’s objectives live (PLY-15, PLY-35)', async ({
-  context,
-}) => {
-  const red = await context.newPage()
-  await player(red, 'red-co')
-  const redObjectives = forcePanel(red).getByRole('region', { name: 'Objectives' })
-  await expect(redObjectives).toContainText('Delay Blue.')
-
-  // 1. The admin login is the umpire, in the White Force, and sees every room.
-  const umpire = await context.newPage()
-  await umpire.setViewportSize({ width: 1400, height: 900 })
-  await player(umpire, 'admin')
-  await expect(umpire.getByLabel('Logged in as Umpire, White')).toBeVisible()
-  await expect(roomTabs(umpire)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
-  await expect(forcePanel(umpire).getByRole('heading', { name: 'Umpire' })).toBeVisible()
-
-  // 3. A clarification in Red HQ, which Red sees from the umpire, in White.
-  await umpire.getByRole('tab', { name: 'Red HQ', exact: true }).click()
-  const box = umpire.getByRole('textbox', { name: 'Message Red HQ', exact: true })
-  await box.fill('Clarification: the bridge is passable on foot only.')
-  await box.press('Enter')
-  await expect(box).toHaveValue('')
-  const card = red
-    .getByRole('region', { name: 'Messages in Red HQ', exact: true })
-    .getByRole('article')
-    .filter({ hasText: 'passable on foot only' })
-  await expect(card).toContainText('Umpire')
-  await expect(card).toContainText('White')
-
-  // 4. Red's objectives, amended with a preview; Red's force panel updates live.
-  await forcePanel(umpire).getByLabel('Show objectives for').selectOption({ label: 'Red' })
-  await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
-    'Delay Blue.',
-  )
-  await forcePanel(umpire).getByRole('button', { name: 'Edit Red objectives' }).click()
-  const dialog = umpire.getByRole('dialog', { name: 'Edit Red objectives' })
-  await dialog
-    .getByRole('textbox', { name: 'Objectives (Markdown)' })
-    .fill('1. Delay Blue.\n2. **Hold** the east bank until noon.')
-  await expect(
-    dialog.getByRole('region', { name: 'Objectives preview' }).locator('strong'),
-  ).toHaveText('Hold')
-  await dialog.getByRole('button', { name: 'Publish objectives' }).click()
-  await expect(dialog).toHaveCount(0)
-
-  // Live on Red's page, with no reload (PLY-28).
-  await expect(redObjectives).toContainText('Hold the east bank until noon.')
-  await expect(redObjectives.locator('strong')).toHaveText('Hold')
-  await expect(forcePanel(umpire).getByRole('region', { name: 'Red objectives' })).toContainText(
-    'Hold the east bank until noon.',
-  )
-})
-
 test('a White Force observer sees every room read only and reads, but cannot edit, objectives (§3 rule 4, PLY-35)', async ({
   page,
 }) => {
   await player(page, 'white-observer')
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
+  // The composers start collapsed for a read-only role (PLY-54); expanded, it says why.
+  await page.getByRole('button', { name: 'Show message entry' }).first().click()
   await expect(page.getByText(/You are observing this game/).first()).toBeVisible()
   await forcePanel(page).getByLabel('Show objectives for').selectOption({ label: 'Blue' })
   await expect(forcePanel(page).getByRole('region', { name: 'Blue objectives' })).toContainText(
@@ -191,18 +146,29 @@ test('the umpire posts in every room; a White observer reads every room and post
 }) => {
   await player(page, 'admin')
   // Every room...
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   // ...and the server, which enforces it (PLY-39), lets the umpire post in each, makes the White
   // observer a visitor in each, and keeps Blue out of Red HQ.
   const posted = await page.evaluate(
-    async ({ domain }) => {
+    async ({ domain, room }) => {
       const host = window.wrxMock
       if (host === undefined) return ['no mock host']
       const results: string[] = []
+      // Rooms by GUID (§3 rule 1), with the short names the results use.
+      const every: (readonly [string, string])[] = [
+        [room.blueHq, 'blue-hq'],
+        [room.redHq, 'red-hq'],
+        [room.negotiation, 'negotiation'],
+      ]
       for (const [user, rooms] of [
-        ['admin', ['blue-hq', 'red-hq', 'negotiation']],
-        ['white-observer', ['blue-hq', 'red-hq', 'negotiation']],
-        ['blue-co', ['red-hq']],
+        ['admin', every],
+        ['white-observer', every],
+        ['blue-co', [[room.redHq, 'red-hq'] as const]],
       ] as const) {
         const login = await host.connect({
           endpoint: { websocketUrl: '', domain },
@@ -211,24 +177,24 @@ test('the umpire posts in every room; a White observer reads every room and post
         })
         if (!login.ok) return [`${user} login: ${login.error.condition}`]
         const session = login.value
-        for (const room of rooms) {
-          const jid = `${room}@${session.services.muc}`
+        for (const [id, name] of rooms) {
+          const jid = `${id}@${session.services.muc}`
           const joined = await session.muc.join(jid, `${user}-check`)
           if (!joined.ok) {
-            results.push(`${user} ${room}: ${joined.error.condition}`)
+            results.push(`${user} ${name}: ${joined.error.condition}`)
             continue
           }
           const sent = await session.muc.send(
             jid,
             JSON.stringify({ type: 'chat', schemaVersion: 1, content: { text: 'Access check' } }),
           )
-          results.push(`${user} ${room}: ${joined.value.role} ${sent.ok ? 'posted' : 'refused'}`)
+          results.push(`${user} ${name}: ${joined.value.role} ${sent.ok ? 'posted' : 'refused'}`)
         }
         await session.disconnect()
       }
       return results
     },
-    { domain: DOMAIN },
+    { domain: DOMAIN, room: ROOM },
   )
   expect(posted.slice(0, 6)).toEqual([
     'admin blue-hq: moderator posted',

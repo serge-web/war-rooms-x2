@@ -19,7 +19,11 @@ describe('frame validation across tabs and the worker (NFR-19)', () => {
       },
       { t: 'request', id: 3, request: { op: 'muc.send', args: ['r@conference.x', 'hi'] } },
       { t: 'request', id: 4, request: { op: 'pubsub.getItems', args: ['n', undefined] } },
-      { t: 'request', id: 5, request: { op: 'muc.listRooms', args: [] } },
+      {
+        t: 'request',
+        id: 5,
+        request: { op: 'muc.listRooms', args: [{ max: 50, after: undefined }] },
+      },
       { t: 'logout' },
       { t: 'drop' },
     ]
@@ -32,7 +36,11 @@ describe('frame validation across tabs and the worker (NFR-19)', () => {
       'login',
       { t: 'login' },
       { t: 'login', credentials: { kind: 'password', username: 'x' } },
-      { t: 'request', id: -1, request: { op: 'muc.listRooms', args: [] } },
+      {
+        t: 'request',
+        id: -1,
+        request: { op: 'muc.listRooms', args: [{ max: 50, after: undefined }] },
+      },
       { t: 'request', id: 1, request: { op: 'muc.nuke', args: [] } },
       { t: 'request', id: 1, request: { op: 'muc.send', args: ['room'] } },
       { t: 'request', id: 1, request: { op: 'muc.send', args: ['room', 42] } },

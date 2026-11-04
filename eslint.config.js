@@ -11,6 +11,19 @@ const FLEXLAYOUT = {
     'Import FlexLayout only in the workspace module, packages/player-ui/src/workspace (ARC-9).',
 }
 const FLEXLAYOUT_HOME = 'packages/player-ui/src/workspace/**'
+// Annex A (F7): RJSF's Ajv validator compiles schemas with `new Function`, which the CSP refuses;
+// templates use `createTemplateFormValidator` from @wrx/templates/rjsf. @rjsf/core's root entry
+// re-exports a test helper that imports Ajv, so import its components by path
+// (`@rjsf/core/lib/components/Form.js`).
+const AJV = {
+  name: '@rjsf/validator-ajv8',
+  message: 'Ajv needs unsafe-eval (F7): use createTemplateFormValidator from @wrx/templates/rjsf.',
+}
+const RJSF_ROOT = {
+  name: '@rjsf/core',
+  message: 'Its root entry imports @rjsf/validator-ajv8: import @rjsf/core/lib/components/Form.js.',
+  subpaths: false,
+}
 
 /** `no-restricted-imports` configs: each forbids its libraries and their subpaths. */
 function restrictedImports(sets) {
@@ -22,7 +35,9 @@ function restrictedImports(sets) {
         'error',
         {
           paths: libraries.map(({ name, message }) => ({ name, message })),
-          patterns: libraries.map(({ name, message }) => ({ group: [`${name}/*`], message })),
+          patterns: libraries
+            .filter(({ subpaths }) => subpaths !== false)
+            .map(({ name, message }) => ({ group: [`${name}/*`], message })),
         },
       ],
     },
@@ -82,10 +97,10 @@ export default tseslint.config(
     {
       files: ['**/*.{ts,tsx,js}'],
       ignores: [STANZA_HOME, FLEXLAYOUT_HOME],
-      libraries: [STANZA, FLEXLAYOUT],
+      libraries: [STANZA, FLEXLAYOUT, AJV, RJSF_ROOT],
     },
-    { files: [STANZA_HOME], libraries: [FLEXLAYOUT] },
-    { files: [FLEXLAYOUT_HOME], libraries: [STANZA] },
+    { files: [STANZA_HOME], libraries: [FLEXLAYOUT, AJV, RJSF_ROOT] },
+    { files: [FLEXLAYOUT_HOME], libraries: [STANZA, AJV, RJSF_ROOT] },
   ]),
   {
     files: ['**/*.test.{ts,tsx}'],

@@ -1,10 +1,10 @@
 // Design export and import (ADM-16): the draft as a versioned JSON file, with no passwords. The
 // draft never holds a password, and the export strips any `password` field all the same; an
 // import is checked with `designFileSchema` (which refuses a `password` field) and `checkDesign`.
-import { checkDesign, designFileSchema } from '@wrx/schemas'
+import { checkDesign, readDesignFile } from '@wrx/schemas'
 import type { DesignFile, DesignIssue, Result } from '@wrx/schemas'
 import type { Draft } from '../draft/index.ts'
-import { draftFromDesign, toDesignFile } from '../draft/index.ts'
+import { createDraft, draftFromDesign, toDesignFile } from '../draft/index.ts'
 import { formatPath } from '../draft/index.ts'
 
 /** The export file's text and a file name for it. */
@@ -49,11 +49,12 @@ export function importDesign(
   } catch {
     return { ok: false, error: [{ severity: 'error', path: '', message: 'the file is not JSON' }] }
   }
-  const parsed = designFileSchema.safeParse(json)
-  if (!parsed.success) {
+  // A file from before GUID ids is converted (ADM-16): new ids, each old role id a login name.
+  const parsed = readDesignFile(json)
+  if (!parsed.ok) {
     return {
       ok: false,
-      error: parsed.error.issues.map((issue) => ({
+      error: parsed.error.map((issue) => ({
         severity: 'error' as const,
         path: formatPath(issue.path),
         message:
@@ -63,14 +64,35 @@ export function importDesign(
       })),
     }
   }
-  const issues = checkDesign(parsed.data)
+  const design = parsed.value.design
+  const issues = checkDesign(design)
   const errors = issues.filter((i) => i.severity === 'error')
   if (errors.length > 0) return { ok: false, error: errors }
+  const converted: DesignIssue[] =
+    parsed.value.converted === undefined
+      ? []
+      : [
+          {
+            severity: 'warning',
+            path: '',
+            message:
+              'This file is from before GUID ids: every force, role, room and asset has a new id, and each role keeps its old id as its login name. A game already published from it is moved by reset, then publish; its room history is not kept (ADM-16).',
+          },
+        ]
   return {
     ok: true,
     value: {
-      draft: draftFromDesign(parsed.data, current.meta),
-      warnings: issues.filter((i) => i.severity === 'warning'),
+      draft: draftFromDesign(design, current.meta),
+      warnings: [...converted, ...issues.filter((i) => i.severity === 'warning')],
     },
   }
+}
+
+/**
+ * An empty design (the White Force only) in place of the draft, e.g. to design a game from
+ * nothing on the mock, whose draft starts as its demo game (SC-1). Like an import, it keeps the
+ * current draft's retired and published ids: they describe the server, not the design.
+ */
+export function newDesign(current: Draft, now: Date = new Date()): Draft {
+  return { ...createDraft({ name: 'New exercise', now }), meta: current.meta }
 }

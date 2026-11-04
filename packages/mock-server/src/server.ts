@@ -15,7 +15,7 @@ import type {
   ServerPort,
 } from './protocol.ts'
 import { PubsubService } from './pubsub.ts'
-import { MOCK_STATE_FORMAT, emptyState } from './state.ts'
+import { MOCK_STATE_FORMAT, MOCK_STATE_VERSION, emptyState } from './state.ts'
 import type { MockState } from './state.ts'
 import { systemClock } from './time.ts'
 import type { Clock } from './time.ts'
@@ -232,7 +232,7 @@ export class MockServer implements ServerLink {
       case 'muc.destroyRoom':
         return { op: request.op, result: muc.destroyRoom(conn, ...request.args) }
       case 'muc.listRooms':
-        return { op: request.op, result: muc.listRooms(conn) }
+        return { op: request.op, result: muc.listRooms(conn, ...request.args) }
       case 'mam.queryRoom':
         return { op: request.op, result: muc.queryArchive(conn, ...request.args) }
       case 'pubsub.getItems':
@@ -255,6 +255,8 @@ export class MockServer implements ServerLink {
         return { op: request.op, result: pubsub.getNodeConfig(conn, ...request.args) }
       case 'pubsub.deleteNode':
         return { op: request.op, result: pubsub.deleteNode(conn, ...request.args) }
+      case 'pubsub.purgeNode':
+        return { op: request.op, result: pubsub.purgeNode(conn, ...request.args) }
       case 'pubsub.getAffiliations':
         return { op: request.op, result: pubsub.getAffiliations(conn, ...request.args) }
       case 'pubsub.setAffiliations':
@@ -379,7 +381,7 @@ export class MockServer implements ServerLink {
     const w = this.world
     return {
       format: MOCK_STATE_FORMAT,
-      version: 1,
+      version: MOCK_STATE_VERSION,
       domain: w.domain,
       accounts: [...w.accounts.values()].map((a) => ({ ...a })),
       rooms: [...w.rooms.values()].map((room) => ({

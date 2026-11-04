@@ -3,13 +3,13 @@
 // confirmation, progress, the result, a second publish that plans nothing, warnings that need
 // ticking, the credentials sheet and password reset, reset with typed confirmation, and design
 // import / export. Server effects are checked through a role's own login.
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { DEMO_VAULT_PASSPHRASE, MockServer, MockTransport, demoState } from '@wrx/mock-server'
-import { sampleDesign } from '@wrx/schemas/fixtures'
+import { sampleDesign, templatedDesign, tid } from '@wrx/schemas/fixtures'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -146,25 +146,25 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
     expect(stepItems()).toEqual([])
-    expect(groupButton('Access').textContent).toBe('▸Access20 stepsTo do')
-    expect(groupButton('Nodes').textContent).toContain('Create nodes: 17 nodes')
+    expect(groupButton('Access').textContent).toBe('▸Access23 stepsTo do')
+    expect(groupButton('Nodes').textContent).toContain('Create nodes: 20 nodes')
     // Repeated access steps read as one line each kind, expandable to every step.
     await user.click(groupButton('Access'))
     expect(groupButton('Access').getAttribute('aria-expanded')).toBe('true')
     const access = within(plan).getByRole('region', { name: 'Access' })
     const nodeGrants = within(access).getByRole('button', {
-      name: /^Give node access: 15 nodes × roles \(54 grants\)/,
+      name: /^Give node access: 18 nodes × roles \(66 grants\)/,
     })
     expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
     // The two observers' read-only steps read as one line too.
     expect(stepItems()).toEqual([])
     await user.click(nodeGrants)
-    expect(stepItems()).toHaveLength(15)
+    expect(stepItems()).toHaveLength(18)
     expect(access.textContent).toContain('Blue CO: read')
     await user.click(groupButton('Access'))
     expect(stepItems()).toEqual([])
     await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
-    expect(stepItems()).toHaveLength(58)
+    expect(stepItems()).toHaveLength(65)
     await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
     expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
@@ -181,23 +181,41 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const groups = within(planRegion()).getAllByRole('region')
     expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
     expect(groupButton('Access').textContent).toContain('Done')
-    expect(within(planRegion()).getByText(/^All 58 steps done\.$/)).toBeTruthy()
+    expect(within(planRegion()).getByText(/^All 65 steps done\.$/)).toBeTruthy()
     await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     const steps = stepItems()
-    expect(steps).toHaveLength(58)
+    expect(steps).toHaveLength(65)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
     // After the publish the room checks run and pass (NFR-4).
     expect(screen.getByText(/All 3 rooms are members-only/)).toBeTruthy()
     expect(screen.getByText(/The archive of .* answers/)).toBeTruthy()
-    // The draft records the publish: login ids are fixed (ADM-5).
-    expect(fresh.store.getSnapshot().draft.meta.publishedRoleIds).toContain('blue-co')
+    // The draft records the publish: login names are fixed (ADM-5).
+    expect(fresh.store.getSnapshot().draft.meta.publishedRoleIds).toContain(tid('blue-co'))
 
     // A second publish of the same draft plans nothing (ADM-10).
     await user.click(screen.getByRole('button', { name: 'Close' }))
     await planAndWait(fresh.user, 'Check the server and plan')
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
+  })
+
+  it('F12: will not create a vault under a guessable passphrase, and says why', async () => {
+    const { user } = await setup()
+    await planAndWait(user, 'Check the server and plan')
+    await user.click(screen.getByRole('button', { name: 'Create the vault' }))
+    const dialog = screen.getByRole('alertdialog', { name: /Create the observer-password vault/ })
+    const create = within(dialog).getByRole('button', { name: 'Create' })
+    await user.type(within(dialog).getByLabelText('Passphrase'), 'Password1234')
+    await user.type(within(dialog).getByLabelText('Passphrase again'), 'Password1234')
+    expect(within(dialog).getByText(/Not yet: the passphrase is too easy to guess/)).toBeTruthy()
+    expect((create as HTMLButtonElement).disabled).toBe(true)
+    await user.clear(within(dialog).getByLabelText('Passphrase'))
+    await user.clear(within(dialog).getByLabelText('Passphrase again'))
+    await user.type(within(dialog).getByLabelText('Passphrase'), PASSPHRASE)
+    await user.type(within(dialog).getByLabelText('Passphrase again'), PASSPHRASE)
+    expect(within(dialog).queryByText(/Not yet/)).toBeNull()
+    expect((create as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('shows the credentials sheet with labelled demo passwords that log in; resets one (ADM-26)', async () => {
@@ -248,17 +266,23 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
       credentials: { kind: 'password', username: 'red-co', password: 'demo-red-co' },
     })
     if (!red.ok) throw new Error('red login')
-    const sent = await red.value.muc.join(`negotiation@conference.${domain}`, 'red-co')
+    const sent = await red.value.muc.join(`${tid('negotiation')}@conference.${domain}`, 'red-co')
     expect(sent.ok).toBe(true)
-    await red.value.muc.send(`negotiation@conference.${domain}`, JSON.stringify({ text: 'hi' }))
+    await red.value.muc.send(
+      `${tid('negotiation')}@conference.${domain}`,
+      JSON.stringify({ text: 'hi' }),
+    )
 
     let draft = store.getSnapshot().draft
-    draft = deleteRole(draft, 'red-co')
+    draft = deleteRole(draft, tid('red-co'))
     draft = {
       ...draft,
-      design: { ...draft.design, rooms: draft.design.rooms.filter((r) => r.id !== 'negotiation') },
+      design: {
+        ...draft.design,
+        rooms: draft.design.rooms.filter((r) => r.id !== tid('negotiation')),
+      },
     }
-    draft = updateRoom(draft, 'blue-hq', { name: 'Blue headquarters' })
+    draft = updateRoom(draft, tid('blue-hq'), { name: 'Blue headquarters' })
     store.commit(draft)
     await planAndWait(user, 'Check the server and plan')
     const plan = planRegion()
@@ -285,7 +309,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const original = muc.createRoom.bind(muc)
     let refused = false
     muc.createRoom = (room, config) => {
-      if (!refused && room.startsWith('red-hq@')) {
+      if (!refused && room.startsWith(`${tid('red-hq')}@`)) {
         refused = true
         return Promise.resolve({ ok: false, error: { condition: 'internal-server-error' } })
       }
@@ -314,10 +338,10 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     expect(groupButton('Accounts').textContent).toContain('Done')
     expect(groupButton('Nodes').textContent).toContain('Not run')
     expect(
-      within(planRegion()).getByText(/^Stopped at a failure: 5 of 58 steps done\.$/),
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 65 steps done\.$/),
     ).toBeTruthy()
     const failed = stepItems().filter((li) => li.dataset.state === 'failed')
-    expect(failed.map((li) => li.dataset.step)).toEqual(['room:red-hq'])
+    expect(failed.map((li) => li.dataset.step)).toEqual([`room:${tid('red-hq')}`])
     expect(screen.getByText(/steps? not run\. Nothing after the failure was applied/)).toBeTruthy()
     expect(
       within(planRegion())
@@ -384,7 +408,7 @@ describe('on the mock’s demo seed, which starts published with its vault', () 
     // A draft saved before the seed was published here: no role recorded as published.
     const store = createDraftStore({
       persistence: memoryDraftPersistence(),
-      initial: () => draftFromDesign(sampleDesign()),
+      initial: () => draftFromDesign(templatedDesign()),
     })
     render(
       createElement(AdminApp, {
@@ -485,13 +509,57 @@ describe('design export and import (ADM-16)', () => {
 
     const broken = {
       ...sampleDesign(),
-      roles: [{ ...sampleDesign().roles[0]!, forceId: 'nowhere' }],
+      roles: [{ ...sampleDesign().roles[0]!, forceId: tid('nowhere') }],
     }
     await user.upload(input, new File([JSON.stringify(broken)], 'broken.json'))
     await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
     expect(screen.getByText('broken.json was not imported.')).toBeTruthy()
-    expect(screen.getByText(/unknown force "nowhere"/)).toBeTruthy()
+    expect(screen.getByText(new RegExp(`unknown force "${tid('nowhere')}"`))).toBeTruthy()
     expect(store.getSnapshot().draft.design.game.name).toBe('Imported game')
+  })
+})
+
+describe('a re-plan', () => {
+  it('holds Publish back until the new plan is read (found by SC-6 on ejabberd)', async () => {
+    const { user } = await setup()
+    await planAndWait(user, 'Check the server and plan')
+    await user.click(screen.getByRole('button', { name: 'Create the vault' }))
+    const dialog = screen.getByRole('alertdialog', { name: /Create the observer-password vault/ })
+    await user.type(within(dialog).getByLabelText('Passphrase'), PASSPHRASE)
+    await user.type(within(dialog).getByLabelText('Passphrase again'), PASSPHRASE)
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+    const publish = () =>
+      within(planRegion()).getByRole('button', { name: /^Publish \d+ changes?…$/ })
+    await waitFor(() => {
+      expect(publish()).toHaveProperty('disabled', false)
+    })
+    // While the server is read again, the plan on screen may be out of date, and applying it
+    // would be ignored: the button says so by being disabled.
+    fireEvent.click(screen.getByRole('button', { name: 'Plan again' }))
+    expect(screen.getByText('Reading the server…')).toBeTruthy()
+    expect(publish()).toHaveProperty('disabled', true)
+    await waitFor(() => {
+      expect(publish()).toHaveProperty('disabled', false)
+    })
+  })
+})
+
+describe('a new design (SC-1)', () => {
+  it('replaces the draft with an empty one after confirmation, keeping the published ids', async () => {
+    const { user, store } = await setup()
+    const before = store.getSnapshot().draft
+    await user.click(screen.getByRole('button', { name: 'Start a new design…' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(store.getSnapshot().draft).toBe(before)
+    await user.click(screen.getByRole('button', { name: 'Start a new design…' }))
+    await user.click(screen.getByRole('button', { name: 'Start a new design' }))
+    expect(screen.getByText('Started a new design.')).toBeTruthy()
+    const after = store.getSnapshot().draft
+    expect(after.design.game.name).toBe('New exercise')
+    expect(after.design.forces.map((f) => f.name)).toEqual(['White'])
+    expect(after.design.roles).toEqual([])
+    expect(after.design.rooms).toEqual([])
+    expect(after.meta).toEqual(before.meta)
   })
 })
 

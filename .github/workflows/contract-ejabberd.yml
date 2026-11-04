@@ -1,6 +1,8 @@
 # The transport contract suite (WP 1.2) against the reference ejabberd (deploy/ejabberd, image
 # pinned by digest), through the real transport (WP 1.3). NFR-16: an unreachable server fails
 # the job; nothing is skipped. NFR-22: the R1 tests (S01, S01b, C01) are part of every run.
+# The user scenarios SC-1 to SC-9 (WP 3.1, NFR-17) run here on ejabberd too, as the mock runs
+# them in ci.yml.
 name: contract-ejabberd
 
 on:
@@ -20,7 +22,7 @@ jobs:
   contract-ejabberd:
     name: Contract suite on ejabberd
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -41,6 +43,9 @@ jobs:
 
       - name: Publish and provisioning on ejabberd (WP 2.3)
         run: pnpm test:publish:ejabberd
+
+      - name: Deployment checks (WP 3.3; headers, TLS versions, per-player rate limit)
+        run: pnpm test:deployment:ejabberd
 
       # Its own server (compose project and port), so nothing the runs above leave behind, such as
       # an account, shows up as drift.
@@ -77,11 +82,13 @@ jobs:
           WRX_XMPP_WS: wss://localhost:35443/ws
         run: pnpm --filter @wrx/transport-xmpp test:bundle
 
-      - name: Player client logs in to ejabberd from the real-server build (WP 2.4)
+      # One game per server (D11): each scenario resets the server and publishes its game, so one
+      # worker.
+      - name: Player client and user scenarios SC-1 to SC-9 on ejabberd (WP 2.4, WP 3.1)
         env:
           CI: 'true'
           WRX_XMPP_WS: wss://localhost:35443/ws
-        run: pnpm --filter @wrx/web exec playwright test --project=ejabberd
+        run: pnpm --filter @wrx/web exec playwright test --project=ejabberd --workers=1
 
       - name: Server log on failure
         if: failure()

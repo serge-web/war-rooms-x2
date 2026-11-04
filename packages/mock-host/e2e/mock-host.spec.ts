@@ -4,10 +4,12 @@
 import { expect, test } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import './app/hooks.ts'
+import { ROOM as SAMPLE_ROOM } from '../../schemas/src/fixtures.ts'
 
 type Mode = 'shared-worker' | 'leader'
 const MODES: readonly Mode[] = ['shared-worker', 'leader']
-const ROOM = 'negotiation'
+// The demo seed's negotiation room, by its fixed GUID (§3 rule 1).
+const ROOM = SAMPLE_ROOM.negotiation
 
 async function openTab(context: BrowserContext, mode: Mode, deployment = '/dep-a/') {
   const page = await context.newPage()
@@ -166,7 +168,7 @@ for (const mode of MODES) {
       await check.goto('/dep-a/?nohost')
       await check.waitForFunction(() => 'wrxStorage' in window)
       const stored = await check.evaluate(() => window.wrxStorage.read())
-      expect(typeof stored === 'string' && JSON.parse(stored)).toMatchObject({ version: 1 })
+      expect(typeof stored === 'string' && JSON.parse(stored)).toMatchObject({ version: 2 })
     })
 
     test('a database from a newer release resets with a notice', async ({ context }) => {

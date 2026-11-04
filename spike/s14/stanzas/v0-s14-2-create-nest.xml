@@ -1,0 +1,83 @@
+<!-- S14-2: create collection c1 (pubsub#node_type=collection, whitelist) -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lu1-1'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:c1'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#node_type'><value>collection</value></field><field var='pubsub#access_model'><value>whitelist</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lu1-1'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:c1'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24luj-2'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><configure node='RUN:c1'/></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24luj-2'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><configure node='RUN:c1'><x type='form' xmlns='jabber:x:data'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#deliver_payloads' type='boolean' label='Deliver payloads with event notifications'><value>1</value></field><field var='pubsub#notify_config' type='boolean' label='Notify subscribers when the node configuration changes'><value>0</value></field><field var='pubsub#notify_delete' type='boolean' label='Notify subscribers when the node is deleted'><value>0</value></field><field var='pubsub#notify_retract' type='boolean' label='Notify subscribers when items are removed from the node'><value>1</value></field><field var='pubsub#purge_offline' type='boolean' label='Purge all items when the relevant publisher goes offline'><value>0</value></field><field var='pubsub#persist_items' type='boolean' label='Persist items to storage'><value>1</value></field><field var='pubsub#max_items' type='text-single' label='Max # of items to persist, or `max` for no specific limit other than a server imposed maximum'><value>1000</value></field><field var='pubsub#subscribe' type='boolean' label='Whether to allow subscriptions'><value>1</value></field><field var='pubsub#access_model' type='list-single' label='Specify the access model'><value>whitelist</value><option label='Subscription requests must be approved and only subscribers may retrieve items'><value>authorize</value></option><option label='Anyone may subscribe and retrieve items'><value>open</value></option><option label='Anyone with a presence subscription of both or from may subscribe and retrieve items'><value>presence</value></option><option label='Anyone in the specified roster group(s) may subscribe and retrieve items'><value>roster</value></option><option label='Only those on a whitelist may subscribe and retrieve items'><value>whitelist</value></option></field><field var='pubsub#roster_groups_allowed' type='list-multi' label='Roster groups allowed to subscribe'/><field var='pubsub#publish_model' type='list-single' label='Specify the publisher model'><value>publishers</value><option label='Only publishers may publish'><value>publishers</value></option><option label='Subscribers may publish'><value>subscribers</value></option><option label='Anyone may publish'><value>open</value></option></field><field var='pubsub#notification_type' type='list-single' label='Specify the event message type'><value>headline</value><option label='Messages of type normal'><value>normal</value></option><option label='Messages of type headline'><value>headline</value></option></field><field var='pubsub#max_payload_size' type='text-single' label='Max payload size in bytes'><value>250000</value></field><field var='pubsub#send_last_published_item' type='list-single' label='When to send the last published item'><value>on_sub_and_presence</value><option label='Never'><value>never</value></option><option label='When a new subscription is processed'><value>on_sub</value></option><option label='When a new subscription is processed and whenever a subscriber comes online'><value>on_sub_and_presence</value></option></field><field var='pubsub#deliver_notifications' type='boolean' label='Deliver event notifications'><value>1</value></field><field var='pubsub#presence_based_delivery' type='boolean' label='Only deliver notifications to available users'><value>0</value></field><field var='pubsub#itemreply' type='list-single' label='Whether owners or publisher should receive replies to items'><value>none</value><option label='Statically specify a replyto of the node owner(s)'><value>owner</value></option><option label='Dynamically specify a replyto of the item publisher'><value>publisher</value></option><option><value>none</value></option></field><field var='pubsub#node_type' type='list-single' label='Whether the node is a leaf (default) or a collection'><value>collection</value><option label='The node is a leaf node (default)'><value>leaf</value></option><option label='The node is a collection node'><value>collection</value></option></field></x></configure></pubsub></iq>
+
+<!-- S14-2: leaf l1 in c1 (pubsub#collection=c1), no access config -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lum-3'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l1'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#collection'><value>RUN:c1</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lum-3'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l1'/></pubsub></iq>
+
+<!-- S14-2: nested collection c2 in c1, leaf l2 in c2 -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lut-4'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:c2'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#node_type'><value>collection</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#collection'><value>RUN:c1</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lut-4'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:c2'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lv0-5'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l2'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#collection'><value>RUN:c2</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lv0-5'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l2'/></pubsub></iq>
+
+<!-- S14-2: move existing leaf l0 into c1 by configuration -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lv7-6'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l0'/></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lv7-6'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:l0'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lvd-7'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><configure node='RUN:l0'><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#collection'><value>RUN:c1</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lvd-7'/>
+
+<!-- S14-3: leaf lw in c1 with whitelist and no affiliations -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lvk-8'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:lw'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#collection'><value>RUN:c1</value></field><field var='pubsub#access_model'><value>whitelist</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lvk-8'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:lw'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24lvr-9'><query xmlns='http://jabber.org/protocol/disco#items' node='RUN:c1'/></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lvr-9'><query node='RUN:c1' xmlns='http://jabber.org/protocol/disco#items'/></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24lvt-a'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><configure node='RUN:l1'/></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lvt-a'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><configure node='RUN:l1'><x type='form' xmlns='jabber:x:data'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#deliver_payloads' type='boolean' label='Deliver payloads with event notifications'><value>1</value></field><field var='pubsub#notify_config' type='boolean' label='Notify subscribers when the node configuration changes'><value>0</value></field><field var='pubsub#notify_delete' type='boolean' label='Notify subscribers when the node is deleted'><value>0</value></field><field var='pubsub#notify_retract' type='boolean' label='Notify subscribers when items are removed from the node'><value>1</value></field><field var='pubsub#purge_offline' type='boolean' label='Purge all items when the relevant publisher goes offline'><value>0</value></field><field var='pubsub#persist_items' type='boolean' label='Persist items to storage'><value>1</value></field><field var='pubsub#max_items' type='text-single' label='Max # of items to persist, or `max` for no specific limit other than a server imposed maximum'><value>1000</value></field><field var='pubsub#subscribe' type='boolean' label='Whether to allow subscriptions'><value>1</value></field><field var='pubsub#access_model' type='list-single' label='Specify the access model'><value>open</value><option label='Subscription requests must be approved and only subscribers may retrieve items'><value>authorize</value></option><option label='Anyone may subscribe and retrieve items'><value>open</value></option><option label='Anyone with a presence subscription of both or from may subscribe and retrieve items'><value>presence</value></option><option label='Anyone in the specified roster group(s) may subscribe and retrieve items'><value>roster</value></option><option label='Only those on a whitelist may subscribe and retrieve items'><value>whitelist</value></option></field><field var='pubsub#roster_groups_allowed' type='list-multi' label='Roster groups allowed to subscribe'/><field var='pubsub#publish_model' type='list-single' label='Specify the publisher model'><value>publishers</value><option label='Only publishers may publish'><value>publishers</value></option><option label='Subscribers may publish'><value>subscribers</value></option><option label='Anyone may publish'><value>open</value></option></field><field var='pubsub#notification_type' type='list-single' label='Specify the event message type'><value>headline</value><option label='Messages of type normal'><value>normal</value></option><option label='Messages of type headline'><value>headline</value></option></field><field var='pubsub#max_payload_size' type='text-single' label='Max payload size in bytes'><value>250000</value></field><field var='pubsub#send_last_published_item' type='list-single' label='When to send the last published item'><value>on_sub_and_presence</value><option label='Never'><value>never</value></option><option label='When a new subscription is processed'><value>on_sub</value></option><option label='When a new subscription is processed and whenever a subscriber comes online'><value>on_sub_and_presence</value></option></field><field var='pubsub#deliver_notifications' type='boolean' label='Deliver event notifications'><value>1</value></field><field var='pubsub#presence_based_delivery' type='boolean' label='Only deliver notifications to available users'><value>0</value></field><field var='pubsub#itemreply' type='list-single' label='Whether owners or publisher should receive replies to items'><value>none</value><option label='Statically specify a replyto of the node owner(s)'><value>owner</value></option><option label='Dynamically specify a replyto of the item publisher'><value>publisher</value></option><option><value>none</value></option></field><field var='pubsub#collection' type='text-multi' label='The collections with which a node is affiliated'><value>RUN:c1</value></field></x></configure></pubsub></iq>
+
+<!-- S14-2: publish an item to the collection itself (XEP-0248: must be refused) -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lvx-b'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:c1'><item id='x1'><asset xmlns='urn:wrx:s14' id='x1' t='1793551286732'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lvx-b'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:c1'><item id='x1'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24lw4-c'><query xmlns='http://jabber.org/protocol/disco#items' node='RUN:c2'/></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lw4-c'><query node='RUN:c2' xmlns='http://jabber.org/protocol/disco#items'/></iq>

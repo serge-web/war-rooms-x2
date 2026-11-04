@@ -64,7 +64,29 @@ export interface RoomConfig {
   readonly whois: 'anyone' | 'moderators'
   /** Archive messages for MAM (XEP-0313); required for history (PLY-49). */
   readonly archive: boolean
+  // The observer's side channels in a moderated room (spike S1b). A visitor cannot post, but
+  // could still reach players through these; game rooms close every one (ADM-37). They are read
+  // back and compared like the fields above, so drift in them is found (security review F6).
+  /** Whom a visitor may send private messages to. */
+  readonly visitorPrivateMessages: 'anyone' | 'moderators' | 'nobody'
+  /** Whether a visitor's presence may carry status text. */
+  readonly visitorStatus: boolean
+  /** Whether a visitor may change nickname. */
+  readonly visitorNickChange: boolean
+  /** Whether a visitor may ask the moderators for voice. */
+  readonly voiceRequests: boolean
+  /** Whether occupants may subscribe to the room without joining (ejabberd MUC/Sub). */
+  readonly subscriptions: boolean
 }
+
+/** The side-channel settings of a game room: all closed (spike S1b, ADM-37). */
+export const CLOSED_SIDE_CHANNELS = Object.freeze({
+  visitorPrivateMessages: 'nobody',
+  visitorStatus: false,
+  visitorNickChange: false,
+  voiceRequests: false,
+  subscriptions: false,
+} as const satisfies Partial<RoomConfig>)
 
 export interface AffiliationEntry {
   /** Bare JID. */

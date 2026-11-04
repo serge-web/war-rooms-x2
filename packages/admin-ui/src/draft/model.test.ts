@@ -1,8 +1,8 @@
 import { createRoomTypeRegistry, chatRoomType, defaultRoomTypes } from '@wrx/domain'
-import { LIMITS } from '@wrx/schemas'
+import { LIMITS, isId } from '@wrx/schemas'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { sampleDesign } from '../../../schemas/src/fixtures.ts'
+import { sampleDesign, sampleDesignV1, tid } from '../../../schemas/src/fixtures.ts'
 import {
   addForce,
   addRoom,
@@ -65,7 +65,7 @@ describe('validateDraft', () => {
 
   it('reports schema errors by path', () => {
     let draft = draftFromDesign(sampleDesign())
-    draft = updateForce(draft, 'red', { name: '  ', colour: '#12' })
+    draft = updateForce(draft, tid('red'), { name: '  ', colour: '#12' })
     const result = validateDraft(draft.design)
     expect(result.publishable).toBe(false)
     expect(result.at('forces[1]').map((i) => i.path)).toEqual([
@@ -86,9 +86,9 @@ describe('validateDraft', () => {
         ...design.rooms,
         {
           ...design.rooms[0]!,
-          id: 'lost',
+          id: tid('lost'),
           order: 9,
-          participants: [{ kind: 'role', id: 'ghost', access: 'write' }],
+          participants: [{ kind: 'role', id: tid('ghost'), access: 'write' }],
         },
       ],
     })
@@ -98,7 +98,11 @@ describe('validateDraft', () => {
       message: '3 forces carry the umpire flag; exactly one is expected (ADM-4)',
     })
     expect(result.at('rooms[3]')).toEqual([
-      { severity: 'error', path: 'rooms[3].participants[0]', message: 'unknown role "ghost"' },
+      {
+        severity: 'error',
+        path: 'rooms[3].participants[0]',
+        message: `unknown role "${tid('ghost')}"`,
+      },
     ])
     expect(result.warningCount).toBe(1)
     expect(result.errorCount).toBe(1)
@@ -138,15 +142,51 @@ describe('formatPath', () => {
 
 describe('stored drafts', () => {
   it('round-trips a draft with its metadata', () => {
-    let draft = draftFromDesign(sampleDesign(), { publishedRoleIds: ['blue-co'] })
-    draft = deleteRoom(draft, 'red-hq')
+    let draft = draftFromDesign(sampleDesign(), {
+      publishedRoleIds: [tid('blue-co')],
+      publishedForceIds: [tid('blue')],
+    })
+    draft = deleteRoom(draft, tid('red-hq'))
     const text = serialiseDraft(draft)
-    expect(JSON.parse(text)).toMatchObject({ format: DRAFT_FORMAT, schemaVersion: 1 })
+    expect(JSON.parse(text)).toMatchObject({ format: DRAFT_FORMAT, schemaVersion: 2 })
     expect(parseStoredDraft(text)).toEqual({ ok: true, value: draft })
   })
 
+  it('converts a draft saved before GUID ids, as an import does (ADM-16)', () => {
+    const v1 = sampleDesignV1()
+    // Mid-edit: a role with no name yet, which does not publish but is kept.
+    v1.roles[1] = { ...v1.roles[1]!, name: '' }
+    const text = JSON.stringify({
+      format: DRAFT_FORMAT,
+      schemaVersion: 1,
+      design: v1,
+      meta: {
+        retiredIds: { forces: [], roles: ['old-co'], rooms: [] },
+        publishedRoleIds: ['blue-co', 'red-co'],
+      },
+    })
+    const parsed = parseStoredDraft(text)
+    if (!parsed.ok) throw new Error(parsed.error)
+    const { design, meta } = parsed.value
+    expect(design.schemaVersion).toBe(2)
+    expect(design.roles.map((r) => r.loginName)).toEqual(v1.roles.map((r) => r.id))
+    expect(design.roles.every((r) => isId(r.id))).toBe(true)
+    expect(design.roles[1]?.name).toBe('')
+    // Published roles stay published by their new ids, so their login names stay fixed.
+    const byLogin = (login: string) => design.roles.find((r) => r.loginName === login)?.id
+    expect(meta.publishedRoleIds).toEqual([byLogin('blue-co'), byLogin('red-co')])
+    expect(meta.publishedForceIds).toHaveLength(2)
+    // The negotiation room still names Blue CO and Red CO, by their new ids.
+    const negotiation = design.rooms.find((r) => r.name === 'Blue–Red negotiation')
+    expect(negotiation?.participants.map((p) => p.id)).toEqual([
+      byLogin('blue-co'),
+      byLogin('red-co'),
+    ])
+  })
+
   it('keeps drafts that would not yet publish', () => {
-    const draft = updateForce(addForce(createDraft(), 'Blue').draft, 'blue', { name: '' })
+    const blue = addForce(createDraft(), 'Blue')
+    const draft = updateForce(blue.draft, blue.id, { name: '' })
     const parsed = parseStoredDraft(serialiseDraft(draft))
     expect(parsed).toEqual({ ok: true, value: draft })
   })
@@ -277,7 +317,8 @@ describe('createDraftStore', () => {
       store.commit(addForce(store.getSnapshot().draft, 'Blue').draft)
       expect([...storage.items.keys()]).toEqual(['wrx1-mock:/demo/:admin-draft'])
       const again = createBrowserDraftStore('wrx1-mock:/demo/:admin-draft')
-      expect(again.getSnapshot().draft.design.forces.map((f) => f.id)).toEqual(['white', 'blue'])
+      expect(again.getSnapshot().draft.design.forces.map((f) => f.name)).toEqual(['White', 'Blue'])
+      expect(again.getSnapshot().draft).toEqual(store.getSnapshot().draft)
     } finally {
       vi.unstubAllGlobals()
     }
@@ -289,7 +330,7 @@ describe('createDraftStore', () => {
     store.commit(addForce(store.getSnapshot().draft, 'Blue').draft)
     store.reset()
     expect(persistence.load()).toBeUndefined()
-    expect(store.getSnapshot().draft.design.forces.map((f) => f.id)).toEqual(['white'])
+    expect(store.getSnapshot().draft.design.forces.map((f) => f.name)).toEqual(['White'])
     const given = draftFromDesign(sampleDesign())
     store.reset(given)
     expect(store.getSnapshot().draft).toBe(given)

@@ -1,6 +1,7 @@
-// Roles (ADM-5): name, login id, observer flag and force; reordered within a force by drag and
-// drop (ADM-8) and moved between forces with the Force field, keeping their ids. Passwords are
-// set at publish time (WP 2.3) and never stored in the design (§3 rule 9).
+// Roles (ADM-5): name, login name, observer flag and force; reordered within a force by drag and
+// drop (ADM-8) and moved between forces with the Force field, keeping their ids. A role's id is a
+// GUID nobody sees; its login name is the XMPP account name a player types (§3 rule 1).
+// Passwords are set at publish time (WP 2.3) and never stored in the design (§3 rule 9).
 import { byOrderThenId } from '@wrx/domain'
 import { LIMITS } from '@wrx/schemas'
 import type { Role } from '@wrx/schemas'
@@ -21,7 +22,7 @@ import {
 } from '../components/index.ts'
 import {
   addRole,
-  changeRoleId,
+  changeLoginName,
   deleteRole,
   isRolePublished,
   moveRole,
@@ -123,7 +124,6 @@ export function RolesSectionCore({ draft, validation, onChange }: SectionProps) 
               draft={draft}
               validation={validation}
               onChange={onChange}
-              onRenamed={setChosen}
             />
           )
         }
@@ -132,13 +132,7 @@ export function RolesSectionCore({ draft, validation, onChange }: SectionProps) 
   )
 }
 
-function RoleForm({
-  role,
-  draft,
-  validation,
-  onChange,
-  onRenamed,
-}: SectionProps & { readonly role: Role; readonly onRenamed: (id: string) => void }) {
+function RoleForm({ role, draft, validation, onChange }: SectionProps & { readonly role: Role }) {
   const design = draft.design
   const at = `roles[${design.roles.findIndex((r) => r.id === role.id)}]`
   const refs = referencesTo(design, 'roles', role.id)
@@ -156,15 +150,16 @@ function RoleForm({
           }}
         >
           <Notice tone="warning" title="Message history stays.">
-            Messages this role has sent stay in room history, still attributed to its login id{' '}
-            <code>{role.id}</code>. The id is never given to another role.
+            Messages this role has sent stay in room history, under its login name{' '}
+            <code>{role.loginName}</code>, shown with its last name and marked deleted. Once the
+            role has been published, the login name is never given to another role.
           </Notice>
           <ReferenceList references={refs} none="No room names this role directly." />
         </ConfirmDialog>
       }
     >
-      <LoginIdField draft={draft} role={role} onChange={onChange} onRenamed={onRenamed} />
-      <IssueList issues={validation.at(`${at}.id`)} />
+      <LoginNameField draft={draft} role={role} onChange={onChange} />
+      <IssueList issues={[...validation.at(`${at}.id`), ...validation.at(`${at}.loginName`)]} />
       <TextField
         label="Name"
         value={role.name}
@@ -176,7 +171,7 @@ function RoleForm({
       />
       <SelectField
         label="Force"
-        hint="Moving a role keeps its login id; its access follows the new force."
+        hint="Moving a role keeps its login name; its access follows the new force."
         value={role.forceId}
         options={[
           ...design.forces.map((f) => ({ value: f.id, label: f.name })),
@@ -202,45 +197,42 @@ function RoleForm({
   )
 }
 
-/** The login id: editable until the role is first published (ADM-5), then fixed. */
-function LoginIdField({
+/** The login name: editable until the role is first published (ADM-5), then fixed. */
+function LoginNameField({
   draft,
   role,
   onChange,
-  onRenamed,
 }: {
   readonly draft: Draft
   readonly role: Role
   readonly onChange: (next: Draft) => void
-  readonly onRenamed: (id: string) => void
 }) {
   const id = useId()
-  const [text, setText] = useState(role.id)
+  const [text, setText] = useState(role.loginName)
   const [error, setError] = useState<string | undefined>(undefined)
   if (isRolePublished(draft, role.id)) {
     return (
       <TextField
-        label="Login id"
-        value={role.id}
+        label="Login name"
+        value={role.loginName}
         readOnly
-        hint="Fixed: this role has been published."
+        hint="Fixed: this role has been published, and the server cannot rename an account. To change it, delete the role and add a new one."
         onChange={() => undefined}
       />
     )
   }
   const apply = () => {
-    const result = changeRoleId(draft, role.id, text.trim())
+    const result = changeLoginName(draft, role.id, text.trim())
     if (!result.ok) {
       setError(result.error)
       return
     }
     setError(undefined)
     onChange(result.value)
-    onRenamed(text.trim())
   }
   return (
     <div className="wrx-admin-field">
-      <label htmlFor={id}>Login id</label>
+      <label htmlFor={id}>Login name</label>
       <div className="wrx-admin-inline">
         <input
           id={id}
@@ -262,12 +254,13 @@ function LoginIdField({
             }
           }}
         />
-        <Button disabled={text.trim() === role.id} onClick={apply}>
-          Change login id
+        <Button disabled={text.trim() === role.loginName} onClick={apply}>
+          Change login name
         </Button>
       </div>
       <div className="wrx-admin-hint" id={`${id}-hint`}>
-        The role&rsquo;s XMPP user name. It can change until the first publish, then it is fixed.
+        The role&rsquo;s XMPP account name, which players type to log in. It can change until the
+        first publish, then it is fixed.
       </div>
       {error !== undefined && (
         <p className="wrx-admin-issue wrx-admin-issue-error" id={`${id}-error`} role="alert">

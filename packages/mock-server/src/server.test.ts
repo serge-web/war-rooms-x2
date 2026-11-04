@@ -1,6 +1,8 @@
 // Unit tests for the server's internals where the contract suite does not reach: stanza-ids,
 // archive edges, join history, state export and import, reset, and the behaviour marked "not
 // covered by contract" in muc.ts and pubsub.ts.
+import { tid } from '@wrx/schemas/fixtures'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type {
   RoomConfig,
   ConnectionStatus,
@@ -11,6 +13,8 @@ import type {
   Session,
 } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
+import { MAX_ROOMS_DISCOITEMS } from './muc.ts'
+import type { ServerFrame } from './protocol.ts'
 import { MockServer } from './server.ts'
 import { MockSession } from './session.ts'
 import { parseMockState } from './state.ts'
@@ -18,7 +22,7 @@ import { ManualTime } from './time.ts'
 import { MockTransport } from './transport.ts'
 
 const domain = 'test.mock'
-const ROOM = `ops@conference.${domain}`
+const ROOM = `${tid('ops')}@conference.${domain}`
 const GAME_ROOM: RoomConfig = {
   name: 'Ops',
   membersOnly: true,
@@ -27,6 +31,7 @@ const GAME_ROOM: RoomConfig = {
   public: false,
   whois: 'anyone',
   archive: true,
+  ...CLOSED_SIDE_CHANNELS,
 }
 const NODE = {
   accessModel: 'whitelist' as const,
@@ -180,7 +185,8 @@ describe('state export, import and reset (PLY-21, PLY-34)', () => {
     expect(copy.exportState()).toEqual(exported)
 
     expect(parseMockState('{').ok).toBe(false)
-    expect(parseMockState({ ...exported, version: 2 }).ok).toBe(false)
+    expect(parseMockState({ ...exported, version: 1 }).ok).toBe(false)
+    expect(parseMockState({ ...exported, version: 3 }).ok).toBe(false)
     expect(parseMockState({ ...exported, lastStanzaId: 'x' }).ok).toBe(false)
   })
 
@@ -370,5 +376,46 @@ describe('the transport side', () => {
     expect(admin).toBeInstanceOf(MockSession)
     const r = await admin.admin.setPrivate('Bad Key', 'x')
     expect(r.ok ? undefined : r.error.condition).toBe('bad-request')
+  })
+})
+
+describe('room list paging, as ejabberd (review F10)', () => {
+  it('lists only occupied rooms without paging past the limit, and every room by pages', async () => {
+    const env = setup()
+    const admin = await env.login('admin')
+    const total = MAX_ROOMS_DISCOITEMS + 5
+    const jidOf = (i: number) => `r${String(i).padStart(3, '0')}@conference.${domain}`
+    for (let i = 0; i < total; i++) unwrap(await admin.muc.createRoom(jidOf(i), GAME_ROOM))
+    unwrap(await admin.muc.join(jidOf(7), 'admin'))
+    const listed = unwrap(await admin.muc.listRooms())
+    expect(listed).toHaveLength(total)
+    expect(new Set(listed).size).toBe(total)
+
+    const frames: ServerFrame[] = []
+    const port = env.server.attach((f) => frames.push(f))
+    port.send({
+      t: 'login',
+      credentials: { kind: 'password', username: 'admin', password: 'pw' },
+      resource: 'raw',
+    })
+    port.send({ t: 'request', id: 1, request: { op: 'muc.listRooms', args: [undefined] } })
+    port.send({
+      t: 'request',
+      id: 2,
+      request: { op: 'muc.listRooms', args: [{ max: 1000, after: jidOf(9) }] },
+    })
+    const reply = (id: number) => {
+      const frame = frames.find((f) => f.t === 'reply' && f.id === id)
+      return frame?.t === 'reply' && frame.reply.op === 'muc.listRooms'
+        ? frame.reply.result
+        : undefined
+    }
+    expect(reply(1)).toEqual({
+      ok: true,
+      value: { rooms: [jidOf(7)], count: total, last: undefined },
+    })
+    const page = reply(2)
+    expect(page?.ok && page.value.rooms).toHaveLength(MAX_ROOMS_DISCOITEMS - 5)
+    expect(page?.ok && page.value.rooms[0]).toBe(jidOf(10))
   })
 })

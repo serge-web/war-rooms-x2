@@ -1,22 +1,33 @@
-# WRX1 reference deployment (NFR-22) for the contract suite (WP 1.2).
+# WRX1 reference ejabberd config (NFR-22), for ejabberd 26.09. One file for both stacks:
+# - the contract-suite stack (deploy/ejabberd/compose.yaml), which CI runs every suite against;
+# - the reference deployment (deploy/wrx1/compose.yaml), which also serves the built client.
+# The domain is the HOST macro: `localhost` here, set from WRX_DOMAIN by the reference deployment
+# (environment variable EJABBERD_MACRO_HOST).
 #
-# Copied from serge-web/xmpp-spike @ 4992530 (spike/docker/ejabberd/ejabberd.yml), the hardened
-# config the server-selection spike validated; credit to that spike. One deliberate change, marked
-# "WP 1.2" below: mod_private is loaded, because the admin's observer-password vault lives in the
-# admin account's XEP-0049 private storage (ADM-37, S13) and AdminApi.getPrivate/setPrivate needs
-# it. mod_adhoc_api stays out (NFR-22, S13 option 3).
+# History: copied from serge-web/xmpp-spike @ 4992530 (spike/docker/ejabberd/ejabberd.yml), the
+# hardened config the server-selection spike validated; credit to that spike. Deliberate changes
+# since, each marked where it is made:
+# - WP 1.2: mod_private is loaded (the admin's encrypted observer-password vault, ADM-37, S13).
+# - WP 3.3: one TLS listener only, which carries the WebSocket and serves the client, with the
+#   HTTP security headers; the plain-text listeners (5222, 5280) are gone, so `wss://` is the
+#   only way in even inside the container (NFR-2). The per-player rate limit is on that
+#   listener (NFR-22); before, it was set only on the unused 5222 listener. Room defaults close
+#   the observer's side channels, and the room listing limit is pinned (review F6, F10).
 #
-# WRX1 spike config for ejabberd 26.09. Derived from the image's default ejabberd.yml,
-# trimmed to what the spike needs. Comments mark each deliberate change.
+# See deploy/README.md for what each setting is for and how the admin backend checks it (NFR-4).
+
+define_macro:
+  HOST: localhost
 
 hosts:
-  - localhost
+  - HOST
 
 loglevel: info
 
 # S5: store everything in the bundled SQLite backend. With the stock Mnesia backend, MAM at ~10k
 # room messages ingested ~5 msg/s and a MAM count query timed out (ejabberd itself warns that
-# Mnesia is not recommended for mod_mam). Schema is created automatically.
+# Mnesia is not recommended for mod_mam). Schema is created automatically. The backup scripts
+# (ops/backup.sh) copy this file with SQLite's online backup.
 sql_type: sqlite
 sql_database: /home/ejabberd/database/ejabberd.db
 default_db: sql
@@ -24,9 +35,12 @@ update_sql_schema: true
 
 certfiles:
   - /home/ejabberd/conf/server.pem
+# The CA that issued the server certificate (an internal CA, NFR-2): its certificate only, never
+# its key. ejabberd checks the server chain against it.
 ca_file: /home/ejabberd/conf/cacert.pem
 
-# Named accounts (SCRAM) plus SASL ANONYMOUS on the same host, for S10.
+# Named accounts (SCRAM) plus SASL ANONYMOUS on the same host: the welcome page reads game-setup
+# before login (D20, NFR-21, S10).
 auth_method: [internal, anonymous]
 auth_password_format: scram
 # Hardening: SCRAM-SHA-256 instead of the default SHA-1. Applies to passwords set after the change.
@@ -35,28 +49,38 @@ anonymous_protocol: sasl_anon
 allow_multiple_connections: true
 
 listen:
-  - port: 5222
-    ip: '0.0.0.0' # container has no IPv6
+  - # Not a way in: bound to the container's loopback and never published. WebSocket sessions
+    # take their limits from the first ejabberd_c2s listener (ejabberd_c2s_config), and an
+    # ejabberd_http listener has no shaper option, so the per-player rate limit (NFR-22) and the
+    # c2s access rule live here. WP 3.3: was 0.0.0.0 without STARTTLS; now loopback, TLS required.
+    port: 5222
+    ip: '127.0.0.1'
     module: ejabberd_c2s
     max_stanza_size: 262144
     shaper: c2s_shaper
     access: c2s
-    starttls_required: false
-  - # Plain HTTP for dev (ws://). TLS (wss://) is covered in S8.
-    port: 5280
-    ip: '0.0.0.0' # container has no IPv6
-    module: ejabberd_http
-    request_handlers:
-      /ws: ejabberd_http_ws
-      # Hardening: no /api (REST isn't needed, S4) and no public web admin; use `ejabberdctl`.
-  - # S8: TLS WebSocket (wss://localhost:5443/ws). Cert comes from certfiles above; compose.tls.yaml
-    # swaps in a server cert issued by the spike's internal test CA (spike/docker/tls).
+    starttls_required: true
+  - # WP 3.3: the only listener the host publishes. TLS WebSocket at wss://<host>/ws, and the
+    # static client at /, on one origin (NFR-8, first mode). The certificate comes from
+    # certfiles above. The spike's plain-HTTP listener (5280, ws://) is gone.
     port: 5443
-    ip: '0.0.0.0'
+    ip: '0.0.0.0' # the container has no IPv6
     module: ejabberd_http
     tls: true
+    # TLS 1.2 and later only.
+    protocol_options:
+      - no_sslv2
+      - no_sslv3
+      - no_tlsv1
+      - no_tlsv1_1
+      - cipher_server_preference
+      - no_compression
     request_handlers:
       /ws: ejabberd_http_ws
+      # Hardening: no /api (REST isn't needed, S4), no web admin (/admin) and no upload or
+      # registration pages; administration is over XMPP (XEP-0133) and `ejabberdctl`. Every
+      # other path is a file of the client, or 404.
+      /: mod_http_fileserver
 
 acl:
   local:
@@ -67,7 +91,7 @@ acl:
       - ::1/128
   admin:
     user:
-      - admin@localhost
+      - admin # admin@HOST, the only server admin; created by the install's bootstrap step
 
 access_rules:
   local:
@@ -107,9 +131,9 @@ shaper_rules:
     player: all
 
 # Hardening: only what WRX1 uses. Removed vs the image default: adhoc_api (whole admin API over
-# XMPP), http_api, last, privacy, private, shared_roster (S7: groups not needed), vcard (user
-# directory), version, announce (WRX1 announcements are a PubSub node), plus the earlier-removed avatar/blocking/bosh/mqtt/proxy65/push/register/sip/
-# stun/http_upload/fail2ban.
+# XMPP), http_api, last, privacy, shared_roster (S7: groups not needed), vcard (user directory),
+# version, announce (WRX1 announcements are a PubSub node), plus the earlier-removed avatar/
+# blocking/bosh/mqtt/proxy65/push/register (no in-band registration)/sip/stun/http_upload/fail2ban.
 modules:
   mod_adhoc: {}
   mod_admin_extra: {}
@@ -117,6 +141,30 @@ modules:
   mod_carboncopy: {}
   mod_configure: {}
   mod_disco: {}
+  # WP 3.3: serves the built client (NFR-10) with the HTTP headers deploy/README.md describes.
+  # The Content-Security-Policy is the client's own (apps/web/vite.config.ts) narrowed to this
+  # origin: the WebSocket is on the same origin, so 'self' covers it, and the client is never
+  # framed. Nothing is cached without revalidation, so a new client or config.json shows at once.
+  mod_http_fileserver:
+    docroot: /home/ejabberd/www
+    directory_indices:
+      - index.html
+    custom_headers:
+      Content-Security-Policy: "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+      X-Content-Type-Options: nosniff
+      Referrer-Policy: no-referrer
+      Cache-Control: no-cache
+      Cross-Origin-Opener-Policy: same-origin
+    content_types:
+      .js: text/javascript
+      .mjs: text/javascript
+      .css: text/css
+      .json: application/json
+      .svg: image/svg+xml
+      .webp: image/webp
+      .woff: font/woff
+      .woff2: font/woff2
+      .webmanifest: application/manifest+json
   mod_mam:
     assume_mam_usage: true
     default: always
@@ -129,10 +177,24 @@ modules:
     access_persistent: muc_create
     access_mam:
       - allow
+    # WP 3.3 (review F10): the most rooms in one disco#items page, and past which a listing
+    # without paging shows only occupied rooms. The transport pages 50 at a time, so this must
+    # stay at 50 or more. 100 is ejabberd's default, pinned here so a change is deliberate.
+    max_rooms_discoitems: 100
     default_room_options:
       mam: true
       persistent: true
       members_only: true
+      # WP 3.3: the rest of a game room's settings as defaults too, so a room that exists before
+      # the admin tooling configures it (a part-way publish) is closed from the start. The admin
+      # tooling still sets and checks every one of them on each room (NFR-3, S1b, review F6).
+      moderated: true
+      public: false
+      allow_private_messages_from_visitors: nobody
+      allow_visitor_status: false
+      allow_visitor_nickchange: false
+      allow_voice_requests: false
+      allow_subscription: false
   mod_muc_admin: {}
   mod_ping: {}
   # WP 1.2: XEP-0049 private storage, per account and readable only by that account. Holds the

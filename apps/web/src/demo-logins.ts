@@ -18,9 +18,9 @@ export function demoLogins(): readonly DemoLogin[] {
     ...[...roles]
       .sort((a, b) => forceOrder(a.forceId) - forceOrder(b.forceId) || a.order - b.order)
       .map((role) => ({
-        roleId: role.id,
+        roleId: role.loginName,
         label: `${role.name} (${forceName(role.forceId)})`,
-        password: demoPassword(role.id),
+        password: demoPassword(role.loginName),
       })),
     {
       roleId: 'admin',

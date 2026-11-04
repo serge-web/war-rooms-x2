@@ -3,18 +3,26 @@
 //
 // 1. publish `sampleDesignWithWhiteCell()` on a clean server; check the effects as players
 //    (C01 style);
-// 2. publishing it again plans nothing (ADM-10);
+// 2. publishing it again plans nothing (ADM-10); a server published before WP 3.5, where White
+//    Cell published its own objectives item, is corrected: its publisher affiliation goes, the
+//    node is purged and the admin's item published again (D21, §3 rule 14);
 // 3. with players online, publish a change: Blue CO moves to Red (R-D), Red CO is deleted
 //    (R-E), the negotiation room is destroyed with its count confirmed (R-F), a joint room is
 //    added (Blue Observer read-only there, R-B), and the White Cell becomes an observer (write
-//    to read in every room, and from publisher to reader of objectives, F5). Check the plan's order and warnings, then the effects;
+//    to read in every room). Check the plan's order and warnings, then the effects;
 // 4. a publish that fails part-way stops, reports what ran, and a re-run completes it with the
 //    same design version (ADM-11, §3 rule 8);
 // 5. a per-role password reset keeps the vault in step (ADM-26);
-// 6. reset removes everything (ADM-15).
-import type { DesignFile } from '@wrx/schemas'
-import { sampleDesignWithWhiteCell } from '@wrx/schemas/fixtures'
+// 5b. message templates (Annex A): published before the room that offers them and locked; each
+//    role offered its own; a templated message sent and checked valid on receipt; a change to a
+//    locked template refused; an unlocked one the design drops retracted;
+// 6. reset removes everything (ADM-15), the templates node included.
+import { nodeName } from '@wrx/schemas'
+import type { DesignFile, Template } from '@wrx/schemas'
+import { TEMPLATE, sampleDesignWithWhiteCell, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
+import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
+import { createSessionStore } from '@wrx/domain'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -69,30 +77,49 @@ function errorOf(
   return result.ok ? undefined : result.error
 }
 
+const quiet = { debug: () => undefined, warn: () => undefined }
+
+/** The session, with node listing refused (disco#items), as a server might (WP 3.4, fix 1). */
+function withoutListing(session: Session): Session {
+  const bound = <T extends object>(target: T, override: (p: string | symbol) => unknown) =>
+    new Proxy(target, {
+      get(t, p) {
+        const replaced = override(p)
+        if (replaced !== undefined) return replaced
+        const value: unknown = Reflect.get(t, p, t)
+        return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(t) : value
+      },
+    })
+  const pubsub = bound(session.pubsub, (p) =>
+    p === 'listNodes' ? () => Promise.resolve(err('forbidden')) : undefined,
+  )
+  return bound(session, (p) => (p === 'pubsub' ? pubsub : undefined))
+}
+
 /** The changed design of step 3. */
 export function publishChangedDesign(): DesignFile {
   const base = sampleDesignWithWhiteCell()
   return {
     ...base,
     roles: base.roles
-      .filter((r) => r.id !== 'red-co')
+      .filter((r) => r.loginName !== 'red-co')
       .map((r) =>
-        r.id === 'blue-co'
-          ? { ...r, forceId: 'red', order: 0 }
-          : r.id === 'white-cell'
+        r.loginName === 'blue-co'
+          ? { ...r, forceId: tid('red'), order: 0 }
+          : r.loginName === 'white-cell'
             ? { ...r, isObserver: true }
             : r,
       ),
     rooms: [
-      ...base.rooms.filter((r) => r.id !== 'negotiation'),
+      ...base.rooms.filter((r) => r.id !== tid('negotiation')),
       {
         schemaVersion: 1,
-        id: 'joint',
+        id: tid('joint'),
         name: 'Joint room',
         roomType: 'chat',
         participants: [
-          { kind: 'force', id: 'blue', access: 'write' },
-          { kind: 'force', id: 'red', access: 'write' },
+          { kind: 'force', id: tid('blue'), access: 'write' },
+          { kind: 'force', id: tid('red'), access: 'write' },
         ],
         config: {},
         order: 2,
@@ -106,24 +133,67 @@ function thirdDesign(): DesignFile {
   const base = publishChangedDesign()
   return {
     ...base,
-    rooms: base.rooms.map((r) => (r.id === 'red-hq' ? { ...r, name: 'Red headquarters' } : r)),
+    rooms: base.rooms.map((r) => (r.id === tid('red-hq') ? { ...r, name: 'Red headquarters' } : r)),
     roles: [
       ...base.roles,
       {
         schemaVersion: 1,
-        id: 'red-xo',
+        id: tid('red-xo'),
+        loginName: 'red-xo',
         name: 'Red XO',
-        forceId: 'red',
+        forceId: tid('red'),
         isObserver: false,
         order: 1,
       },
       {
         schemaVersion: 1,
-        id: 'red-obs',
+        id: tid('red-obs'),
+        loginName: 'red-obs',
         name: 'Red Observer',
-        forceId: 'red',
+        forceId: tid('red'),
         isObserver: true,
         order: 2,
+      },
+    ],
+  }
+}
+
+const RED_REPORTS = tid('red-reports')
+const SPARE = tid('spare-template')
+
+/** An unlocked template no room offers, for step 5b's retraction. */
+function spareTemplate(): Template {
+  const [first] = sampleTemplates()
+  if (first === undefined) throw new Error('no sample template')
+  return { ...first, id: SPARE, name: 'Spare' }
+}
+
+/**
+ * Step 5b: the step 4 design with the three sample templates and a Red Reports room offering
+ * them, free text off: Red's force entry gives two, Red XO's role entry adds the third.
+ */
+function templatedThirdDesign(): DesignFile {
+  const base = thirdDesign()
+  return {
+    ...base,
+    templates: sampleTemplates(),
+    rooms: [
+      ...base.rooms,
+      {
+        schemaVersion: 1,
+        id: RED_REPORTS,
+        name: 'Red reports',
+        roomType: 'chat',
+        participants: [{ kind: 'force', id: tid('red'), access: 'write' }],
+        config: {
+          schemaVersion: 2,
+          freeText: false,
+          templates: [
+            { kind: 'force', id: tid('red'), templateIds: [TEMPLATE.sitrep, TEMPLATE.contact] },
+            { kind: 'role', id: tid('red-xo'), templateIds: [TEMPLATE.support] },
+          ],
+        },
+        order: 3,
       },
     ],
   }
@@ -258,7 +328,9 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the objectives document is the admin’s own item (§3 rule 14)', () => {
-        expect(first?.steps.map((s) => s.id)).toContain('doc:objectives:blue:admin')
+        expect(first?.steps.map((s) => s.id)).toContain(
+          `doc:${nodeName.objectives(tid('blue'))}:admin`,
+        )
       })
 
       it('every password is random and only the observers’ are in the vault (NFR-6, ADM-37)', () => {
@@ -274,30 +346,51 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('rooms have the NFR-3 defaults; writers post, the observer cannot, outsiders cannot join', async () => {
-        for (const roomId of ['blue-hq', 'red-hq', 'negotiation']) {
+        for (const roomId of [tid('blue-hq'), tid('red-hq'), tid('negotiation')]) {
           const config = must(await theOps().session.muc.getRoomConfig(room(roomId)), 'config')
           expect(config).toMatchObject({
             membersOnly: true,
             moderated: true,
             whois: 'anyone',
             archive: true,
+            ...CLOSED_SIDE_CHANNELS,
           })
         }
-        expect(await postResult('blue-co', 'blue-hq')).toMatchObject({
+        expect(await postResult('blue-co', tid('blue-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
-        expect(await postResult('white-cell', 'red-hq')).toMatchObject({
+        expect(await postResult('white-cell', tid('red-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
-        await expectReadOnly('blue-observer', 'blue-hq')
-        expect((await postResult('red-co', 'blue-hq')).joined?.condition).toBe(
+        await expectReadOnly('blue-observer', tid('blue-hq'))
+        expect((await postResult('red-co', tid('blue-hq'))).joined?.condition).toBe(
           'registration-required',
         )
         const red = await login('red-co')
-        expect(errorOf(await red.pubsub.getItems('objectives:blue'))?.condition).toBe('not-allowed')
-        expect(must(await red.pubsub.getItems('objectives:red'), 'own objectives')).toHaveLength(1)
+        expect(
+          errorOf(await red.pubsub.getItems(nodeName.objectives(tid('blue'))))?.condition,
+        ).toBe('not-allowed')
+        expect(
+          must(await red.pubsub.getItems(nodeName.objectives(tid('red'))), 'own objectives'),
+        ).toHaveLength(1)
+      })
+
+      it('a role finds its own role, force, objectives and rooms with node listing refused (§3 rule 1)', async () => {
+        // The directory names each role's GUID by login name, so nothing depends on listing.
+        const session = await login('blue-co')
+        const store = createSessionStore({ session: withoutListing(session), logger: quiet })
+        await store.ready()
+        const me = store.me().data
+        expect(me.role?.id).toBe(tid('blue-co'))
+        expect(me.force?.id).toBe(tid('blue'))
+        expect(me.rooms.map((r) => r.room.id)).toContain(tid('blue-hq'))
+        expect(me.rooms.map((r) => r.room.id)).not.toContain(tid('red-hq'))
+        expect(store.objectives(tid('blue')).data?.forceId).toBe(tid('blue'))
+        // Fails closed: another force's objectives stay unreadable however the role was found.
+        expect(store.objectives(tid('red')).data).toBeUndefined()
+        await closeAll()
       })
 
       it('the game is at design version 1', async () => {
@@ -313,6 +406,119 @@ export function definePublishIntegration(backend: PublishBackend): void {
       afterAll(closeAll)
     })
 
+    describe('2. a server published before WP 3.5, with a White Force editor’s item (D21)', () => {
+      let corrected: PublishPlan | undefined
+      let result: ExecutionResult | undefined
+      const node = nodeName.objectives(tid('red'))
+      const ids = async () =>
+        must(await theOps().session.pubsub.getItems(node), 'items')
+          .map((i) => i.id)
+          .sort()
+
+      beforeAll(async () => {
+        // What a publish before WP 3.5 left: White Cell a publisher, room for its item, and its
+        // own item beside the admin's.
+        const config = must(await theOps().session.pubsub.getNodeConfig(node), 'config')
+        must(
+          await theOps().session.pubsub.configureNode(node, { ...config, maxItems: 10 }),
+          'old max_items',
+        )
+        mustOps(await theOps().setNodeAccess(node, 'white-cell', 'publish'), 'old publisher')
+        const cell = await login('white-cell')
+        must(
+          await cell.pubsub.publish(
+            node,
+            'white-cell',
+            JSON.stringify({
+              schemaVersion: 1,
+              forceId: tid('red'),
+              markdown: 'Stale umpire text',
+              updatedAt: '2026-10-30T09:00:00.000Z',
+            }),
+          ),
+          'before: White Cell publishes its own item',
+        )
+        expect(await ids()).toEqual(['admin', 'white-cell'])
+        corrected = await plan(sampleDesignWithWhiteCell())
+        result = await apply(corrected)
+      }, 300_000)
+
+      afterAll(closeAll)
+
+      it('plans: max_items to 1, White Cell to reader, purge, then the admin’s item again', () => {
+        const steps = corrected?.steps.map((s) => s.id) ?? []
+        expect(steps.slice(0, -1)).toEqual([
+          `node:${node}`,
+          `grant-node:${node}`,
+          `purge:${node}`,
+          `doc:${node}:admin`,
+        ])
+        expect(corrected?.steps.find((s) => s.id === `grant-node:${node}`)?.action).toEqual({
+          type: 'node-access',
+          node,
+          changes: [{ roleId: 'white-cell', access: 'read' }],
+        })
+        expect(result?.ok).toBe(true)
+      })
+
+      it('after: the node holds the admin’s item only, and White Cell can no longer publish', async () => {
+        expect(await ids()).toEqual(['admin'])
+        const cell = await login('white-cell')
+        const items = must(await cell.pubsub.getItems(node), 'White Cell still reads')
+        expect(items.map((i) => JSON.parse(i.payload) as { markdown: string })).toEqual([
+          expect.objectContaining({ markdown: '1. Delay Blue.' }),
+        ])
+        for (const itemId of ['white-cell', 'admin']) {
+          expect(errorOf(await cell.pubsub.publish(node, itemId, '{}'))?.condition, itemId).toBe(
+            'forbidden',
+          )
+        }
+        const config = must(await theOps().session.pubsub.getNodeConfig(node), 'config')
+        expect(config.maxItems).toBe(1)
+      })
+
+      it('publishing again plans nothing', async () => {
+        expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+      })
+    })
+
+    describe('2b. a design that changes a published role’s login name is refused (ADM-5)', () => {
+      const renamed = (): DesignFile => {
+        const base = sampleDesignWithWhiteCell()
+        return {
+          ...base,
+          roles: base.roles.map((r) =>
+            r.loginName === 'blue-co' ? { ...r, loginName: 'blue-commander' } : r,
+          ),
+        }
+      }
+
+      it('plans an error naming the role, both login names and the remedy, and no step', async () => {
+        const refused = await plan(renamed())
+        expect(refused.steps).toEqual([])
+        expect(refused.errors).toHaveLength(1)
+        expect(refused.errors[0]).toMatchObject({
+          kind: 'login-name-changed',
+          roleId: tid('blue-co'),
+          from: 'blue-co',
+          to: 'blue-commander',
+        })
+        expect(refused.errors[0]?.message).toMatch(/delete the role and add a new one/)
+        const result = await apply(refused)
+        expect(result).toMatchObject({ ok: false, done: [] })
+      })
+
+      it('the server is unchanged: the old account works, no new one exists', async () => {
+        const blue = await login('blue-co')
+        expect(blue.jid.startsWith('blue-co@')).toBe(true)
+        const attempt = await connect('blue-commander', 'any-password-at-all')
+        if (attempt.ok) await attempt.value.disconnect()
+        expect(attempt.ok).toBe(false)
+        expect((await plan(sampleDesignWithWhiteCell())).steps).toEqual([])
+        await closeAll()
+      })
+    })
+
     describe('3. a change published while players are online', () => {
       let changed: PublishPlan | undefined
       let result: ExecutionResult | undefined
@@ -321,11 +527,14 @@ export function definePublishIntegration(backend: PublishBackend): void {
 
       beforeAll(async () => {
         blue = await login('blue-co')
-        must(await blue.muc.join(room('blue-hq'), 'blue-co'), 'join blue-hq')
-        must(await blue.pubsub.subscribe('objectives:blue'), 'subscribe')
-        must(await blue.muc.join(room('negotiation'), 'blue-co'), 'join negotiation')
+        must(await blue.muc.join(room(tid('blue-hq')), 'blue-co'), 'join blue-hq')
+        must(await blue.pubsub.subscribe(nodeName.objectives(tid('blue'))), 'subscribe')
+        must(await blue.muc.join(room(tid('negotiation')), 'blue-co'), 'join negotiation')
         for (let i = 0; i < 3; i++) {
-          must(await blue.muc.send(room('negotiation'), JSON.stringify({ text: `m${i}` })), 'post')
+          must(
+            await blue.muc.send(room(tid('negotiation')), JSON.stringify({ text: `m${i}` })),
+            'post',
+          )
           posted++
         }
         await sleep(300)
@@ -344,12 +553,12 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(warnings).toContainEqual({ kind: 'role-deleted', roleId: 'red-co', name: 'Red CO' })
         expect(warnings).toContainEqual({
           kind: 'room-destroyed',
-          roomId: 'negotiation',
+          roomId: tid(tid('negotiation')),
           name: 'Blue–Red negotiation',
           messageCount: posted,
         })
         const resync = warnings.filter((w) => w.kind === 'resync').map((w) => w.id)
-        expect(resync).toEqual(expect.arrayContaining(['blue-co', 'white-cell']))
+        expect(resync).toEqual(expect.arrayContaining([tid('blue-co'), tid('white-cell')]))
       })
 
       it('orders grants before revokes, read-only before documents, removals after, version last', () => {
@@ -359,32 +568,43 @@ export function definePublishIntegration(backend: PublishBackend): void {
           expect(i, id).toBeGreaterThanOrEqual(0)
           return i
         }
-        expect(at('grant-room:red-hq')).toBeLessThan(at('revoke-room:blue-hq'))
-        expect(at('grant-node:objectives:red')).toBeLessThan(at('revoke-node:objectives:blue'))
-        expect(at('read-only-grant:blue-observer')).toBeLessThan(at('doc:rooms:joint:current'))
-        expect(at('read-only-revoke:white-cell')).toBeLessThan(at('doc:roles:white-cell:current'))
-        expect(at('room:joint')).toBeLessThan(at('read-only-grant:blue-observer'))
-        expect(at('doc:rooms:joint:current')).toBeLessThan(at('delete-role:red-co'))
-        expect(at('delete-role:red-co')).toBeLessThan(at('destroy-room:negotiation'))
+        expect(at(`grant-room:${tid('red-hq')}`)).toBeLessThan(at(`revoke-room:${tid('blue-hq')}`))
+        expect(at(`grant-node:${nodeName.objectives(tid('red'))}`)).toBeLessThan(
+          at(`revoke-node:${nodeName.objectives(tid('blue'))}`),
+        )
+        expect(at('read-only-grant:blue-observer')).toBeLessThan(
+          at(`doc:${nodeName.room(tid('joint'))}:current`),
+        )
+        expect(at('read-only-revoke:white-cell')).toBeLessThan(
+          at(`doc:${nodeName.role(tid('white-cell'))}:current`),
+        )
+        expect(at(`room:${tid('joint')}`)).toBeLessThan(at('read-only-grant:blue-observer'))
+        expect(at(`doc:${nodeName.room(tid('joint'))}:current`)).toBeLessThan(
+          at('delete-role:red-co'),
+        )
+        expect(at('delete-role:red-co')).toBeLessThan(at(`destroy-room:${tid('negotiation')}`))
         expect(ids.at(-1)).toBe('doc:game-setup:current')
-        expect(changed?.designVersion).toBe(2)
+        expect(changed?.designVersion).toBe(3)
         expect(result?.ok).toBe(true)
       })
 
       it('the moved role keeps working, in its new rooms only (R-D)', async () => {
-        expect(await postResult('blue-co', 'red-hq')).toMatchObject({
+        expect(await postResult('blue-co', tid('red-hq'))).toMatchObject({
           role: 'participant',
           posted: 'ok',
         })
-        expect((await postResult('blue-co', 'blue-hq')).joined?.condition).toBe(
+        expect((await postResult('blue-co', tid('blue-hq'))).joined?.condition).toBe(
           'registration-required',
         )
-        expect(await postResult('blue-co', 'joint')).toMatchObject({ posted: 'ok' })
+        expect(await postResult('blue-co', tid('joint'))).toMatchObject({ posted: 'ok' })
         if (blue === undefined) throw new Error('no session')
-        expect(errorOf(await blue.pubsub.getItems('objectives:blue'))?.condition).toBe(
-          'not-allowed',
+        expect(
+          errorOf(await blue.pubsub.getItems(nodeName.objectives(tid('blue'))))?.condition,
+        ).toBe('not-allowed')
+        const subs = must(
+          await theOps().session.pubsub.getSubscriptions(nodeName.objectives(tid('blue'))),
+          'subs',
         )
-        const subs = must(await theOps().session.pubsub.getSubscriptions('objectives:blue'), 'subs')
         expect(subs.filter((s) => s.jid.startsWith(theOps().roleJid('blue-co')))).toEqual([])
       })
 
@@ -394,25 +614,46 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect(errorOf(attempt)?.condition).toBe('not-authorized')
         if (attempt.ok) await attempt.value.disconnect()
         const rooms = must(await theOps().session.muc.listRooms(), 'rooms')
-        expect(rooms).not.toContain(room('negotiation'))
+        expect(rooms).not.toContain(room(tid('negotiation')))
+      })
+
+      it('the deleted role keeps its last name in `retired`, read by every role, before its account went (§3 rule 1, ADM-39)', async () => {
+        const ids = changed?.steps.map((s) => s.id) ?? []
+        const record = `doc:retired:${tid('red-co')}`
+        expect(ids.indexOf(record)).toBeGreaterThanOrEqual(0)
+        expect(ids.indexOf(record)).toBeLessThan(ids.indexOf('delete-role:red-co'))
+        const blueCo = await login('blue-co')
+        const items = must(await blueCo.pubsub.getItems('retired'), 'Blue CO reads retired')
+        expect(items.map((i) => [i.id, JSON.parse(i.payload) as unknown])).toEqual([
+          [
+            tid('red-co'),
+            expect.objectContaining({ kind: 'role', name: 'Red CO', loginName: 'red-co' }),
+          ],
+        ])
+        expect(errorOf(await blueCo.pubsub.publish('retired', 'x', '{}'))?.condition).toBe(
+          'forbidden',
+        )
       })
 
       it('the new observer is read-only everywhere; the old one is read-only in the new room (R-B)', async () => {
-        await expectReadOnly('white-cell', 'blue-hq')
-        await expectReadOnly('white-cell', 'joint')
-        await expectReadOnly('blue-observer', 'joint')
+        await expectReadOnly('white-cell', tid('blue-hq'))
+        await expectReadOnly('white-cell', tid('joint'))
+        await expectReadOnly('blue-observer', tid('joint'))
         expect(vault?.roles()).toEqual(['blue-observer', 'white-cell', 'white-observer'])
-        // F5: as an observer, White Cell keeps reading objectives but no longer publishes them.
+        // As an observer, White Cell keeps reading objectives, and publishes none (D21).
         const cell = await login('white-cell')
-        expect(must(await cell.pubsub.getItems('objectives:blue'), 'still reads')).toHaveLength(1)
         expect(
-          errorOf(await cell.pubsub.publish('objectives:blue', 'white-cell', '{}'))?.condition,
+          must(await cell.pubsub.getItems(nodeName.objectives(tid('blue'))), 'still reads'),
+        ).toHaveLength(1)
+        expect(
+          errorOf(await cell.pubsub.publish(nodeName.objectives(tid('blue')), 'white-cell', '{}'))
+            ?.condition,
         ).toBe('forbidden')
         await sleep(QUIET_MS / 4)
       })
 
       it('documents and version are published; again plans nothing', async () => {
-        expect(await gameVersion()).toBe(2)
+        expect(await gameVersion()).toBe(3)
         expect((await plan(publishChangedDesign())).steps).toEqual([])
       })
     })
@@ -440,7 +681,7 @@ export function definePublishIntegration(backend: PublishBackend): void {
       })
 
       it('the re-run plans what is left, with the same version', () => {
-        expect(rerun?.designVersion).toBe(3)
+        expect(rerun?.designVersion).toBe(4)
         expect(rerun?.steps.map((s) => s.id)).toContain('account:red-obs')
         // The account the first run made exists: it is neither created again nor reset (F3).
         expect(rerun?.steps.map((s) => s.id)).not.toContain('account:red-xo')
@@ -454,11 +695,11 @@ export function definePublishIntegration(backend: PublishBackend): void {
         const done = await apply(rerun ?? (await plan(thirdDesign())))
         expect(done.ok).toBe(true)
         expect(done.passwordsSet).not.toContain('red-xo')
-        expect(await gameVersion()).toBe(3)
+        expect(await gameVersion()).toBe(4)
         expect((await plan(thirdDesign())).steps).toEqual([])
-        expect(await postResult('red-xo', 'red-hq')).toMatchObject({ posted: 'ok' })
-        await expectReadOnly('red-obs', 'red-hq')
-        const config = must(await theOps().session.muc.getRoomConfig(room('red-hq')), 'config')
+        expect(await postResult('red-xo', tid('red-hq'))).toMatchObject({ posted: 'ok' })
+        await expectReadOnly('red-obs', tid('red-hq'))
+        const config = must(await theOps().session.muc.getRoomConfig(room(tid('red-hq'))), 'config')
         expect(config.name).toBe('Red headquarters')
       })
 
@@ -473,13 +714,138 @@ export function definePublishIntegration(backend: PublishBackend): void {
         mustOps(await theOps().setPassword('blue-observer', fresh, { readOnly: true }), 'reset')
         expect(vault?.get('blue-observer')).toBe(fresh)
         mustOps(
-          await theOps().makeReadOnly('blue-observer', ['joint']),
+          await theOps().makeReadOnly('blue-observer', [tid('joint')]),
           're-apply through the vault',
         )
-        await expectReadOnly('blue-observer', 'joint')
+        await expectReadOnly('blue-observer', tid('joint'))
         const stored = must(await theOps().session.admin.getPrivate(VAULT_STORAGE_KEY), 'stored')
         expect(stored).not.toContain(fresh)
       })
+      afterAll(closeAll)
+    })
+
+    describe('5b. message templates (Annex A, WP 4.1)', () => {
+      let first: PublishPlan | undefined
+      beforeAll(async () => {
+        first = await plan(templatedThirdDesign())
+        const result = await apply(first)
+        if (!result.ok) throw new Error(`templates: ${result.failed?.error.message}`)
+      }, 120_000)
+
+      it('published the templates before the room that offers them, locking them (TD6)', () => {
+        const ids = first?.steps.map((s) => s.id) ?? []
+        const reports = ids.indexOf(`doc:${nodeName.room(RED_REPORTS)}:current`)
+        for (const id of [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support]) {
+          const at = ids.indexOf(`doc:templates:${id}`)
+          expect(at, id).toBeGreaterThanOrEqual(0)
+          expect(at, id).toBeLessThan(reports)
+          expect(first?.steps[at]?.details).toEqual([
+            'A room offers it, so it locks: its fields are fixed from now on (TD6)',
+          ])
+        }
+      })
+
+      it('every role reads them, locked; no role may publish one', async () => {
+        const session = await login('blue-observer')
+        const items = must(await session.pubsub.getItems('templates'), 'read templates')
+        expect(items.map((i) => i.id).sort()).toEqual(
+          [TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support].sort(),
+        )
+        for (const item of items) {
+          expect(JSON.parse(item.payload)).toMatchObject({
+            lockedAt: templatedThirdDesign().exportedAt,
+          })
+        }
+        expect(
+          errorOf(
+            await session.pubsub.publish('templates', TEMPLATE.sitrep, items[0]?.payload ?? '{}'),
+          )?.condition,
+        ).toBe('forbidden')
+        await closeAll()
+      })
+
+      it('each role is offered its templates; one is sent, checked and received as valid', async () => {
+        const xo = createSessionStore({ session: await login('red-xo'), logger: quiet })
+        const co = createSessionStore({ session: await login('blue-co'), logger: quiet })
+        const watcher = createSessionStore({
+          session: await login('white-observer'),
+          logger: quiet,
+        })
+        await Promise.all([xo.ready(), co.ready(), watcher.ready()])
+        const names = (s: typeof xo) => s.roomTemplates(RED_REPORTS).data.templates.map((t) => t.id)
+        expect(names(xo)).toEqual([TEMPLATE.sitrep, TEMPLATE.contact, TEMPLATE.support])
+        // Blue CO is in Red since step 3: Red's two, not Red XO's own.
+        expect(names(co)).toEqual([TEMPLATE.sitrep, TEMPLATE.contact])
+        expect(names(watcher)).toEqual([])
+        expect(xo.roomTemplates(RED_REPORTS).data.freeText).toBe(false)
+
+        xo.acquireRoom(RED_REPORTS)
+        watcher.acquireRoom(RED_REPORTS)
+        for (const s of [xo, watcher]) {
+          await expect
+            .poll(() => s.roomView(RED_REPORTS).data?.status, { timeout: 10_000 })
+            .toBe('joined')
+        }
+        const text = await xo.sendMessage(RED_REPORTS, 'free text')
+        expect(text.ok ? undefined : text.error.code).toBe('not-permitted')
+        const sent = await xo.sendTemplateMessage(RED_REPORTS, TEMPLATE.sitrep, {
+          force: tid('red'),
+          summary: `Holding ${run}`,
+          readiness: 80,
+          asOf: '2026-10-24',
+        })
+        expect(sent.ok).toBe(true)
+        await expect
+          .poll(
+            () =>
+              (watcher.roomView(RED_REPORTS).data?.messages ?? []).flatMap((m) =>
+                m.kind === 'message' && m.body.type === 'template'
+                  ? [watcher.checkTemplate(m)?.status]
+                  : [],
+              ),
+            { timeout: 10_000 },
+          )
+          .toEqual(['valid'])
+        await Promise.all([xo.logout(), co.logout(), watcher.logout()])
+        await closeAll()
+      })
+
+      it('refuses a change to a locked template’s fields, and plans no step', async () => {
+        const design = templatedThirdDesign()
+        const changed = {
+          ...design,
+          templates: design.templates.map((t) =>
+            t.id === TEMPLATE.contact ? { ...t, schema: { ...t.schema, required: ['grid'] } } : t,
+          ),
+        }
+        const refused = await plan(changed)
+        expect(refused.steps).toEqual([])
+        expect(refused.errors.map((e) => e.kind)).toEqual(['template-locked-changed'])
+        const result = await apply(refused)
+        expect(result.failed?.stepId).toBe('error:template-locked-changed')
+      })
+
+      it('removes an unlocked template the design drops, then plans nothing', async () => {
+        const design = templatedThirdDesign()
+        const draft = {
+          ...design,
+          templates: [...design.templates, spareTemplate()],
+        }
+        expect((await apply(await plan(draft))).ok).toBe(true)
+        const spare = must(await theOps().session.pubsub.getItems('templates'), 'read').find(
+          (i) => i.id === SPARE,
+        )
+        expect(JSON.parse(spare?.payload ?? '{}')).not.toHaveProperty('lockedAt')
+        const dropped = await plan(design)
+        expect(dropped.steps.map((s) => s.id)).toContain(`retract:templates:${SPARE}`)
+        expect((await apply(dropped)).ok).toBe(true)
+        const ids = must(await theOps().session.pubsub.getItems('templates'), 'read').map(
+          (i) => i.id,
+        )
+        expect(ids).not.toContain(SPARE)
+        expect((await plan(design)).steps).toEqual([])
+      })
+
       afterAll(closeAll)
     })
 

@@ -3,48 +3,33 @@
 // reset (PLY-42), the keyboard move (NFR-14) and a popout docking back. Tests read the DOM and
 // drive the page as a user would; nothing reaches into the layout library.
 import { expect, test } from '@playwright/test'
-import type { Locator, Page } from '@playwright/test'
+import { nodeName } from '@wrx/schemas'
+import { ASSET, FORCE, ROOM, tid } from '@wrx/schemas/fixtures'
+import type { Page } from '@playwright/test'
+import { columns, drag } from './layout.ts'
 import { asMockAdmin, logIn } from './mock.ts'
+import { isBrowserNotice } from './notices.ts'
 
 const ROOMS = { blue: 'Blue HQ', red: 'Red HQ', talks: 'Blue–Red negotiation' } as const
-
-/** Room tab names per docked tabset, left to right (then top to bottom). */
-function columns(page: Page): Promise<string[][]> {
-  return page.evaluate(() =>
-    [...document.querySelectorAll('.flexlayout__layout_main .flexlayout__tabset')]
-      .map((ts) => ({ box: ts.getBoundingClientRect(), ts }))
-      .sort((a, b) => a.box.x - b.box.x || a.box.y - b.box.y)
-      .map(({ ts }) =>
-        [...ts.querySelectorAll('[role="tab"]')].map((t) => t.getAttribute('aria-label') ?? ''),
-      ),
-  )
-}
 
 const tab = (page: Page, name: string) => page.getByRole('tab', { name, exact: true })
 const panel = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 const announcement = (page: Page) =>
   page.getByRole('main', { name: 'Workspace' }).getByRole('status').first()
 
-/** A user-like mouse drag: press, move in steps so dragenter and dragover fire, release. */
-async function drag(page: Page, source: Locator, target: Locator): Promise<void> {
-  const from = await source.boundingBox()
-  const to = await target.boundingBox()
-  if (from === null || to === null) throw new Error('drag: element not visible')
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2 + 10, { steps: 5 })
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 20 })
-  await page.mouse.up()
-}
-
 async function asUmpire(page: Page): Promise<string[]> {
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
   })
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => {
+    if (!isBrowserNotice(e.message)) errors.push(e.message)
+  })
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('./')
+  // These checks are about the three-room layout of v1's demo: the templated room (Annex A) is
+  // taken out first.
+  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(ROOM.blueReports) }])
   await logIn(page, 'admin', 'demo-admin')
   await expect(tab(page, ROOMS.blue)).toBeVisible()
   return errors
@@ -63,7 +48,7 @@ function gameSetup(designVersion: number) {
       description: 'A two-sided negotiation exercise.',
       briefing: '## Briefing\n\nThe exercise starts at 09:00.',
       designVersion,
-      theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' }, logoAssetId: 'game-logo' },
+      theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' }, logoAssetId: ASSET.gameLogo },
       roomTypeDefaults: {},
     }),
   } as const
@@ -115,16 +100,16 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   // What a publish does: the node, the new room's document, and a new design version (§3
   // rule 8), since PubSub does not announce new nodes.
   await asMockAdmin(page, [
-    { op: 'create-node', node: 'rooms:press', members: ['blue-co'] },
+    { op: 'create-node', node: nodeName.room(tid('press')), members: ['blue-co'] },
     {
       op: 'publish',
-      node: 'rooms:press',
+      node: nodeName.room(tid('press')),
       payload: JSON.stringify({
         schemaVersion: 1,
-        id: 'press',
+        id: tid('press'),
         name: 'Press room',
         roomType: 'chat',
-        participants: [{ kind: 'force', id: 'blue', access: 'write' }],
+        participants: [{ kind: 'force', id: FORCE.blue, access: 'write' }],
         config: {},
         order: 3,
       }),
@@ -141,7 +126,7 @@ test('a room the admin adds during play goes to the tabset with the fewest tabs 
   await expect(tab(page, ROOMS.red)).toHaveAttribute('aria-selected', 'true')
   // The room is withdrawn again: its tab closes, the rest stays. The node's deletion is
   // announced, so no new design version is needed.
-  await asMockAdmin(page, [{ op: 'delete-node', node: 'rooms:press' }])
+  await asMockAdmin(page, [{ op: 'delete-node', node: nodeName.room(tid('press')) }])
   await expect.poll(() => columns(page)).toEqual([[ROOMS.blue, ROOMS.talks], [ROOMS.red]])
   expect(errors).toEqual([])
 })

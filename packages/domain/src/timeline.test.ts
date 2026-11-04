@@ -8,7 +8,7 @@ function entry(id: string, timestamp: string): TimelineEntry {
     id,
     roomId: 'r',
     timestamp,
-    sender: { nick: 'n', jid: undefined, roleId: undefined, isAdmin: false },
+    sender: { nick: 'n', jid: undefined, loginName: undefined, isAdmin: false },
     body: { type: 'chat', schemaVersion: 1, content: { text: id } },
   }
 }

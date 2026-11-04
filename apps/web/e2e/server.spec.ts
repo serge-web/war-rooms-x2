@@ -30,7 +30,7 @@ test('config.json names the real server; it is the default and shown in the badg
     page.getByText('The game details could not be loaded from the server. You can still log in.'),
   ).toBeVisible({ timeout: 20_000 })
   await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
-  await expect(page.getByLabel('Role id')).toBeEditable()
+  await expect(page.getByLabel('Login name')).toBeEditable()
 })
 
 test('the mock stays selectable next to the real server (PLY-20)', async ({ page }) => {

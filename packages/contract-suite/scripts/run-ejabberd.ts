@@ -1,7 +1,8 @@
 // Runs the contract suite against the reference ejabberd. Node reads NODE_EXTRA_CA_CERTS only at
 // start-up, so this sets it to the stack's test CA (NFR-2: internal CAs) and starts vitest.
 // `--r1` runs only the R1 tests (S01, S01b, C01), the gate for an ejabberd upgrade (NFR-22).
-// Other arguments pass through to vitest.
+// `--deployment` runs the deployment checks instead (deployment/, WP 3.3). Other arguments pass
+// through to vitest.
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -14,7 +15,8 @@ if (!existsSync(ca)) {
 }
 const args = process.argv.slice(2)
 const r1 = args.includes('--r1')
-const rest = args.filter((a) => a !== '--r1')
+const deployment = args.includes('--deployment')
+const rest = args.filter((a) => a !== '--r1' && a !== '--deployment')
 const result = spawnSync(
   'pnpm',
   [
@@ -22,7 +24,7 @@ const result = spawnSync(
     'vitest',
     'run',
     '--config',
-    'vitest.ejabberd.config.ts',
+    deployment ? 'vitest.deployment.config.ts' : 'vitest.ejabberd.config.ts',
     ...(r1 ? ['--tags-filter', 'r1'] : []),
     ...rest,
   ],

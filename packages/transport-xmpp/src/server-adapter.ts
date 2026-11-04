@@ -5,6 +5,17 @@
 import type { EndReason, NodeConfig, RoomConfig, TransportError } from '@wrx/transport'
 import type { DataForm, FieldValue } from './forms.ts'
 
+/** The room config fields a server holds beyond muc#roomconfig. */
+export type RoomServerFields = Pick<
+  RoomConfig,
+  | 'archive'
+  | 'visitorPrivateMessages'
+  | 'visitorStatus'
+  | 'visitorNickChange'
+  | 'voiceRequests'
+  | 'subscriptions'
+>
+
 export interface ServerAdapter {
   readonly name: string
 
@@ -38,11 +49,21 @@ export interface ServerAdapter {
   /** XEP-0133 §4.16: the field of `get-online-users-num` that holds the count. */
   readonly onlineUsersCountField: string
 
+  /**
+   * RSM page size for the MUC service's room list (XEP-0059). Must not exceed the most the
+   * server returns in one page, or rooms can be skipped.
+   */
+  readonly roomListPageSize: number
+
   /** XEP-0045 §10.2: the owner form for a room config, standard fields and the server's own. */
   roomConfigFields(config: RoomConfig): readonly FieldValue[]
 
-  /** Reads `archive` back from a room config form (XEP-0313 defines no standard field). */
-  roomArchive(form: DataForm): boolean | undefined
+  /**
+   * Reads back the room config fields that are not muc#roomconfig: `archive` (XEP-0313 defines
+   * no field) and the side channels (spike S1b, review F6). A string names a field the form
+   * lacks or holds an unknown value in; the read then fails.
+   */
+  roomServerFields(form: DataForm): RoomServerFields | string
 
   /** XEP-0060 §8.2: the node config form, with the settings the transport relies on. */
   nodeConfigFields(config: NodeConfig): readonly FieldValue[]

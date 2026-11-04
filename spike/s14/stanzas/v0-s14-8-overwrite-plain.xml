@@ -1,0 +1,53 @@
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27pkh-0'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:ow-plain'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#publish_model'><value>publishers</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-kvxpca' from='pubsub.localhost' type='result' id='s14-mvy27pkh-0'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN:ow-plain'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27pkw-1'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN:ow-plain'><affiliation jid='RUN-blue@localhost' affiliation='publisher'/><affiliation jid='RUN-blue2@localhost' affiliation='publisher'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-kvxpca' from='pubsub.localhost' type='result' id='s14-mvy27pkw-1'/>
+
+<!-- blue publishes asset-1; blue2 then publishes the same item id -->
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27prh-2'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431725' by='blue'/></item></publish></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy27plk-z01nm' from='pubsub.localhost' type='result' id='s14-mvy27prh-2'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'/></publish></pubsub></iq>
+
+<!-- blue2: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27prr-3'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431735' by='blue2'/></item></publish></pubsub></iq>
+
+<!-- blue2: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue2@localhost/blue2-mvy27po8-tvk2u' from='pubsub.localhost' type='error' id='s14-mvy27prr-3'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431735' by='blue2'/></item></publish></pubsub><error type='auth'><forbidden xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- blue2: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27pru-4'><pubsub xmlns='http://jabber.org/protocol/pubsub'><retract node='RUN:ow-plain'><item id='asset-1'/></retract></pubsub></iq>
+
+<!-- blue2: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue2@localhost/blue2-mvy27po8-tvk2u' from='pubsub.localhost' type='error' id='s14-mvy27pru-4'><pubsub xmlns='http://jabber.org/protocol/pubsub'><retract node='RUN:ow-plain'><item id='asset-1'/></retract></pubsub><error type='auth'><forbidden xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- the owner (admin) overwrites blue’s item -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27ps1-5'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431745' by='admin'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-kvxpca' from='pubsub.localhost' type='result' id='s14-mvy27ps1-5'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'/></publish></pubsub></iq>
+
+<!-- blue publishes again over the owner’s item -->
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy27ps6-6'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431750' by='blue-again'/></item></publish></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy27plk-z01nm' from='pubsub.localhost' type='error' id='s14-mvy27ps6-6'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431750' by='blue-again'/></item></publish></pubsub><error type='auth'><forbidden xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy27ps9-7'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:ow-plain'/></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-kvxpca' from='pubsub.localhost' type='result' id='s14-mvy27ps9-7'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:ow-plain'><item id='asset-1'><asset xmlns='urn:wrx:s14' id='asset-1' t='1793551431745' by='admin'/></item></items></pubsub></iq>

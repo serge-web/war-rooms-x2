@@ -12,12 +12,24 @@ import type {
   Me,
   Occupant,
   Release,
+  RoomTemplates,
   RoomView,
   SessionStore,
   Snapshot,
   StoreStatus,
+  TimelineEntry,
 } from '@wrx/domain'
-import type { Asset, Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
+import type {
+  Asset,
+  Force,
+  GameSetup,
+  Objectives,
+  Retired,
+  Role,
+  Room,
+  Template,
+} from '@wrx/schemas'
+import type { TemplateCheck } from '@wrx/templates'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useSessionStore } from './context.ts'
 
@@ -158,4 +170,39 @@ export function useOccupants(roomId: string): Snapshot<readonly Occupant[]> {
     (s) => s.acquireRoom(roomId),
     `occupants:${roomId}`,
   )
+}
+
+/**
+ * Deleted forces and roles, by their last names (§3 rule 1, TPL-9): so a template card or picker
+ * still names a GUID whose force or role is gone, marked deleted; live.
+ */
+export function useRetired(): Snapshot<readonly Retired[]> {
+  return useStoreSnapshot((s) => s.retired(), undefined, 'retired')
+}
+
+/** Every message template in the game, by name (Annex A, TPL-1); live. */
+export function useTemplates(): Snapshot<readonly Template[]> {
+  return useStoreSnapshot((s) => s.templates(), undefined, 'templates')
+}
+
+/**
+ * What a room offers the current role for posting (TD3, TD4), live: `data.freeText`, and
+ * `data.templates`, the templates it may use there in the room config's order (none for an
+ * observer; every template the room names for the admin and the White Force's writers);
+ * `data.config` is the room's chat config, version 2. The composer's source (WP 4.2).
+ */
+export function useRoomTemplates(roomId: string): Snapshot<RoomTemplates> {
+  return useStoreSnapshot((s) => s.roomTemplates(roomId), undefined, `room-templates:${roomId}`)
+}
+
+/**
+ * The receiver's check of a timeline entry (TPL-6), re-run live as templates, the room's config
+ * and the documents change: `undefined` for a message that is not templated, else `valid` (show
+ * the card), `invalid` (plain text with a warning) or `not-permitted` (the card with a warning).
+ */
+export function useTemplateCheck(entry: TimelineEntry): TemplateCheck | undefined {
+  const store = useSessionStore()
+  const subscribe = useCallback((onChange: () => void) => store.subscribe(onChange), [store])
+  const getSnapshot = () => (entry.kind === 'message' ? store.checkTemplate(entry) : undefined)
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }

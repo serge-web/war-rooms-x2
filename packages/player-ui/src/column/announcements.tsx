@@ -227,6 +227,34 @@ export function AnnouncementsPanel({ highlightMs }: { readonly highlightMs?: num
   )
 }
 
+/**
+ * FT-1: how many announcements arrived after `seenId`. Only live ones count: those in the first
+ * load were there before this client opened, and are not news.
+ */
+export function unseenCount(
+  items: readonly { readonly id: string; readonly live: boolean }[],
+  seenId: string | undefined,
+): number {
+  const after = seenId === undefined ? 0 : items.findIndex((item) => item.id === seenId) + 1
+  return items.slice(after).filter((item) => item.live).length
+}
+
+/**
+ * FT-1: the announcements that arrived while the admin panel was not on screen (its tab hidden in
+ * a narrow client), for the tab's unread badge; 0 while it is on screen. Needs a
+ * SessionStoreProvider.
+ */
+export function useUnseenAnnouncements(shown: boolean): number {
+  const items = useAnnouncements().data
+  const lastId = items.at(-1)?.id
+  // The newest announcement that was on screen. Set after each render that showed it.
+  const seen = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (shown) seen.current = lastId
+  }, [shown, lastId])
+  return shown ? 0 : unseenCount(items, seen.current)
+}
+
 function postResult(result: DomainResult<void>): string | undefined {
   return result.ok ? undefined : `Not posted: ${errorText(result.error)}`
 }

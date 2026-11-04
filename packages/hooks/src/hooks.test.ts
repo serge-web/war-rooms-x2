@@ -1,8 +1,21 @@
 // @vitest-environment happy-dom
+import { nodeName } from '@wrx/schemas'
+import { TEMPLATE, blueReportsConfig, nameOf, sampleTemplates, tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { withSlots, defaultRoomTypes } from '@wrx/domain'
 import type { SessionStore } from '@wrx/domain'
-import { force, flush, harness, message, role, room } from '@wrx/domain/fixtures'
+import type { TimelineEntry } from '@wrx/domain'
+import {
+  DOMAIN,
+  MUC,
+  force,
+  flush,
+  harness,
+  message,
+  role,
+  room,
+  sampleDocuments,
+} from '@wrx/domain/fixtures'
 import { StrictMode, createElement } from 'react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
@@ -24,8 +37,11 @@ import {
   useRoles,
   useRoom,
   useRoomMessages,
+  useRoomTemplates,
   useRooms,
   useSessionStatus,
+  useTemplateCheck,
+  useTemplates,
 } from './hooks.ts'
 import type { PlayerPanel, PlayerPanelProps, ReactRoomTypeRegistry } from './registry.ts'
 
@@ -60,23 +76,29 @@ describe('hooks under StrictMode (ARC-3)', () => {
         forces: useForces(),
         roles: useRoles(),
         rooms: useRooms(),
-        red: useForce('red'),
+        red: useForce(tid('red')),
         me: useMe(),
         authors: useAuthors(),
         announcements: useAnnouncements(),
-        objectives: useObjectives('blue'),
+        objectives: useObjectives(tid('blue')),
       }),
       { wrapper: strictWrapper(h.store) },
     )
     expect(result.current.game.data?.name).toBe('Exercise Northern Gate')
-    expect(result.current.forces.data.map((f) => f.id)).toEqual(['blue', 'red', 'white'])
+    expect(result.current.forces.data.map((f) => nameOf(f.id))).toEqual(['blue', 'red', 'white'])
     expect(result.current.roles.status).toBe('ready')
     expect(result.current.rooms.data).toHaveLength(3)
-    expect(result.current.me.data.rooms.map((r) => r.room.id)).toEqual(['blue-hq', 'negotiation'])
+    expect(result.current.me.data.rooms.map((r) => nameOf(r.room.id))).toEqual([
+      'blue-hq',
+      'negotiation',
+    ])
     expect(result.current.objectives.data?.markdown).toBe('Secure the crossing.')
     expect(result.current.announcements.data).toEqual([])
     act(() => {
-      h.publish('forces:red', force('red', { name: 'Red Alliance', colour: '#ff0000', order: 1 }))
+      h.publish(
+        nodeName.force(tid('red')),
+        force('red', { name: 'Red Alliance', colour: '#ff0000', order: 1 }),
+      )
     })
     expect(result.current.red.data?.name).toBe('Red Alliance')
     expect(result.current.authors.data.get('red-co')?.colour).toBe('#ff0000')
@@ -85,7 +107,7 @@ describe('hooks under StrictMode (ARC-3)', () => {
   it('acquires a node while mounted, and leaks nothing after a double mount (StrictMode)', async () => {
     const h = await ready()
     const baseline = h.session.listenerCount()
-    const { result, unmount } = renderHook(() => useAsset('logo'), {
+    const { result, unmount } = renderHook(() => useAsset(tid('logo')), {
       wrapper: strictWrapper(h.store),
     })
     await act(() => flush())
@@ -96,17 +118,19 @@ describe('hooks under StrictMode (ARC-3)', () => {
     await flush()
     expect(h.session.listenerCount()).toBe(baseline)
     expect(
-      h.session.calls.filter((c) => c.op === 'getItems' && c.args[0] === 'assets:logo'),
+      h.session.calls.filter(
+        (c) => c.op === 'getItems' && c.args[0] === nodeName.asset(tid('logo')),
+      ),
     ).toHaveLength(1)
   })
 
   it('joins a room once under StrictMode, and leaves it after unmount', async () => {
     const h = await ready({ pageSize: 10 })
-    h.archive.set('blue-hq@conference.wrx.test', [message('blue-hq'), message('blue-hq')])
+    h.archive.set(`${tid('blue-hq')}@conference.wrx.test`, [message('blue-hq'), message('blue-hq')])
     const baseline = h.session.listenerCount()
     function Room(): ReactNode {
-      const messages = useRoomMessages('blue-hq')
-      const occupants = useOccupants('blue-hq')
+      const messages = useRoomMessages(tid('blue-hq'))
+      const occupants = useOccupants(tid('blue-hq'))
       return createElement(
         'p',
         null,
@@ -131,10 +155,13 @@ describe('hooks under StrictMode (ARC-3)', () => {
   it('moves its subscription when the id changes', async () => {
     const h = await ready()
     const baseline = h.session.listenerCount()
-    const { result, rerender, unmount } = renderHook(({ id }) => useDocument(`assets:${id}`), {
-      wrapper: strictWrapper(h.store),
-      initialProps: { id: 'one' },
-    })
+    const { result, rerender, unmount } = renderHook(
+      ({ id }) => useDocument(nodeName.asset(tid(id))),
+      {
+        wrapper: strictWrapper(h.store),
+        initialProps: { id: 'one' },
+      },
+    )
     await act(() => flush())
     rerender({ id: 'two' })
     await act(() => flush())
@@ -148,7 +175,12 @@ describe('hooks under StrictMode (ARC-3)', () => {
   it('leaves no listeners at all after unmount and logout (PLY-3)', async () => {
     const h = await ready()
     const { unmount } = renderHook(
-      () => [useRoomMessages('negotiation'), useRole('red-co'), useRoom('blue-hq'), useAsset('x')],
+      () => [
+        useRoomMessages(tid('negotiation')),
+        useRole(tid('red-co')),
+        useRoom(tid('blue-hq')),
+        useAsset(tid('x')),
+      ],
       { wrapper: strictWrapper(h.store) },
     )
     await act(() => flush())
@@ -169,7 +201,7 @@ describe('hooks under StrictMode (ARC-3)', () => {
   it('computes effective access live, and for a design being edited (ADM-9)', async () => {
     const h = await ready()
     const { result } = renderHook(() => useEffectiveAccess(), { wrapper: strictWrapper(h.store) })
-    expect(result.current.data.cells.get('red-hq')?.get('white-1')?.access).toBe('write')
+    expect(result.current.data.cells.get(tid('red-hq'))?.get(tid('white-1'))?.access).toBe('write')
     const design = {
       forces: [force('blue')],
       roles: [role('blue-co', 'blue')],
@@ -181,7 +213,7 @@ describe('hooks under StrictMode (ARC-3)', () => {
     const first = pure.result.current
     pure.rerender({ input: design })
     expect(pure.result.current).toBe(first)
-    expect(first.cells.get('a')?.get('blue-co')?.access).toBe('read')
+    expect(first.cells.get(tid('a'))?.get(tid('blue-co'))?.access).toBe('read')
   })
 
   it('keeps panes apart: each provider has its own store (D15)', async () => {
@@ -203,6 +235,88 @@ describe('hooks under StrictMode (ARC-3)', () => {
 
   it('throws a clear error outside a provider', () => {
     expect(() => renderHook(() => useSessionStore())).toThrow(/SessionStoreProvider/)
+  })
+})
+
+describe('template hooks (Annex A, WP 4.1)', () => {
+  function templatedDocs() {
+    const docs = sampleDocuments()
+    docs.set('templates', sampleTemplates())
+    const reports = room('blue-reports', [{ kind: 'force', id: 'blue', access: 'write' }], {
+      order: 3,
+      config: blueReportsConfig(),
+    })
+    docs.set(nodeName.room(reports.id), [reports])
+    return docs
+  }
+
+  it('gives the templates, and what the role may post in each room, live', async () => {
+    const h = await ready({ docs: templatedDocs() })
+    const { result } = renderHook(
+      () => ({
+        all: useTemplates(),
+        reports: useRoomTemplates(tid('blue-reports')),
+        hq: useRoomTemplates(tid('blue-hq')),
+      }),
+      { wrapper: strictWrapper(h.store) },
+    )
+    await act(() => flush())
+    expect(result.current.all.data.map((t) => t.name)).toEqual([
+      'Contact report',
+      'Situation report',
+      'Support request',
+    ])
+    expect(result.current.reports.data.freeText).toBe(false)
+    expect(result.current.reports.data.templates.map((t) => t.id)).toEqual([
+      TEMPLATE.sitrep,
+      TEMPLATE.contact,
+      TEMPLATE.support,
+    ])
+    expect(result.current.hq.data).toMatchObject({ freeText: true, templates: [] })
+    const before = result.current.all
+    act(() => {
+      h.session.emitItems({
+        node: 'templates',
+        items: [],
+        retracted: [TEMPLATE.contact],
+        deleted: false,
+      })
+    })
+    expect(result.current.all).not.toBe(before)
+    expect(result.current.reports.data.templates.map((t) => t.id)).toEqual([
+      TEMPLATE.sitrep,
+      TEMPLATE.support,
+    ])
+  })
+
+  it('checks a received templated message, and nothing else', async () => {
+    const h = await ready({ docs: templatedDocs() })
+    const body = JSON.stringify({
+      type: 'template',
+      schemaVersion: 1,
+      content: {
+        templateId: TEMPLATE.sitrep,
+        values: { force: tid('blue'), summary: 'ok', readiness: 50, asOf: '2026-10-24' },
+      },
+    })
+    h.archive.set(`${tid('blue-reports')}@${MUC}`, [
+      message('blue-reports', { nick: 'blue-co', from: `blue-co@${DOMAIN}`, body }),
+      message('blue-reports'),
+    ])
+    function Check({ entry }: { entry: TimelineEntry }) {
+      return createElement('span', null, `${useTemplateCheck(entry)?.status ?? 'chat'};`)
+    }
+    function Room() {
+      const view = useRoomMessages(tid('blue-reports'))
+      return createElement(
+        'p',
+        null,
+        (view.data?.messages ?? []).map((entry) => createElement(Check, { key: entry.id, entry })),
+      )
+    }
+    const view = render(createElement(Room), { wrapper: strictWrapper(h.store) })
+    await act(() => flush())
+    expect(view.container.textContent).toBe('valid;chat;')
   })
 })
 

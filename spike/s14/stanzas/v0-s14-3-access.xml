@@ -1,0 +1,97 @@
+<!-- S14-3: blue affiliated member on c1 only -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lw7-d'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN:c1'><affiliation jid='RUN-blue@localhost' affiliation='member'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lw7-d'/>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lwb-e'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lwb-e'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a1'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lwf-f'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:lw'><item id='w1'><asset xmlns='urn:wrx:s14' id='w1' t='1793551286751'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lwf-f'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:lw'><item id='w1'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24lwk-g'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l2'><item id='n1'><asset xmlns='urn:wrx:s14' id='n1' t='1793551286756'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24lwk-g'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l2'><item id='n1'/></publish></pubsub></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2g-h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='result' id='s14-mvy24m2g-h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'><item id='x1'><asset xmlns='urn:wrx:s14' id='x1' t='1793551286732'/></item></items></pubsub></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2k-i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='error' id='s14-mvy24m2k-i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- anonymous: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2n-j'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'/></pubsub></iq>
+
+<!-- anonymous: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='131569677183044912222180@localhost/anon-mvy24m10-6pbi3' from='pubsub.localhost' type='error' id='s14-mvy24m2n-j'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:c1'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2q-k'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='result' id='s14-mvy24m2q-k'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item></items></pubsub></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2t-l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='result' id='s14-mvy24m2t-l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item></items></pubsub></iq>
+
+<!-- anonymous: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2w-m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'/></pubsub></iq>
+
+<!-- anonymous: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='131569677183044912222180@localhost/anon-mvy24m10-6pbi3' from='pubsub.localhost' type='result' id='s14-mvy24m2w-m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item></items></pubsub></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m2z-n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='error' id='s14-mvy24m2z-n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m33-o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='error' id='s14-mvy24m33-o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- anonymous: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m35-p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub></iq>
+
+<!-- anonymous: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='131569677183044912222180@localhost/anon-mvy24m10-6pbi3' from='pubsub.localhost' type='error' id='s14-mvy24m35-p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m38-q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='result' id='s14-mvy24m38-q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'><item id='n1'><asset xmlns='urn:wrx:s14' id='n1' t='1793551286756'/></item></items></pubsub></iq>
+
+<!-- red: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m3c-r'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'/></pubsub></iq>
+
+<!-- red: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-red@localhost/red-mvy24lyu-s8v8m' from='pubsub.localhost' type='result' id='s14-mvy24m3c-r'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'><item id='n1'><asset xmlns='urn:wrx:s14' id='n1' t='1793551286756'/></item></items></pubsub></iq>
+
+<!-- anonymous: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24m3f-s'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'/></pubsub></iq>
+
+<!-- anonymous: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='131569677183044912222180@localhost/anon-mvy24m10-6pbi3' from='pubsub.localhost' type='result' id='s14-mvy24m3f-s'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l2'><item id='n1'><asset xmlns='urn:wrx:s14' id='n1' t='1793551286756'/></item></items></pubsub></iq>

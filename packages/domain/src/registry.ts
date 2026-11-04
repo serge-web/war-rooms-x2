@@ -5,8 +5,8 @@
 // live in `@wrx/hooks` (`ReactRoomTypeDefinition`). WP 2.6 and WP 2.2 fill them by building a
 // registry with `withSlots`, which returns a new registry; nothing is ever mutated, so one
 // registry can be shared by every pane (ARC-2).
-import { chatMessageBodySchema, slugSchema } from '@wrx/schemas'
-import type { GameSetup, MessageBody, Result, Room } from '@wrx/schemas'
+import { chatRoomConfigReader, messageBodySchema, slugSchema } from '@wrx/schemas'
+import type { ChatRoomConfig, GameSetup, MessageBody, Result, Room } from '@wrx/schemas'
 import { z } from 'zod'
 
 export interface RoomTypeDefinition<Player = unknown, Editor = unknown, Config = unknown> {
@@ -35,9 +35,12 @@ export interface RoomTypeRegistry<Player = unknown, Editor = unknown> {
   list(): readonly RoomTypeDefinition<Player, Editor>[]
 }
 
-/** Config of a chat room: nothing in v1. */
-export const chatConfigSchema = z.object({}).describe('Chat room config: empty in v1')
-export type ChatConfig = z.infer<typeof chatConfigSchema>
+/**
+ * Config of a chat room: version 2 (Annex A, TPL-2), free text and templates per force or role;
+ * a version 1 config (`{}`) reads as free text with no templates.
+ */
+export const chatConfigSchema: z.ZodType<ChatRoomConfig> = chatRoomConfigReader
+export type ChatConfig = ChatRoomConfig
 
 /** The `chat` room type, with its UI slots empty. */
 export const chatRoomType: RoomTypeDefinition<never, never, ChatConfig> = Object.freeze({
@@ -45,7 +48,9 @@ export const chatRoomType: RoomTypeDefinition<never, never, ChatConfig> = Object
   label: 'Chat',
   icon: 'chat',
   configSchema: chatConfigSchema,
-  messageSchema: chatMessageBodySchema,
+  // Chat text and templated messages (TPL-3); a templated message is then checked against its
+  // template and the room's config (TPL-6, `@wrx/templates`).
+  messageSchema: messageBodySchema,
   playerComponent: undefined,
   adminEditor: undefined,
 })

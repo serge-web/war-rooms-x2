@@ -55,6 +55,7 @@ function logged(session: FakeSession, who: string, log: string[]): void {
     ['pubsub', 'createNode'],
     ['pubsub', 'configureNode'],
     ['pubsub', 'publish'],
+    ['pubsub', 'retract'],
     ['admin', 'deleteUser'],
     ['admin', 'addUser'],
     ['admin', 'changePassword'],

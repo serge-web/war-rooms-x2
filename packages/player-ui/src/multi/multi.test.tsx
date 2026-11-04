@@ -2,6 +2,7 @@
 // The multi-client view (happy-dom): presets parsed defensively, panes with their own sessions
 // (each a FakeSession of its own), pane count and arrangement, presets saved and restored with
 // their logins, and the mock database controls. The admin's preview store is tested here too.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { flush, harness } from '@wrx/domain/fixtures'
 import { err, ok } from '@wrx/transport'
@@ -41,6 +42,36 @@ describe('presets (PLY-19)', () => {
     })
     expect(list).toHaveLength(1)
     expect(parsePresets(serialisePresets(list))).toEqual(list)
+  })
+
+  it('keeps a preset saved before GUID ids: its logins were role ids, now login names', () => {
+    // What a release before WP 3.5 stored: format 1, each pane's role id, which the role keeps
+    // as its login name (§3 rule 1).
+    const stored = JSON.stringify({
+      format: 1,
+      presets: [
+        {
+          name: 'Old',
+          count: 2,
+          arrangement: 'row',
+          panes: [
+            { kind: 'player', roleId: 'blue-co' },
+            { kind: 'admin', roleId: 'admin' },
+          ],
+        },
+      ],
+    })
+    expect(parsePresets(stored)).toEqual([
+      {
+        name: 'Old',
+        count: 2,
+        arrangement: 'row',
+        panes: [
+          { kind: 'player', roleId: 'blue-co' },
+          { kind: 'admin', roleId: 'admin' },
+        ],
+      },
+    ])
   })
 
   it('drops anything malformed rather than trusting storage', () => {
@@ -267,16 +298,16 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
     await h.store.ready()
     await flush()
     expect(h.store.me().data.rooms).toHaveLength(3)
-    const preview = previewAsRole(h.store, 'red-co')
-    expect(preview.identity).toMatchObject({ roleId: 'red-co', isAdmin: false })
+    const preview = previewAsRole(h.store, tid('red-co'))
+    expect(preview.identity).toMatchObject({ loginName: 'red-co', isAdmin: false })
     const me = preview.me()
-    expect(me.data.role?.id).toBe('red-co')
-    expect(me.data.force?.id).toBe('red')
-    expect(me.data.rooms.map((r) => r.room.id)).toEqual(['red-hq', 'negotiation'])
+    expect(me.data.role?.id).toBe(tid('red-co'))
+    expect(me.data.force?.id).toBe(tid('red'))
+    expect(me.data.rooms.map((r) => r.room.id)).toEqual([tid('red-hq'), tid('negotiation')])
     // A stable snapshot until something changes (useSyncExternalStore needs it).
     expect(preview.me()).toBe(me)
     // Everything else is the admin's: its documents, and its session for anything sent.
-    expect(preview.objectives('red').data?.markdown).toBe('Delay Blue.')
+    expect(preview.objectives(tid('red')).data?.markdown).toBe('Delay Blue.')
     expect(preview.session).toBe(h.store.session)
     expect(await preview.postAnnouncement('From the admin')).toEqual(ok(undefined))
     const call = h.session.calls.find((c) => c.op === 'publish')
@@ -287,19 +318,20 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
     const h = harness({ roleId: 'admin' })
     await h.store.ready()
     await flush()
-    const observer = previewAsRole(h.store, 'white-observer').me().data
+    const observer = previewAsRole(h.store, tid('white-observer')).me().data
     expect(observer).toMatchObject({ isUmpire: true, isObserver: true, canEditObjectives: false })
     expect(observer.rooms.map((r) => [r.room.id, r.access])).toEqual([
-      ['blue-hq', 'read'],
-      ['red-hq', 'read'],
-      ['negotiation', 'read'],
+      [tid('blue-hq'), 'read'],
+      [tid('red-hq'), 'read'],
+      [tid('negotiation'), 'read'],
     ])
-    const preview = previewAsRole(h.store, 'white-1')
-    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: true })
+    // Read only: no role edits objectives, a White Force role that is not an observer included.
+    const preview = previewAsRole(h.store, tid('white-1'))
+    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: false })
     expect(preview.me().data.rooms.map((r) => r.room.id)).toEqual([
-      'blue-hq',
-      'red-hq',
-      'negotiation',
+      tid('blue-hq'),
+      tid('red-hq'),
+      tid('negotiation'),
     ])
   })
 })

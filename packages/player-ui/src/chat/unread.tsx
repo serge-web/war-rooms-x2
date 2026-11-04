@@ -103,7 +103,7 @@ export function useIsOwn(): (entry: TimelineEntry) => boolean {
   return useMemo(
     () => (entry: TimelineEntry) =>
       entry.sender.jid === identity.bareJid ||
-      (identity.roleId !== undefined && entry.sender.roleId === identity.roleId),
+      (identity.loginName !== undefined && entry.sender.loginName === identity.loginName),
     [identity],
   )
 }

@@ -1,16 +1,16 @@
 # War Rooms X1 — Software Requirements Document
 
-Oct 20, 2026 (revised Oct 24, 2026, see §14) · @Ian Mayo
+Oct 20, 2026 (revised to Nov 3, 2026, see §14) · @Ian Mayo
 
 ## 1. Introduction
 
-War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-designed, chat-based wargames with an ejabberd XMPP server as its only backend service. It combines Serge's domain model with War Rooms X's XMPP transport, and fixes the defects both reviews identified.
+War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-designed, turn-based wargames with chat rooms and a shared map, using an ejabberd XMPP server as its only backend service. It combines Serge's domain model with War Rooms X's XMPP transport, and fixes the defects both reviews identified.
 
-**Scope (v1).** An admin backend to design and provision one wargame (forces, roles, chat rooms, themes, objectives), and a player client with a themed welcome page, a dockable chat workspace and a fixed out-of-game column. A browser-only mock backend and a 2–4 pane multi-client view support review and demos, and a public GitHub Pages site documents the project and hosts a live demo of every PR (section 13). Other room types, turns and exports are deferred but must not need re-architecture (section 8).
+**Scope (v1).** An admin backend to design and provision one wargame (forces, roles, chat and map rooms, message templates, themes, objectives) and to run it turn by turn, and a player client with a themed welcome page, a dockable workspace of chat and map rooms and an out-of-game column (a workspace tab when the client is narrow). A turn model (turns, planning and adjudication phases) advances under admin control, and a map room shows a world state of assets that the admin edits. A browser-only mock backend and a 2–4 pane multi-client view support review and demos, and a public GitHub Pages site documents the project and hosts a live demo of every PR (section 13). Orders, automated adjudication (reconciliation), fog of war, other room types and exports are deferred but must not need re-architecture (section 8). Message templates are specified in Annex A and were built in Phase 4; Annex B, force assets in their own store, is superseded by the map room's world state (D25).
 
 **Sources.** Serge v3.0.0 (`serge-web/serge`), War Rooms X (`serge-web/war-rooms-x`), and the technical summary of both.
 
-**Requirement language.** SHALL = mandatory for v1; SHOULD = expected unless justified; MAY = optional. Requirements are numbered by area (ADM, PLY, ARC, NFR, DOC). Retired ids are not reused: ADM-32–34 (merged into ADM-18–20), PLY-7 (merged into PLY-42) and PLY-23 (merged into PLY-46).
+**Requirement language.** SHALL = mandatory for v1; SHOULD = expected unless justified; MAY = optional. Requirements are numbered by area (ADM, PLY, ARC, NFR, DOC). Retired ids are not reused: ADM-32–34 (merged into ADM-18–20), PLY-7 (merged into PLY-42), PLY-23 (merged into PLY-46), and PLY-6 and PLY-41 (dropped Nov 3, 2026: structural changes reset layouts, PLY-5). Annexes A and B specify features built after v1; their ids (TD, TPL, AD) are not v1 requirements, and only the provisions they name are built in v1.
 
 **Definitions**
 
@@ -19,29 +19,34 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-de
 | Admin | The XMPP server's `admin` account: the sole game designer and controller, and in play the umpire, a member of the White Force |
 | Force | A side in the game; a PubSub document plus its roles' room and node affiliations |
 | Role | A player position; one XMPP user account |
-| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4) |
+| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4). Every White Force role reads every force's objectives, but only the admin edits the game, objectives included (D21) |
+| GUID | A random, lowercase UUID: the id of every force, role, room and asset (§3 rule 1) |
+| Login name | The readable name a player types to log in as a role; the role's XMPP account name, separate from its GUID (§3 rule 1) |
 | Observer | A role that can read, but not post in, its rooms |
 | Room | A channel; an XMPP MUC room plus a PubSub config document |
-| Room type | A plug-in kind of room (v1: `chat` only) |
+| Room type | A plug-in kind of room (v1: `chat` and `map`) |
+| Map room | The game's single room whose messages each carry the full world state, posted only by the admin |
+| World state | The set of all assets (units, platforms) with their positions and status; v1 holds one shared state with no fog of war |
+| Turn / phase | A numbered game turn, each with a planning phase then an adjudication phase; the admin advances them |
 
 ## 2. Key decisions and constraints
 
-Twenty-four decisions frame v1; each has a consequence the requirements below depend on.
+Twenty-six decisions frame v1; each has a consequence the requirements below depend on.
 
 | # | Decision | Consequence |
 | --- | --- | --- |
 | D1 | The XMPP server (ejabberd, D16) is the sole production backend; all data lives in XMPP | No app server or database. Game metadata in PubSub; messages in MUC + MAM |
 | D2 | Rules enforced by standard XMPP ACLs only; client trust accepted beyond that | No custom server module or bot. Anything ACLs cannot express is advisory (section 9) |
 | D3 | The server's `admin` account is the game admin | Admin rights come from server-side authorisation, not a UI username check |
-| D4 | v1 room type: chat only; others anticipated | A room-type registry is mandatory from v1 (ARC-5) |
+| D4 | v1 room types: chat and map; others anticipated | A room-type registry is mandatory from v1 (ARC-5) |
 | D5 | One XMPP account per role | Several people may log in to one role; they are indistinguishable to the server |
-| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device; must survive room changes |
-| D7 | No turn model in v1 | No phase-dependent permissions, so D2 covers all v1 rules |
+| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device. It survives theme and text edits, but structural design changes (forces, roles, rooms, participants) reset it to the default (PLY-5) |
+| D7 | Full turn model in v1: numbered turns, each with planning then adjudication phases; only the admin advances them | State in the `game-state` node. Phase-dependent behaviour is advisory only (client-side), consistent with D2 |
 | D8 | White Force (all rooms) and observers (read-only) | The admin is the umpire, in the White Force; White Force roles that are not observers are MUC members of every room; an observer is a MUC `visitor` in moderated rooms, enforced by ejabberd's stored role (ADM-37) |
 | D9 | Participants per room by force or role, mixed | Force entries expand to roles at provisioning; re-sync on change |
 | D10 | Provisioning over XMPP only, with the admin's own credentials | Spike result: ejabberd needs no REST; all provisioning is XMPP using the admin's own session credentials (§10 outcome) |
 | D11 | One wargame per server | No namespacing of nodes, rooms or users |
-| D12 | Deploy air-gapped, internal or cloud | No runtime CDN or internet dependency |
+| D12 | Deploy air-gapped, internal or cloud | No runtime CDN or internet dependency, except base-map tiles: in v1 the map room needs internet access (air-gapped mapping is post-v1, §8) |
 | D13 | History: live MAM scrollback only | No export or replay in v1 |
 | D14 | A browser-only JavaScript mock backend replaces the XMPP server for review and stakeholder demos; mock data is stored only in the browser | One transport interface with two implementations. The mock SHALL enforce the same ACL semantics as the server, verified by one contract-test suite run against both, or demos will misrepresent behaviour |
 | D15 | A multi-client view shows 2, 3 or 4 independently logged-in client UIs on one page, against mock or real backend | No global singletons: each pane owns its own session, store and React provider. The mock runs as one in-page "server" serving several sessions |
@@ -55,13 +60,17 @@ Twenty-four decisions frame v1; each has a consequence the requirements below de
 
 **D20 — Themed welcome page before login, via anonymous read-only access.** Consequence: SASL ANONYMOUS is enabled, and anonymous sessions may read only `game-setup` and the game theme's assets. Those must hold nothing sensitive, and every other node must use a non-open access model. The mock emulates anonymous login; spike check S10 verifies the server.
 
-**D21 — Objectives are written by the admin per force; the force reads them, and the White Force may read every force's objectives and, except its observers, edit them during play.** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, the White Force's roles and the admin; publish by the admin and White Force roles that are not observers (publisher affiliation). Whitelists re-sync when roles move force.
+**D21 — Objectives are written by the admin per force; the force reads them, and the White Force may read every force's objectives and, except its observers, edit them during play (product owner, Nov 3, 2026, reversing the WP 3.5 admin-only rule).** Consequence: one `objectives:<forceId>` node per force, whitelist read for that force's roles, the White Force's roles and the admin; publish by the admin and White Force roles that are not observers (publisher affiliation). Whitelists and publishers re-sync when roles move force or leave the White Force.
 
 **D22 — Several people may log in to the same role at once, silently.** Consequence: multiple sessions of one account must join rooms under the same nickname (spike check S11), and each keeps its own browser layout.
 
 **D23 — The admin may make any change to a published game while players are online; changes apply live.** Consequence: the client must handle every kind of change in place (PLY-28–31), and publishing must grant new access before revoking old to avoid transient lock-outs.
 
 **D24 — UI component kit chosen by the dev team.** Constraints: per-panel theming via CSS custom properties (PLY-26), fully offline bundling (NFR-7), WCAG 2.2 AA (NFR-14) and first-class TypeScript types (D18).
+
+**D25 — World state lives in one members-only map room; every message carries the full state; only the admin posts it.** Consequence: replay comes from MAM for free, and a joiner needs only the latest valid message. Because members of a members-only room always have voice (S13), "admin only" is enforced by clients, which accept world-state messages only from the admin's real JID (§3 rule 3) and ignore the rest. The admin edits a browser-only draft and publishes it at a phase change or whenever the admin chooses, for example to set up the starting state or fix a mistake during play. Map-room messages may be up to 500 KB (PLY-53). Snapshots plus deltas, compression and per-force views are post-v1.
+
+**D26 — Automated reconciliation (post-v1) will run as external clients.** Game-specific reconcilers written in Python against a common SDK, running natively or in the browser via Pyodide, log in as ordinary XMPP accounts. They hold no special server rights, so they do not breach D1 or D2. v1 SHALL NOT preclude this: world-state, turn and room documents are schema-defined and exportable as JSON Schema (ARC-6).
 
 ## 3. Domain model and XMPP mapping
 
@@ -71,23 +80,27 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 | --- | --- | --- | --- |
 | Wargame | — | PubSub leaf `game-setup` (name, description, briefing, theme, room-type defaults, `designVersion`) | Read: anyone, including anonymous (D20); publish: admin |
 | Force | Room and node affiliations of its roles (no server group) | PubSub leaf `forces:<forceId>` (name, colour, icon, `isUmpire`) | Read: all game users; publish: admin |
-| Role | XMPP user `<roleId>@<domain>` | PubSub leaf `roles:<roleId>` (name, `forceId`, `isObserver`) | Read: all game users; publish: admin |
-| Room | MUC room `<roomId>@<mucService>` | PubSub leaf `rooms:<roomId>` (name, `roomType`, participants, type-specific config) | Read: room participants SHOULD; all users MAY; publish: admin |
+| Role | XMPP user `<loginName>@<domain>` | PubSub leaf `roles:<roleId>` (name, `loginName`, `forceId`, `isObserver`) | Read: all game users; publish: admin |
+| Room | MUC room `<roomId>@<mucService>` | PubSub leaf `rooms:<roomId>` (name, `roomType`, participants, type-specific config) | Read: all game users (needed for room discovery, PLY-60); publish: admin |
 | Message | MUC groupchat stanza | Body = JSON `{type, schemaVersion, content}` | MUC membership |
 | History | MAM (XEP-0313); join history not relied on (PLY-49) | — | MUC membership |
 | Announcement | — | PubSub leaf `announcements`, one item per announcement (text, posted time) | Read: every role; publish: admin (PLY-37) |
-| Reserved | — | PubSub leaf `game-state` (created empty in v1 for the future turn model) | Publish: admin |
+| Deleted entity | — | PubSub leaf `retired`, one item per deleted force or role (id, kind, last name, login name, colour) (rule 1) | Read: all game users; publish: admin |
+| Directory | — | PubSub leaf `directory`, one item listing every force, role and room GUID, with each role's login name (lets a client find its own role without node listing; a pointer only, the role document must carry the login name) | Read: all game users; publish: admin |
+| Turn state | — | PubSub leaf `game-state` (turn number, phase: `planning` or `adjudication`) | Read: all game users; publish: admin |
+| World state | Messages in the map room | Body `{type: "world-state", schemaVersion, content}`, content = full state (rules 16–18) | Room membership; accepted only from the admin (D25) |
+| Templates | — | PubSub leaf `templates`, one item per message template (Annex A) | Read: all game users; publish: admin |
 
 **Rules**
 
-1. Entity ids SHALL be stable, URL-safe slugs generated at creation and never reused; display names are separate fields.
+1. Entity ids (forces, roles, rooms, assets) SHALL be GUIDs, generated at creation, stable and never reused; display names are separate fields. A role's login name is a separate, readable field, distinct from its GUID: its XMPP account name, unique in the game, and not reused for another role while the game's history is kept. A deleted force or role SHALL keep a record of its last name in the `retired` node, so old messages can still show it, marked as deleted (ADM-14, Annex A). Room-type ids (`chat`) are registry names, not entity ids.
 2. Each PubSub document SHALL carry `schemaVersion` and be validated at runtime on read (ARC-6).
 3. Sender identity SHALL come from the MUC occupant JID (the stanza `from`, mapped to the real JID via members-only, non-anonymous rooms), never from the message body.
-4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and the White Force's roles. Precedence, weakest to strongest: a force entry, then a role entry for a role in that force (which overrides it), then White Force membership (write access to every room), then observer status (read only, always). A White Force observer is read only; it sees only the rooms whose participant list names it in a role entry, or every room when none does. The admin, as umpire, writes in every room. An entry naming an unknown force or role grants nothing.
+4. Room participants SHALL be stored as a list of `{kind: force|role, id, access: write|read}` entries. The effective set is the union of expanded force entries, role entries and the White Force's roles. Precedence, weakest to strongest: a force entry, then a role entry for a role in that force (which overrides it), then White Force membership (write access to every room), then observer status (read only, always). A White Force observer is read only; it sees only the rooms whose participant list names it in a role entry, or every room when none does. The admin, as umpire, writes in every room. An entry naming an unknown force or role grants nothing. Two consequences are kept deliberately and SHALL be highlighted in the access matrix (ADM-9): giving a White Force observer any role entry limits it to those rooms, and a per-room `access: read` entry does not apply to White Force roles that are not observers.
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
-6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents, kept live by subscription.
+6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents by the author's login name, kept live by subscription; a deleted role's or force's name comes from its `retired` record (rule 1).
 7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
-8. `game-setup.designVersion` SHALL be a positive integer that publishing increments whenever the design changes; it keys saved layouts (PLY-5).
+8. `game-setup.designVersion` SHALL be a positive integer that publishing increments only on structural design changes: adding, removing or moving forces, roles or rooms, or changing room participants. Theme, text, briefing, objectives and template changes SHALL NOT increment it. It keys saved layouts (PLY-5).
 9. Role passwords SHALL NOT be stored in any PubSub document or design export (ADM-16, ADM-26, NFR-1).
 
 **Themes and assets**
@@ -106,8 +119,14 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
 13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
-15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements node SHALL be readable by every role and publishable only by the admin (PLY-37).
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest by server timestamp (the PubSub delay stamp, not the author's `updatedAt`; spike check S15). A role's items SHALL be deleted when it leaves the White Force or is deleted; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
+15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements, `game-state`, `directory` and `rooms:*` nodes SHALL be readable by every role and publishable only by the admin (PLY-37, PLY-60); room names are therefore visible to every role (R24).
+
+**World state**
+
+16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
+17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
+18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a read entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); clients treat only the admin's messages as world state.
 
 ## 4. Functional requirements — admin backend
 
@@ -122,11 +141,11 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-3 The admin SHALL edit game properties: name, description, theme colour.
 - ADM-4 The admin SHALL create, edit, reorder and delete forces: name, colour, icon, umpire flag. Exactly one force SHALL carry the umpire flag: the White Force, which the admin belongs to as umpire; the editor names it White by default.
-- ADM-5 The admin SHALL create, edit, reorder and delete roles within a force: display name, login id, password, observer flag; and move a role between forces.
+- ADM-5 The admin SHALL create, edit, reorder and delete roles within a force: display name, login name, password, observer flag; and move a role between forces. The login name is the role's XMPP account name: editable until the role is first published, then fixed, since the server cannot rename an account; to change it, delete the role and add a new one.
 - ADM-6 The admin SHALL create, edit, reorder and delete rooms: name, room type (v1: chat), participants as mixed force/role entries each with read or write access (§3 rule 4).
 - ADM-7 Room-type-specific settings SHALL be edited through the editor supplied by that type's registry entry (ARC-5).
 - ADM-8 Reordering of forces, roles and rooms SHALL use drag and drop with keyboard alternatives.
-- ADM-9 The admin SHALL see a live effective-access matrix (rooms × roles: write / read / none) before publishing.
+- ADM-9 The admin SHALL see a live effective-access matrix (rooms × roles: write / read / none) before publishing, highlighting the rule 4 consequences noted in §3.
 
 **Themes**
 
@@ -148,12 +167,12 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 - ADM-11 Publishing SHALL show progress per item and report failures without leaving silent partial state; re-running SHALL complete a partial publish.
 - ADM-12 Provisioning SHALL use XMPP only (MUC owner config, affiliations, PubSub owner operations, XEP-0133 user commands) with the admin's own credentials; no REST or shared secret (§10 outcome).
 - ADM-13 Changing a role's force or a room's participants SHALL re-sync affected MUC affiliations and roles on publish.
-- ADM-14 Deleting a role SHALL warn that its message history remains attributed to the old JID.
+- ADM-14 Deleting a role SHALL warn that its message history remains attributed to the old JID, shown under the role's last name and marked as deleted (§3 rule 1).
 - ADM-15 The admin SHALL be able to reset the game (delete all provisioned users, rooms and documents) with typed confirmation.
 
 **Design portability**
 
-- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export.
+- ADM-16 The admin SHALL export and import the game design as a versioned JSON file, so designs move between mock and real backends and between servers. Passwords SHALL be excluded or replaced on export. Import SHALL also accept design files from before GUID ids (§3 rule 1), giving each entity a new GUID and keeping each old role id as its login name. A game already published with the old ids is moved by export, import, reset (ADM-15) and publish; its room history is not kept. The export SHALL include a world state: the admin's draft if one is held in this browser, otherwise the latest published state; importing loads it as the admin's draft, which reaches the map room only when the admin publishes it (ADM-45), so a game can be set up again on another server with its map (product owner, Nov 4, 2026).
 
 **Monitoring**
 
@@ -171,12 +190,19 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-35 Every admin operation SHALL go through a single admin-operations module that applies rules ADM-36–40 (the spike's `AdminOps`, rules R-A to R-F).
 - ADM-36 Revoking a role's read access to a node SHALL remove both its whitelist affiliation and its subscriptions (R-A).
-- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Because S13 failed (§10), voice SHALL be revoked by the admin tooling logging in as the observer, using an encrypted observer-password vault: encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only. The vault holds the password of every role that is read-only in some room: observers, and roles with a per-room `access: read` entry (§3 rule 5), since both need their voice revoked the same way. If the passphrase is lost, passwords are reset (ADM-26). The vault SHALL be updated by password resets (ADM-26) and role deletion (ADM-39). Making an observer a room member and revoking its voice SHALL run back to back, before the room is published to the observer, so an online observer has no window in which to post.
+- ADM-37 Game rooms SHALL always be moderated, and the admin UI SHALL NOT offer an unmoderated game room (R-C). Observer voice revocation SHALL be re-applied after any change to an observer's room affiliation (R-B). Re-applying SHALL NOT require resetting the observer's password, which would lock out everyone sharing the role (D22). Because S13 failed (§10), voice SHALL be revoked by the admin tooling logging in as the observer, using an encrypted observer-password vault: encrypted in the admin's browser under a vault passphrase and kept in the admin account's private storage, so the server holds ciphertext only. The vault holds the password of every role that is read-only in some room: observers, and roles with a per-room `access: read` entry (§3 rule 5), since both need their voice revoked the same way. If the passphrase is lost, passwords are reset (ADM-26), which locks out everyone sharing those roles; this is accepted (R22). The vault SHALL be updated by password resets (ADM-26) and role deletion (ADM-39). Making an observer a room member and revoking its voice SHALL run back to back, before the room is published to the observer, so an online observer has no window in which to post.
 - ADM-38 Moving a role between forces SHALL grant the new access before revoking the old (R-D).
 - ADM-39 Deleting a role SHALL remove its room and node affiliations and subscriptions, then the account; `item-not-found` on account deletion SHALL be treated as already deleted (R-E).
 - ADM-40 Destroying a room deletes its history (R-F). The admin UI SHALL warn, show the message count and require confirmation.
 - ADM-41 The admin UI SHOULD offer an "Audit and repair" action that checks the live server against the game design (room moderation, observer voice, orphaned affiliations and subscriptions) and fixes differences.
-- ADM-42 The admin UI SHALL warn that anonymous users can list node names, and MAY offer opaque node ids.
+- ADM-42 The admin UI SHALL warn that anonymous users can list node names. Node names carry only GUIDs (§3 rule 1), so they show how many forces, roles and rooms exist, but not their names.
+
+**Turns and world state**
+
+- ADM-43 Only the admin SHALL advance the game: from planning to adjudication within a turn, and from adjudication to the next turn's planning. Each change publishes `game-state`.
+- ADM-44 The admin SHALL edit the world state on the map: add, move, edit and delete assets, with all fixed fields (§3 rule 17) editable in a form.
+- ADM-45 World-state edits SHALL accumulate as a draft in the admin's browser storage and SHALL be published to the map room as one full-state message, either with a phase change or at any time from an explicit "Publish world state" action (to set up the starting state before play, or to fix a mistake during play), and only if the draft differs from the last published state. The UI SHALL show that unpublished edits exist and that the draft is held only in this browser (R25). (Publishing at any time: product owner, Nov 4, 2026.)
+- ADM-46 Before any world-state publish, with a phase change or on its own, the admin SHALL see a summary of the world-state changes (assets added, removed and changed) and confirm.
 
 ## 5. Functional requirements — player client and demo views
 
@@ -184,7 +210,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 **Login and session**
 
-- PLY-1 The player SHALL log in with role id and password; the client SHALL show the backend in use (real server address or "MOCK") at all times.
+- PLY-1 The player SHALL log in with login name and password; the client SHALL show the backend in use (real server address or "MOCK") at all times.
 - PLY-2 On connection loss the client SHALL show status, reconnect with back-off, rejoin rooms and fetch missed messages via MAM without duplicates.
 - PLY-3 Logout SHALL leave rooms, release subscriptions and clear in-memory game data.
 
@@ -193,16 +219,16 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-27 Before login, the client SHALL fetch `game-setup` and the game theme anonymously (D20) and show the themed welcome page; if that fails it SHALL show the default theme and still allow login.
 - PLY-28 Changes to game, force, role, room, objective and theme documents SHALL apply live, without re-login.
 - PLY-29 If the logged-in role is deleted, the client SHALL notify the user and log out.
-- PLY-30 If the role moves force, the force panel, objectives, theme and room list SHALL refresh in place; rooms losing access close with a notice, new rooms appear via PLY-6.
+- PLY-30 If the role moves force, the force panel, objectives, theme and room list SHALL refresh in place; rooms losing access close with a notice, and the layout resets to the default with any new rooms (PLY-5).
 - PLY-31 A password change SHALL NOT end current sessions; it applies at next login.
 
 **Workspace**
 
 - PLY-4 Each room the role can see SHALL appear as a tab in a dockable workspace (FlexLayout or dockview) that the user can drag, split, resize and pop out.
-- PLY-5 The layout SHALL be saved to browser storage keyed by server, role and game design version, and restored at login.
-- PLY-6 Rooms added or removed while logged in SHALL be reconciled into the current layout via the layout library's public API, without resetting it.
+- PLY-5 The layout SHALL be saved to browser storage keyed by server, role and `designVersion` (§3 rule 8), and restored at login. When `designVersion` changes during a session, the client SHALL reset the layout to the default (PLY-40) with a notice.
+- PLY-6 Retired (Nov 3, 2026): structural changes reset the layout (PLY-5).
 - PLY-7 Retired: merged into PLY-42.
-- PLY-8 Other non-room panels (game info, online roles) SHOULD be dockable; the out-of-game column (PLY-36) is fixed.
+- PLY-8 Other non-room panels (game info, online roles) SHOULD be dockable; the out-of-game column (PLY-36) is not one of them: it is fixed, and becomes a special tab only when the client is narrow.
 
 **Themes**
 
@@ -228,15 +254,19 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 
 **Out-of-game column**
 
-- PLY-36 The player screen SHALL have a permanently visible, fixed-width out-of-game column on the right, outside the dockable workspace. Top to bottom: a reserved area for game time and turn (empty in v1, D7), the admin panel, then the force panel (PLY-25).
-- PLY-37 The admin panel SHALL show announcements from the `announcements` PubSub node, readable by every role and with publish restricted to the admin by the server (`publish_model: publishers`). It carries out-of-game announcements (breaks, delays, reminders) and SHALL NOT appear as a workspace tab.
+- PLY-36 The player screen SHALL have a fixed-width out-of-game column on the right, outside the dockable workspace, always visible while the client is at least 45rem wide. Top to bottom: the turn panel showing turn number and phase (PLY-55), the admin panel, then the force panel (PLY-25). Below that width, measured on the client itself so that each multi-client pane switches on its own width, the column SHALL become a workspace tab instead. The tab:
+  - is styled as special (a bar in the game's primary colour and an icon) and cannot be closed or popped out;
+  - keeps the column's content and state when it switches between column and tab;
+  - is not saved in layouts (PLY-5), and adding or removing it leaves the room tabs where they were;
+  - shows an unread badge for announcements that arrive while it is hidden (PLY-38).
+- PLY-37 The admin panel SHALL show announcements from the `announcements` PubSub node, readable by every role and with publish restricted to the admin by the server (`publish_model: publishers`). It carries out-of-game announcements (breaks, delays, reminders) and SHALL NOT appear as a workspace tab of its own; in a narrow client it is inside the out-of-game tab (PLY-36).
 - PLY-38 Admin messages SHALL be ordered oldest to newest, with newest at the bottom like a chat, and a newly arrived message SHALL be briefly highlighted.
 - PLY-39 Write control SHALL be enforced by the server. Observer read-only uses ejabberd's stored visitor role in moderated rooms (spike S1, ADM-37); no client-only fallback is needed.
 
 **Default workspace layout**
 
 - PLY-40 On first login (no saved layout), rooms SHALL be distributed evenly across up to three side-by-side tabset columns; only as many columns as there are rooms SHALL be shown (one room, one column).
-- PLY-41 A room added during play SHALL appear in the tabset with the fewest tabs, without disturbing the rest of the layout.
+- PLY-41 Retired (Nov 3, 2026): structural changes reset the layout (PLY-5).
 - PLY-42 The player SHALL have a "Reset layout" control that restores the three-column default for their current rooms.
 
 **Chat room panel**
@@ -244,6 +274,19 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-43 Messages SHALL display as cards with a header row (sender role, force colour, time) above the text; consecutive messages from the same sender SHALL share one header.
 - PLY-44 The composer SHALL sit at the bottom of the panel and grow as text is entered; Enter sends, Shift+Enter inserts a new line.
 - PLY-45 Message times SHALL show local wall-clock time only, with a date divider line between messages from different days.
+- PLY-54 The composer of every chat room, free text or templated, SHALL collapse to a slim bar at the foot of the panel and expand again, from a button that exposes its state; collapsed, the message list takes the space. Collapsing SHALL NOT lose a draft, form values or a refused post (PLY-33), and the bar SHALL say when one is waiting. Each room's state SHALL be kept in the saved layout (PLY-5); with none saved, and after Reset layout (PLY-42), the composer is expanded for a role that may post and collapsed for observers and read-only participants (PLY-12). (Product-owner request, Nov 2, 2026.)
+
+**Turns and phases**
+
+- PLY-55 The turn panel SHALL show the current turn number and phase, updating live from `game-state`.
+- PLY-56 During adjudication, composers SHALL be disabled for roles outside the White Force, with an explanation. This is advisory only: the server does not enforce it (D7, R27).
+
+**Map room**
+
+- PLY-57 The map room SHALL show the latest world state on a web map (e.g. Leaflet) with base tiles from a runtime-configured URL (NFR-9), each asset drawn as a MIL-STD symbol from its `sidc` using milsymbol. Selecting an asset SHALL show its fields. Players see the map read-only.
+- PLY-58 Clients SHALL accept world-state messages only from the admin's real JID and SHALL ignore and log any other message in the map room (D25).
+- PLY-59 On joining the map room, the client SHALL page back through MAM to the newest valid world-state message and display it; later messages replace it live.
+- PLY-60 The client SHALL discover rooms from the `directory` node, which lists every room GUID, reading each `rooms:<roomId>` node and filtering to the rooms its role participates in (§3 rule 4). Rooms created during a session SHALL appear without re-login, by subscription to `directory`. (The Nov 3 draft named a `rooms` collection; spike S14 found ejabberd 26.09 has no collection nodes, and `directory` is the index-node fallback the draft gave.)
 
 **Welcome page**
 
@@ -257,7 +300,7 @@ A player logs in as a role, sees only the rooms that role participates in, and a
 - PLY-50 The stream errors `policy-violation` (session ended) and `conflict` (account removed) SHALL be treated as forced logout, with an explanation.
 - PLY-51 Unavailable self-presence with status codes 110 and 321 (removed by an affiliation change) SHALL close the room panel with a notice (PLY-30).
 - PLY-52 Access changes are not notified, so `<not-allowed/>` and `<forbidden/>` from MUC or PubSub SHALL be handled gracefully: the panel shows that access was withdrawn, and the client does not crash or retry endlessly.
-- PLY-53 The client SHALL cap each outgoing message stanza at 65,536 bytes (UTF-8, after XML escaping) and keep PubSub items well under the 250 KB server limit, rejecting oversized content with a message (R15).
+- PLY-53 The client SHALL cap each outgoing message stanza at 65,536 bytes (UTF-8, after XML escaping), except world-state messages in the map room, which SHALL be capped at 500 KB (about 2,500 assets in plain JSON). It SHALL keep PubSub items well under the 250 KB server limit, and reject oversized content with a message (R15).
 
 **Multi-client view**
 
@@ -298,7 +341,7 @@ The same code above the transport interface runs against both backends; that is 
 - ARC-2 Each pane SHALL own a framework-agnostic session store with an explicit ready state (resolved after service discovery) and reference-counted subscriptions (`acquire(node) → release()`). Client code SHALL contain no module-level mutable state; a lint rule SHALL enforce this.
 - ARC-3 Hooks SHALL be thin wrappers (`useSyncExternalStore` and/or TanStack Query) returning `{data, status, error}`, with cleanup verified under React StrictMode.
 - ARC-4 Messages SHALL be normalised per room, keyed by stable id, ordered by server timestamp, and merged idempotently from MAM pages and live stanzas; MAM paging SHALL use RSM ids correctly.
-- ARC-5 A room-type registry SHALL map `type → {player component, icon, config schema, admin editor, message schema}` and be shared by admin and player. v1 registers `chat` only.
+- ARC-5 A room-type registry SHALL map `type → {player component, icon, config schema, admin editor, message schema}` and be shared by admin and player. v1 registers `chat` and `map`.
 - ARC-6 PubSub documents, room configs and message bodies SHALL be validated at runtime (e.g. zod), with migration by `schemaVersion`.
 - ARC-7 The mock server SHALL run in a SharedWorker where available, else in a Web Locks–elected leader tab with BroadcastChannel relay; persist to IndexedDB; implement MUC affiliations and roles, PubSub access and publish models, MAM paging, presence and admin operations with the same error semantics as the real server; and support seed scenarios and a controllable clock for tests.
 - ARC-8 A server adapter SHALL isolate server-specific behaviour (e.g. ejabberd error conditions and stored-role behaviour). The XMPP core SHALL use standard extensions only: XEP-0045, 0060, 0313, 0059, 0133, and SHOULD use 0198 (stream management) for resilient reconnects.
@@ -329,9 +372,9 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 
 **Deployment**
 
-- NFR-7 The client SHALL be a static build with all assets (fonts, icons, libraries) bundled; no runtime CDN calls.
+- NFR-7 The client SHALL be a static build with all assets (fonts, icons, libraries, milsymbol) bundled; no runtime CDN calls. The only exception in v1 is base-map tiles (D12).
 - NFR-8 The build SHALL support three hosting modes: served by a reverse proxy on the same origin as the XMPP WebSocket endpoint, a separate static host with a configured proxy, and file/static hosting with mock only.
-- NFR-9 Backend endpoints (WebSocket URL, XMPP domain) SHALL be runtime configuration, not build-time constants.
+- NFR-9 Backend endpoints (WebSocket URL, XMPP domain) and the base-map tile URL SHALL be runtime configuration, not build-time constants.
 - NFR-10 A container image (ejabberd + client + config, per NFR-22) SHOULD be provided for one-command deployment.
 
 - NFR-22 The reference deployment SHALL be `spike/docker/ejabberd/` from the spike repo: image pinned by digest, `wss://` only, SCRAM-SHA-256, no REST `/api`, web admin or `mod_adhoc_api`, in-band registration off, per-player rate limit. CI SHALL run the contract suite on every push, and an ejabberd upgrade SHALL NOT be adopted until the R1 tests (S01, S01b, C01) pass.
@@ -339,12 +382,12 @@ Security rests on XMPP server configuration, not client code; deployment must wo
 
 **Performance and scale**
 
-- NFR-11 v1 SHALL support at least 50 roles, 30 rooms and 10,000 messages per room on one server, with a room tab rendering in under 1 s (virtualised list).
+- NFR-11 v1 SHALL support at least 50 roles, 30 rooms and 10,000 messages per room on one server, with a room tab rendering in under 1 s (virtualised list), and a world state of at least 600 assets rendering on the map in under 1 s.
 - NFR-12 The multi-client view with 4 panes SHALL deliver a sent message to all four panes within 1 s, with no visible typing lag, on a standard 8 GB laptop.
 
 **Browsers and accessibility**
 
-- NFR-13 Current Chrome, Edge and Firefox SHALL be supported; Safari SHOULD be.
+- NFR-13 Current Chrome and Edge SHALL be supported; Safari SHOULD be. Firefox is not supported (product owner, Nov 3, 2026).
 - NFR-14 The UI SHOULD meet WCAG 2.2 AA, including keyboard alternatives to drag and drop.
 
 **Testing and quality**
@@ -365,18 +408,23 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 
 | Deferred feature | v1 provision that keeps it cheap |
 | --- | --- |
-| Structured form rooms (JSON Schema templates, per-participant template permissions) | Room-type registry; message body `{type, schemaVersion, content}`; `templates` PubSub collection name reserved |
+| Structured form rooms and message templates, specified in Annex A | Room-type registry; message body `{type, schemaVersion, content}`; `templates` PubSub collection name reserved; GUID ids, login names and deleted-entity records (§3 rule 1) |
 | Collab / RFI workflow rooms | Registry; message `type` discriminator; Serge's model as reference |
-| Mapping rooms (Leaflet, GeoJSON deltas) | Registry; locally hosted tiles required by D12 |
-| Turns, phases, game clock | Reserved `game-state` node; admin-only publish |
-| Phase-based permissions | Would need a server plugin or bot, which D2 currently excludes |
+| Air-gapped mapping | Tile URL is runtime config (NFR-9); point it at a local tile server |
+| World-state snapshots plus JSON Patch deltas, and gzip compression | Assets keyed by id (§3 rule 16); message `type` discriminator |
+| Fog of war: per-force world-state views | One map room per force, each showing that force's view; the main map room then becomes visible only to the White Force and observers (§3 rule 18 fixes v1's main map room to every role); members-only, admin-sender check already in place (D25) |
+| Orders | Form rooms and templates (Annex A); `game-state` phases already exist |
+| Automated reconciliation: Python SDK, per-game reconcilers, automatic / review / interactive modes, plug-in umpire UI, Pyodide | External clients (D26); schemas exportable as JSON Schema; registry for umpire panels |
+| In-app reconciler editor with live preview | Fast follow-up after the SDK; reconciler code storable in PubSub |
+| Server-side world-state draft, several umpires editing | Draft format = world-state schema |
+| Admin-defined asset schema | Fixed fields in v1 (§3 rule 17) |
+| Game clock, planning countdown | `game-state` node can gain fields |
+| Server-enforced phase permissions | v1 is advisory (PLY-56); enforcement would need a server plugin or an external client toggling voice |
 | Admin-defined default layouts per role | Layout model is plain JSON, storable in PubSub later |
 | Server-side layout persistence | Same; XEP-0049 private storage is a candidate |
 | Message export and replay | MAM retains everything; export is a query-and-serialise feature |
-| Multiple wargames per server | Entity ids are slugs; a namespace prefix can be added |
+| Multiple wargames per server | Entity ids are GUIDs (§3 rule 1), so they cannot collide; singleton node names and login names would take a namespace prefix |
 | Per-person accounts within a role | Role = account in v1; resource or nickname could identify individuals later |
-
-**Backlog:** the out-of-game column becomes a specially styled workspace tab when the client is narrow (Dev Plan FT-1; would relax PLY-36's permanently visible column).
 
 **Backlog:** umpire combined view — one merged, filterable timeline of all rooms, each message labelled with its room, with reply into the source room. Needs no new XMPP mechanism; it reads the rooms umpires already join.
 
@@ -403,17 +451,29 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 
 - R13 **R1 depends on ejabberd's stored-role behaviour**, which is deliberate but not an XMPP standard. Medium. Mitigation: R1 contract tests gate every ejabberd upgrade (NFR-22); fallback is Prosody with a small module, which would relax D2.
 - R14 **Enforcement depends on correct admin tooling.** A missed step (subscription left in place, observer voice not re-applied, room left unmoderated) silently leaks access or voice. Medium–High. Mitigation: ADM-35 and ADM-41, contract test C01.
-- R15 **No WebSocket stanza size cap.** WP 0.1 found no size limit on the WebSocket listener: room messages up to 64 MiB were delivered, `max_stanza_size` does not apply to it, and the \~885 KB connection drop seen earlier did not reproduce. Medium. Mitigation: the 64 KiB client cap (PLY-53) and the per-player rate limit. A modified client can still post large messages; accepted for v1.
+- R15 **No WebSocket stanza size cap.** WP 0.1 found no size limit on the WebSocket listener: room messages up to 64 MiB were delivered, `max_stanza_size` does not apply to it, and the \~885 KB connection drop seen earlier did not reproduce. Medium. Mitigation: the client caps (PLY-53) and the per-player rate limit, which counts messages, not bytes. Spike check S16 tests whether ejabberd's byte shapers apply to the WebSocket listener; adopt them if so. Otherwise a modified client can still post large messages; accepted for v1.
 - R16 **Destroying a room destroys its history.** Medium, given live editing (D23). Mitigation: ADM-40.
 - R17 **Anonymous users can list PubSub node names** (not contents). Low, accepted. Mitigation: ADM-42.
 
 **Risks added by the publishing strategy**
 
-- R18 **Public repos already expose security detail.** The xmpp-spike findings and the future `AdminOps` code describe the admin rules and the accepted weaknesses that DOC-2 keeps off the site. Medium. Mitigation: decide repo visibility (open issue).
+- R18 **Public repos already expose security detail.** The xmpp-spike findings, this SRD and the `AdminOps` code describe the admin rules and the accepted weaknesses that DOC-2 keeps off the site. Medium. **Accepted (Nov 3, 2026):** repos stay public; DOC-2 still applies to the site.
 - R19 **Preview storage growth.** Keeping every merged preview approaches the Pages size limit after about 200–300 PRs. Low–Medium. Mitigation: DOC-14.
 - R20 **Diagram updates rely on a review checklist** while human review is light, so diagrams may drift from the code. Medium. Mitigation: milestone posts include a diagram review.
 
 - R21 **Unreviewed public posts.** Intermediate posts go public with no human review, so one could be inaccurate or reveal something sensitive. Medium. Mitigation: the deny-list check blocks auto-merge (DOC-25); posts are labelled as work in progress (DOC-26); a post can be withdrawn by reverting its PR.
+
+**Risks added by the Nov 3, 2026 revision**
+
+- R22 **Lost vault passphrase.** Recovery resets the passwords of read-only roles, locking out everyone sharing them. Medium. Accepted, with no mitigation.
+- R23 **World-state authority is client-enforced.** Map-room members can post; clients ignore non-admin senders (PLY-58), and sender identity comes from the server, so posts cannot be spoofed. Low.
+- R24 **Room names visible to every role,** because `rooms:*` must be readable for discovery (PLY-60). Low–Medium: names can reveal plans. Mitigation: the admin editor SHOULD warn that room names are visible to all roles.
+- R25 **Admin's world-state draft is browser-only.** Clearing storage or switching device loses unpublished edits. Medium during adjudication. Mitigation: ADM-45 indicator; server-side drafts post-v1.
+- R26 **Archive growth from full-state messages.** About 100 KB per publish at 600 assets; small at v1 scale. Low. Mitigation: snapshots plus deltas post-v1.
+- R27 **Phase rules are advisory.** A modified client can post during adjudication. Low in v1, since no orders exist.
+- R28 **Layout resets during play.** Any structural change resets every online player's layout. Low–Medium. Mitigation: notice to the user (PLY-5); admins batch structural changes.
+- R29 **No session eviction.** A leaked password stays usable by sessions already open; the only remedy is deleting and recreating the role, which loses attribution of its history (ADM-14). Medium. Accepted.
+- R30 **Map needs internet in v1.** Air-gapped deployments have no base map. Medium for some customers. Accepted for v1 (D12).
 
 **Open issues**
 
@@ -423,9 +483,13 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Server choice: ejabberd 26.09 (D16, §10)
 - [ ] Air-gapped host install verified on real hardware (S8, NFR-23)
 - [x] Follow-up spike S13: failed, so ADM-37 uses the encrypted vault (§10)
-- [ ] Repo visibility: should the spike and WRX1 code repos stay public, given DOC-2 keeps security detail off the site? (R18)
+- [x] Repo visibility: repos stay public; exposure accepted (R18)
+- [x] Server certificates: chosen per install, the organisation's CA or a small internal one, so each site keeps its own security model; the scripts support both (Nov 4, 2026)
+- [ ] Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers), §10
 - [x] Welcome page: before login, via anonymous read access (D20)
-- [x] Objectives: admin-written per force, force read-only, the White Force (not its observers) may edit (D21)
+- [x] Objectives: admin-written per force, force read-only, the White Force reads all and, except its observers, may edit (D21, Nov 3, 2026)
+- [x] Spike S14: collection-level access on ejabberd failed (collections need the `dag` plugin, which no longer starts on 26.09), so force assets use two flat whitelist nodes per force (Annex B, `plan/decisions/S14.md`)
+- [ ] Message templates: image storage, inline or a separate asset (Annex A)
 - [x] Concurrent logins per role: allowed silently (D22)
 - [x] Live editing: any change, applied live (D23)
 - [x] UI component kit: dev team decides, within constraints (D24)
@@ -437,11 +501,13 @@ The server question is settled. These remaining checks come first in the develop
 | # | Check | When | Owner | Decides |
 | --- | --- | --- | --- | --- |
 | P1 | S13 offline voice revocation, plus whether `max_stanza_size` applies to the WebSocket listener. **Done:** S13 failed (vault); no WebSocket size limit (64 KiB client cap) | Before start | Claude Code / dev | ADM-37, R15 |
-| P2 | Target environment: analyst browsers and versions (SharedWorker, IndexedDB, Web Locks), approval to run ejabberd/Erlang on internal and air-gapped hosts, who verifies NFR-23 | Before start | Doc, with customer | D12, D17, NFR-23 |
+| P2 | Target environment: analyst browsers and versions (SharedWorker, IndexedDB, Web Locks), approval to run ejabberd/Erlang on internal and air-gapped hosts, who verifies NFR-23. **Done** (WP 0.4): Chrome and Edge only; see `plan/decisions/target-environment.md` | Before start | Doc, with customer | D12, D17, NFR-23 |
 | P3 | Layout library, FlexLayout vs dockview: four independent workspaces with pop-outs on one page (D15), add to the fewest-tab tabset via public API only (PLY-41), save/restore across room changes (D6) | Sprint 1 | Claude Code / dev | ARC, PLY-40–42 |
 | P4 | StanzaJS health: maintenance status, typing of ad-hoc commands, MAM and RSM, and a fallback library if needed | Sprint 1 | Claude Code / dev | ARC-12 |
 | P5 | JSON schemas for every PubSub document in §3 | Sprint 1, first | Dev team | Mock, contract suite, design import/export |
 | P6 | Retired: the plan keeps no time estimates | After P5 | Dev team | Plan |
+| P7 | Spike checks S15–S16 (§10) | Before map and objectives work | Claude Code / dev | §3 rule 14, R15 |
+| P8 | JSON schemas for world state and `game-state` (§3 rules 16–17) | With the map work | Dev team | Mock, contract suite, map room |
 
 ## 10. Server selection spike
 
@@ -473,6 +539,15 @@ OpenFire, ejabberd and Prosody were each evaluated against the same pass/fail cr
 
 **S13 outcome (24 October 2026): fail.** Run by WP 0.1 against ejabberd 26.09. No documented admin feature over XMPP makes a member observer a visitor before it first joins: a MUC role change for an absent occupant is refused (`not-allowed` or `not-acceptable`); `members_by_default=false` affects only unaffiliated users, whom members-only rooms refuse; and ejabberd's admin commands over ad-hoc have no role operation. An open room with unaffiliated observers does make them visitors, but lets other forces and anonymous users read, so breaks NFR-3 and NFR-21. ADM-37 therefore uses the encrypted vault. The full record is internal (`plan/decisions/S13.md`).
 
+**Spike S14 (done, Nov 1, 2026).** Collection nodes are unavailable on ejabberd 26.09 (its `dag` plugin is gone). Annex B's force assets were to use two flat nodes per force; the Nov 3 world-state design (D25) supersedes them. Room discovery uses the `directory` index node instead of a `rooms` collection (PLY-60).
+
+**Follow-up checks from the Nov 3 revision**
+
+| # | Check | Pass criterion | If it fails |
+| --- | --- | --- | --- |
+| S15 | Item timestamps | Fetched PubSub items (not only live events) carry a server timestamp usable for ordering | Order by server item order; else fall back to `updatedAt` |
+| S16 | WebSocket byte shaping | An ejabberd byte-rate shaper throttles a client sending large stanzas over WebSocket | R15 stays accepted |
+
 ## 11. Mock development process
 
 Every interaction the mock supports SHALL be specified from the XMPP standards, verified against the chosen server, and only then reproduced in the mock, so that reviews and demos on the mock behave as the real backend will.
@@ -489,7 +564,7 @@ Every interaction the mock supports SHALL be specified from the XMPP standards, 
 
 ## 12. User scenarios
 
-Nine end-to-end scenarios walk each actor through v1; each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
+Nine end-to-end scenarios walk each actor through v1, SC-10 through message templates (Annex A) and SC-11 through turns and the map; each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
 
 ### SC-1 Admin designs and publishes a game
 
@@ -511,7 +586,7 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 **Actor:** Blue role. **Start:** published game, player not logged in.
 
 1. Opens the app and sees the welcome page in the game theme, loaded anonymously.
-2. Logs in with role id and password.
+2. Logs in with login name and password.
 3. Sees one tab per permitted room, plus the force panel at the bottom of the out-of-game column showing Blue's logo, role name and objectives in the Blue theme.
 4. Drags the negotiation room into a second tabset and resizes it.
 5. Reloads the page and finds the layout restored.
@@ -557,10 +632,10 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 1. Admin moves the Blue role to Red and adds a new room for Red.
 2. Before applying, the publish view lists the online roles affected.
 3. On publish, Red access is granted before Blue access is revoked.
-4. The player's force panel, objectives and theme switch to Red; Blue rooms close with a notice; Red rooms and the new room appear without disturbing the rest of the layout.
+4. The player's force panel, objectives and theme switch to Red; Blue rooms close with a notice; the layout resets to the default with Red rooms and the new room, with a notice.
 5. Admin then deletes another online role; that player is notified and logged out.
 
-**Outcome:** live changes apply cleanly with no transient lock-out. **Traces to:** ADM-13, ADM-25, PLY-6, PLY-28–30, D23.
+**Outcome:** live changes apply cleanly with no transient lock-out. **Traces to:** ADM-13, ADM-25, PLY-5, PLY-28–30, D23.
 
 ### SC-7 Stakeholder demo on the mock, offline
 
@@ -594,9 +669,35 @@ Nine end-to-end scenarios walk each actor through v1; each traces to the require
 
 **Outcome:** the mock stays faithful to the server. **Traces to:** §11, ARC-10–11, NFR-16.
 
+### SC-10 Templated room (Annex A)
+
+**Actors:** admin, Blue CO, Red CO. **Start:** the demo game, published.
+
+1. The admin adds a role, Blue Liaison, and builds a template in the builder: a required text and a role picker. The preview shows the form as players fill it.
+2. In the Blue–Red negotiation the admin turns free text off and offers the template to the Blue force only, sees it in the access matrix, and publishes. The template locks.
+3. Blue CO picks the template, names Blue Liaison in the picker and sends it. Red CO sees the card, but its composer says the room offers its role nothing to send.
+4. The admin copies the locked template, changes the copy (a new label, a new yes/no field), offers the copy in its place, deletes Blue Liaison and publishes again.
+5. The old message still shows with the old template's name and fields, its picker value "Blue Liaison (deleted)", and a warning that the room no longer offers that template. Blue CO sends the copy, which shows with the new fields.
+
+**Outcome:** templated rooms work end to end on both backends, and a template change never rewrites history. **Traces to:** TD2–TD7, TPL-1–TPL-9, T-R1, ADM-9.
+
+### SC-11 Admin runs a turn and updates the map
+
+**Actors:** admin; Blue and Red roles, online.
+
+1. In turn 1 planning, players chat and view the map room showing the initial world state.
+2. The admin advances to adjudication; the turn panel updates for everyone, and Blue's and Red's composers are disabled with an explanation.
+3. The admin moves two Blue assets, reduces a Red asset's health and adds a new Red asset. The map shows unpublished edits, held in this browser.
+4. The admin advances to turn 2 planning, reviews the change summary, and confirms.
+5. Blue's and Red's maps update to the new world state; composers re-enable.
+6. A Red player reloads; the map room loads the latest world state from MAM.
+7. During turn 2 planning, the admin sees a Blue asset in the wrong place, moves it and uses "Publish world state"; after the change summary, the corrected state appears for every player without a phase change.
+
+**Outcome:** the world state is published with phase changes or whenever the admin chooses, and every player sees the latest one. **Traces to:** ADM-43–46, PLY-55–59, D7, D25.
+
 ### Gaps found and requirements added
 
-- ADM-26 (from SC-1) Generated passwords need a route to players. The admin SHALL export a printable credentials sheet (role, force, login id, password), and SHALL be able to reset any role's password. The sheet SHALL be generated on demand and never stored in PubSub.
+- ADM-26 (from SC-1) Generated passwords need a route to players. The admin SHALL export a printable credentials sheet (role, force, login id, password), and SHALL be able to reset any role's password. The sheet SHALL be generated on demand and never stored in PubSub. Resetting a password does not end current sessions (PLY-31); to evict a compromised login, the admin deletes and recreates the role (R29).
 - PLY-32 (from SC-2) The client SHALL show clear empty states: no published game (welcome page falls back to default), and a role with no rooms.
 - PLY-33 (from SC-4 and SC-6) When the server rejects a post or access is revoked mid-composition, the client SHALL show why and keep the unsent text so it can be copied.
 - PLY-34 (from SC-7) Seed scenarios SHALL include message history, and SHALL be creatable by exporting a mock database after a rehearsal run (PLY-21).
@@ -678,3 +779,172 @@ Changes from the Phase 2 gate (Oct 25, 2026), confirmed by the product owner:
 - §3 rule 4: White Force observers are read only (security review F5); one with rooms assigned in role entries sees only those rooms, otherwise every room. White Force roles that are not observers write in every room.
 - D21, §3 rule 14, PLY-15, PLY-35, R10: objectives may be edited by the admin and White Force non-observers; White Force observers read them.
 
+
+Changes from Dev Plan FT-1 (Nov 1, 2026), raised by the product owner from the multi-client view:
+
+- PLY-36 relaxed: the out-of-game column is always visible only while the client is at least 45rem wide; below that it is a special workspace tab. PLY-8 and PLY-37 say so, the scope line no longer calls the column fixed, and the §8 backlog line is removed.
+- Why 45rem and not the 400 px first suggested: the column is 18rem wide (13rem in a pane), so at 400 px the workspace would keep under 7rem, and the case the product owner saw (three panes at 125% zoom, each about 500 to 680 CSS px wide, the column taking about 40%) would not switch at all. At 45rem the column takes at most 40% of a client and the workspace keeps about 27rem, one chat room. The width is the client's own, in rem, so zoom and font size count, and each pane switches on its own.
+- Where the tab goes: first in the strip along the bottom of the workspace, next to the game info and online panels (PLY-8), unselected. In a tabset of a narrow pane the tab strip scrolls, and the new tab, badge included, was out of sight behind the overflow button; the bottom strip is as wide as the client and holds short tabs, so the tab and its badge stay in view. Opening it opens the strip's panel, which can be resized, and the tab can be dragged into a tabset like a room.
+
+Changes from WP 0.4 (Nov 1, 2026), answered by the product owner (`plan/decisions/target-environment.md`):
+
+- NFR-13: the customer's analysts use Chrome and Edge only, so those two are the SHALL and Firefox joins Safari as a SHOULD. It read "Current Chrome, Edge and Firefox SHALL be supported; Safari SHOULD be." P2 in §9 is marked done.
+
+Changes from the product owner's revision (Nov 1, 2026), merged onto the text above. The owner's copy was based on the Oct 20 text; every decision since then is kept unless listed here (record: `plan/reviews/srd-merge-2026-11-01.md`).
+
+- Objectives: only the admin edits them; every White Force role, observer or not, reads every force's objectives (D21, §3 rule 14, PLY-35, R10, glossary, open issues). SC-5 is unchanged: its umpire is the admin, who still amends Red's objectives. This reverses the Phase 2 change that let White Force non-observers edit.
+- §3 rule 14 simplified: with one publisher, objectives are a single item that the admin replaces, so the one-item-per-author rule is gone. `updatedAt` stays, for display. Security review F11's ordering still holds: a live notification replaces the copy fetched at login, whatever the author's clock said.
+- §3 rule 1: entity ids are GUIDs, not slugs. A role's login name is a separate readable field and its XMPP account name, and is not reused for another role. A deleted force or role keeps its last name in a new `retired` node (§3 table). Rule 6, ADM-5, ADM-14, ADM-16 (import of slug-id designs), ADM-26, PLY-1 and SC-2 say login name instead of role id or login id. ADM-42: node names now carry only GUIDs, so the "MAY offer opaque node ids" option is met by default. §8: the multiple-wargames row no longer says ids are slugs.
+- §3 table: the `templates` node name is reserved (§8 already said so).
+- New Annex A, message templates (TD1–TD7, TPL-1–TPL-10, T-R1–T-R3), and Annex B, force assets and the map channel (AD1–AD3, spike S14). Fixed on merging: TPL-10 cites §3 rule 14, not rule 11; TD2 says the other White Force roles, not the White Force, since the admin, a White Force member, edits; Annex B notes that force assets are not the theme image assets of §3. The owner's "full sight of every room" for the White Force (glossary, TD2) is left out: White Force observers see only their assigned rooms, if any (§3 rule 4); the merge record asks the owner to confirm.
+- §8 rows for structured form rooms and mapping rooms point to the annexes; §9 open issues list S14 and template image storage; §10 points to S14. The scope line names the annexes. Requirement language: annex ids are not v1 requirements.
+- Built by WP 3.5 (GUID ids, login names, deleted-entity records, objectives by the admin only, and migration of designs and the mock seed) before the v1 security review (WP 3.4); spike S14 can run at any time. The annexes are planned in `plan/decisions/annex-a-b-implementation.md`.
+
+Changes from WP 3.4, the v1 security review (Nov 1, 2026):
+
+- §3 table: new `directory` node, one item listing every force, role and room GUID with each role's login name, so a client finds its own role, force and rooms without node listing. It is a pointer only: a role is the user's own only if its document carries the user's login name.
+- ADM-5 as built: publish and audit refuse a design that changes a published role's login name, or gives a published or deleted role's login name to another role, with the reason and the remedy.
+
+Changes from Phase 4, message templates (WP 4.4, Nov 2, 2026):
+
+- Annex A: built, except the image and asset pickers. Its heading and introduction say so, and an "As built" part records the six provisional answers it rests on (leaf node, lock on publish, card with a warning for a template no longer offered, role entries add, templates not confidential, no image picker) and what was built. The product owner confirmed the answers on Nov 2 and 3, 2026, and locks were widened to labels, order and name.
+- §12: new user scenario SC-10, a templated room, on both backends.
+
+Changes from the product owner's request of Nov 2, 2026:
+
+- New PLY-54: the composer, free text or templated, collapses to a bar, remembered per room. Some users only read a room, and keep its message entry collapsed.
+
+Changes from the product owner's interview of Nov 3, 2026 (turns and the map). These change decisions. The owner's draft was written on an earlier copy of this SRD, so it was merged in rather than copied: what Phases 3 and 4 built and the owner decided since (GUID ids and login names, the `directory` node, objectives edited by the admin only, the narrow-window tab FT-1, Annex A, PLY-54, NFR-13 per WP 0.4) is kept, and the draft's ids are renumbered where they clashed.
+
+- **Scope.** v1 now includes a map room, a world state edited by the admin, and a full turn model (D4, D7, intro, §8). Orders and automated reconciliation are post-v1; D26 records the intended external-client approach. Annex B's separate asset store is superseded by D25.
+- **World state (D25, §3 rules 16–18).** One members-only map room; every message is the full state; only the admin posts, enforced by clients ignoring other senders (PLY-58). Edits are a browser-only draft published at phase changes or, from Nov 4, whenever the admin chooses (ADM-45). Fixed asset fields with a `sidc`; milsymbol symbols. No fog of war, snapshots, deltas or compression in v1.
+- **Turns (D7, ADM-43–46, PLY-55–56).** Turn number and phase only; the admin advances; composers are disabled for roles outside the White Force during adjudication, advisory. The draft's PLY-54 to PLY-59 became PLY-55 to PLY-60, since PLY-54 is the collapsible composer, and its SC-10 became SC-11.
+- **Maps need internet in v1** (D12, NFR-7, NFR-9, R30).
+- **Size cap.** Map-room messages may reach 500 KB (PLY-53).
+- **Room discovery (PLY-60).** `rooms:*` readable by every role (§3 table, rule 15, R24). The draft's `rooms` collection is replaced by the existing `directory` index node, since collections do not exist on ejabberd 26.09 (S14); the draft's check S14 is therefore dropped and S15–S16 kept.
+- **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired.
+- **Objectives (D21, §3 rule 14, PLY-35, R10).** The owner chose the draft's rule over WP 3.5's: White Force roles that are not observers edit objectives again, one item per author, newest by server timestamp (S15), with cleanup when a role leaves the White Force.
+- **Kept as built:** rule 4 consequences, now highlighted in ADM-9; PLY-31, with delete-and-recreate as the eviction route (ADM-26, R29).
+- **Accepted risks:** lost vault passphrase (R22), public repos (R18). New risks R23–R30.
+- **New spike checks** S15–S16 (§10, P7).
+- **Browsers (NFR-13).** The draft made Firefox a SHALL; the owner chose instead to drop Firefox support. Chrome and Edge stay SHALL, Safari SHOULD; CI no longer runs Firefox.
+
+**Assumptions to confirm**
+
+- Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
+- Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
+- Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
+- Decided (Nov 4, 2026): the design export includes a world state, imported as the admin's draft (ADM-16).
+
+## Annex A. Message templates (built in Phase 4)
+
+Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
+
+**Decisions**
+
+| # | Decision |
+| --- | --- |
+| TD1 | Templates are JSON Schema documents, rendered and filled with React JSON Schema Form (RJSF), as in War Rooms X |
+| TD2 | Only the admin creates and edits templates |
+| TD3 | Per room, the admin decides whether free text is allowed alongside templates |
+| TD4 | Per room, the admin chooses which templates each force or role may use, so forces in the same room can have different templates |
+| TD5 | The admin builds templates with a drag-and-drop form builder, and can also edit the JSON Schema directly |
+| TD6 | A template that has been used in a message is locked; changing it means copying it to a new template |
+| TD7 | A recipient sees a templated message as a card: the template name, then each field as label and value |
+
+**Requirements**
+
+- TPL-1 Templates SHALL be stored as PubSub items in the reserved `templates` collection, each with a GUID, name, JSON Schema, optional UI schema and `schemaVersion`. Read: game users; publish: admin.
+- TPL-2 Room config SHALL record whether free text is allowed, and the templates available to each force or role in that room.
+- TPL-3 When a room has templates, the composer SHALL offer a template drop-down. Choosing one shows its form; sending posts a message of type `template` carrying the template GUID and the field values.
+- TPL-4 Once any message references a template, that template SHALL be read-only in the admin UI, with a "Copy to new template" action.
+- TPL-5 Recipients SHALL render a templated message as a card with the template name and each field's label and value (TD7).
+- TPL-6 The receiving client SHALL validate every templated message against its template, and SHALL check the sender may use that template in that room. An invalid message SHALL be shown as plain text with a warning. The server cannot enforce either check under D2 (risk T-R1).
+- TPL-7 The admin's template editor SHALL offer a drag-and-drop builder and a raw JSON Schema editor on the same template, with a live preview.
+
+**Special fields**
+
+| Field | Behaviour |
+| --- | --- |
+| Force picker | A drop-down of forces, filled live from `forces:*`. Scope set per field: all forces in the game, or only forces with players in this room |
+| Role picker | A drop-down of roles, filled live from `roles:*`. Scope set per field: all roles, or only players in this room; optionally filtered by force |
+| Asset picker (after the map) | A drop-down of force assets: own force, other forces, or both, set per field. Other forces' assets SHALL include only those the sender's force is currently aware of |
+| Date picker | Date, or date and time |
+| Numeric slider | Minimum, maximum and step set in the schema |
+| Drop-down list | A fixed list of options |
+| Linked drop-downs | The choice in one list sets the options of the next (schema dependencies) |
+| Image picker | Storage open: inline in the message, or a separate asset referenced by GUID |
+
+- TPL-8 Force, role and asset pickers SHALL store the entity GUID, never its name. At display, the GUID SHALL be mapped to the entity's current name.
+- TPL-9 A deleted force or role SHALL keep a record of its last name, so messages show that name marked as deleted (§3 rule 1).
+- TPL-10 The asset picker's awareness filter SHALL be enforced by the server, not only filtered in the client: each force's view of other forces' assets needs its own access-controlled node, as objectives have (§3 rule 14).
+
+**v1 provisions that keep this cheap**
+
+- Entity ids are GUIDs, never reused, role login names are a separate readable field, and deleted forces and roles keep their last names (§3 rule 1).
+- The message body already carries `{type, schemaVersion, content}`, and the room-type registry exists (ARC-5).
+- The `templates` PubSub collection name is reserved (§3 table).
+
+**Risks**
+
+- T-R1 **Template use is client-asserted.** A modified client can send a template it isn't allowed, or values that don't fit. Mitigation: TPL-6; never trust template content for identity or permissions.
+- T-R2 **Message size.** Large templates or inline images can exceed the stanza and item limits (R15). Mitigation: settle image storage before building the image picker; cap message size (PLY-53).
+- T-R3 **Asset awareness** depends on a per-force visibility model the map doesn't have yet. Mitigation: TPL-10; the asset picker waits for it.
+
+**Open questions**
+
+- [ ] Image picker: inline images with a size cap, or separate assets referenced by GUID?
+
+**As built (Phase 4, November 2026)**
+
+The product owner deferred the design record's open questions when Phase 4 started; it was built on the recommended answers, which the product owner confirmed on Nov 2 and 3, 2026, except the image picker, which stays open (`plan/decisions/annex-a-b-implementation.md`):
+
+1. TPL-1: `templates` is a single PubSub leaf node, not a collection, with one item per template, its item id the template's GUID. Every game user reads it; the admin alone publishes.
+2. TD6, TPL-4: a template locks when a publish makes it available in a room, not when a message first uses it, because the admin cannot reliably see use (confirmed by the product owner, Nov 2, 2026). A lock fixes the template's fields (its JSON Schema), its UI schema (labels, order) and its name, so past cards read as they did when sent (product owner, Nov 2, 2026); only its description stays editable. A locked template opens read only in the editor, with "Copy to new template", and publish refuses a design that changes its fields. Removing a locked template is allowed after a confirmation; its messages then show as plain text (confirmed by the product owner, Nov 2, 2026).
+3. TPL-6: a message that fails its template's schema, or names an unknown template, shows as plain text with a warning, as written. A message whose template the room no longer offers to its sender shows as a card with a warning, so a changed room config does not turn history into plain text (confirmed by the product owner, Nov 2, 2026).
+4. TD4: a role entry adds to its force's entry. The admin and the White Force's roles that are not observers may use every template the room names; observers none (confirmed by the product owner, Nov 2, 2026).
+5. Templates are not confidential between forces: every role can read every template (confirmed by the product owner, Nov 2, 2026).
+6. An unticked yes/no field is sent, and shown on the card, as "No", never left out (confirmed by the product owner, Nov 2, 2026).
+7. The template form uses the browser's own controls (drop-downs, date pickers, sliders) styled with the theme, not Radix primitives, so it works in popped-out windows (confirmed by the product owner, Nov 3, 2026).
+8. The image picker is not built (A5); it waits for the open question above and for Annex B's asset store.
+
+Also as built:
+
+- Templates use a restricted JSON Schema profile: an object of named scalar fields (text with a required `maxLength`, number, integer, yes/no, date, date and time, drop-down, linked drop-downs, force and role pickers), conditions one level deep, a short list of UI options, and patterns that pass a safe-regex check. Anything outside the profile is refused with a message saying why.
+- One validator, which interprets schemas and generates no code, checks the composer's form and every received message, so sender and receiver agree and the client's Content-Security-Policy is unchanged.
+- A `chat` room's config is version 2: free text allowed or not, and template entries per force or role (TPL-2). Version 1 configs read as free text with no templates.
+- A templated message is `{type: 'template', schemaVersion: 1, content: {templateId, values}}`, within the 64 KiB cap (PLY-53).
+- The admin's live preview is the player's own form, with the same widgets and checks (TPL-7).
+- User scenario SC-10 (§12) runs on the mock and on ejabberd. A room of 2,000 templated messages meets the NFR-11 budgets.
+
+## Annex B. Force assets and map channel (superseded Nov 3, 2026)
+
+**Superseded.** The product owner's Nov 3 decisions replace this annex's separate asset store with the map room's world state (D25, §3 rules 16–18): assets are fields of the full-state messages, not PubSub items. The text below is kept as the record of what was considered. Template asset pickers (Annex A, A5) would refer to world-state asset ids.
+
+Forces own assets such as aircraft, vehicles and resources. A map channel shows them, and other channels, including template pickers (Annex A), refer to them. This annex records decisions so far; it is not built in v1.
+
+**Decisions so far**
+
+- AD1 Assets live in their own store, separate from any channel. The map channel is one view of that store; template asset pickers are another. Everything refers to assets by GUID.
+- AD2 The design SHALL scale beyond 300 assets per force with about 12 fields each. A whole-force snapshot (about 120–150 KB at 300 assets) uses most of the 250,000-byte item limit, so current state SHALL be stored as one PubSub item per asset, with the asset GUID as the item id.
+- AD3 Per-force visibility (TPL-10) is enforced by access-controlled nodes: a force's own assets, and a separate view of what that force knows about other forces' assets.
+
+These force assets are not the theme image assets of §3 (`assets:<assetId>`); the two need different node names.
+
+**Open**
+
+- [ ] History of past states: a per-force history node of versioned items, or a node per asset with recent versions kept as items.
+- [x] Node layout: two nodes per force. Spike S14 (1 November 2026) found that ejabberd 26.09 has no collection nodes: its `dag` plugin is gone, and a config that asks for it does not start. So a node per asset under a collection is not possible with standard controls. The full record is internal (`plan/decisions/S14.md`).
+
+**Spike S14 — collection-level access control (ejabberd)**
+
+Question: can access be set once on a PubSub collection node and apply to every leaf node in it, using standard controls only (D2)?
+
+Checks:
+
+1. Does ejabberd 26.09 support collection nodes (XEP-0248) well enough to create, nest and subscribe to them?
+2. Does a leaf inherit, or can it be made to follow, the collection's access model and whitelist?
+3. A user outside the collection's whitelist SHALL be refused when reading a leaf directly, not only when subscribing to the collection.
+4. Can one subscription to a collection deliver live notifications from all its leaves, with 600+ leaves?
+
+Outcome decides: if leaves follow the collection's access, a node per asset becomes practical; if not, use two nodes per force, with AdminOps setting access by rule (R14). The spike also records whether enabling collections changes the behaviour of the existing nodes, which the v1 contract suite and the R1 tests check.

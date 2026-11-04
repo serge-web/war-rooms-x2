@@ -1,17 +1,19 @@
 // Seeds (PLY-21, PLY-34): a design file (ADM-16) turned into mock server state, provisioned as
 // the admin tooling provisions a real server (§3, NFR-3, S13.md):
-// - one account per role, plus the admin;
+// - one account per role, `<loginName>@<domain>` (§3 rule 1), plus the admin;
 // - one members-only, moderated, non-anonymous, persistent, unlisted, archived room per room,
 //   with every role that has access as a member, and read-only roles (observers, `read`
 //   entries) stored as visitors, the state the vault route leaves behind (ADM-37);
 // - the §3 nodes: `game-setup` and the game theme's assets open, everything else whitelist with
-//   the admin as owner and publisher; objectives readable by their force and the White Force's
-//   observers, and published by the White Force's other roles, with the design's text as the
-//   admin's own item (§3 rule 14);
+//   the admin as owner and publisher; objectives readable by their force and every White Force
+//   role, published by the admin only, with the design's text as the admin's single item
+//   (§3 rule 14, D21); `retired` holds the design's deleted-entity records; `directory` the
+//   entity GUIDs and each role's GUID by login name (§3 rule 1); `templates` one item per
+//   message template, locked if a room offers it, as a publish leaves it (Annex A, TD6);
 // - optional message history, archived for MAM;
 // - optional private storage of the admin account (the demo seed's observer vault).
 // White Force roles reach rooms through effective access (D8, §3 rule 4).
-import { effectiveAccess } from '@wrx/domain'
+import { directoryOf, effectiveAccess } from '@wrx/domain'
 import {
   SINGLETON_NODES,
   checkDesign,
@@ -19,20 +21,26 @@ import {
   isoDateTimeSchema,
   nodeName,
   publicAssetIds,
+  TEMPLATE_LIMITS,
+  withTemplateLocks,
 } from '@wrx/schemas'
 import type { DesignFile, Result } from '@wrx/schemas'
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { RoomConfig } from '@wrx/transport'
 import { z } from 'zod'
 import type { ServerNodeConfig } from './protocol.ts'
 import { messageStanza, messageWithinCap, payloadWithinCap } from './size.ts'
-import { MOCK_STATE_FORMAT } from './state.ts'
+import { MOCK_STATE_FORMAT, MOCK_STATE_VERSION } from './state.ts'
 import type { ArchivedMessage, MockState, NodeState, RoomState } from './state.ts'
 
 /** One message of seed history (PLY-34). */
 export interface SeedMessage {
-  /** The room's id in the design. */
+  /** The room's id (a GUID) in the design. */
   readonly room: string
-  /** A role id with write access to the room, or `admin`. The nick is the same id. */
+  /**
+   * The login name of a role with write access to the room, or `admin`. The nick is the same
+   * name.
+   */
   readonly author: string
   /** The body as clients send it: JSON `{type, schemaVersion, content}` (§3). */
   readonly body: string
@@ -47,7 +55,7 @@ export interface DesignSeed {
   readonly domain?: string
   /**
    * DEMO PASSWORDS (NFR-6): known, not secret, and marked `demo` in the state so the UI can say
-   * so. Unlisted roles get `demo-<roleId>`; the admin gets `demo-admin`.
+   * so, by login name. Unlisted roles get `demo-<loginName>`; the admin gets `demo-admin`.
    */
   readonly demoPasswords?: {
     readonly admin?: string
@@ -63,9 +71,9 @@ export interface DesignSeed {
 
 export const DEFAULT_SEED_DOMAIN = 'wrx.mock'
 
-/** The demo password of a role or of the admin, unless the seed names another (NFR-6). */
-export function demoPassword(id: string): string {
-  return `demo-${id}`
+/** The demo password of a role (by login name) or of the admin, unless the seed names another (NFR-6). */
+export function demoPassword(loginName: string): string {
+  return `demo-${loginName}`
 }
 
 /** NFR-3 room settings; the name comes from the design. */
@@ -78,6 +86,7 @@ function gameRoom(name: string): RoomConfig {
     public: false,
     whois: 'anyone',
     archive: true,
+    ...CLOSED_SIDE_CHANNELS,
   }
 }
 
@@ -101,6 +110,12 @@ function gameNode(
 /** Items kept on the announcements node; the admin tooling has not fixed one (WP 2.1). */
 const ANNOUNCEMENTS_MAX_ITEMS = 100
 
+/** Items kept on `retired`, as the admin tooling (`RETIRED_MAX_ITEMS` in @wrx/admin-ops). */
+const RETIRED_MAX_ITEMS = 1000
+
+/** Items kept on `templates`, as the admin tooling (`TEMPLATES_MAX_ITEMS` in @wrx/admin-ops). */
+const TEMPLATES_MAX_ITEMS = TEMPLATE_LIMITS.templates
+
 /** One `current` item for single-document nodes (WP 1.6). */
 const CURRENT = 'current'
 
@@ -116,7 +131,8 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
   const parsed = designFileSchema.safeParse(seed.design)
   if (!parsed.success)
     return { ok: false, error: `invalid design: ${z.prettifyError(parsed.error)}` }
-  const design: DesignFile = parsed.data
+  // A seed is a published game, so every template a room offers is locked (TD6).
+  const design: DesignFile = withTemplateLocks(parsed.data, [])
   const errors = checkDesign(design).filter((i) => i.severity === 'error')
   if (errors.length > 0) {
     return { ok: false, error: errors.map((e) => `${e.path}: ${e.message}`).join('; ') }
@@ -124,7 +140,9 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
   const domain = seed.domain ?? DEFAULT_SEED_DOMAIN
   const admin = `admin@${domain}`
   const muc = `conference.${domain}`
-  const jidOf = (roleId: string) => `${roleId}@${domain}`
+  // A role's account is its login name (§3 rule 1); everything else is by GUID.
+  const loginOf = new Map(design.roles.map((r) => [r.id, r.loginName]))
+  const jidOf = (roleId: string) => `${loginOf.get(roleId) ?? roleId}@${domain}`
   const everyRole = design.roles.map((r) => jidOf(r.id))
 
   const accounts: MockState['accounts'] = [
@@ -136,7 +154,7 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     },
     ...design.roles.map((role) => ({
       jid: jidOf(role.id),
-      password: seed.demoPasswords?.roles?.[role.id] ?? demoPassword(role.id),
+      password: seed.demoPasswords?.roles?.[role.loginName] ?? demoPassword(role.loginName),
       admin: false,
       demo: true,
     })),
@@ -188,12 +206,10 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     })
   }
 
-  // The White Force (umpire flag): its roles read every force's objectives, and those that are
-  // not observers publish them (§3 rule 14). Observers never publish (review F5).
+  // The White Force (umpire flag): every one of its roles, observer or not, reads every force's
+  // objectives; only the admin publishes them (§3 rule 14, D21).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId))
-  const editors = white.filter((r) => !r.isObserver).map((r) => jidOf(r.id))
-  const whiteObservers = white.filter((r) => r.isObserver).map((r) => jidOf(r.id))
+  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => jidOf(r.id))
   const publicAssets = new Set(publicAssetIds(design.game))
 
   addNode(
@@ -211,6 +227,27 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     [],
   )
   addNode(SINGLETON_NODES.gameState, gameNode('whitelist', 1), everyRole, [], [])
+  addNode(
+    SINGLETON_NODES.retired,
+    gameNode('whitelist', RETIRED_MAX_ITEMS),
+    everyRole,
+    [],
+    design.retired.map((record) => ({ id: record.id, doc: record })),
+  )
+  addNode(
+    SINGLETON_NODES.directory,
+    gameNode('whitelist', 1),
+    everyRole,
+    [],
+    [{ id: CURRENT, doc: directoryOf(design) }],
+  )
+  addNode(
+    SINGLETON_NODES.templates,
+    gameNode('whitelist', TEMPLATES_MAX_ITEMS),
+    everyRole,
+    [],
+    design.templates.map((template) => ({ id: template.id, doc: template })),
+  )
   for (const force of design.forces) {
     addNode(
       nodeName.force(force.id),
@@ -241,17 +278,17 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
   for (const force of design.forces) {
-    // §3 rule 14: one item per author, so room for the admin and every White Force editor.
+    // §3 rule 14: one item, the admin's.
     const readers = [
       ...design.roles.filter((r) => r.forceId === force.id).map((r) => jidOf(r.id)),
-      ...whiteObservers,
+      ...white,
     ]
     const objectives = design.objectives.find((o) => o.forceId === force.id)
     addNode(
       nodeName.objectives(force.id),
-      gameNode('whitelist', Math.max(10, editors.length + 1)),
+      gameNode('whitelist', 1),
       [...new Set(readers)],
-      editors,
+      [],
       objectives === undefined ? [] : [{ id: 'admin', doc: objectives }],
     )
   }
@@ -277,7 +314,7 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     ok: true,
     value: {
       format: MOCK_STATE_FORMAT,
-      version: 1,
+      version: MOCK_STATE_VERSION,
       domain,
       accounts,
       rooms,
@@ -310,7 +347,9 @@ function seedHistory(
       issues.push(`history[${index}]: unknown room "${message.room}"`)
       return
     }
-    const access = matrix.cells.get(message.room)?.get(message.author)?.access
+    const author = design.roles.find((r) => r.loginName === message.author)
+    const access =
+      author === undefined ? undefined : matrix.cells.get(message.room)?.get(author.id)?.access
     if (message.author !== 'admin' && access !== 'write') {
       issues.push(`history[${index}]: "${message.author}" cannot post in "${message.room}"`)
       return

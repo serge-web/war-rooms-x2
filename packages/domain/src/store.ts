@@ -8,8 +8,29 @@
 // - Every payload is validated; invalid items are logged and ignored (NFR-5).
 // - Getters return frozen snapshots that keep their identity until something they depend on
 //   changes, so they can be passed straight to `useSyncExternalStore`.
-import { LIMITS, SINGLETON_NODES, checkItemSize, parseDocument } from '@wrx/schemas'
-import type { Announcement, Asset, Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
+import {
+  LIMITS,
+  SINGLETON_NODES,
+  checkItemSize,
+  chatRoomConfigReader,
+  parseDocument,
+} from '@wrx/schemas'
+import type {
+  Announcement,
+  Asset,
+  ChatRoomConfig,
+  Directory,
+  Force,
+  GameSetup,
+  Objectives,
+  Retired,
+  Role,
+  Room,
+  Template,
+  TemplateValue,
+} from '@wrx/schemas'
+import { checkTemplatedMessage, createTemplateValidator, templatesFor } from '@wrx/templates'
+import type { TemplateCheck, TemplateValidator } from '@wrx/templates'
 import type {
   ConnectionStatus,
   EndReason,
@@ -24,18 +45,24 @@ import type {
 } from '@wrx/transport'
 import { byOrderThenId, effectiveAccess, roomsForRole } from './access.ts'
 import type { AccessMatrix } from './access.ts'
-import { DOCUMENT_ITEM_ID, documentValue, nodeSpec, parseItem, safeNodeName } from './documents.ts'
+import {
+  OBJECTIVES_ITEM_ID,
+  documentValue,
+  nodeSpec,
+  parseItem,
+  safeNodeName,
+} from './documents.ts'
 import type { DocumentValues, LiveDocument, NodeSpec } from './documents.ts'
 import { domainErr, domainOk, fromTransport } from './errors.ts'
 import type { DomainError, DomainResult } from './errors.ts'
 import { bareJid, domainpart, localpart, roomJid } from './jid.ts'
 import { consoleLogger } from './logger.ts'
 import type { Logger } from './logger.ts'
-import { defaultRoomTypes } from './registry.ts'
+import { defaultRoomTypes, roomConfig } from './registry.ts'
 import type { RoomTypeRegistry } from './registry.ts'
 import { fitsInStanza } from './size.ts'
 import { Timeline, timeKey } from './timeline.ts'
-import type { Sender, TimelineEntry } from './timeline.ts'
+import type { ReadableEntry, Sender, TimelineEntry } from './timeline.ts'
 
 export type Release = () => void
 
@@ -63,8 +90,11 @@ export interface Identity {
   readonly jid: string
   readonly bareJid: string
   readonly domain: string
-  /** The role id (the JID's local part), or `undefined` for the admin and anonymous sessions. */
-  readonly roleId: string | undefined
+  /**
+   * The role's login name (the JID's local part), or `undefined` for the admin and anonymous
+   * sessions. The role itself, and its GUID, come from the role documents: `Me.role`.
+   */
+  readonly loginName: string | undefined
   /** The server's `admin` account (D3). The server, not this flag, enforces admin rights. */
   readonly isAdmin: boolean
   readonly anonymous: boolean
@@ -79,8 +109,8 @@ export interface Me {
   readonly isUmpire: boolean
   readonly isObserver: boolean
   /**
-   * May edit every force's objectives: the admin and White Force roles that are not observers
-   * (PLY-35, §3 rule 14). White Force observers read them only.
+   * May edit every force's objectives: the admin only (PLY-35, §3 rule 14, D21). Every White
+   * Force role reads them, and none edits.
    */
   readonly canEditObjectives: boolean
   /**
@@ -91,15 +121,20 @@ export interface Me {
 }
 
 /**
- * Display data for a message author, resolved live from role and force documents (§3 rule 6).
- * The admin is listed under ADMIN_AUTHOR_ID as the umpire, in the White Force.
+ * Display data for a message author, resolved live from role and force documents by the
+ * author's login name (§3 rule 6). The admin is listed under ADMIN_AUTHOR_ID as the umpire, in
+ * the White Force. A deleted role is listed from its `retired` record, marked `deleted`.
  */
 export interface Author {
+  /** The role's GUID; ADMIN_AUTHOR_ID for the admin. */
   readonly roleId: string
+  readonly loginName: string
   readonly name: string
   readonly forceId: string
   readonly forceName: string | undefined
   readonly colour: string | undefined
+  /** The role was deleted; `name` is its last name, from `retired` (§3 rule 1, ADM-14). */
+  readonly deleted: boolean
 }
 
 export interface AnnouncementEntry {
@@ -124,6 +159,13 @@ export interface UnsentMessage {
   readonly error: DomainError
 }
 
+/** A refused templated message, kept so its form can show the values again (PLY-33). */
+export interface UnsentTemplateMessage {
+  readonly templateId: string
+  readonly values: Readonly<Record<string, TemplateValue>>
+  readonly error: TemplateSendError
+}
+
 export interface RoomView {
   readonly roomId: string
   readonly status: RoomStatus
@@ -144,12 +186,15 @@ export interface RoomView {
   readonly historyLoaded: boolean
   /** The last refused post, kept so it can be copied (PLY-33). */
   readonly unsent: UnsentMessage | undefined
+  /** The last refused templated message, kept so its form keeps the values (PLY-33). */
+  readonly unsentTemplate: UnsentTemplateMessage | undefined
 }
 
 export interface Occupant {
   readonly nick: string
   readonly jid: string | undefined
-  readonly roleId: string | undefined
+  /** The JID's local part on this game's domain: a role's login name. */
+  readonly loginName: string | undefined
   /** The server's `admin` account, the umpire, from the occupant JID (§3 rule 3). */
   readonly isAdmin: boolean
   readonly role: MucRole
@@ -160,6 +205,35 @@ export interface Occupant {
 export interface SendError extends DomainError {
   /** The text that was not sent, for the composer to keep (PLY-33). */
   readonly unsentText: string
+}
+
+/** A refused templated message; the values come back so the form can keep them (PLY-33). */
+export interface TemplateSendError extends DomainError {
+  readonly templateId: string
+  readonly unsentValues: Readonly<Record<string, TemplateValue>>
+  /** Why the values do not fit, when that is the reason: each field's problem. */
+  readonly check?: TemplateCheck
+}
+
+/**
+ * What a room offers this session for posting (Annex A, TD3, TD4): free text or not, and the
+ * templates it may use. The composer (WP 4.2) shows these; the receiver checks every templated
+ * message against the same rule (`checkTemplate`).
+ */
+export interface RoomTemplates {
+  /**
+   * The room's chat config, version 2 (a version 1 config reads as free text, no templates);
+   * `undefined` while the room document loads, or for a room type without templates.
+   */
+  readonly config: ChatRoomConfig | undefined
+  /** Free text may be posted here (TD3). True while the config is not known, as in v1. */
+  readonly freeText: boolean
+  /**
+   * The templates this session may use here, in the config's order (TD4, provisional answer 4):
+   * none for observers; every template the room names for the admin and the White Force's
+   * writers. A template not (yet) loaded is left out.
+   */
+  readonly templates: readonly Template[]
 }
 
 export interface RoomWatch {
@@ -212,7 +286,19 @@ export interface SessionStore {
   announcements(): Snapshot<readonly AnnouncementEntry[]>
   access(): Snapshot<AccessMatrix>
   me(): Snapshot<Me>
+  /** Login names keyed to authors, deleted roles included (§3 rule 6). */
   authors(): Snapshot<ReadonlyMap<string, Author>>
+  /** The last names of deleted forces and roles (§3 rule 1); never used for access. */
+  retired(): Snapshot<readonly Retired[]>
+  /** Every message template in the game, by name (Annex A, TPL-1). */
+  templates(): Snapshot<readonly Template[]>
+  /** What the room offers this session for posting: free text, and its templates (TD3, TD4). */
+  roomTemplates(roomId: string): Snapshot<RoomTemplates>
+  /**
+   * The receiver's check of a templated message (TPL-6): `undefined` for any other message.
+   * Re-run as templates, the room's config and the documents change; cached per entry.
+   */
+  checkTemplate(entry: ReadableEntry): TemplateCheck | undefined
 
   /** Reference-counted room membership: join and load history on first, leave on last. */
   acquireRoom(roomId: string): Release
@@ -228,9 +314,19 @@ export interface SessionStore {
     roomId: string,
     text: string,
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }>
+  /**
+   * Posts a templated message (TPL-3) after the receiver's own check, run on this session as the
+   * sender: the room offers the template to it, the values fit, pickers name known forces and
+   * roles. Refused when any fails, or over the stanza cap (PLY-53); the values come back.
+   */
+  sendTemplateMessage(
+    roomId: string,
+    templateId: string,
+    values: Readonly<Record<string, TemplateValue>>,
+  ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
-  /** The admin and White Force roles that are not observers only (PLY-35, §3 rule 14). */
+  /** The admin only (§3 rule 14, D21); refused for every role before anything is sent. */
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
@@ -248,6 +344,10 @@ interface NodeItem {
   readonly id: string
   readonly doc: LiveDocument
   readonly live: boolean
+  /** This client's clock when the item was read or arrived (ms), for F11's clamp. */
+  readonly receivedAt: number
+  /** The live event it came in, numbered in arrival order; 0 for items read by a fetch. */
+  readonly arrival: number
 }
 
 interface NodeEntry {
@@ -288,6 +388,7 @@ interface RoomEntry {
   /** Bumped by every join, close and teardown, so late replies are ignored. */
   generation: number
   unsent: UnsentMessage | undefined
+  unsentTemplate: UnsentTemplateMessage | undefined
 }
 
 const LOADING: Snapshot<undefined> = Object.freeze({
@@ -319,6 +420,12 @@ class Store implements SessionStore {
   private readonly now: () => string
   private readonly newId: () => string
   private readonly defer: (task: () => void) => void
+  /** One validator for the session: composer and receiver checks share its cache (TPL-6). */
+  private readonly templateValidator: TemplateValidator = createTemplateValidator()
+  private readonly templateChecks = new WeakMap<
+    TimelineEntry,
+    { deps: readonly unknown[]; value: TemplateCheck }
+  >()
 
   private readonly listeners = new Set<() => void>()
   private readonly nodes = new Map<string, NodeEntry>()
@@ -328,6 +435,8 @@ class Store implements SessionStore {
   private readonly offSession: Unsubscribe[] = []
   private readonly readyWaiters: ((status: StoreStatus) => void)[] = []
   private listed = new Set<string>()
+  /** Numbers live item events in arrival order (see `latest`). */
+  private arrivals = 0
   private currentStatus: StoreStatus = { state: 'starting' }
   /** The first load has finished; until then, coming back online means `starting` again. */
   private booted = false
@@ -357,7 +466,7 @@ class Store implements SessionStore {
       jid: this.session.jid,
       bareJid: bare,
       domain: domainpart(bare),
-      roleId: this.session.anonymous || isAdmin ? undefined : local,
+      loginName: this.session.anonymous || isAdmin ? undefined : local,
       isAdmin,
       anonymous: this.session.anonymous,
     })
@@ -560,10 +669,13 @@ class Store implements SessionStore {
         return
       }
       const next = new Map<string, NodeItem>()
+      const receivedAt = this.clockMs()
       for (const item of fetched.value) {
-        if (touched.has(item.id)) continue
+        if (touched.has(item.id) || !shownItem(spec, item.id)) continue
         const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
-        if (doc !== undefined) next.set(item.id, { id: item.id, doc, live: false })
+        if (doc !== undefined) {
+          next.set(item.id, { id: item.id, doc, live: false, receivedAt, arrival: 0 })
+        }
       }
       for (const [id, item] of entry.items) if (touched.has(id)) next.set(id, item)
       entry.items = next
@@ -604,13 +716,15 @@ class Store implements SessionStore {
     const spec = entry.spec
     if (!entry.alive || spec === undefined) return
     if (deleted) {
+      // Before the items go: the own role is found from them (by login name).
+      const ownRole = this.isOwnRoleNode(entry.node)
       entry.items.clear()
       entry.touched?.clear()
       entry.touched = undefined
       entry.status = 'error'
       entry.error = { code: 'not-found', message: `${entry.node} was deleted` }
       this.nodeChanged(entry)
-      if (this.isOwnRoleNode(entry.node)) void this.endSession('deleted')
+      if (ownRole) void this.endSession('deleted')
       return
     }
     let changed = false
@@ -618,13 +732,16 @@ class Store implements SessionStore {
       entry.touched?.add(id)
       changed = entry.items.delete(id) || changed
     }
+    const arrival = ++this.arrivals
+    const receivedAt = this.clockMs()
     for (const item of items) {
+      if (!shownItem(spec, item.id)) continue
       const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
       if (doc === undefined) continue
       entry.touched?.add(item.id)
       // Delete first so the newest item is last in the map's order.
       entry.items.delete(item.id)
-      entry.items.set(item.id, { id: item.id, doc, live: true })
+      entry.items.set(item.id, { id: item.id, doc, live: true, receivedAt, arrival })
       changed = true
     }
     if (!changed) return
@@ -660,8 +777,34 @@ class Store implements SessionStore {
   }
 
   private isOwnRoleNode(node: string): boolean {
-    const roleId = this.identity.roleId
-    return roleId !== undefined && node === safeNodeName('role', roleId)
+    const role = this.ownRole()
+    return role !== undefined && node === safeNodeName('role', role.id)
+  }
+
+  /**
+   * This session's role: the role document whose login name is the session's (§3 rule 1). The
+   * `directory` says which document that is, so it is read without listing nodes; it is only a
+   * pointer, and a role document is taken only if it carries this login name (failing closed).
+   * Two documents claiming the login name: the one the directory names, else the first in order.
+   */
+  private ownRole(): Role | undefined {
+    const login = this.identity.loginName
+    if (login === undefined) return undefined
+    const pointed = this.directoryRoleId(login)
+    const pointedRole = pointed === undefined ? undefined : this.docOf('role', pointed)
+    if (pointedRole?.loginName === login) return pointedRole
+    return this.collection('role').find((r) => r.loginName === login)
+  }
+
+  /** The `directory` document, if this session has read it. */
+  private directory(): Directory | undefined {
+    const entry = this.nodes.get(SINGLETON_NODES.directory)
+    return documentValue(entry === undefined ? undefined : latest(entry), 'directory')
+  }
+
+  /** The role GUID the `directory` gives for a login name. */
+  private directoryRoleId(login: string): string | undefined {
+    return this.directory()?.roles.find((r) => r.loginName === login)?.id
   }
 
   private async listNodes(): Promise<void> {
@@ -678,8 +821,22 @@ class Store implements SessionStore {
     const desired = new Set<string>([SINGLETON_NODES.gameSetup])
     if (this.identity.anonymous) return desired
     desired.add(SINGLETON_NODES.announcements)
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    // The deleted-entity records, for message authors only; nothing reads them for access.
+    desired.add(SINGLETON_NODES.retired)
+    // Where the documents are, so neither the own role nor the rest needs node listing.
+    desired.add(SINGLETON_NODES.directory)
+    // Message templates, read by every role (Annex A, TPL-1).
+    desired.add(SINGLETON_NODES.templates)
+    const add = (node: string | undefined) => {
+      if (node !== undefined) desired.add(node)
+    }
+    const directory = this.directory()
+    if (directory !== undefined) {
+      for (const f of directory.forces) add(safeNodeName('force', f))
+      for (const r of directory.roles) add(safeNodeName('role', r.id))
+      for (const r of directory.rooms) add(safeNodeName('room', r))
+    }
+    const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
     for (const node of this.listed) {
@@ -688,11 +845,11 @@ class Store implements SessionStore {
       if (spec.kind === 'force' || spec.kind === 'role' || spec.kind === 'room') desired.add(node)
       if (spec.kind === 'objectives' && allObjectives) desired.add(node)
     }
-    const add = (node: string | undefined) => {
-      if (node !== undefined) desired.add(node)
+    if (allObjectives) {
+      for (const force of this.collection('force')) add(safeNodeName('objectives', force.id))
     }
-    if (roleId !== undefined) add(safeNodeName('role', roleId))
     if (role !== undefined) {
+      add(safeNodeName('role', role.id))
       add(safeNodeName('force', role.forceId))
       add(safeNodeName('objectives', role.forceId))
     }
@@ -858,8 +1015,8 @@ class Store implements SessionStore {
   me(): Snapshot<Me> {
     const matrix = this.access().data
     const rooms = this.collection('room')
-    const roleId = this.identity.roleId
-    const role = roleId === undefined ? undefined : this.docOf('role', roleId)
+    const role = this.ownRole()
+    const roleId = role?.id
     const forces = this.collection('force')
     // The admin is the umpire, a member of the White Force (glossary, D8).
     const force = this.identity.isAdmin
@@ -883,38 +1040,162 @@ class Store implements SessionStore {
         force,
         isUmpire: this.identity.isAdmin || force?.isUmpire === true,
         isObserver: role?.isObserver === true,
-        canEditObjectives: canEditObjectives(this.identity.isAdmin, force, role),
+        canEditObjectives: canEditObjectives(this.identity.isAdmin),
         rooms: Object.freeze(visible),
       })
     })
     return this.memo('me', [me, this.currentStatus], () => this.collectionStatus(me))
   }
 
+  retired(): Snapshot<readonly Retired[]> {
+    const data = this.retiredList()
+    return this.memo('retired', [data, this.currentStatus], () => this.collectionStatus(data))
+  }
+
+  private retiredList(): readonly Retired[] {
+    const entry = this.nodes.get(SINGLETON_NODES.retired)
+    if (entry === undefined) return EMPTY_RETIRED
+    return this.memo('retired-list', [entry, entry.version], () => {
+      const list: Retired[] = []
+      for (const item of entry.items.values()) {
+        // The item id is the entity's GUID; a record under another id is ignored.
+        if (item.doc.kind === 'retired' && item.doc.value.id === item.id) list.push(item.doc.value)
+      }
+      return Object.freeze(list.sort((a, b) => compareStrings(a.id, b.id)))
+    })
+  }
+
+  templates(): Snapshot<readonly Template[]> {
+    const data = this.templateList()
+    return this.memo('templates', [data, this.currentStatus], () => this.collectionStatus(data))
+  }
+
+  private templateList(): readonly Template[] {
+    const entry = this.nodes.get(SINGLETON_NODES.templates)
+    if (entry === undefined) return EMPTY_TEMPLATES
+    return this.memo('template-list', [entry, entry.version], () => {
+      const list: Template[] = []
+      for (const item of entry.items.values()) {
+        // The item id is the template's GUID; a template under another id is ignored.
+        if (item.doc.kind === 'template' && item.doc.value.id === item.id) list.push(item.doc.value)
+      }
+      return Object.freeze(
+        list.sort((a, b) => compareStrings(a.name, b.name) || compareStrings(a.id, b.id)),
+      )
+    })
+  }
+
+  /** A chat room's config, version 2; undefined until its documents load, or for other types. */
+  private chatConfig(roomId: string): ChatRoomConfig | undefined {
+    const room = this.docOf('room', roomId)
+    const game = documentValue(this.document(SINGLETON_NODES.gameSetup).data, 'game-setup')
+    return this.memo(`chat-config:${roomId}`, [room, game], () => {
+      if (room?.roomType !== 'chat') return undefined
+      const config = roomConfig(this.registry, room, game)
+      if (!config.ok) {
+        this.logger.warn('Invalid room config', { room: roomId, error: config.error })
+        return undefined
+      }
+      const parsed = chatRoomConfigReader.safeParse(config.value)
+      return parsed.success ? parsed.data : undefined
+    })
+  }
+
+  roomTemplates(roomId: string): Snapshot<RoomTemplates> {
+    const config = this.chatConfig(roomId)
+    const all = this.templateList()
+    const role = this.ownRole()
+    const forces = this.collection('force')
+    const value = this.memo(
+      `room-templates-value:${roomId}`,
+      [config, all, role, forces],
+      (): RoomTemplates => {
+        if (config === undefined) return Object.freeze({ config, freeText: true, templates: [] })
+        const ids = templatesFor(config, { isAdmin: this.identity.isAdmin, role }, forces)
+        const templates = ids.flatMap((id) => all.filter((t) => t.id === id))
+        return Object.freeze({
+          config,
+          freeText: config.freeText,
+          templates: Object.freeze(templates),
+        })
+      },
+    )
+    return this.memo(`room-templates:${roomId}`, [value, this.currentStatus], () =>
+      this.collectionStatus(value),
+    )
+  }
+
+  checkTemplate(entry: ReadableEntry): TemplateCheck | undefined {
+    const body = entry.body
+    if (body.type !== 'template') return undefined
+    const template = this.templateList().find((t) => t.id === body.content.templateId)
+    const config = this.chatConfig(entry.roomId)
+    const forces = this.collection('force')
+    const roles = this.collection('role')
+    const retired = this.retiredList()
+    const deps = [template, config, forces, roles, retired]
+    const cached = this.templateChecks.get(entry)
+    if (cached !== undefined && sameDeps(cached.deps, deps)) return cached.value
+    // An unknown room config offers nothing, so every templated message is not permitted until
+    // it loads; the schema checks still run.
+    const value = checkTemplatedMessage(
+      body,
+      template,
+      config ?? { schemaVersion: 2, freeText: true, templates: [] },
+      entry.sender,
+      { forces, roles, retired },
+      { validator: this.templateValidator },
+    )
+    this.templateChecks.set(entry, { deps, value })
+    return value
+  }
+
   authors(): Snapshot<ReadonlyMap<string, Author>> {
     const forces = this.collection('force')
     const roles = this.collection('role')
-    const map = this.memo('authors-value', [forces, roles], () => {
+    const retired = this.retiredList()
+    const map = this.memo('authors-value', [forces, roles, retired], () => {
       const byForce = new Map(forces.map((f) => [f.id, f]))
       const authors = new Map<string, Author>()
+      // Deleted roles first, so a current role's document wins should a login name ever be in
+      // both (the design check and the editor refuse that, §3 rule 1).
+      for (const record of retired) {
+        if (record.kind !== 'role' || record.loginName === undefined) continue
+        if (record.loginName === ADMIN_AUTHOR_ID) continue
+        authors.set(record.loginName, {
+          roleId: record.id,
+          loginName: record.loginName,
+          name: record.name,
+          forceId: '',
+          forceName: undefined,
+          colour: record.colour,
+          deleted: true,
+        })
+      }
       for (const role of roles) {
+        if (role.loginName === ADMIN_AUTHOR_ID) continue
         const force = byForce.get(role.forceId)
-        authors.set(role.id, {
+        authors.set(role.loginName, {
           roleId: role.id,
+          loginName: role.loginName,
           name: role.name,
           forceId: role.forceId,
           forceName: force?.name,
           colour: force?.colour,
+          deleted: false,
         })
       }
-      // The admin is the umpire, in the White Force. Set last: `admin` is a reserved id, so a
-      // role document claiming it cannot take the umpire's label.
+      // The admin is the umpire, in the White Force. `admin` is a reserved login name, so a role
+      // document claiming it cannot take the umpire's label (skipped above).
       const white = whiteForceOf(forces)
       authors.set(ADMIN_AUTHOR_ID, {
         roleId: ADMIN_AUTHOR_ID,
+        loginName: ADMIN_AUTHOR_ID,
         name: UMPIRE_NAME,
         forceId: white?.id ?? '',
         forceName: white?.name,
         colour: white?.colour,
+        deleted: false,
       })
       return authors
     })
@@ -967,6 +1248,7 @@ class Store implements SessionStore {
       joining: undefined,
       generation: 0,
       unsent: undefined,
+      unsentTemplate: undefined,
     }
   }
 
@@ -999,7 +1281,7 @@ class Store implements SessionStore {
     entry.error = undefined
     this.attachRoom(entry)
     this.roomChanged(entry)
-    const nick = this.identity.roleId ?? localpart(this.identity.bareJid) ?? 'admin'
+    const nick = this.identity.loginName ?? localpart(this.identity.bareJid) ?? 'admin'
     const run = async (): Promise<DomainResult<Joined>> => {
       const joined = await this.session.muc.join(entry.jid, nick)
       if (!current()) return domainErr('not-joined', 'superseded')
@@ -1129,7 +1411,7 @@ class Store implements SessionStore {
     const onDomain = bare !== undefined && domainpart(bare) === this.identity.domain
     const local = onDomain ? localpart(bare) : undefined
     const isAdmin = local === 'admin'
-    return { nick, jid: bare, roleId: isAdmin ? undefined : local, isAdmin }
+    return { nick, jid: bare, loginName: isAdmin ? undefined : local, isAdmin }
   }
 
   private toOccupant(event: OccupantEvent): Occupant {
@@ -1137,7 +1419,7 @@ class Store implements SessionStore {
     return {
       nick: event.nick,
       jid: sender.jid,
-      roleId: sender.roleId,
+      loginName: sender.loginName,
       isAdmin: sender.isAdmin,
       role: event.role,
       affiliation: event.affiliation,
@@ -1206,6 +1488,7 @@ class Store implements SessionStore {
         loadingOlder: entry.older !== undefined,
         historyLoaded: entry.historyLoaded,
         unsent: entry.unsent,
+        unsentTemplate: entry.unsentTemplate,
       })
       const status: LoadStatus =
         entry.status === 'joining' ? 'loading' : entry.status === 'joined' ? 'ready' : 'error'
@@ -1317,6 +1600,10 @@ class Store implements SessionStore {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
     if (text.trim() === '') return refuse({ code: 'invalid', message: 'the message is empty' })
+    // TD3: a room may take templates only. Advisory, like every template rule (T-R1).
+    if (!this.roomTemplates(roomId).data.freeText) {
+      return refuse({ code: 'not-permitted', message: 'this room takes templated messages only' })
+    }
     if (text.length > LIMITS.messageTextChars) {
       return refuse({
         code: 'too-large',
@@ -1350,13 +1637,89 @@ class Store implements SessionStore {
     return { ok: true, value: { stanzaId: sent.value.stanzaId } }
   }
 
+  async sendTemplateMessage(
+    roomId: string,
+    templateId: string,
+    values: Readonly<Record<string, TemplateValue>>,
+  ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }> {
+    const entry = this.roomEntries.get(roomId)
+    const refuse = (error: DomainError, check?: TemplateCheck) => {
+      const sendError: TemplateSendError = {
+        ...error,
+        templateId,
+        unsentValues: values,
+        ...(check === undefined ? {} : { check }),
+      }
+      if (entry !== undefined) {
+        entry.unsentTemplate = { templateId, values, error: sendError }
+        this.roomChanged(entry)
+      }
+      return { ok: false as const, error: sendError }
+    }
+    if (this.isEnded()) return refuse({ code: 'session-ended', message: 'the session has ended' })
+    if (entry?.status !== 'joined' || entry.joined === undefined) {
+      return refuse({ code: 'not-joined', message: 'the room is not joined' })
+    }
+    if (entry.joined.role === 'visitor' || entry.joined.role === 'none') {
+      return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
+    }
+    const candidate = parseDocument('message', {
+      type: 'template',
+      schemaVersion: 1,
+      content: { templateId, values },
+    })
+    if (!candidate.ok || candidate.value.type !== 'template') {
+      return refuse({ code: 'invalid', message: 'not a valid templated message' })
+    }
+    const body = candidate.value
+    const template = this.templateList().find((t) => t.id === templateId)
+    const config = this.chatConfig(roomId)
+    if (template === undefined || config === undefined) {
+      return refuse({ code: 'not-permitted', message: 'this room does not offer that template' })
+    }
+    // The receiver's check, with this session as the sender, so what is sent is what every
+    // receiver accepts (TPL-6, T-R1).
+    const check = checkTemplatedMessage(
+      body,
+      template,
+      config,
+      { loginName: this.identity.loginName, isAdmin: this.identity.isAdmin },
+      {
+        forces: this.collection('force'),
+        roles: this.collection('role'),
+        retired: this.retiredList(),
+      },
+      { validator: this.templateValidator },
+    )
+    if (check.status === 'not-permitted') {
+      return refuse({ code: 'not-permitted', message: check.message }, check)
+    }
+    if (check.status === 'invalid')
+      return refuse({ code: 'invalid', message: check.message }, check)
+    const json = JSON.stringify(body)
+    const size = fitsInStanza(json)
+    if (!size.ok) {
+      return refuse({
+        code: 'too-large',
+        message: `the message is ${size.bytes} bytes; the limit is ${size.limitBytes}`,
+      })
+    }
+    const sent = await this.session.muc.send(entry.jid, json)
+    if (!sent.ok) {
+      const error = fromTransport(sent.error, 'Sending')
+      return refuse(error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error)
+    }
+    if (entry.unsentTemplate !== undefined) {
+      entry.unsentTemplate = undefined
+      this.roomChanged(entry)
+    }
+    return { ok: true, value: { stanzaId: sent.value.stanzaId } }
+  }
+
   async publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
     if (!this.me().data.canEditObjectives) {
-      return domainErr(
-        'not-permitted',
-        'only the umpire and White Force roles that are not observers edit objectives (PLY-35)',
-      )
+      return domainErr('not-permitted', 'only the admin, as umpire, edits objectives (PLY-35)')
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
@@ -1367,10 +1730,8 @@ class Store implements SessionStore {
       updatedAt: this.now(),
     })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    // One item per author: ejabberd refuses to let a publisher overwrite another's item, so the
-    // admin and each White Force editor keep their own, and readers take the newest (§3 rule 14).
-    const author = localpart(this.session.jid) ?? DOCUMENT_ITEM_ID
-    return this.publish(node, author, parsed.value, 'Publishing objectives')
+    // The admin's single item, replaced on each edit (§3 rule 14).
+    return this.publish(node, OBJECTIVES_ITEM_ID, parsed.value, 'Publishing objectives')
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -1407,6 +1768,11 @@ class Store implements SessionStore {
       }
     }
     return domainOk(undefined)
+  }
+
+  /** This client's clock in ms, or NaN if the injected clock is not a time. */
+  private clockMs(): number {
+    return Date.parse(this.now())
   }
 
   logout(): Promise<DomainResult<void>> {
@@ -1465,21 +1831,53 @@ function noop(): void {
   return undefined
 }
 
+const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+const EMPTY_TEMPLATES: readonly Template[] = Object.freeze([])
+
+/**
+ * Whether the store takes this item at all. An objectives node shows the admin's item only
+ * (§3 rule 14): a server published before WP 3.5 can still hold White Force editors' items until
+ * the next publish purges them, and those are not the force's objectives.
+ */
+function shownItem(spec: NodeSpec, itemId: string): boolean {
+  return spec.kind !== 'objectives' || itemId === OBJECTIVES_ITEM_ID
+}
+
+/**
+ * The document a node shows. Single-document nodes hold one item, and objectives nodes one too,
+ * the admin's (§3 rule 14; `shownItem` drops any other), so the last one received is the newest.
+ * The ordering below is kept for any node that still holds several items (review F11; ejabberd
+ * returns items in the order they were first created and carries no publish time):
+ * - an item that arrived live is newer than any item read by a fetch, and a later live event is
+ *   newer than an earlier one: the server notifies in publish order (contract S06). A fetch that
+ *   answers after a live event never replaces the item that event brought (`touched`), so a
+ *   live notification beats the copy fetched at login, whatever its `updatedAt` says;
+ * - among items of one fetch (or one event), the author's `updatedAt` decides, clamped to when
+ *   this client received it, so a clock set ahead cannot pin an edit above later live ones.
+ */
 function latest(entry: NodeEntry): LiveDocument | undefined {
-  let doc: LiveDocument | undefined
+  let best: NodeItem | undefined
   for (const item of entry.items.values()) {
-    // Objectives carry their own time, as several authors' items share the node; other
-    // documents have one item, so the last one received is the newest.
-    if (
-      doc?.kind === 'objectives' &&
-      item.doc.kind === 'objectives' &&
-      Date.parse(item.doc.value.updatedAt) < Date.parse(doc.value.updatedAt)
-    ) {
+    if (best === undefined || item.doc.kind !== 'objectives' || best.doc.kind !== 'objectives') {
+      best = item
       continue
     }
-    doc = item.doc
+    if (newerObjectives(item, best)) best = item
   }
-  return doc
+  return best?.doc
+}
+
+/** F11: whether objectives item `a` is a newer edit than `b` (see `latest`). */
+function newerObjectives(a: NodeItem, b: NodeItem): boolean {
+  if (a.arrival !== b.arrival) return a.arrival > b.arrival
+  return effectiveTime(a) >= effectiveTime(b)
+}
+
+/** The author's time, never later than when this client received it; unreadable is oldest. */
+function effectiveTime(item: NodeItem): number {
+  const stamped = item.doc.kind === 'objectives' ? Date.parse(item.doc.value.updatedAt) : NaN
+  if (Number.isNaN(stamped)) return -Infinity
+  return Number.isNaN(item.receivedAt) ? stamped : Math.min(stamped, item.receivedAt)
 }
 
 function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {
@@ -1505,7 +1903,7 @@ function endedError(reason: SessionEndReason): DomainError {
 /** How the admin's messages are labelled: the umpire, in the White Force (SC-5). */
 export const UMPIRE_NAME = 'Umpire'
 
-/** The admin's key in `authors()`: the reserved account name, never a role id. */
+/** The admin's key in `authors()`: the reserved account name, never a login name. */
 export const ADMIN_AUTHOR_ID = 'admin'
 
 /**
@@ -1516,12 +1914,11 @@ export function whiteForceOf(forces: readonly Force[]): Force | undefined {
   return [...forces].filter((f) => f.isUmpire).sort(byOrderThenId)[0]
 }
 
-/** PLY-35, §3 rule 14: the admin, and White Force roles that are not observers. */
-export function canEditObjectives(
-  isAdmin: boolean,
-  force: Force | undefined,
-  role: Role | undefined,
-): boolean {
-  if (isAdmin) return true
-  return role !== undefined && force?.isUmpire === true && !role.isObserver
+/**
+ * PLY-35, §3 rule 14, D21: only the admin edits objectives. White Force roles, observers or not,
+ * read every force's objectives but never edit them; the server refuses them too (no publisher
+ * affiliation).
+ */
+export function canEditObjectives(isAdmin: boolean): boolean {
+  return isAdmin
 }

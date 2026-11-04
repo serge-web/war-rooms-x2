@@ -1,5 +1,6 @@
 // The test controls (§11, limits of the guarantee): a controllable clock, injected latency,
 // jitter and reordering, and disconnects, all on ManualTime so nothing waits for real.
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { ConnectionStatus, Recovery, RoomMessage, Session } from '@wrx/transport'
 import { describe, expect, it } from 'vitest'
 import { Channel, MockNetwork } from './network.ts'
@@ -94,6 +95,7 @@ describe('injected latency (ManualTime)', () => {
         public: false,
         whois: 'anyone',
         archive: true,
+        ...CLOSED_SIDE_CHANNELS,
       }),
     )
     await run(time, admin.muc.join(ROOM, 'admin'))

@@ -21,7 +21,7 @@
 // Operations are primitives for a planner (2.3 publish, 2.10 audit). Each resolves to a Result
 // and never rejects for a refusal (ARC-14), and reports each step to an optional listener.
 import { bareJid, domainpart } from '@wrx/domain'
-import { isReservedRoleId, parseNodeName, slugSchema } from '@wrx/schemas'
+import { isGameNodeName, isReservedLoginName, slugSchema } from '@wrx/schemas'
 import type {
   AffiliationEntry,
   Endpoint,
@@ -38,7 +38,7 @@ import type {
 } from '@wrx/transport'
 import { opsAll, opsErr, opsOk } from './errors.ts'
 import type { AdminOpsError, OpsOutcome, OpsResult, ProgressListener } from './errors.ts'
-import { gameRoomConfig } from './target.ts'
+import { gameRoomConfig, sameRoomConfig } from './target.ts'
 import type { NodeAccess, RoomAccess } from './target.ts'
 import { ObserverVault } from './vault.ts'
 
@@ -134,19 +134,6 @@ const LISTED_AFFILIATIONS: readonly MucAffiliation[] = Object.freeze([
 
 /** Most archive pages read when counting a room's messages (100 each). */
 const MAX_COUNT_PAGES = 10_000
-
-function sameRoomConfig(a: RoomConfig, b: RoomConfig): boolean {
-  return (
-    a.name === b.name &&
-    (a.description ?? '') === (b.description ?? '') &&
-    a.membersOnly === b.membersOnly &&
-    a.moderated === b.moderated &&
-    a.persistent === b.persistent &&
-    a.public === b.public &&
-    a.whois === b.whois &&
-    a.archive === b.archive
-  )
-}
 
 function sameNodeConfig(a: NodeConfig, b: NodeConfig): boolean {
   return (
@@ -260,11 +247,12 @@ export class AdminOps {
     return failed
   }
 
+  /** Roles are named by login name, the account's localpart (§3 rule 1). */
   private checkRole(op: string, roleId: string): OpsResult<void> {
     if (!slugSchema.safeParse(roleId).success) {
-      return opsErr('invalid', `"${roleId}" is not a role id`, { op, target: roleId })
+      return opsErr('invalid', `"${roleId}" is not a login name`, { op, target: roleId })
     }
-    if (isReservedRoleId(roleId)) {
+    if (isReservedLoginName(roleId)) {
       return opsErr('invalid', `"${roleId}" is reserved; the tooling never changes it`, {
         op,
         target: roleId,
@@ -273,6 +261,10 @@ export class AdminOps {
     return opsOk(undefined)
   }
 
+  /**
+   * A room's localpart: a GUID, or a slug from a game published before GUID ids, which a reset
+   * must still be able to destroy (ADM-15).
+   */
   private checkRoom(op: string, roomId: string): OpsResult<void> {
     return slugSchema.safeParse(roomId).success
       ? opsOk(undefined)
@@ -280,7 +272,7 @@ export class AdminOps {
   }
 
   private checkNode(op: string, node: string): OpsResult<void> {
-    return parseNodeName(node) === undefined
+    return !isGameNodeName(node)
       ? opsErr('invalid', `"${node}" is not a WRX1 node`, { op, target: node })
       : opsOk(undefined)
   }
@@ -820,6 +812,53 @@ export class AdminOps {
     return deleted
   }
 
+  /**
+   * Deletes every item on a node, keeping its config and affiliations (XEP-0060 §8.5), then
+   * reads it back: no item may be left. Publish uses it on an objectives node that holds items
+   * other than the admin's (§3 rule 14), after the White Force editors' publisher affiliations
+   * are gone, so no stale editor's text survives and nobody can write a new one.
+   */
+  async purgeNode(node: string): OpsOutcome<void> {
+    const op = 'purgeNode'
+    const valid = this.checkNode(op, node)
+    if (!valid.ok) return valid
+    const purged = await this.step(op, 'purge items', node, () =>
+      this.session.pubsub.purgeNode(node),
+    )
+    if (!purged.ok) return purged
+    const left = await this.query(op, 'verify purge', node, () =>
+      this.session.pubsub.getItems(node),
+    )
+    if (!left.ok) return left
+    if (left.value.length > 0) {
+      return this.fail(op, 'verify purge', node, 'verify-failed', 'items remain after the purge')
+    }
+    return opsOk(undefined)
+  }
+
+  /**
+   * Retracts one item (XEP-0060 §7.2, as the node's owner), then reads the node back: the item
+   * must be gone; already gone is success. Publish uses it on `templates` for a template the
+   * design no longer has (never a locked one: the planner refuses that, TD6).
+   */
+  async retractItem(node: string, itemId: string): OpsOutcome<void> {
+    const op = 'retractItem'
+    const valid = this.checkNode(op, node)
+    if (!valid.ok) return valid
+    const retracted = await this.step(op, 'retract item', node, () =>
+      this.session.pubsub.retract(node, itemId),
+    )
+    if (!retracted.ok && !gone(retracted)) return retracted
+    const left = await this.query(op, 'verify retraction', node, () =>
+      this.session.pubsub.getItems(node),
+    )
+    if (!left.ok) return left
+    if (left.value.some((item) => item.id === itemId)) {
+      return this.fail(op, 'verify retraction', node, 'verify-failed', `item ${itemId} remains`)
+    }
+    return opsOk(undefined)
+  }
+
   setNodeAccess(node: string, roleId: string, access: NodeAccess): OpsOutcome<void> {
     return this.applyNodeAccess(node, [{ roleId, access }])
   }
@@ -1007,7 +1046,7 @@ export class AdminOps {
       this.session.pubsub.listNodes(),
     )
     if (!listed.ok) return listed
-    return opsOk(listed.value.filter((n) => parseNodeName(n) !== undefined))
+    return opsOk(listed.value.filter((n) => isGameNodeName(n)))
   }
 
   // ---- accounts -------------------------------------------------------------------------------

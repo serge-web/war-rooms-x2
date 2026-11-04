@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { accessOf, effectiveAccess, participantsOf, roomsForRole } from './access.ts'
 import type { AccessInput } from './access.ts'
-import { force, role, room } from './fixtures.ts'
+import { force as forceDoc, role as roleDoc, room as roomDoc } from './fixtures.ts'
+import type { Force, Role, Room } from '@wrx/schemas'
+
+// Effective access is pure over ids it never validates, so these tests keep short readable ids
+// rather than GUIDs (the fixtures' builders make GUIDs; these put the short name back).
+const plain = <T extends { readonly id: string }>(doc: T, id: string): T => ({ ...doc, id })
+function force(id: string, extra: Partial<Force> = {}): Force {
+  return plain(forceDoc(id, extra), id)
+}
+function role(id: string, forceId: string, extra: Partial<Role> = {}): Role {
+  return { ...plain(roleDoc(id, forceId, extra), id), forceId: extra.forceId ?? forceId }
+}
+function room(id: string, participants: Room['participants'], extra: Partial<Room> = {}): Room {
+  return { ...plain(roomDoc(id, [], extra), id), participants }
+}
 
 function base(): AccessInput {
   return {

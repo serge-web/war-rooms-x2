@@ -151,6 +151,57 @@ export function s04(ctx: Ctx, raw: RawAccess | undefined): void {
       }
     })
 
+    // Spike S1b side channels, read back (security review F6): a room's stored values come back,
+    // open or closed, so drift in them is seen by the audit and the publish checks.
+    it('reads a room’s side channels back as set, open or closed (S1b, review F6)', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const room = ctx.room(uniq(`${fx.tag}-f6`))
+      try {
+        const open = {
+          ...GAME_ROOM,
+          name: 'F6 room',
+          visitorPrivateMessages: 'anyone' as const,
+          visitorStatus: true,
+          visitorNickChange: true,
+          voiceRequests: true,
+          subscriptions: true,
+        }
+        must(await admin.muc.createRoom(room, open), 'create open')
+        expect(must(await admin.muc.getRoomConfig(room), 'config')).toEqual(open)
+        const moderators = { ...open, visitorPrivateMessages: 'moderators' as const }
+        must(await admin.muc.configureRoom(room, moderators), 'moderators only')
+        expect(must(await admin.muc.getRoomConfig(room), 'config')).toEqual(moderators)
+        const closed = { ...GAME_ROOM, name: 'F6 room' }
+        must(await admin.muc.configureRoom(room, closed), 'close')
+        expect(must(await admin.muc.getRoomConfig(room), 'config')).toEqual(closed)
+      } finally {
+        await admin.muc.destroyRoom(room)
+      }
+    })
+
+    // XEP-0030 disco#items paged with XEP-0059 RSM (security review F10). Past its listing limit
+    // (ejabberd: max_rooms_discoitems, 100) a service lists only occupied rooms to a request
+    // without paging; these rooms are all empty, so without paging none would be listed.
+    it('lists every room, past the service’s listing limit (XEP-0059, review F10)', async () => {
+      const fx = ctx.fx()
+      const admin = ctx.admin()
+      const tag = uniq(`${fx.tag}-f10`)
+      const rooms = Array.from({ length: 105 }, (_, i) =>
+        ctx.room(`${tag}-${String(i).padStart(3, '0')}`),
+      )
+      try {
+        for (const room of rooms) {
+          must(await admin.muc.createRoom(room, { ...GAME_ROOM, name: 'F10' }), 'create')
+        }
+        const listed = must(await admin.muc.listRooms(), 'list rooms')
+        expect(rooms.filter((room) => !listed.includes(room))).toEqual([])
+        expect(new Set(listed).size).toBe(listed.length)
+      } finally {
+        for (const room of rooms) await admin.muc.destroyRoom(room)
+      }
+    }, 300_000)
+
     // XEP-0060 §8.1–8.2 create and configure, §8.9 affiliations.
     it('creates a node whose config and affiliations read back as set', async () => {
       const fx = ctx.fx()

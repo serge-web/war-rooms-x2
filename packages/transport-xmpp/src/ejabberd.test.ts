@@ -1,3 +1,4 @@
+import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import { JXT, createClient } from 'stanza'
 import { describe, expect, it } from 'vitest'
 import { backoffDelay, DEFAULT_BACKOFF } from './backoff.ts'
@@ -122,6 +123,7 @@ describe('ejabberd adapter: config forms', () => {
     public: false,
     whois: 'anyone' as const,
     archive: true,
+    ...CLOSED_SIDE_CHANNELS,
   }
 
   it('adds the S1b hardening and the mam switch to every room config', () => {
@@ -132,8 +134,54 @@ describe('ejabberd adapter: config forms', () => {
     expect(booleanField(form, 'allow_voice_requests')).toBe(false)
     expect(booleanField(form, 'allow_subscription')).toBe(false)
     expect(booleanField(form, 'mam')).toBe(true)
-    expect(ejabberd.roomArchive(form)).toBe(true)
     expect(stringField(form, 'muc#roomconfig_whois')).toBe('anyone')
+  })
+
+  it('reads the mam switch and the side channels back (review F6)', () => {
+    expect(ejabberd.roomServerFields(submitForm('ns', ejabberd.roomConfigFields(room)))).toEqual({
+      archive: true,
+      ...CLOSED_SIDE_CHANNELS,
+    })
+    const open = {
+      ...room,
+      archive: false,
+      visitorPrivateMessages: 'anyone' as const,
+      visitorStatus: true,
+      visitorNickChange: true,
+      voiceRequests: true,
+      subscriptions: true,
+    }
+    const {
+      name: _name,
+      membersOnly: _m,
+      moderated: _mo,
+      persistent: _p,
+      public: _pu,
+      whois: _w,
+      ...fields
+    } = open
+    expect(ejabberd.roomServerFields(submitForm('ns', ejabberd.roomConfigFields(open)))).toEqual(
+      fields,
+    )
+  })
+
+  it('fails the read when a side-channel field is missing or unknown (review F6)', () => {
+    const all = ejabberd.roomConfigFields(room)
+    const without = (name: string) =>
+      submitForm(
+        'ns',
+        all.filter((f) => f.name !== name),
+      )
+    expect(ejabberd.roomServerFields(without('allow_subscription'))).toBe('allow_subscription')
+    expect(ejabberd.roomServerFields(without('allow_voice_requests'))).toBe('allow_voice_requests')
+    const odd = all.map((f) =>
+      f.name === 'allow_private_messages_from_visitors' ? { ...f, value: 'everyone' } : f,
+    )
+    expect(ejabberd.roomServerFields(submitForm('ns', odd))).toBe(
+      'allow_private_messages_from_visitors',
+    )
+    // No mam field: no archiving, as before.
+    expect(ejabberd.roomServerFields(without('mam'))).toMatchObject({ archive: false })
   })
 
   it('sets the node options the interface relies on', () => {

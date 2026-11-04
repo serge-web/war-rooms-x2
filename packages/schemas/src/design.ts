@@ -1,25 +1,37 @@
 import { z } from 'zod'
-import { LIMITS, isReservedRoleId, isoDateTimeSchema } from './common.ts'
+import { ANONYMOUS_LIKE_NAME, LIMITS, isReservedLoginName, isoDateTimeSchema } from './common.ts'
 import {
   assetSchema,
   forceSchema,
   gameSetupSchema,
   objectivesSchema,
+  retiredSchema,
   roleSchema,
   roomSchema,
 } from './documents.ts'
 import type { GameSetup } from './documents.ts'
 import type { Theme } from './theme.ts'
+import {
+  TEMPLATE_LIMITS,
+  chatRoomConfigSchema,
+  templateFields,
+  templateSchema,
+} from './template.ts'
+import type { Template } from './template.ts'
+
+/** The design file's current `schemaVersion`: 2 since GUID ids (§3 rule 1, WP 3.5). */
+export const DESIGN_FILE_VERSION = 2
 
 /**
  * The design export file (ADM-16): everything publishing provisions, in one versioned JSON
  * document that moves between mock and real backends. A `password` field on a role is
- * rejected, so a file carrying passwords cannot be imported (§3 rule 9).
+ * rejected, so a file carrying passwords cannot be imported (§3 rule 9). Version 1 files, from
+ * before GUID ids, are read by `readDesignFile` (legacy.ts), which converts them.
  */
 export const designFileSchema = z
   .object({
     format: z.literal('wrx1-design'),
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(DESIGN_FILE_VERSION),
     exportedAt: isoDateTimeSchema,
     game: gameSetupSchema.describe('The game setup document'),
     forces: z.array(forceSchema).describe('Force documents'),
@@ -33,6 +45,17 @@ export const designFileSchema = z
     rooms: z.array(roomSchema).describe('Room documents'),
     objectives: z.array(objectivesSchema).describe('Objectives documents, at most one per force'),
     assets: z.array(assetSchema).describe('Asset documents'),
+    retired: z
+      .array(retiredSchema)
+      .describe(
+        'The last names of deleted forces and roles that were published, kept so old messages show them (§3 rule 1)',
+      ),
+    templates: z
+      .array(templateSchema)
+      .default([])
+      .describe(
+        'Message templates (Annex A); a file from before templates has none. Each locks when a published room makes it available (TPL-4)',
+      ),
   })
   .describe('A complete game design, as exported and imported by the admin')
 
@@ -62,8 +85,18 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
 
   const forceIds = uniqueIds('forces', design.forces, error)
   const roleIds = uniqueIds('roles', design.roles, error)
-  uniqueIds('rooms', design.rooms, error)
+  const roomIds = uniqueIds('rooms', design.rooms, error)
   const assetIds = uniqueIds('assets', design.assets, error)
+
+  // §3 rule 1: ids are never reused, and a retired login name is never given to another role.
+  uniqueIds('retired', design.retired, error)
+  const retiredLogins = new Set<string>()
+  design.retired.forEach((r, i) => {
+    if (forceIds.has(r.id) || roleIds.has(r.id) || roomIds.has(r.id) || assetIds.has(r.id)) {
+      error(`retired[${i}].id`, `"${r.id}" belongs to a deleted ${r.kind} and cannot be reused`)
+    }
+    if (r.loginName !== undefined) retiredLogins.add(r.loginName)
+  })
 
   const assetRef = (path: string, id: string | undefined) => {
     if (id !== undefined && !assetIds.has(id)) error(path, `unknown asset "${id}"`)
@@ -94,9 +127,26 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
     themeRefs(`forces[${i}].theme`, force.theme)
   })
 
+  const logins = new Set<string>()
   design.roles.forEach((role, i) => {
-    if (isReservedRoleId(role.id)) {
-      error(`roles[${i}].id`, `"${role.id}" is reserved and cannot be a role id`)
+    const login = role.loginName
+    if (isReservedLoginName(login)) {
+      error(
+        `roles[${i}].loginName`,
+        ANONYMOUS_LIKE_NAME.test(login)
+          ? `"${login}" looks like an anonymous session and cannot be a login name`
+          : `"${login}" is reserved and cannot be a login name`,
+      )
+    }
+    if (logins.has(login)) {
+      error(`roles[${i}].loginName`, `another role has the login name "${login}"`)
+    }
+    logins.add(login)
+    if (retiredLogins.has(login)) {
+      error(
+        `roles[${i}].loginName`,
+        `"${login}" was a deleted role's login name and cannot be given to another role`,
+      )
     }
     if (!forceIds.has(role.forceId)) error(`roles[${i}].forceId`, `unknown force "${role.forceId}"`)
     // The admin's messages are labelled "Umpire" (SC-5); a role of that name would look the same.
@@ -128,6 +178,8 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
     objectiveForces.add(o.forceId)
   })
 
+  checkTemplates(design, forceIds, roleIds, error, warn)
+
   const limit = options.assetLimitBytes ?? LIMITS.assetDefaultBytes
   design.assets.forEach((a, i) => {
     if (a.size > limit) warn(`assets[${i}].size`, `${a.size} bytes is over the ${limit}-byte limit`)
@@ -147,6 +199,74 @@ export function publicAssetIds(game: GameSetup): string[] {
   return [...new Set(ids)]
 }
 
+/**
+ * Templates (Annex A): unique GUIDs no other entity has, at most the node's item limit, force
+ * filters naming known forces; and each chat room's config version 2 naming known forces, roles
+ * and templates (TPL-2). A room config that is neither version 1 nor 2 is an error.
+ */
+function checkTemplates(
+  design: DesignFile,
+  forceIds: ReadonlySet<string>,
+  roleIds: ReadonlySet<string>,
+  error: (path: string, message: string) => void,
+  warn: (path: string, message: string) => void,
+): void {
+  const templateIds = uniqueIds('templates', design.templates, error)
+  if (design.templates.length > TEMPLATE_LIMITS.templates) {
+    error(
+      'templates',
+      `${design.templates.length} templates; the limit is ${TEMPLATE_LIMITS.templates}`,
+    )
+  }
+  const others = new Set([
+    ...forceIds,
+    ...roleIds,
+    ...design.rooms.map((r) => r.id),
+    ...design.assets.map((a) => a.id),
+    ...design.retired.map((r) => r.id),
+  ])
+  design.templates.forEach((template, i) => {
+    if (others.has(template.id)) {
+      error(`templates[${i}].id`, `"${template.id}" is another entity's id`)
+    }
+    for (const field of templateFields(template.schema)) {
+      if (field.forceFilter !== undefined && !forceIds.has(field.forceFilter)) {
+        warn(
+          `templates[${i}].schema.properties.${field.name}`,
+          `the role picker's force filter names an unknown force "${field.forceFilter}", so it offers no role`,
+        )
+      }
+    }
+  })
+  design.rooms.forEach((room, i) => {
+    if (room.roomType !== 'chat') return
+    const version = room.config.schemaVersion
+    if (version === undefined || version === 1) return
+    const parsed = chatRoomConfigSchema.safeParse(room.config)
+    if (!parsed.success) {
+      error(`rooms[${i}].config`, `not a valid chat room config: ${z.prettifyError(parsed.error)}`)
+      return
+    }
+    parsed.data.templates.forEach((entry, j) => {
+      const known = entry.kind === 'force' ? forceIds : roleIds
+      if (!known.has(entry.id)) {
+        error(`rooms[${i}].config.templates[${j}]`, `unknown ${entry.kind} "${entry.id}"`)
+      }
+      entry.templateIds.forEach((id, k) => {
+        if (!templateIds.has(id)) {
+          error(`rooms[${i}].config.templates[${j}].templateIds[${k}]`, `unknown template "${id}"`)
+        }
+      })
+    })
+    if (!parsed.data.freeText && parsed.data.templates.every((e) => e.templateIds.length === 0)) {
+      warn(
+        `rooms[${i}].config`,
+        'free text is off and the room offers no template, so nobody can post in it',
+      )
+    }
+  })
+}
+
 function uniqueIds(
   collection: string,
   items: readonly { readonly id: string }[],
@@ -158,4 +278,42 @@ function uniqueIds(
     seen.add(item.id)
   })
   return seen
+}
+
+/**
+ * Templates the design's rooms make available: named by any entry of a `chat` room's config
+ * version 2 (TPL-2). Publishing the design locks these (TD6, provisional answer 2).
+ */
+export function templatesInRooms(design: Pick<DesignFile, 'rooms'>): Set<string> {
+  const ids = new Set<string>()
+  for (const room of design.rooms) {
+    if (room.roomType !== 'chat') continue
+    const parsed = chatRoomConfigSchema.safeParse(room.config)
+    if (!parsed.success) continue
+    for (const entry of parsed.data.templates) for (const id of entry.templateIds) ids.add(id)
+  }
+  return ids
+}
+
+/**
+ * The design with each template's lock as publishing it leaves the server (TD6, TPL-4,
+ * provisional answer 2): the server's `lockedAt` if the published template has one, else the
+ * design's, else, for a template a room makes available, the design's export time (planning
+ * keeps no clock, as with `retired` records). A lock is never taken away. The same design is
+ * returned when nothing changes.
+ */
+export function withTemplateLocks(
+  design: DesignFile,
+  published: readonly Pick<Template, 'id' | 'lockedAt'>[],
+): DesignFile {
+  const offered = templatesInRooms(design)
+  const templates = design.templates.map((template) => {
+    const lockedAt =
+      published.find((p) => p.id === template.id)?.lockedAt ??
+      template.lockedAt ??
+      (offered.has(template.id) ? design.exportedAt : undefined)
+    return lockedAt === template.lockedAt ? template : { ...template, lockedAt }
+  })
+  const changed = templates.some((t, i) => t !== design.templates[i])
+  return changed ? { ...design, templates } : design
 }

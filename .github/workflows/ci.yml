@@ -60,7 +60,8 @@ jobs:
       - name: Site size (DOC-14)
         run: node tools/site/size-report.ts site/dist --title "Site build size"
       - run: pnpm --filter @wrx/web exec playwright install --with-deps chromium
-      - run: pnpm e2e
+      - name: App e2e in Chromium, with the performance guard (NFR-11, NFR-12) and axe (NFR-14)
+        run: pnpm e2e
         env:
           CI: 'true'
       - name: Real-server build has no external references (NFR-7, DOC-11)
@@ -94,6 +95,66 @@ jobs:
         with:
           name: site-playwright-report
           path: site/playwright-report
+          retention-days: 7
+
+  # NFR-13: the app's e2e suite in the other browsers, which only CI installs (locally there is
+  # Chromium alone). Chrome and Edge are the SHALL (WP 0.4: the customer's analysts use them
+  # only), covered by build-e2e's Chromium run. WebKit (for Safari) is a SHOULD, so it is
+  # advisory: its test failures show as warnings and the job passes. Firefox is not supported
+  # (product owner, Nov 3, 2026). Known failures are in plan/reviews/phase-3-browsers.md. The performance tests skip here: their timing APIs and
+  # recorded numbers are Chromium's (build-e2e runs them).
+  e2e-browsers:
+    name: App e2e in ${{ matrix.browser }} (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.advisory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: webkit
+            advisory: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @wrx/web exec playwright install --with-deps ${{ matrix.browser }}
+      # Test failures here are warnings, not a red job (product owner, Nov 3, 2026): each failed
+      # test becomes a warning annotation and a line in the job summary, and the job passes. A run
+      # that fails without any failed test (install, build or server trouble) still fails.
+      - id: e2e
+        shell: bash
+        run: |
+          set +e
+          pnpm e2e 2>&1 | tee e2e.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -eq 0 ]; then exit 0; fi
+          failed=$(grep -E '^\s*✘' e2e.log | sed -E 's/^\s*✘\s*[0-9]+ //' | sort -u || true)
+          if [ -z "$failed" ]; then
+            echo "::error::The ${{ matrix.browser }} e2e run failed before any test failed (exit $status)."
+            exit "$status"
+          fi
+          echo "failed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ${{ matrix.browser }}: $(echo "$failed" | wc -l) failed test(s), advisory"
+            echo
+            echo "$failed" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r line; do
+            echo "::warning title=${{ matrix.browser }} e2e (advisory)::$line"
+          done <<< "$failed"
+        env:
+          CI: 'true'
+          WRX_E2E_BROWSERS: ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: failure() || steps.e2e.outputs.failed == 'true'
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: apps/web/playwright-report
           retention-days: 7
 
   # The ejabberd contract-suite job (NFR-16, NFR-22) joins this workflow in WP 1.2, when the

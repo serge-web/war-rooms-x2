@@ -3,7 +3,7 @@
 // and the keyboard move are all checked here.
 import { Actions, DockLocation, Model } from 'flexlayout-react'
 import { describe, expect, it } from 'vitest'
-import { panelTabId, parseTabId, roomTabId, tabIds } from './ids.ts'
+import { panelTabId, parseTabId, roomTabId, specialTabId, tabIds } from './ids.ts'
 import {
   addToFewest,
   borderTabs,
@@ -15,9 +15,13 @@ import {
   moveTab,
   reconcile,
   restoreLayout,
+  roomTabState,
+  SPECIAL_TAB_CLASS,
   serialiseLayout,
+  specialTab,
   structure,
   tabIdsIn,
+  updateRoomTabState,
 } from './model.ts'
 import type { LayoutSpec, TabSpec } from './model.ts'
 import { defaultColumns, pickFewest, reconcilePlan } from './rules.ts'
@@ -268,6 +272,168 @@ describe('saving and restoring (PLY-5, D6)', () => {
     const tab = restored.getNodeById(ids.toModel('room:r1'))?.toJson()
     expect(tab).toMatchObject({ component: 'room' })
     expect(tab).not.toHaveProperty('config')
+  })
+})
+
+describe('a room tab’s own state (PLY-54)', () => {
+  it('is kept in the tab’s config, saved and restored with the layout', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    expect(roomTabState(model, ids, 'r1')).toEqual({})
+    updateRoomTabState(model, ids, 'r1', { composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r1')).toEqual({ composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r2')).toEqual({})
+    // No tab, no state, and no error.
+    updateRoomTabState(model, ids, 'r9', { composerCollapsed: true })
+    expect(roomTabState(model, ids, 'r9')).toEqual({})
+    const text = serialiseLayout(model, ids)
+    const other = tabIds('ws1')
+    const restored = restoreLayout(text, spec(1, 2), other)
+    if (restored === undefined) throw new Error('not restored')
+    expect(roomTabState(restored, other, 'r1')).toEqual({ composerCollapsed: true })
+    expect(roomTabState(restored, other, 'r2')).toEqual({})
+  })
+
+  it('keeps only known fields of the right type from storage', () => {
+    const saved = JSON.stringify({
+      layout: {
+        type: 'row',
+        children: [
+          {
+            type: 'tabset',
+            children: [
+              { type: 'tab', id: 'room:r1', name: 'Room 1', config: { composerCollapsed: 'yes' } },
+              {
+                type: 'tab',
+                id: 'room:r2',
+                name: 'Room 2',
+                config: { composerCollapsed: false, evil: '<script>' },
+              },
+              {
+                type: 'tab',
+                id: 'panel:online',
+                name: 'Online',
+                config: { composerCollapsed: true },
+              },
+            ],
+          },
+        ],
+      },
+    })
+    const restored = restoreLayout(saved, spec(1, 2), ids)
+    if (restored === undefined) throw new Error('not restored')
+    expect(restored.getNodeById(ids.toModel('room:r1'))?.toJson()).not.toHaveProperty('config')
+    expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: false })
+    expect(restored.getNodeById(ids.toModel('panel:online'))?.toJson()).not.toHaveProperty('config')
+  })
+
+  it('a popped-out room keeps its state across a save, docked again', () => {
+    const model = defaultModel(spec(1, 2, 3), ids)
+    model.doAction(Actions.popoutTab(ids.toModel('room:r2')))
+    updateRoomTabState(model, ids, 'r2', { composerCollapsed: true })
+    expect(detachedTabs(model, ids)).toEqual(r(2))
+    const restored = restoreLayout(serialiseLayout(model, ids), spec(1, 2, 3), ids)
+    if (restored === undefined) throw new Error('not restored')
+    expect(detachedTabs(restored, ids)).toEqual([])
+    expect(roomTabState(restored, ids, 'r2')).toEqual({ composerCollapsed: true })
+  })
+
+  it('goes back to the defaults on reset (PLY-42)', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    updateRoomTabState(model, ids, 'r1', { composerCollapsed: true })
+    expect(roomTabState(defaultModel(spec(1, 2), ids, model), ids, 'r1')).toEqual({})
+  })
+})
+
+describe('the special tab (FT-1)', () => {
+  const SPECIAL: TabSpec = { id: specialTabId('out-of-game'), name: 'Out of game' }
+  const narrow = (...ns: number[]): LayoutSpec => ({ ...spec(...ns), special: SPECIAL })
+
+  it('parses as its own kind', () => {
+    expect(parseTabId('special:out-of-game')).toEqual({
+      kind: 'special',
+      specialId: 'out-of-game',
+    })
+  })
+
+  it('is added first in the strip, unselected, and removed again, leaving the rooms', () => {
+    const model = defaultModel(spec(1, 2, 3, 4), ids)
+    const before = { tabs: tabsOf(model), selected: selectedOf(model) }
+    reconcile(model, narrow(1, 2, 3, 4), ids)
+    // Not in a tabset, whose strip scrolls and could hide it: the wide strip along the bottom.
+    expect(borderTabs(model, ids)).toEqual([SPECIAL.id, 'panel:game-info', 'panel:online'])
+    expect({ tabs: tabsOf(model), selected: selectedOf(model) }).toEqual(before)
+    const node = specialTab(model, narrow(1, 2, 3, 4), ids)
+    expect(node?.isSelected()).toBe(false)
+    expect(node?.isEnableClose()).toBe(false)
+    expect(node?.isEnablePopout()).toBe(false)
+    expect(node?.getClassName()).toBe(SPECIAL_TAB_CLASS)
+    reconcile(model, spec(1, 2, 3, 4), ids)
+    expect({ tabs: tabsOf(model), selected: selectedOf(model) }).toEqual(before)
+    expect(borderTabs(model, ids)).toEqual(['panel:game-info', 'panel:online'])
+    expect(specialTab(model, narrow(1, 2, 3, 4), ids)).toBeUndefined()
+  })
+
+  /** The player drags the special tab to the end of the right-most tabset. */
+  function dragToLastTabset(model: Model): void {
+    const last = mainTabsets(model).at(-1)
+    if (last === undefined) throw new Error('no tabset')
+    model.doAction(
+      Actions.moveNode(ids.toModel(SPECIAL.id), last.getId(), DockLocation.CENTER, -1, true),
+    )
+  }
+
+  it('is never saved, nor restored from bad storage', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    reconcile(model, narrow(1, 2), ids)
+    // Dragged in with the rooms and selected, as when the player is reading the column there.
+    dragToLastTabset(model)
+    expect(selectedOf(model)).toEqual(['room:r1', SPECIAL.id])
+    const text = serialiseLayout(model, ids)
+    expect(text).not.toContain('special:')
+    const wide = restoreLayout(text, spec(1, 2), tabIds('ws1'))
+    expect(wide === undefined ? undefined : tabsOf(wide, tabIds('ws1'))).toEqual([r(1), r(2)])
+    // The room it hid is the one shown after the restore.
+    expect(wide === undefined ? undefined : structure(wide, tabIds('ws1'))[1]?.selected).toBe(
+      'room:r2',
+    )
+    // A stored special tab (hand-edited or from another version) is dropped, not restored.
+    const forged = JSON.parse(text) as { layout: { children: { children: unknown[] }[] } }
+    forged.layout.children[0]?.children.push({ type: 'tab', id: SPECIAL.id, name: 'Forged' })
+    const restored = restoreLayout(JSON.stringify(forged), spec(1, 2), ids)
+    expect(restored === undefined ? undefined : tabIdsIn(restored, ids)).not.toContain(SPECIAL.id)
+  })
+
+  it('a column made for it is not saved, so switching back leaves no empty column', () => {
+    const model = defaultModel(spec(1, 2), ids)
+    reconcile(model, narrow(1, 2), ids)
+    // The player drags the tab into a column of its own.
+    const last = mainTabsets(model).at(-1)
+    if (last === undefined) throw new Error('no tabset')
+    model.doAction(
+      Actions.moveNode(ids.toModel(SPECIAL.id), last.getId(), DockLocation.RIGHT, -1, true),
+    )
+    expect(tabsOf(model)).toEqual([r(1), r(2), [SPECIAL.id]])
+    const restored = restoreLayout(serialiseLayout(model, ids), spec(1, 2), ids)
+    expect(restored === undefined ? undefined : tabsOf(restored)).toEqual([r(1), r(2)])
+    // On screen, taking the tab away removes its column too.
+    reconcile(model, spec(1, 2), ids)
+    expect(tabsOf(model)).toEqual([r(1), r(2)])
+  })
+
+  it('open in the strip, it is saved with the strip closed and the panels kept', () => {
+    const model = defaultModel(spec(1), ids)
+    reconcile(model, narrow(1), ids)
+    model.doAction(Actions.selectTab(ids.toModel(SPECIAL.id)))
+    expect(specialTab(model, narrow(1), ids)?.isSelected()).toBe(true)
+    const saved = JSON.parse(serialiseLayout(model, ids)) as {
+      borders: { selected: number; children: { id: string }[] }[]
+    }
+    expect(saved.borders[0]?.children.map((c) => c.id)).toEqual(['panel:game-info', 'panel:online'])
+    expect(saved.borders[0]?.selected).toBe(-1)
+    // An open panel stays open: its index moves with the dropped special tab.
+    model.doAction(Actions.selectTab(ids.toModel('panel:online')))
+    const again = JSON.parse(serialiseLayout(model, ids)) as typeof saved
+    expect(again.borders[0]?.selected).toBe(1)
   })
 })
 

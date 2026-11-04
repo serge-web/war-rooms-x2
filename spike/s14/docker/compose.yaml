@@ -1,0 +1,31 @@
+# S14 stack: one throwaway ejabberd per config, each its own compose project and port, so the
+# three configs (and other agents' stacks) can run side by side. Started by scripts/up.sh,
+# stopped (volume deleted) by scripts/down.sh.
+#
+#   S14_CONFIG  which config file to mount: v0 (reference), v1 (dag + flat), v2 (dag only)
+#   S14_DB      which database volume (and compose project) to use; defaults to S14_CONFIG.
+#               S14-9 starts V0's database under V1 with S14_DB=v0 S14_CONFIG=v1.
+#   S14_PORT    host port for wss://localhost:<port>/ws (up.sh: v0 35970, v1 35971, v2 35972)
+#
+# Same image, pinned by the same digest, as deploy/ejabberd/compose.yaml. Same listener as the
+# contract-suite stack: TLS WebSocket only, on loopback, with a throwaway test CA (make-ca.sh).
+name: wrx-s14-${S14_DB:-v0}
+services:
+  ejabberd:
+    image: ejabberd/ecs:26.09@sha256:8ebff5b218e686d5dbd93850ea17556d5b70d4c15918c3613e9302a357798e0e
+    ports:
+      - '127.0.0.1:${S14_PORT:-35970}:5443'
+    volumes:
+      - ./ejabberd-${S14_CONFIG:-v0}.yml:/home/ejabberd/conf/ejabberd.yml:ro
+      - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
+      - ./tls-out/server.pem:/home/ejabberd/conf/server.pem:ro
+      - ./tls-out/ca.crt:/home/ejabberd/conf/cacert.pem:ro
+      - ./www:/home/ejabberd/www:ro
+      - db:/home/ejabberd/database
+    healthcheck:
+      test: ['CMD', 'ejabberdctl', 'status']
+      interval: 3s
+      timeout: 5s
+      retries: 30
+volumes:
+  db:

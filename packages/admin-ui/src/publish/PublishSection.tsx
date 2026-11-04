@@ -23,7 +23,7 @@ import { describeError } from './controller.ts'
 import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
-import { exportDesign, importDesign } from './transfer.ts'
+import { exportDesign, importDesign, newDesign } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
@@ -84,6 +84,9 @@ export function PublishSection({
         store.commit(imported.value.draft)
         return imported.value.warnings
       }}
+      onNewDesign={() => {
+        store.commit(newDesign(store.getSnapshot().draft))
+      }}
     />
   )
 }
@@ -118,6 +121,8 @@ export interface PublishSectionCoreProps {
   readonly onExport: () => void
   /** Imports a file's text; returns the blocking issues, or the warnings when it was imported. */
   readonly onImport: (text: string) => readonly DesignIssue[]
+  /** Replaces the draft with an empty design (SC-1: designing a game from nothing). */
+  readonly onNewDesign?: () => void
   readonly print?: () => void
 }
 
@@ -149,7 +154,7 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
         <>
           {connection.kind === 'mock' && (
             <Notice title="Mock server.">
-              New roles get known demo passwords (demo-&lt;login id&gt;), which are not secret. A
+              New roles get known demo passwords (demo-&lt;login name&gt;), which are not secret. A
               real server gets random passwords.
               {connection.demoVaultPassphrase !== undefined && (
                 <DemoPassphrase passphrase={connection.demoVaultPassphrase} />
@@ -205,7 +210,11 @@ export function PublishSectionCore(props: PublishSectionCoreProps) {
           </section>
         </>
       )}
-      <DesignTransfer onExport={props.onExport} onImport={props.onImport} />
+      <DesignTransfer
+        onExport={props.onExport}
+        onImport={props.onImport}
+        {...(props.onNewDesign === undefined ? {} : { onNewDesign: props.onNewDesign })}
+      />
     </SectionFrame>
   )
 }
@@ -231,14 +240,21 @@ function VaultStatus({
   }
   if (snapshot.vault === 'locked') {
     return (
-      <VaultDialog
-        mode="unlock"
-        busy={busy}
-        onSubmit={onUnlockVault}
-        {...(connection?.demoVaultPassphrase === undefined
-          ? {}
-          : { demoPassphrase: connection.demoVaultPassphrase })}
-      />
+      <>
+        {snapshot.vaultIdleLocked === true && (
+          <span className="wrx-publish-vault" role="status">
+            The vault locked itself after a time without activity.
+          </span>
+        )}
+        <VaultDialog
+          mode="unlock"
+          busy={busy}
+          onSubmit={onUnlockVault}
+          {...(connection?.demoVaultPassphrase === undefined
+            ? {}
+            : { demoPassphrase: connection.demoVaultPassphrase })}
+        />
+      </>
     )
   }
   if (snapshot.vault === 'none' && need === 'create') {
@@ -287,8 +303,10 @@ function warningText(w: PlanWarning): string {
       return `${w.name} gets a new password: the vault must hold it to make the role read-only. Its players need the new password at their next login.`
     case 'account-exists':
       return `The account of ${w.name} (${w.roleId}) already exists, so it is not created and its password is not changed. If its players do not have the password, reset it from the credentials sheet.`
-    case 'objectives-kept':
-      return `The objectives of force ${w.forceId} were removed from the draft, but the published text stays: no operation retracts it.`
+    case 'template-removed':
+      return w.locked
+        ? `The template ${w.name} is removed. It is locked: messages that used it show as plain text from now on.`
+        : `The template ${w.name} is removed. No published room offered it, so no message uses it.`
   }
 }
 
@@ -303,6 +321,13 @@ function acknowledgementOf(w: PlanWarning): Acknowledgement | undefined {
       return { id, label: `Destroy ${w.name} and its ${plural(w.messageCount, 'message')}` }
     case 'password-reset':
       return { id, label: `Reset the password of ${w.name}` }
+    case 'template-removed':
+      return {
+        id,
+        label: w.locked
+          ? `Remove the template ${w.name}; its messages show as plain text`
+          : `Remove the template ${w.name}`,
+      }
     default:
       return undefined
   }
@@ -314,7 +339,6 @@ function PlanPanel(
   const { plan, snapshot, draft, stale } = props
   const design = draft.design
   const reset = plan.kind === 'reset'
-  const running = snapshot.busy === 'running'
   const result = snapshot.result
   const acknowledgements = plan.warnings
     .map(acknowledgementOf)
@@ -326,7 +350,17 @@ function PlanPanel(
   return (
     <section className="wrx-publish-panel" aria-labelledby={headingId}>
       <h3 id={headingId}>{reset ? 'Reset plan' : 'Publish plan'}</h3>
-      {plan.steps.length === 0 ? (
+      {plan.errors.length > 0 ? (
+        <Notice tone="error" title="This design cannot be published.">
+          <ul className="wrx-publish-errors">
+            {plan.errors.map((e, i) => (
+              <li key={i} data-kind={e.kind}>
+                {e.message}
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      ) : plan.steps.length === 0 ? (
         <p role="status">
           {reset
             ? 'Nothing to reset: the server holds no game.'
@@ -376,7 +410,8 @@ function PlanPanel(
               triggerLabel={
                 reset ? 'Reset the game…' : `Publish ${plural(plan.steps.length, 'change')}…`
               }
-              triggerDisabled={running || blocked || stale}
+              // Not while anything else runs, a re-plan included: the controller would ignore it.
+              triggerDisabled={snapshot.busy !== undefined || blocked || stale}
               title={reset ? 'Reset the game?' : 'Publish these changes?'}
               acknowledgements={acknowledgements}
               {...(reset ? { typed: gameName } : {})}
@@ -490,12 +525,13 @@ export interface CredentialsSheetProps {
   readonly published: readonly string[]
   readonly credentials: readonly Credential[]
   readonly busy: boolean
-  readonly onReset: (roleId: string) => Promise<string | undefined>
+  /** Resets a role's password, by login name (the account). */
+  readonly onReset: (loginName: string) => Promise<string | undefined>
   readonly print?: () => void
 }
 
 /**
- * ADM-26: role, force, login id and password, for the passwords issued in this browser session.
+ * ADM-26: role, force, login name and password, for the passwords issued in this browser session.
  * Generated on demand from memory, never stored; printed with print CSS that hides the rest of
  * the page.
  */
@@ -544,7 +580,7 @@ export function CredentialsSheet({
               <tr>
                 <th scope="col">Role</th>
                 <th scope="col">Force</th>
-                <th scope="col">Login id</th>
+                <th scope="col">Login name</th>
                 <th scope="col">Password</th>
                 <th scope="col" className="wrx-print-hide">
                   Actions
@@ -553,14 +589,15 @@ export function CredentialsSheet({
             </thead>
             <tbody>
               {roles.map((role) => {
-                const credential = passwordOf.get(role.id)
+                // Passwords belong to accounts, so the book is keyed by login name.
+                const credential = passwordOf.get(role.loginName)
                 const error = errors.get(role.id)
                 return (
                   <tr key={role.id}>
                     <th scope="row">{role.name}</th>
                     <td>{forceName(role.forceId)}</td>
                     <td>
-                      <code>{role.id}</code>
+                      <code>{role.loginName}</code>
                     </td>
                     <td>
                       {credential === undefined ? (
@@ -577,7 +614,7 @@ export function CredentialsSheet({
                         disabled={busy}
                         aria-label={`Reset the password of ${role.name}`}
                         onClick={() => {
-                          void onReset(role.id).then((problem) => {
+                          void onReset(role.loginName).then((problem) => {
                             const next = new Map(errors)
                             if (problem === undefined) next.delete(role.id)
                             else next.set(role.id, problem)
@@ -626,21 +663,30 @@ export function CredentialsSheet({
 function DesignTransfer({
   onExport,
   onImport,
+  onNewDesign,
 }: {
   readonly onExport: () => void
   readonly onImport: (text: string) => readonly DesignIssue[]
+  readonly onNewDesign?: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
   const [outcome, setOutcome] = useState<
     | { readonly ok: boolean; readonly issues: readonly DesignIssue[]; readonly name: string }
+    | 'new'
     | undefined
   >()
   const [pending, setPending] = useState<
-    { readonly name: string; readonly text: string } | undefined
+    { readonly name: string; readonly text: string } | 'new' | undefined
   >()
   let body: ReactNode = null
-  if (outcome !== undefined) {
+  if (outcome === 'new') {
+    body = (
+      <Notice title="Started a new design.">
+        The draft is empty but for the White Force; publish to apply it.
+      </Notice>
+    )
+  } else if (outcome !== undefined) {
     body = outcome.ok ? (
       <Notice title={`Imported ${outcome.name}.`}>
         The draft is replaced; publish to apply it.
@@ -680,8 +726,45 @@ function DesignTransfer({
             if (input.current !== null) input.current.value = ''
           }}
         />
+        {onNewDesign === undefined ? null : (
+          <Button
+            onClick={() => {
+              setOutcome(undefined)
+              setPending('new')
+            }}
+          >
+            Start a new design…
+          </Button>
+        )}
       </div>
-      {pending !== undefined && (
+      {pending === 'new' && onNewDesign !== undefined && (
+        <Notice tone="warning" title="Replace the draft with a new, empty design?">
+          <p>
+            The current draft is replaced; export it first to keep it. Nothing on the server changes
+            until you publish.
+          </p>
+          <div className="wrx-publish-toolbar">
+            <Button
+              variant="primary"
+              onClick={() => {
+                onNewDesign()
+                setOutcome('new')
+                setPending(undefined)
+              }}
+            >
+              Start a new design
+            </Button>
+            <Button
+              onClick={() => {
+                setPending(undefined)
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Notice>
+      )}
+      {pending !== undefined && pending !== 'new' && (
         <Notice tone="warning" title={`Replace the draft with ${pending.name}?`}>
           <p>The current draft is replaced. Nothing on the server changes until you publish.</p>
           <div className="wrx-publish-toolbar">

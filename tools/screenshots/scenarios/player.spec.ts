@@ -1,6 +1,7 @@
 // The player client on the mock (WP 2.4, 2.5, 2.6, DOC-20): the welcome page with the demo game, the
-// shell after logging in as Blue CO with its demo password (NFR-6), and the umpire's workspace
-// (the admin login, in the White Force).
+// shell after logging in as Blue CO with its demo password (NFR-6), the umpire's workspace
+// (the admin login, in the White Force), the chat panel, and a room with its composer collapsed
+// to a bar holding a draft (PLY-54).
 import { expect, test } from '@playwright/test'
 import { freezeClock, shoot } from '../lib/shoot.ts'
 import { hostMockInLeaderTab, roomTabs, welcomeLoaded } from './mock-app.ts'
@@ -20,10 +21,10 @@ test('player shell, logged in', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('blue-co')
+  await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await shoot(page, 'player-shell')
 })
@@ -33,11 +34,16 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // PLY-40: one column per room; the game info panel opened from the strip (PLY-8).
-  await expect(roomTabs(page)).toHaveText(['Blue HQ', 'Red HQ', 'Blue–Red negotiation'])
+  await expect(roomTabs(page)).toHaveText([
+    'Blue HQ',
+    'Red HQ',
+    'Blue–Red negotiation',
+    'Blue Reports',
+  ])
   await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByRole('tab', { name: 'Game info', exact: true }).click()
   await expect(page.getByRole('region', { name: 'Game briefing' })).toContainText('09:00')
@@ -50,7 +56,7 @@ test('player chat panel', { tag: '@screenshot' }, async ({ page }) => {
   await hostMockInLeaderTab(page)
   await page.goto('./app/')
   await welcomeLoaded(page)
-  await page.getByLabel('Role id').fill('blue-co')
+  await page.getByLabel('Login name').fill('blue-co')
   await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   // WP 2.6: the seeded history as cards with shared headers under a date divider (PLY-43,
@@ -65,4 +71,29 @@ test('player chat panel', { tag: '@screenshot' }, async ({ page }) => {
   await expect(room.getByRole('textbox', { name: 'Message Blue HQ' })).toBeEnabled()
   await page.mouse.move(0, 0)
   await shoot(page, 'player-chat')
+})
+
+test('player chat panel, composer collapsed', { tag: '@screenshot' }, async ({ page }) => {
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  await page.getByLabel('Login name').fill('blue-co')
+  await page.getByLabel('Password', { exact: true }).fill('demo-blue-co')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  // PLY-54: Blue HQ's composer collapsed to a bar, a draft waiting; the list takes the space.
+  const room = page.getByRole('region', { name: 'Blue HQ', exact: true })
+  const list = room.getByRole('region', { name: 'Messages in Blue HQ' })
+  await expect(list).toContainText('Recce team moving to the bridge.')
+  await expect(list).toContainText('Start of the room’s history.')
+  await expect(room.getByRole('list', { name: 'Online in this room' })).toContainText('Blue CO')
+  await room.getByRole('textbox', { name: 'Message Blue HQ' }).fill('Hold at the bridge')
+  await room.getByRole('button', { name: 'Hide message entry' }).click()
+  await expect(room.getByText('Draft not sent')).toBeVisible()
+  // No focus ring on the toggle in the shot.
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await page.mouse.move(0, 0)
+  await shoot(page, 'player-chat-collapsed')
 })

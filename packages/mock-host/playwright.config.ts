@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const port = 4392
+// WRX_MOCK_HOST_E2E_PORT moves the server, e.g. for two checkouts on one machine; the screenshot
+// runs (tools/screenshots) use the same default, so set one of them when both run at once.
+const port = Number(process.env.WRX_MOCK_HOST_E2E_PORT ?? 4392)
 
 export default defineConfig({
   testDir: 'e2e',

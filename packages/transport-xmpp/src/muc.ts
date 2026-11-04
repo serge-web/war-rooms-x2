@@ -15,6 +15,7 @@ import type {
 } from '@wrx/transport'
 import { JID } from 'stanza'
 import type * as XMPP from 'stanza'
+import type { Paging } from 'stanza/protocol'
 import { sendIq } from './core.ts'
 import type { Core } from './core.ts'
 import { booleanField, stringField, submitForm } from './forms.ts'
@@ -24,6 +25,16 @@ import { messageWithinCap } from './size.ts'
 
 const NS_ROOMCONFIG = 'http://jabber.org/protocol/muc#roomconfig'
 const SELF_PRESENCE = 110
+/** Most room-list pages read: far past NFR-11's 30 rooms, and a bound on a looping server. */
+const MAX_ROOM_PAGES = 200
+
+// StanzaJS parses an RSM set inside disco#items (xep0030 aliases `disco.paging`) but leaves it
+// out of the type.
+declare module 'stanza/protocol' {
+  interface DiscoItems {
+    paging?: Paging
+  }
+}
 
 type ReceivedPresence = XMPP.Stanzas.ReceivedPresence
 type ReceivedMessage = XMPP.Stanzas.ReceivedMessage
@@ -326,6 +337,8 @@ export class XmppMuc implements MucApi {
         throw invalidResponse(`room config whois is ${whois ?? 'missing'}`)
       }
       const description = stringField(form, 'muc#roomconfig_roomdesc')
+      const server = this.core.adapter.roomServerFields(form)
+      if (typeof server === 'string') throw invalidResponse(`room config has no valid ${server}`)
       return {
         name: stringField(form, 'muc#roomconfig_roomname') ?? '',
         ...(description === undefined || description === '' ? {} : { description }),
@@ -334,7 +347,7 @@ export class XmppMuc implements MucApi {
         persistent: flag('muc#roomconfig_persistentroom'),
         public: flag('muc#roomconfig_publicroom'),
         whois,
-        archive: this.core.adapter.roomArchive(form) ?? false,
+        ...server,
       }
     })
   }
@@ -346,12 +359,35 @@ export class XmppMuc implements MucApi {
     })
   }
 
+  /**
+   * disco#items on the service (XEP-0030), paged with RSM (XEP-0059) at the adapter's page size.
+   * A plain request is not enough: past its listing limit a server may answer with only some
+   * rooms (ejabberd lists only occupied ones, and so none of an idle game; review F10). Pages
+   * follow `last` until a page is empty, carries no RSM set (a server that does not page has
+   * sent everything) or the server's count is reached.
+   */
   listRooms(): Outcome<readonly RoomJid[]> {
     return this.core.run(async () => {
-      const result = await this.core.client.getDiscoItems(this.core.services().muc)
-      const rooms: RoomJid[] = []
-      for (const item of result.items) if (item.jid !== undefined) rooms.push(JID.toBare(item.jid))
-      return rooms
+      const max = this.core.adapter.roomListPageSize
+      const rooms = new Set<RoomJid>()
+      let after: string | undefined
+      for (let page = 0; page < MAX_ROOM_PAGES; page++) {
+        const reply = await sendIq(this.core.client, {
+          to: this.core.services().muc,
+          type: 'get',
+          disco: { type: 'items', paging: { max, ...(after === undefined ? {} : { after }) } },
+        })
+        const disco = reply.disco
+        if (disco?.type !== 'items') throw invalidResponse('the room list is not disco#items')
+        const items = disco.items ?? []
+        for (const item of items) if (item.jid !== undefined) rooms.add(JID.toBare(item.jid))
+        const paging = disco.paging
+        if (items.length === 0 || paging?.last === undefined) return [...rooms]
+        if (paging.count !== undefined && rooms.size >= paging.count) return [...rooms]
+        if (paging.last === after) throw invalidResponse('the room list did not advance')
+        after = paging.last
+      }
+      throw invalidResponse(`the room list has more than ${MAX_ROOM_PAGES * max} rooms`)
     })
   }
 }

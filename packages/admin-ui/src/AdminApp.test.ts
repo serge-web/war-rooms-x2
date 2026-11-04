@@ -3,11 +3,12 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { userEvent } from '@testing-library/user-event'
 import { chatRoomType, createRoomTypeRegistry, defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, AdminEditorProps, PlayerPanel, ReactRoomTypeRegistry } from '@wrx/hooks'
+import { isId } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { sampleDesign, sampleDesignWithWhiteCell } from '../../schemas/src/fixtures.ts'
+import { nameOf, sampleDesign, sampleDesignWithWhiteCell, tid } from '../../schemas/src/fixtures.ts'
 import { AdminApp } from './AdminApp.tsx'
 import type { AdminAppProps, AdminSection } from './AdminApp.tsx'
 import {
@@ -56,16 +57,23 @@ function setup({ design = sampleDesign(), draft, section = 'game', props = {} }:
 
 const main = () => screen.getByRole('main')
 
-function force(store: DraftStore, id: string) {
-  return store.getSnapshot().draft.design.forces.find((f) => f.id === id)
+/** A force by GUID, short test name (`blue`) or display name. */
+function force(store: DraftStore, key: string) {
+  return store
+    .getSnapshot()
+    .draft.design.forces.find((f) => f.id === key || f.id === tid(key) || f.name === key)
 }
 
-function role(store: DraftStore, id: string) {
-  return store.getSnapshot().draft.design.roles.find((r) => r.id === id)
+/** A role by GUID or login name. */
+function role(store: DraftStore, key: string) {
+  return store.getSnapshot().draft.design.roles.find((r) => r.id === key || r.loginName === key)
 }
 
-function room(store: DraftStore, id: string) {
-  return store.getSnapshot().draft.design.rooms.find((r) => r.id === id)
+/** A room by GUID, short test name (`blue-hq`) or display name. */
+function room(store: DraftStore, key: string) {
+  return store
+    .getSnapshot()
+    .draft.design.rooms.find((r) => r.id === key || r.id === tid(key) || r.name === key)
 }
 
 describe('layout (ADM-27, ADM-28)', () => {
@@ -78,6 +86,7 @@ describe('layout (ADM-27, ADM-28)', () => {
       'Forces',
       'Roles',
       'Rooms',
+      'Templates',
       'Themes',
       'Access matrix',
       'Publish',
@@ -203,9 +212,12 @@ describe('forces (ADM-4, ADM-23)', () => {
     const { user, store } = setup({ section: 'forces' })
     await user.type(screen.getByLabelText('New force name'), 'Green Force')
     await user.click(screen.getByRole('button', { name: 'Add force' }))
-    expect(force(store, 'green-force')).toMatchObject({ name: 'Green Force', order: 3 })
+    const added = force(store, 'Green Force')
+    expect(added).toMatchObject({ name: 'Green Force', order: 3 })
+    expect(isId(added?.id ?? '')).toBe(true)
     expect(screen.getByRole('form', { name: 'Force: Green Force' })).toBeTruthy()
-    expect(main().textContent).toContain('green-force')
+    // The generated id is shown, read only.
+    expect(main().textContent).toContain(added?.id)
   })
 
   it('edits name, colour, icon and umpire flag', async () => {
@@ -223,8 +235,8 @@ describe('forces (ADM-4, ADM-23)', () => {
     expect(force(store, 'blue')?.colour).toBe('#123456')
     expect(screen.getByLabelText<HTMLInputElement>('Colour picker').value).toBe('#123456')
 
-    await user.selectOptions(screen.getByLabelText('Icon'), 'game-logo')
-    expect(force(store, 'blue')?.iconAssetId).toBe('game-logo')
+    await user.selectOptions(screen.getByLabelText('Icon'), tid('game-logo'))
+    expect(force(store, 'blue')?.iconAssetId).toBe(tid('game-logo'))
     await user.selectOptions(screen.getByLabelText('Icon'), '')
     expect(force(store, 'blue')).not.toHaveProperty('iconAssetId')
 
@@ -244,9 +256,9 @@ describe('forces (ADM-4, ADM-23)', () => {
     const editor = screen.getByRole('textbox', { name: 'Objectives' })
     await user.clear(editor)
     await user.type(editor, '**Hold** the bridge')
-    expect(objectivesOf(store.getSnapshot().draft.design, 'blue')).toEqual({
+    expect(objectivesOf(store.getSnapshot().draft.design, tid('blue'))).toEqual({
       schemaVersion: 1,
-      forceId: 'blue',
+      forceId: tid('blue'),
       markdown: '**Hold** the bridge',
       updatedAt: NOW.toISOString(),
     })
@@ -266,18 +278,19 @@ describe('forces (ADM-4, ADM-23)', () => {
     expect(force(store, 'blue')).toBeDefined()
   })
 
-  it('deletes a force after confirmation, and never reuses its id', async () => {
+  it('deletes a force after confirmation; a new force of the same name gets a new id', async () => {
     const { user, store } = setup({ section: 'forces' })
     await user.type(screen.getByLabelText('New force name'), 'Green')
     await user.click(screen.getByRole('button', { name: 'Add force' }))
     await user.click(screen.getByRole('button', { name: 'Delete Green' }))
     const dialog = screen.getByRole('alertdialog', { name: 'Delete Green?' })
     expect(dialog.textContent).toContain('Nothing else refers to this force.')
+    const first = force(store, 'Green')?.id
     await user.click(within(dialog).getByRole('button', { name: 'Delete force' }))
-    expect(force(store, 'green')).toBeUndefined()
+    expect(force(store, 'Green')).toBeUndefined()
     await user.type(screen.getByLabelText('New force name'), 'Green')
     await user.click(screen.getByRole('button', { name: 'Add force' }))
-    expect(force(store, 'green-2')).toBeDefined()
+    expect(force(store, 'Green')?.id).not.toBe(first)
   })
 })
 
@@ -285,9 +298,9 @@ describe('roles (ADM-5, ADM-14)', () => {
   it('adds a role to the chosen force', async () => {
     const { user, store } = setup({ section: 'roles' })
     await user.type(screen.getByLabelText('New role name'), 'Red Logistics')
-    await user.selectOptions(screen.getByLabelText('In force'), 'red')
+    await user.selectOptions(screen.getByLabelText('In force'), tid('red'))
     await user.click(screen.getByRole('button', { name: 'Add role' }))
-    expect(role(store, 'red-logistics')).toMatchObject({ forceId: 'red', order: 1 })
+    expect(role(store, 'red-logistics')).toMatchObject({ forceId: tid('red'), order: 1 })
     expect(screen.getByRole('form', { name: 'Role: Red Logistics' })).toBeTruthy()
     expect(
       within(screen.getByRole('list', { name: 'Roles in Red' })).getAllByRole('listitem'),
@@ -300,35 +313,36 @@ describe('roles (ADM-5, ADM-14)', () => {
     expect(role(store, 'blue-co')?.name).toBe('Blue CO (acting)')
     await user.click(screen.getByLabelText('Observer'))
     expect(role(store, 'blue-co')?.isObserver).toBe(true)
-    await user.selectOptions(screen.getByLabelText('Force'), 'red')
-    expect(role(store, 'blue-co')).toMatchObject({ forceId: 'red', order: 1 })
+    await user.selectOptions(screen.getByLabelText('Force'), tid('red'))
+    expect(role(store, 'blue-co')).toMatchObject({ forceId: tid('red'), order: 1 })
     expect(
       within(screen.getByRole('list', { name: 'Roles in Red' })).getByText('Blue CO (acting)'),
     ).toBeTruthy()
   })
 
-  it('changes the login id before publishing, and refuses bad ones', async () => {
+  it('changes the login name before publishing, and refuses bad ones', async () => {
     const { user, store } = setup({ section: 'roles' })
-    const login = screen.getByLabelText('Login id')
+    const login = screen.getByLabelText('Login name')
     await user.clear(login)
     await user.type(login, 'red-co')
-    await user.click(screen.getByRole('button', { name: 'Change login id' }))
+    await user.click(screen.getByRole('button', { name: 'Change login name' }))
     expect(screen.getByRole('alert').textContent).toBe('Error: another role is "red-co"')
     expect(login.getAttribute('aria-invalid')).toBe('true')
     await user.clear(login)
     await user.type(login, 'blue-commander{enter}')
-    expect(role(store, 'blue-commander')).toBeDefined()
+    expect(role(store, 'blue-commander')?.id).toBe(tid('blue-co'))
     expect(role(store, 'blue-co')).toBeUndefined()
-    expect(room(store, 'negotiation')?.participants[0]?.id).toBe('blue-commander')
+    // Room entries name the role by its GUID, so they do not change.
+    expect(room(store, tid('negotiation'))?.participants[0]?.id).toBe(tid('blue-co'))
     expect(screen.getByRole('form', { name: 'Role: Blue CO' })).toBeTruthy()
   })
 
-  it('fixes the login id once published', () => {
+  it('fixes the login name once published', () => {
     setup({ section: 'roles', draft: markPublished(draftFromDesign(sampleDesign())) })
-    const login = screen.getByLabelText<HTMLInputElement>('Login id')
+    const login = screen.getByLabelText<HTMLInputElement>('Login name')
     expect(login.readOnly).toBe(true)
-    expect(main().textContent).toContain('Fixed: this role has been published.')
-    expect(screen.queryByRole('button', { name: 'Change login id' })).toBeNull()
+    expect(main().textContent).toContain('Fixed: this role has been published')
+    expect(screen.queryByRole('button', { name: 'Change login name' })).toBeNull()
   })
 
   it('warns that history stays before deleting a role', async () => {
@@ -336,11 +350,12 @@ describe('roles (ADM-5, ADM-14)', () => {
     await user.click(screen.getByRole('button', { name: 'Delete Blue CO' }))
     const dialog = screen.getByRole('alertdialog', { name: 'Delete Blue CO?' })
     expect(dialog.textContent).toContain('Message history stays.')
-    expect(dialog.textContent).toContain('still attributed to its login id blue-co')
+    expect(dialog.textContent).toContain('under its login name blue-co')
     expect(dialog.textContent).toContain('Blue–Red negotiation')
     await user.click(within(dialog).getByRole('button', { name: 'Delete role' }))
     expect(role(store, 'blue-co')).toBeUndefined()
-    expect(store.getSnapshot().draft.meta.retiredIds.roles).toEqual(['blue-co'])
+    // Never published, so no record is kept and the login name is free again.
+    expect(store.getSnapshot().draft.design.retired).toEqual([])
   })
 })
 
@@ -349,37 +364,37 @@ describe('rooms (ADM-6, ADM-7)', () => {
     const { user, store } = setup({ section: 'rooms' })
     await user.type(screen.getByLabelText('New room name'), 'Press room')
     await user.click(screen.getByRole('button', { name: 'Add room' }))
-    expect(room(store, 'press-room')).toMatchObject({ roomType: 'chat', participants: [] })
+    expect(room(store, 'Press room')).toMatchObject({ roomType: 'chat', participants: [] })
     expect(main().textContent).toContain('No settings for this room type.')
 
-    await user.selectOptions(screen.getByLabelText('Add participant'), 'force:red')
+    await user.selectOptions(screen.getByLabelText('Add participant'), `force:${tid('red')}`)
     await user.selectOptions(screen.getByLabelText('With access'), 'read')
     await user.click(screen.getByRole('button', { name: 'Add participant' }))
-    await user.selectOptions(screen.getByLabelText('Add participant'), 'role:blue-co')
+    await user.selectOptions(screen.getByLabelText('Add participant'), `role:${tid('blue-co')}`)
     await user.selectOptions(screen.getByLabelText('With access'), 'write')
     await user.click(screen.getByRole('button', { name: 'Add participant' }))
-    expect(room(store, 'press-room')?.participants).toEqual([
-      { kind: 'force', id: 'red', access: 'read' },
-      { kind: 'role', id: 'blue-co', access: 'write' },
+    expect(room(store, 'Press room')?.participants).toEqual([
+      { kind: 'force', id: tid('red'), access: 'read' },
+      { kind: 'role', id: tid('blue-co'), access: 'write' },
     ])
 
     await user.selectOptions(screen.getByLabelText('Access for Force: Red'), 'write')
-    expect(room(store, 'press-room')?.participants[0]?.access).toBe('write')
+    expect(room(store, 'Press room')?.participants[0]?.access).toBe('write')
     await user.click(screen.getByRole('button', { name: 'Remove Role: Blue CO (Blue)' }))
-    expect(room(store, 'press-room')?.participants).toEqual([
-      { kind: 'force', id: 'red', access: 'write' },
+    expect(room(store, 'Press room')?.participants).toEqual([
+      { kind: 'force', id: tid('red'), access: 'write' },
     ])
   })
 
   it('renames and deletes a room', async () => {
     const { user, store } = setup({ section: 'rooms' })
     await user.type(screen.getByLabelText('Name'), ' main')
-    expect(room(store, 'blue-hq')?.name).toBe('Blue HQ main')
+    expect(room(store, tid('blue-hq'))?.name).toBe('Blue HQ main')
     await user.click(screen.getByRole('button', { name: 'Delete Blue HQ main' }))
     const dialog = screen.getByRole('alertdialog', { name: 'Delete Blue HQ main?' })
     expect(dialog.textContent).toContain('destroys the room and its message history')
     await user.click(within(dialog).getByRole('button', { name: 'Delete room' }))
-    expect(room(store, 'blue-hq')).toBeUndefined()
+    expect(room(store, tid('blue-hq'))).toBeUndefined()
     expect(screen.getByRole('form', { name: 'Room: Red HQ' })).toBeTruthy()
   })
 
@@ -407,7 +422,7 @@ describe('rooms (ADM-6, ADM-7)', () => {
     )
     const { user, store } = setup({ section: 'rooms', props: { registry: types } })
     await user.click(screen.getByLabelText('Slow mode'))
-    expect(room(store, 'blue-hq')?.config).toEqual({ slow: true })
+    expect(room(store, tid('blue-hq'))?.config).toEqual({ slow: true })
   })
 
   it('flags a room type the registry does not know', () => {
@@ -452,7 +467,11 @@ describe('reordering (ADM-8)', () => {
     expect(document.body.textContent).toContain('Blue moved to position 2 of 3.')
     await user.keyboard(' ')
     expect(document.body.textContent).toContain('Blue dropped in position 2 of 3.')
-    expect(design().forces.map((f) => `${f.id}:${f.order}`)).toEqual(['red:0', 'blue:1', 'white:2'])
+    expect(design().forces.map((f) => `${nameOf(f.id)}:${f.order}`)).toEqual([
+      'red:0',
+      'blue:1',
+      'white:2',
+    ])
     expect(names(screen.getByRole('list', { name: 'Forces' }))).toEqual(['Red', 'Blue', 'White'])
   })
 
@@ -462,14 +481,18 @@ describe('reordering (ADM-8)', () => {
     await user.keyboard(' ')
     await user.keyboard('{ArrowDown}')
     await user.keyboard('{Escape}')
-    expect(design().rooms.map((r) => r.id)).toEqual(['blue-hq', 'red-hq', 'negotiation'])
+    expect(design().rooms.map((r) => r.id)).toEqual([
+      tid('blue-hq'),
+      tid('red-hq'),
+      tid('negotiation'),
+    ])
     expect(document.body.textContent).toContain('Moving Blue HQ cancelled.')
   })
 
   it('moves rooms and roles with the Move buttons', async () => {
     const { user, design } = setup({ section: 'rooms' })
     await user.click(screen.getByRole('button', { name: 'Move Blue–Red negotiation up' }))
-    expect(design().rooms.map((r) => `${r.id}:${r.order}`)).toEqual([
+    expect(design().rooms.map((r) => `${nameOf(r.id)}:${r.order}`)).toEqual([
       'blue-hq:0',
       'negotiation:1',
       'red-hq:2',
@@ -480,7 +503,7 @@ describe('reordering (ADM-8)', () => {
     await user.click(screen.getByRole('button', { name: 'Move Blue CO down' }))
     expect(
       design()
-        .roles.map((r) => `${r.id}:${r.order}`)
+        .roles.map((r) => `${r.loginName}:${r.order}`)
         .slice(0, 2),
     ).toEqual(['blue-observer:0', 'blue-co:1'])
   })
@@ -530,12 +553,12 @@ describe('access matrix (ADM-9)', () => {
       design: {
         ...base,
         rooms: base.rooms.map((r) =>
-          r.id === 'negotiation'
+          r.id === tid('negotiation')
             ? {
                 ...r,
                 participants: [
                   ...r.participants,
-                  { kind: 'role' as const, id: 'white-observer', access: 'write' as const },
+                  { kind: 'role' as const, id: tid('white-observer'), access: 'write' as const },
                 ],
               }
             : r,
@@ -565,16 +588,19 @@ describe('access matrix (ADM-9)', () => {
       design: {
         ...base,
         rooms: base.rooms.map((r) =>
-          r.id === 'red-hq'
+          r.id === tid('red-hq')
             ? {
                 ...r,
-                participants: [...r.participants, { kind: 'role', id: 'ghost', access: 'write' }],
+                participants: [
+                  ...r.participants,
+                  { kind: 'role', id: tid('ghost'), access: 'write' },
+                ],
               }
             : r,
         ),
       },
     })
-    expect(main().textContent).toContain('Red HQ: unknown role "ghost" (grants nothing)')
+    expect(main().textContent).toContain(`Red HQ: unknown role "${tid('ghost')}" (grants nothing)`)
     expect(main().textContent).toContain('1 error (these block publishing), 0 warnings.')
     expect(main().textContent).toContain('rooms[1].participants[1]')
   })

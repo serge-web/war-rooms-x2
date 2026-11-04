@@ -14,7 +14,7 @@ WRX1 keeps Serge's way of describing a game and War Rooms X's XMPP transport, an
 ## What version 1 does
 
 - **An admin backend** to design one wargame and provision it on the server in one step. Publishing is repeatable: it works out what changed and applies only that.
-- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a fixed column for announcements, the player's force and its objectives.
+- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a column for announcements, the player's force and its objectives. In a narrow window or multi-client pane the column becomes a tab of its own. Each room's message entry can be collapsed to a slim bar for players who only read, so the messages get the space; each room remembers it, and observers, who cannot post, start with it collapsed.
 - **A mock backend** that runs entirely in the browser, for reviews and demos with no server at all.
 - **A multi-client view** that shows two to four independent clients on one page, so a demo can show several players at once.
 - **This site**, which explains the project and hosts a live build of every pull request.

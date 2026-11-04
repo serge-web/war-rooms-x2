@@ -3,12 +3,12 @@
 // LayoutStorage (PLY-5), reconciles it whenever the tabs change (PLY-6), docks popouts back when
 // their window closes, and adds the Alt+Shift+Arrow keyboard move with focus kept on the moved
 // tab (NFR-14). `Workspace` (workspace.tsx) wires it to the pane's store.
-import { Layout, TabNode } from 'flexlayout-react'
-import type { ITabRenderValues, TabSetNode } from 'flexlayout-react'
+import { Layout, OverflowIcon, TabNode } from 'flexlayout-react'
+import type { IIcons, ITabRenderValues, TabSetNode } from 'flexlayout-react'
 import { Button } from '@wrx/ui'
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
-import { panelTabId, parseTabId, roomTabId, tabIds } from './ids.ts'
+import { panelTabId, parseTabId, roomTabId, specialTabId, tabIds } from './ids.ts'
 import type { TabIds } from './ids.ts'
 import {
   Model,
@@ -18,10 +18,17 @@ import {
   moveTab,
   reconcile,
   restoreLayout,
+  roomTabState,
   serialiseLayout,
+  specialTab,
+  updateRoomTabState,
 } from './model.ts'
 import type { Action, LayoutSpec } from './model.ts'
+import { WorkspaceSpecialContext } from './special.tsx'
+import type { WorkspaceSpecialTab } from './special.tsx'
 import type { LayoutStorage } from './storage.ts'
+import { RoomTabStateContext } from './tab-state.ts'
+import type { RoomTabStateStore } from './tab-state.ts'
 import { TabLabel } from './tabs.tsx'
 import type { RoomTabBadge } from './tabs.tsx'
 
@@ -57,10 +64,16 @@ export interface WorkspaceCoreProps {
   readonly popoutUrl?: string
 }
 
-function specOf(rooms: readonly WorkspaceRoom[], panels: readonly WorkspacePanel[]): LayoutSpec {
+function specOf(
+  rooms: readonly WorkspaceRoom[],
+  panels: readonly WorkspacePanel[],
+  special: WorkspaceSpecialTab | undefined,
+): LayoutSpec {
   return {
     rooms: rooms.map((r) => ({ id: roomTabId(r.id), name: r.name })),
     panels: panels.map((p) => ({ id: panelTabId(p.id), name: p.name })),
+    special:
+      special === undefined ? undefined : { id: specialTabId(special.id), name: special.name },
   }
 }
 
@@ -77,6 +90,24 @@ function initialModel(
 
 const EMPTY_PANELS: readonly WorkspacePanel[] = Object.freeze([])
 
+/**
+ * The hidden-tabs button as the library draws it, but with the count drawn by CSS (workspace.css)
+ * instead of as text (NFR-14, WCAG 2.5.3): the button is named "Hidden tabs" and its menu lists
+ * them, so a bare number as its visible text only made the name disagree with what is shown.
+ */
+const ICONS: IIcons = Object.freeze({
+  more: (_node: unknown, hidden: readonly unknown[]) => (
+    <>
+      <OverflowIcon />
+      <span
+        className="flexlayout__tab_button_overflow_count wrx-overflow-count"
+        data-count={hidden.length > 0 ? hidden.length : ''}
+        aria-hidden="true"
+      />
+    </>
+  ),
+})
+
 export function WorkspaceCore({
   rooms,
   renderRoom,
@@ -91,8 +122,11 @@ export function WorkspaceCore({
   const ids = useMemo(() => tabIds(instance), [instance])
   // A stable spec, new only when a tab id or name changes: `rooms` and `panels` are usually new
   // arrays on every render, so their text stands in for them.
-  const specText = JSON.stringify(specOf(rooms, panels))
-  const spec = useMemo(() => specOf(rooms, panels), [specText])
+  // FT-1: the host's special tab, if it offers one.
+  const slot = useContext(WorkspaceSpecialContext)
+  const special = slot?.tab
+  const specText = JSON.stringify(specOf(rooms, panels, special))
+  const spec = useMemo(() => specOf(rooms, panels, special), [specText])
 
   const [model, setModel] = useState(
     () => initialModel(spec, ids, storage, layoutKey) ?? defaultModel(spec, ids),
@@ -107,6 +141,26 @@ export function WorkspaceCore({
     if (layoutKey !== undefined) storage?.save(layoutKey, serialiseLayout(m, ids))
   }
 
+  // PLY-54: each room tab's own state, in its tab node's config, for the panels to read and
+  // change. One store for the workspace's life; it follows the model on screen, so a reset or
+  // a restored layout reaches the panels without remounting them. Popouts render through
+  // portals, so their panels find it too.
+  const modelRef = useRef(model)
+  modelRef.current = model
+  const tabState = useMemo(() => tabStateStore(modelRef, ids), [ids])
+  useLayoutEffect(() => {
+    tabState.changed()
+    const listener = {
+      onAfterAction() {
+        tabState.changed()
+      },
+    }
+    model.addChangeListener(listener)
+    return () => {
+      model.removeChangeListener(listener)
+    }
+  }, [model, tabState])
+
   // PLY-5: a new key (another design version) restores that key's layout, or keeps this one.
   useLayoutEffect(() => {
     if (loadedKey.current === layoutKey) return
@@ -119,6 +173,28 @@ export function WorkspaceCore({
   // PLY-6: reconcile the model on screen with the current tabs, before paint.
   useLayoutEffect(() => {
     reconcile(model, spec, ids)
+  }, [model, spec, ids])
+
+  // FT-1: tell the host this workspace can show its special tab, and whether the tab is on
+  // screen. FlexLayout reports a tab's visibility as it positions the tab panels.
+  const claim = slot?.claim
+  useLayoutEffect(() => claim?.(), [claim])
+  const onShownRef = useRef(slot?.onShownChange)
+  onShownRef.current = slot?.onShownChange
+  useLayoutEffect(() => {
+    const node = specialTab(model, spec, ids)
+    if (node === undefined) return undefined
+    const report = (shown: boolean) => {
+      onShownRef.current?.(shown)
+    }
+    report(node.isVisible())
+    node.setEventListener('visibility', (params: { readonly visible?: unknown }) => {
+      report(params.visible === true)
+    })
+    return () => {
+      node.removeEventListener('visibility')
+      report(false)
+    }
   }, [model, spec, ids])
 
   // Save after every change, and dock a closed popout's tabs back (CLOSE_POPOUT leaves them in
@@ -154,6 +230,7 @@ export function WorkspaceCore({
     const ref = logical === undefined ? undefined : parseTabId(logical)
     if (ref?.kind === 'room') return renderRoom(ref.roomId)
     if (ref?.kind === 'panel') return panels.find((p) => p.id === ref.panelId)?.content ?? null
+    if (ref?.kind === 'special' && ref.specialId === special?.id) return special.content
     return null
   }
 
@@ -161,7 +238,16 @@ export function WorkspaceCore({
   const onRenderTab = (node: TabNode, values: ITabRenderValues) => {
     const logical = ids.toLogical(node.getId())
     if (logical === undefined) return
-    values.content = <TabLabel tabId={logical} name={node.getName()} badge={tabBadge} />
+    const own = parseTabId(logical)?.kind === 'special' ? special : undefined
+    values.content = (
+      <TabLabel
+        tabId={logical}
+        name={node.getName()}
+        badge={tabBadge}
+        icon={own?.icon}
+        after={own?.badge}
+      />
+    )
   }
 
   const onTabSetPlaceHolder = (_node: TabSetNode): ReactNode => (
@@ -204,16 +290,42 @@ export function WorkspaceCore({
         {announcement}
       </p>
       <div className="wrx-workspace__layout" ref={rootRef} onKeyDownCapture={onKeyDownCapture}>
-        <Layout
-          model={model}
-          factory={factory}
-          onRenderTab={onRenderTab}
-          onTabSetPlaceHolder={onTabSetPlaceHolder}
-          popoutURL={popoutUrl}
-        />
+        <RoomTabStateContext.Provider value={tabState}>
+          <Layout
+            model={model}
+            factory={factory}
+            onRenderTab={onRenderTab}
+            onTabSetPlaceHolder={onTabSetPlaceHolder}
+            popoutURL={popoutUrl}
+            icons={ICONS}
+          />
+        </RoomTabStateContext.Provider>
       </div>
     </div>
   )
+}
+
+/** The room tabs' state over whichever model is on screen (PLY-54). */
+function tabStateStore(
+  modelRef: { readonly current: Model },
+  ids: TabIds,
+): RoomTabStateStore & { changed(): void } {
+  const listeners = new Set<() => void>()
+  return {
+    get: (roomId) => roomTabState(modelRef.current, ids, roomId),
+    update(roomId, patch) {
+      updateRoomTabState(modelRef.current, ids, roomId, patch)
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    changed() {
+      for (const listener of listeners) listener()
+    },
+  }
 }
 
 /** The tab button (role=tab) an event came from, if it is inside this workspace. */

@@ -52,7 +52,7 @@ describe('parsePost', () => {
     const { problems } = parsePost(file, post('title: T\ndate: 2 Nov\nphase: 7\nstatus: draft'))
     expect(problems).toEqual([
       `${file}: date is YYYY-MM-DD`,
-      `${file}: phase is 0 to 3`,
+      `${file}: phase is 0 to 4`,
       `${file}: status is work-in-progress or gate (DOC-26)`,
     ])
   })

@@ -1,0 +1,5 @@
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy25y4e-3pi'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN:scale-c-1200' jid='RUN-blue@localhost'/><options><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#subscribe_options</value></field><field var='pubsub#subscription_type'><value>items</value></field><field var='pubsub#subscription_depth'><value>all</value></field></x></options></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy25y2b-w5ufd' from='pubsub.localhost' type='result' id='s14-mvy25y4e-3pi'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='701869B53CC2F' node='RUN:scale-c-1200' jid='RUN-blue@localhost'/></pubsub></iq>

@@ -1,6 +1,6 @@
 export * from './errors.ts'
 export type * from './session.ts'
-export type * from './muc.ts'
+export * from './muc.ts'
 export type * from './mam.ts'
 export type * from './pubsub.ts'
 export type * from './admin.ts'

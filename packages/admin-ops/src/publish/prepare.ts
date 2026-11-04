@@ -2,10 +2,10 @@
 // would destroy (R-F, ADM-40), and plan again with the counts. Also the server checks run
 // before and after a publish (NFR-4).
 import type { DesignFile } from '@wrx/schemas'
-import type { RoomConfig } from '@wrx/transport'
 import { opsOk } from '../errors.ts'
 import type { OpsOutcome } from '../errors.ts'
 import type { AdminOps } from '../ops.ts'
+import { ROOM_SETTINGS, gameRoomConfig } from '../target.ts'
 import { planPublish, planReset, roomsToDestroy } from './plan.ts'
 import type { PublishPlan } from './plan.ts'
 import { readServerView } from './view.ts'
@@ -66,19 +66,12 @@ export interface ServerCheck {
   readonly detail: string
 }
 
-/** The room settings NFR-3 relies on, without the name. */
-const ROOM_DEFAULTS = {
-  membersOnly: true,
-  moderated: true,
-  persistent: true,
-  public: false,
-  whois: 'anyone',
-  archive: true,
-} as const satisfies Omit<RoomConfig, 'name' | 'description'>
+/** The room settings NFR-3 and spike S1b rely on: the game room's, without name and text. */
+const ROOM_DEFAULTS = gameRoomConfig('')
 
 /**
  * NFR-4: checks what can be checked over XMPP. Admin commands answered (the view was read);
- * every existing room has the NFR-3 defaults (before a publish, a difference is a warning, since
+ * every existing room has the NFR-3 defaults and the S1b side channels closed (review F6) (before a publish, a difference is a warning, since
  * the publish reconfigures it); MAM answers for a game room. With no rooms yet, the room checks
  * are skipped; run them again after publishing.
  */
@@ -105,10 +98,9 @@ export async function checkServer(ops: AdminOps, view: ServerView): Promise<Serv
     return checks
   }
   const off = view.rooms.flatMap((room) => {
-    const wrong = (Object.keys(ROOM_DEFAULTS) as (keyof typeof ROOM_DEFAULTS)[]).filter(
-      (key) => room.config[key] !== ROOM_DEFAULTS[key],
-    )
-    return wrong.length === 0 ? [] : [`${room.roomId} (${wrong.join(', ')})`]
+    const wrong = ROOM_SETTINGS.filter((key) => room.config[key] !== ROOM_DEFAULTS[key])
+    const name = room.config.name === '' ? room.roomId : room.config.name
+    return wrong.length === 0 ? [] : [`${name} (${wrong.join(', ')})`]
   })
   checks.push({
     id: 'room-defaults',
@@ -116,7 +108,7 @@ export async function checkServer(ops: AdminOps, view: ServerView): Promise<Serv
     status: off.length === 0 ? 'pass' : 'warn',
     detail:
       off.length === 0
-        ? `All ${view.rooms.length} rooms are members-only, moderated, non-anonymous, persistent, unlisted and archived.`
+        ? `All ${view.rooms.length} rooms are members-only, moderated, non-anonymous, persistent, unlisted and archived, and let observers send no private messages, voice requests, status text or nick changes, and no one subscribe (MUC/Sub).`
         : `Not as NFR-3 requires, and reconfigured by the publish: ${off.join('; ')}.`,
   })
   const probe = view.rooms[0]

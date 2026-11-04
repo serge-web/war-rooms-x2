@@ -4,6 +4,8 @@
 // A node auto-created by a bare publish keeps ejabberd's default (notify_delete off), so its
 // deletion is silent and only the next design version reveals it: the admin tooling never
 // relies on auto-create.
+import { nodeName } from '@wrx/schemas'
+import { nameOf, tid } from '@wrx/schemas/fixtures'
 import { createSessionStore } from '@wrx/domain'
 import type { SessionStore } from '@wrx/domain'
 import type { Session } from '@wrx/transport'
@@ -20,10 +22,10 @@ function unwrap<T>(result: { ok: true; value: T } | { ok: false; error: unknown 
 
 const PRESS = {
   schemaVersion: 1,
-  id: 'press',
+  id: tid('press'),
   name: 'Press room',
   roomType: 'chat',
-  participants: [{ kind: 'force', id: 'blue', access: 'write' }],
+  participants: [{ kind: 'force', id: tid('blue'), access: 'write' }],
   config: {},
   order: 3,
 }
@@ -53,7 +55,7 @@ async function demo() {
 
 const silent = { debug: () => undefined, warn: () => undefined }
 
-const roomIds = (store: SessionStore) => store.me().data.rooms.map((r) => r.room.id)
+const roomIds = (store: SessionStore) => store.me().data.rooms.map((r) => nameOf(r.room.id))
 
 describe('a room node deleted mid-session (PLY-6)', () => {
   it('leaves the White observer’s rooms at once when the node was created as a publish creates it', async () => {
@@ -61,7 +63,7 @@ describe('a room node deleted mid-session (PLY-6)', () => {
     expect(roomIds(umpire)).not.toContain('press')
     // As the publish does: create and configure the node, grant access, publish, bump.
     unwrap(
-      await admin.pubsub.createNode('rooms:press', {
+      await admin.pubsub.createNode(nodeName.room(tid('press')), {
         accessModel: 'whitelist',
         publishModel: 'publishers',
         maxItems: 1,
@@ -69,32 +71,36 @@ describe('a room node deleted mid-session (PLY-6)', () => {
       }),
     )
     unwrap(
-      await admin.pubsub.setAffiliations('rooms:press', [
+      await admin.pubsub.setAffiliations(nodeName.room(tid('press')), [
         { jid: `white-observer@${state.domain}`, affiliation: 'member' },
       ]),
     )
-    unwrap(await admin.pubsub.publish('rooms:press', 'current', JSON.stringify(PRESS)))
+    unwrap(
+      await admin.pubsub.publish(nodeName.room(tid('press')), 'current', JSON.stringify(PRESS)),
+    )
     await bumpDesign(2)
     await vi.waitFor(() => {
       expect(roomIds(umpire)).toContain('press')
     })
 
-    unwrap(await admin.pubsub.deleteNode('rooms:press'))
+    unwrap(await admin.pubsub.deleteNode(nodeName.room(tid('press'))))
     await vi.waitFor(() => {
       expect(roomIds(umpire)).not.toContain('press')
     })
-    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation'])
+    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports'])
     await umpire.logout()
   })
 
   it('an auto-created node is deleted silently (ejabberd’s default), until the next design version', async () => {
     const { admin, umpire, bumpDesign } = await demo()
-    unwrap(await admin.pubsub.publish('rooms:press', 'current', JSON.stringify(PRESS)))
+    unwrap(
+      await admin.pubsub.publish(nodeName.room(tid('press')), 'current', JSON.stringify(PRESS)),
+    )
     await bumpDesign(2)
     await vi.waitFor(() => {
       expect(roomIds(umpire)).toContain('press')
     })
-    unwrap(await admin.pubsub.deleteNode('rooms:press'))
+    unwrap(await admin.pubsub.deleteNode(nodeName.room(tid('press'))))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(roomIds(umpire)).toContain('press')
     await bumpDesign(3)

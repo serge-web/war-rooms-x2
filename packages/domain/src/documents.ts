@@ -3,14 +3,17 @@ import { nodeName, parseDocument, parseNodeName } from '@wrx/schemas'
 import type {
   Announcement,
   Asset,
+  Directory,
   Force,
   GameSetup,
   GameState,
   Objectives,
   ParseError,
   Result,
+  Retired,
   Role,
   Room,
+  Template,
 } from '@wrx/schemas'
 
 /** The value type of each document kind the store holds. */
@@ -23,6 +26,12 @@ export interface DocumentValues {
   readonly room: Room
   readonly objectives: Objectives
   readonly asset: Asset
+  /** An item of `retired`: a deleted force's or role's last name (§3 rule 1). */
+  readonly retired: Retired
+  /** `directory`: entity GUIDs, and each role's GUID by login name (§3 rule 1). */
+  readonly directory: Directory
+  /** An item of `templates`: a message template, its item id its GUID (Annex A, TPL-1). */
+  readonly template: Template
 }
 
 /** A validated document, tagged with its kind. */
@@ -48,6 +57,12 @@ export type LiveDocumentKind = LiveDocument['kind']
  */
 export const DOCUMENT_ITEM_ID = 'current'
 
+/**
+ * The one item an objectives node holds: the admin's, the only publisher (§3 rule 14, D21).
+ * Readers ignore any other item, which only a server published before WP 3.5 can hold.
+ */
+export const OBJECTIVES_ITEM_ID = 'admin'
+
 export interface NodeSpec {
   readonly kind: LiveDocumentKind
   /** For per-entity nodes, the id the document must carry. */
@@ -59,13 +74,15 @@ export function nodeSpec(node: string): NodeSpec | undefined {
   const ref = parseNodeName(node)
   if (ref === undefined) return undefined
   if (ref.kind === 'singleton') {
-    const kind =
-      ref.node === 'game-setup'
-        ? 'game-setup'
-        : ref.node === 'game-state'
-          ? 'game-state'
-          : 'announcement'
-    return { kind, id: undefined }
+    const kinds = {
+      'game-setup': 'game-setup',
+      'game-state': 'game-state',
+      announcements: 'announcement',
+      retired: 'retired',
+      directory: 'directory',
+      templates: 'template',
+    } as const
+    return { kind: kinds[ref.node], id: undefined }
   }
   const kinds = {
     forces: 'force',
@@ -143,6 +160,18 @@ function parseAs(kind: LiveDocumentKind, payload: string): Result<LiveDocument> 
       const r = parseDocument('asset', payload)
       return r.ok ? done({ kind, value: r.value }) : fail(r.error)
     }
+    case 'retired': {
+      const r = parseDocument('retired', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
+    case 'directory': {
+      const r = parseDocument('directory', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
+    case 'template': {
+      const r = parseDocument('template', payload)
+      return r.ok ? done({ kind, value: r.value }) : fail(r.error)
+    }
   }
 }
 
@@ -152,5 +181,26 @@ export function safeNodeName(kind: keyof typeof nodeName, id: string): string | 
     return nodeName[kind](id)
   } catch {
     return undefined
+  }
+}
+
+/**
+ * The `directory` document for a design (§3 rule 1): every force, role and room GUID, and each
+ * role's login name, sorted by GUID so the same design always gives the same document. The admin
+ * tooling publishes it and the mock seeds it; a role reads it to find its own role document from
+ * its login name, without listing nodes.
+ */
+export function directoryOf(design: {
+  readonly forces: readonly { readonly id: string }[]
+  readonly roles: readonly { readonly id: string; readonly loginName: string }[]
+  readonly rooms: readonly { readonly id: string }[]
+}): Directory {
+  const byId = (a: { readonly id: string }, b: { readonly id: string }) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  return {
+    schemaVersion: 1,
+    roles: [...design.roles].sort(byId).map((r) => ({ id: r.id, loginName: r.loginName })),
+    forces: [...design.forces].sort(byId).map((f) => f.id),
+    rooms: [...design.rooms].sort(byId).map((r) => r.id),
   }
 }

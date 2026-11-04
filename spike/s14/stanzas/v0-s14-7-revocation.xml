@@ -1,0 +1,29 @@
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24nby-12'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN:c1'><affiliation jid='RUN-blue@localhost' affiliation='none'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24nby-12'/>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24nc4-13'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><subscriptions node='RUN:c1'><subscription jid='RUN-blue@localhost' subscription='none'/></subscriptions></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24nc4-13'/>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mvy24nca-14'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a3'><asset xmlns='urn:wrx:s14' id='a3' t='1793551288618'/></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s14-n9czys' from='pubsub.localhost' type='result' id='s14-mvy24nca-14'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN:l1'><item id='a3'/></publish></pubsub></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24oi8-15'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='result' id='s14-mvy24oi8-15'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:l1'><item id='a1'><asset xmlns='urn:wrx:s14' id='a1' t='1793551286747'/></item><item id='a2'><asset xmlns='urn:wrx:s14' id='a2' t='1793551287073'/></item><item id='a3'><asset xmlns='urn:wrx:s14' id='a3' t='1793551288618'/></item></items></pubsub></iq>
+
+<!-- blue: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mvy24oid-16'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub></iq>
+
+<!-- blue: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-blue@localhost/blue-mvy24lwp-cpqxl' from='pubsub.localhost' type='error' id='s14-mvy24oid-16'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN:lw'/></pubsub><error type='cancel'><closed-node xmlns='http://jabber.org/protocol/pubsub#errors'/><not-allowed xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/></error></iq>

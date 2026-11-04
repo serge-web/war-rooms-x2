@@ -9,4 +9,4 @@ Each work package (WP) in [the development plan](../../WRX1-Dev-Plan.md) has a b
 - **Consumes**: the frozen interfaces it may use but not change;
 - **Notes**: open points and decisions.
 
-Phase 0, 1 and 2 briefs are written. Phase 3 briefs are written at the start of Phase 3.
+Every v1 brief is written, plus FT-1 and spike S14. Briefs for Annexes A and B are written when the product owner approves their work packages (`plan/decisions/annex-a-b-implementation.md`).

@@ -4,7 +4,9 @@
 // stays plain text in a real browser (PLY-14). Two pages of one context share one mock server.
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { ROOM } from '@wrx/schemas/fixtures'
 import { asMockAdmin, logIn } from './mock.ts'
+import { isBrowserNotice } from './notices.ts'
 
 const ROOMS = { blue: 'Blue HQ', red: 'Red HQ', talks: 'Blue–Red negotiation' } as const
 
@@ -20,7 +22,9 @@ function watchErrors(page: Page): string[] {
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
   })
-  page.on('pageerror', (e) => errors.push(e.message))
+  page.on('pageerror', (e) => {
+    if (!isBrowserNotice(e.message)) errors.push(e.message)
+  })
   return errors
 }
 
@@ -92,6 +96,8 @@ test('two clients send and receive; a hidden tab counts unread (PLY-9, PLY-11, P
 test('an observer reads but cannot post (PLY-12)', async ({ page }) => {
   const errors = await open(page, 'blue-observer')
   await expect(messages(page, ROOMS.blue)).toContainText('Orders for the crossing are out.')
+  // Collapsed by default for a read-only role (PLY-54), and expandable to see why.
+  await panel(page, ROOMS.blue).getByRole('button', { name: 'Show message entry' }).click()
   const box = composer(page, ROOMS.blue)
   await expect(box).toBeDisabled()
   await expect(panel(page, ROOMS.blue)).toContainText(
@@ -122,7 +128,7 @@ test('scrolling up pages back through the room’s history (PLY-49)', async ({ p
     { length: 130 },
     (_, i) => `History item ${String(i + 1).padStart(3, '0')}`,
   )
-  await asMockAdmin(page, [{ op: 'post', room: 'blue-hq', texts }])
+  await asMockAdmin(page, [{ op: 'post', room: ROOM.blueHq, texts }])
   // A fresh session loads only the latest page, then pages back on scroll.
   await page.reload()
   await logIn(page, 'blue-co', 'demo-blue-co')

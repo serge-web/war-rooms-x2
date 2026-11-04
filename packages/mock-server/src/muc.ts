@@ -18,6 +18,7 @@ import type {
 } from '@wrx/transport'
 import type { ArchivedMessage } from './state.ts'
 import { HISTORY_SIZE, bareOf, compareStanzaIds, stampOf } from './world.ts'
+import type { RoomList, RoomListPage } from './protocol.ts'
 import type { Connection, Occupant, Room, World } from './world.ts'
 
 type Outcome<T> = Result<T, TransportError>
@@ -27,6 +28,12 @@ const NON_ANONYMOUS = 100
 const BANNED = 301
 const KICKED = 307
 const AFFILIATION_CHANGE = 321
+
+/**
+ * ejabberd's `max_rooms_discoitems` default: the most rooms in one disco#items page, and past
+ * which a request without RSM lists only occupied rooms (review F10, probed on 26.09).
+ */
+export const MAX_ROOMS_DISCOITEMS = 100
 
 /** XEP-0313 RSM page size cap (mod_mam `max_rsm`-style limit: ejabberd caps a page at 250). */
 const MAX_PAGE = 250
@@ -463,18 +470,35 @@ export class MucService {
    * or admin (server admins see all). Unlisted game rooms stay hidden from players and
    * anonymous sessions (S10) and visible to the admin (S04).
    */
-  listRooms(conn: Connection): Outcome<readonly string[]> {
-    const rooms: string[] = []
-    for (const room of this.world.rooms.values()) {
+  listRooms(conn: Connection, page: RoomListPage | undefined): Outcome<RoomList> {
+    const all = [...this.world.rooms.values()].sort((a, b) => (a.jid < b.jid ? -1 : 1))
+    const visible = (room: Room): boolean => {
       const affiliation = this.affiliationOf(room, conn.bare)
-      const visible =
+      return (
         room.config.public ||
         affiliation === 'owner' ||
         affiliation === 'admin' ||
         this.occupantOf(room, conn) !== undefined
-      if (visible) rooms.push(room.jid)
+      )
     }
-    return ok(rooms)
+    if (page === undefined) {
+      // ejabberd: past the limit, a request without RSM lists only occupied rooms.
+      const listed =
+        all.length > MAX_ROOMS_DISCOITEMS ? all.filter((r) => r.occupants.size > 0) : all
+      return ok({
+        rooms: listed.filter(visible).map((r) => r.jid),
+        count: all.length,
+        last: undefined,
+      })
+    }
+    // ejabberd: the page is a window of `max` rooms after `after`, capped at the limit, and only
+    // the visible rooms in it are listed, so a page may be short and still not the last.
+    const { after } = page
+    const window = all
+      .filter((r) => after === undefined || r.jid > after)
+      .slice(0, Math.min(page.max, MAX_ROOMS_DISCOITEMS))
+    const rooms = window.filter(visible).map((r) => r.jid)
+    return ok({ rooms, count: all.length, last: rooms.at(-1) })
   }
 
   /** XEP-0133 delete-user: the account loses its affiliations and stored roles (S12). */

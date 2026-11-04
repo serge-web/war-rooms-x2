@@ -48,11 +48,36 @@ flowchart TB
         wp32["3.2 Performance and a11y"]
         wp33["3.3 Air-gapped install"]
         wp34["3.4 Security review and release"]
+        wp35["3.5 GUID ids, login names, admin-only objectives"]
+    end
+    subgraph P4["Phase 4 — Message templates"]
+        direction LR
+        wp41["4.1 Template model"]
+        wp42["4.2 Composer and card"]
+        wp43["4.3 Template editor"]
+        wp44["4.4 Acceptance and review"]
+    end
+    subgraph P5["Phase 5 — Turns and the map"]
+        direction LR
+        wp51["5.1 Spike checks S15–S16"]
+        wp52["5.2 Turn and world-state model"]
+        wp53["5.3 Design, publish and layout changes"]
+        wp54["5.4 Turns and turn panel"]
+        wp55["5.5 Map room"]
+        wp56["5.6 World-state editor"]
+        wp58["5.8 White Force edits objectives"]
+        wp57["5.7 Acceptance and review"]
+    end
+    subgraph PX["After v1 — Annexes A and B"]
+        direction LR
+        wps14["S14 Collection access spike"]
     end
     G0{{"Gate G0"}}
     G1{{"Gate G1"}}
     G2{{"Gate G2"}}
     G3{{"Gate G3 — v1"}}
+    G4{{"Gate G4 — templates"}}
+    G5{{"Gate G5 — turns and map"}}
 
     wp05 --> wp06 --> wp07
     wp05 --> wp08
@@ -70,19 +95,33 @@ flowchart TB
     wp15 & wp25 --> wp29
     wp04 & wp13 --> wp33
     wp31 & wp32 & wp33 --> wp34
+    wp35 --> wp34
+    wp12 --> wps14
     P0 -.-> G0
     P1 -.-> G1
     P2 -.-> G2
-    G2 --> wp31 & wp32
+    G2 --> wp31 & wp32 & wp35
     P3 -.-> G3
+    G3 --> wp41
+    wp41 --> wp42 & wp43
+    wp42 & wp43 --> wp44
+    P4 -.-> G4
+    G4 --> wp52
+    wp12 --> wp51
+    wp52 --> wp53 & wp54 & wp55
+    wp54 & wp55 --> wp56
+    wp51 --> wp58
+    wp53 & wp56 & wp58 --> wp57
+    P5 -.-> G5
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp04,wp31,wp32,wp33,wp34 todo
-    class wp01,wp02,wp03,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211 done
-    class G0,G1,G2,G3 gate
+    class wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58 todo
+    class wp33,wp34 active
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43,wp44 done
+    class G0,G1,G2,G3,G4,G5 gate
 ```
 
 ## Documents
@@ -90,13 +129,17 @@ flowchart TB
 - [Software requirements (SRD)](WRX1-SRD.md)
 - [Development plan](WRX1-Dev-Plan.md) and [work package briefs](plan/briefs/)
 - [Data dictionary](docs/data-dictionary.md), generated from the schemas
+- [Release notes](RELEASE-NOTES.md)
+- [Decision records](plan/decisions/) and [reviews](plan/reviews/) (internal)
 
 ## Repo layout
 
 | Path | What |
 | --- | --- |
 | `packages/schemas` | Runtime schemas (zod) for every PubSub document and message body, and the types inferred from them (WP 0.8) |
-| `apps/web` | The web app. A shell for now; the player client and admin backend are built in Phase 2 |
+| `apps/web` | The web app: player client, admin backend and multi-client view, with the e2e scenarios |
+| `deploy` | The reference ejabberd config, the contract-suite stack and the reference deployment (WP 3.3); its README is the setup guide |
+| `ops` | Offline bundle and install, internal CA, checks, backup and restore, and their tests (WP 3.3) |
 | `tools` | CI checks and the local ESLint rules |
 | `plan/briefs` | One brief per work package |
 

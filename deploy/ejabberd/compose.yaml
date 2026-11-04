@@ -1,13 +1,17 @@
-# The WRX1 reference ejabberd (NFR-22), run by the contract suite (WP 1.2) locally and in CI.
+# The WRX1 contract-suite ejabberd (NFR-22), run by the contract suite (WP 1.2) locally and in CI.
 #
 # From serge-web/xmpp-spike @ 4992530: spike/docker/ejabberd/compose.yaml, compose.tls.yaml and
 # compose.prod.yaml merged into one file. Only wss:// is published (NFR-2), on loopback, on a port
 # that leaves the spike stacks' ports free. Start and stop it with `pnpm stack:up` and
 # `pnpm stack:down` at the repo root (sh deploy/ejabberd/up.sh, down.sh).
+#
+# It runs the same ejabberd.yml as the reference deployment (deploy/wrx1), with the domain left at
+# `localhost`, a throwaway test CA (make-ca.sh) and a placeholder page instead of the client.
 name: wrx-contract
 services:
   ejabberd:
-    # ejabberd 26.09, the official image, pinned by digest (NFR-22).
+    # ejabberd 26.09, the official image, pinned by digest (NFR-22). deploy/wrx1/compose.yaml
+    # and ops/make-bundle.sh pin the same digest; tools/check-deploy.ts checks they agree.
     image: ejabberd/ecs:26.09@sha256:8ebff5b218e686d5dbd93850ea17556d5b70d4c15918c3613e9302a357798e0e
     ports:
       - '127.0.0.1:${WRX_XMPP_PORT:-35443}:5443' # wss://localhost:35443/ws
@@ -16,6 +20,7 @@ services:
       - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
       - ./tls-out/server.pem:/home/ejabberd/conf/server.pem:ro
       - ./tls-out/ca.crt:/home/ejabberd/conf/cacert.pem:ro
+      - ./www:/home/ejabberd/www:ro
       - db:/home/ejabberd/database
     healthcheck:
       test: ['CMD', 'ejabberdctl', 'status']

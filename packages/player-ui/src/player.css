@@ -254,6 +254,21 @@
   box-sizing: border-box;
 }
 
+/* FT-1: the column's own node, moved between the column, the workspace tab and a hidden stash;
+   it adds no box of its own. */
+.wrx-shell__column-content {
+  display: contents;
+}
+
+/* FT-1: the column as a workspace tab, in a narrow client. It scrolls inside the tab. */
+.wrx-shell__column-tab {
+  height: 100%;
+  padding: 0.75rem;
+  overflow-y: auto;
+  background: var(--wrx-surface);
+  box-sizing: border-box;
+}
+
 .wrx-column__section + .wrx-column__section {
   margin-top: 1rem;
 }

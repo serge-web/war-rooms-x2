@@ -1,6 +1,8 @@
 // The player shell against the mock (WP 2.4): welcome page, login, the session lifecycle and
 // the empty states.
 import { expect, test } from '@playwright/test'
+import { nodeName } from '@wrx/schemas'
+import { ROLE, ROOM } from '@wrx/schemas/fixtures'
 import { DOMAIN, asMockAdmin, logIn, roomTabs } from './mock.ts'
 
 const rooms = roomTabs
@@ -25,7 +27,7 @@ test('welcome page, login as blue-co with its demo password, rooms, logout (PLY-
   await logIn(page, 'blue-co', 'demo-blue-co')
   await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
   await expect(page.getByLabel('Backend: MOCK')).toBeVisible()
-  await expect(rooms(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation'])
+  await expect(rooms(page)).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
   await expect(page.getByRole('complementary', { name: 'Out-of-game column' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Log out' }).click()
@@ -36,7 +38,7 @@ test('welcome page, login as blue-co with its demo password, rooms, logout (PLY-
 test('a demo login fills in the form', async ({ page }) => {
   await page.goto('./')
   await page.getByRole('button', { name: 'Use the demo login for Red CO (Red)' }).click()
-  await expect(page.getByLabel('Role id')).toHaveValue('red-co')
+  await expect(page.getByLabel('Login name')).toHaveValue('red-co')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
   await expect(rooms(page)).toHaveText(['Red HQ', 'Blue–Red negotiation'])
 })
@@ -44,7 +46,7 @@ test('a demo login fills in the form', async ({ page }) => {
 test('a wrong password is refused with a message', async ({ page }) => {
   await page.goto('./')
   await logIn(page, 'blue-co', 'not-the-password')
-  await expect(page.getByRole('alert')).toHaveText('Wrong role id or password.')
+  await expect(page.getByRole('alert')).toHaveText('Wrong login name or password.')
   await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
 })
 
@@ -65,7 +67,7 @@ const FORCED: readonly {
   },
   {
     name: 'the role is deleted (PLY-29)',
-    op: { op: 'delete-node', node: 'roles:blue-co' },
+    op: { op: 'delete-node', node: nodeName.role(ROLE.blueCo) },
     title: 'Your role was deleted',
   },
 ]
@@ -74,7 +76,7 @@ for (const { name, op, title } of FORCED) {
   test(`forced logout with an explanation when ${name}`, async ({ page }) => {
     await page.goto('./')
     await logIn(page, 'blue-co', 'demo-blue-co')
-    await expect(rooms(page)).toHaveCount(2)
+    await expect(rooms(page)).toHaveCount(3)
     await asMockAdmin(page, [op])
     const notice = page.getByRole('alert').filter({ hasText: title })
     await expect(notice).toBeVisible()
@@ -103,8 +105,9 @@ test('with no published game the welcome page falls back and login still works (
 test('a role with no rooms sees an empty state (PLY-32)', async ({ page }) => {
   await page.goto('./')
   await asMockAdmin(page, [
-    { op: 'delete-node', node: 'rooms:blue-hq' },
-    { op: 'delete-node', node: 'rooms:negotiation' },
+    { op: 'delete-node', node: nodeName.room(ROOM.blueHq) },
+    { op: 'delete-node', node: nodeName.room(ROOM.negotiation) },
+    { op: 'delete-node', node: nodeName.room(ROOM.blueReports) },
   ])
   await logIn(page, 'blue-co', 'demo-blue-co')
   await expect(page.getByText('Your role has no rooms yet.')).toBeVisible()

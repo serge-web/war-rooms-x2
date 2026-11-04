@@ -59,7 +59,7 @@ export function ThemePreview({ design, target }: ThemePreviewProps) {
             <MarkdownView markdown={design.game.briefing} empty="No briefing yet." />
           </div>
           <div className="wrx-preview-card wrx-preview-login" aria-hidden="true">
-            <span className="wrx-preview-field">Role id</span>
+            <span className="wrx-preview-field">Login name</span>
             <span className="wrx-preview-field">Password</span>
             <span className="wrx-preview-button">Log in</span>
           </div>

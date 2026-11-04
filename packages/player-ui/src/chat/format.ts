@@ -3,6 +3,7 @@
 // (PLY-14), and the composer's size check against the stanza cap (PLY-53). No React, no store.
 import { fitsInStanza } from '@wrx/domain'
 import { LIMITS } from '@wrx/schemas'
+import type { TemplateCardView } from '../templates/card.ts'
 
 /** One message as the panel shows it: display data resolved, nothing left to look up. */
 export interface ChatMessage {
@@ -10,18 +11,31 @@ export interface ChatMessage {
   readonly id: string
   /** Server time, ISO 8601. */
   readonly timestamp: string
-  /** Who sent it, for grouping: a role id, `admin`, or `nick:<nick>` for anyone else. */
+  /** Who sent it, for grouping: a login name, `admin`, or `nick:<nick>` for anyone else. */
   readonly senderKey: string
-  /** The role's name, resolved live from the role document (§3 rule 6). */
+  /** The role's name, resolved live from the role document by login name (§3 rule 6). */
   readonly senderName: string
+  /** The role has been deleted: `senderName` is its last name, from `retired` (ADM-14). */
+  readonly deleted?: boolean | undefined
   /** The sender's force name, when known. */
   readonly forceName?: string | undefined
   /** The force colour (PLY-43). */
   readonly colour?: string | undefined
   /** Sent by this role, from any of its sessions (D22). */
   readonly self: boolean
-  /** The plain text; `undefined` when the body could not be read (R9). */
+  /**
+   * The plain text; `undefined` when the body could not be read (R9). For a templated message,
+   * its one-line form (`templatePlainText`): shown when it has no card, and read out on arrival.
+   */
   readonly text: string | undefined
+  /** A templated message that fits its template, shown as a card (TD7, TPL-5). */
+  readonly card?: TemplateCardView | undefined
+  /**
+   * Why a templated message is shown with a warning (TPL-6, provisional answer 3): it does not
+   * fit its template or names an unknown one (shown as plain text), or the room does not offer
+   * the sender its template now (shown as a card).
+   */
+  readonly warning?: string | undefined
 }
 
 /** A row of the list: one message, with what is drawn above it. */
@@ -205,6 +219,30 @@ export function sizeNote(size: MessageSize): string | undefined {
   }
   if (size.near) return `Nearly at the size limit: ${kib(size.bytes)} of ${kib(size.byteLimit)}.`
   return undefined
+}
+
+/**
+ * The size of a templated message as the store will check it (PLY-53): only the stanza cap
+ * applies, each text field already being capped by its `maxLength`.
+ */
+export function templateMessageSize(
+  templateId: string,
+  values: Readonly<Record<string, unknown>>,
+): MessageSize {
+  const body = JSON.stringify({
+    type: 'template',
+    schemaVersion: 1,
+    content: { templateId, values },
+  })
+  const { bytes, limitBytes } = fitsInStanza(body)
+  return {
+    chars: 0,
+    charLimit: LIMITS.messageTextChars,
+    bytes,
+    byteLimit: limitBytes,
+    over: bytes > limitBytes ? 'bytes' : undefined,
+    near: bytes > limitBytes * 0.9,
+  }
 }
 
 function kib(bytes: number): string {

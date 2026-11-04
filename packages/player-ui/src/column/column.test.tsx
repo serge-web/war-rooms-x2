@@ -2,6 +2,7 @@
 // The out-of-game column over a store (happy-dom): the three parts in order, announcements oldest
 // first with the newest live one highlighted, the admin's post box, the force panel in the force
 // theme with live objectives, and the umpire's force choice and editor.
+import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { flush, force, harness, objectives, sampleDocuments } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
@@ -139,7 +140,9 @@ describe('the admin panel (PLY-37, PLY-38, ADM-29)', () => {
 describe('the force panel (PLY-25, PLY-35)', () => {
   it('shows the role, its force and the force’s objectives in the force theme', async () => {
     const docs = sampleDocuments()
-    docs.set(nodeName.force('blue'), [force('blue', { theme: { tokens: { primary: '#123456' } } })])
+    docs.set(nodeName.force(tid('blue')), [
+      force('blue', { theme: { tokens: { primary: '#123456' } } }),
+    ])
     await mount('blue-co', docs)
     const panel = forcePanel()
     expect(within(panel).getByRole('heading', { name: 'blue-co' })).toBeTruthy()
@@ -154,13 +157,12 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     expect(within(panel).queryByRole('button', { name: /Edit/ })).toBeNull()
   })
 
-  it('updates live when someone publishes newer objectives', async () => {
+  it('updates live when the admin publishes newer objectives', async () => {
     const h = await mount('blue-co')
     act(() => {
       h.publish(
-        nodeName.objectives('blue'),
+        nodeName.objectives(tid('blue')),
         objectives('blue', 'Hold the bridge.', '2026-10-25T09:00:00.000Z'),
-        'white-1',
       )
     })
     await act(() => flush())
@@ -169,8 +171,8 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     )
   })
 
-  it('lets a White Force role choose any force and publish its objectives with a preview', async () => {
-    const h = await mount('white-1')
+  it('lets the admin choose any force and publish its objectives with a preview (SC-5)', async () => {
+    const h = await mount('admin')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
     expect(
@@ -178,7 +180,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
         .getAllByRole('option')
         .map((o) => o.textContent),
     ).toEqual(['BLUE', 'RED', 'WHITE'])
-    fireEvent.change(choice, { target: { value: 'red' } })
+    fireEvent.change(choice, { target: { value: tid('red') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',
@@ -195,17 +197,17 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publish objectives' }))
     await act(() => flush())
     const call = h.session.calls.find((c) => c.op === 'publish')
-    // One item per author (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual(['objectives:red', 'white-1'])
+    // One item, the admin's (§3 rule 14).
+    expect(call?.args.slice(0, 2)).toEqual([nodeName.objectives(tid('red')), 'admin'])
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
-      forceId: 'red',
+      forceId: tid('red'),
       markdown: '1. Delay **Blue** until noon.',
     })
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('keeps the editor open with the reason when publishing fails', async () => {
-    const h = await mount('white-1')
+    const h = await mount('admin')
     h.session.stub('pubsub', 'publish', () => Promise.resolve(err('timeout')))
     fireEvent.click(within(forcePanel()).getByRole('button', { name: /^Edit .* objectives$/ }))
     const dialog = screen.getByRole('dialog')
@@ -216,13 +218,28 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     )
   })
 
+  it('lets a White Force role that is not an observer read any force’s objectives, not edit them (D21)', async () => {
+    const h = await mount('white-1')
+    const panel = forcePanel()
+    const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
+    fireEvent.change(choice, { target: { value: tid('red') } })
+    await act(() => flush())
+    expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
+      'Delay Blue.',
+    )
+    // Before WP 3.5 it had an editor here.
+    expect(within(panel).queryByRole('button', { name: /Edit/ })).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(h.session.calls.some((c) => c.op === 'publish')).toBe(false)
+  })
+
   it('shows the admin as the umpire in the White Force, choosing and editing any force (SC-5)', async () => {
     await mount('admin')
     const panel = forcePanel()
     expect(within(panel).getByRole('heading', { name: 'Umpire' })).toBeTruthy()
-    expect(panel.dataset.force).toBe('white')
+    expect(panel.dataset.force).toBe(tid('white'))
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
-    fireEvent.change(choice, { target: { value: 'blue' } })
+    fireEvent.change(choice, { target: { value: tid('blue') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'BLUE objectives' }).textContent).toContain(
       'Secure the crossing.',
@@ -234,7 +251,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     const h = await mount('white-observer')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
-    fireEvent.change(choice, { target: { value: 'red' } })
+    fireEvent.change(choice, { target: { value: tid('red') } })
     await act(() => flush())
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',
