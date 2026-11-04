@@ -1,6 +1,7 @@
 // The admin backend at `#/admin`, shown only after an `admin` login (AdminRoute.tsx, ADM-1):
 // the design editor (WP 2.2) with the theme editor (WP 2.8) and publishing (WP 2.3). Publishing
-// goes through admin operations over the admin's own session (ADM-12, ADM-35). The draft is kept
+// goes through admin operations over the admin's own session (ADM-12, ADM-35). The header carries
+// the turn control (ADM-43), over the same session. The draft is kept
 // in this browser under a key per backend: the mock deployment's own namespace for the mock
 // (DOC-10), the server's domain otherwise. The publish marker is kept on the server.
 import { AdminOps, privateMarkerStore, storageMarkerStore } from '@wrx/admin-ops'
@@ -16,7 +17,7 @@ import type { Draft, PublishConnection } from '@wrx/admin-ui'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
 import { DEMO_VAULT_PASSPHRASE, demoSeed } from '@wrx/mock-server'
-import { AppBarCore } from '@wrx/player-ui'
+import { AppBarCore, TurnPanel } from '@wrx/player-ui'
 import { designFileSchema, withTemplateLocks } from '@wrx/schemas'
 import { Button } from '@wrx/ui'
 import { useState } from 'react'
@@ -78,6 +79,8 @@ export function AdminApp({
         registry={registry}
         themes={ThemeEditor}
         publish={publish}
+        // ADM-43: the turn control, so the admin can move the game on from here too.
+        headerItems={<TurnPanel variant="bar" />}
         onSwitchToGame={() => {
           location.hash = ROUTE_HREFS.player
         }}

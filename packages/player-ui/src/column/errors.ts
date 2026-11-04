@@ -15,6 +15,10 @@ export function errorText(error: DomainError | undefined): string {
       return 'the text is too long.'
     case 'session-ended':
       return 'the session has ended.'
+    case 'paused':
+      return 'posting is paused during adjudication.'
+    case 'stale':
+      return 'it changed since you looked. Check, then try again.'
     case 'not-joined':
     case 'transport':
     case undefined:

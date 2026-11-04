@@ -41,14 +41,15 @@ function item(id: string, text: string, live = false, at = '10:00'): Announcemen
 }
 
 describe('the out-of-game column (PLY-36)', () => {
-  it('shows the game-time slot, the admin panel and the force panel, top to bottom', async () => {
+  it('shows the turn panel, the admin panel and the force panel, top to bottom', async () => {
     await mount('blue-co')
     const column = screen.getByRole('complementary', { name: 'Out-of-game column' })
     const names = [...column.querySelectorAll('section[aria-label], section[aria-labelledby]')]
       .filter((s) => s.parentElement?.classList.contains('wrx-column') === true)
       .map((s) => s.getAttribute('aria-label') ?? s.querySelector('h2')?.textContent)
-    expect(names).toEqual(['Game time', 'Announcements', 'Force panel'])
-    expect(screen.getByText('Game time and turn: not used in this version.')).toBeTruthy()
+    expect(names).toEqual(['Turn', 'Announcements', 'Force panel'])
+    // The sample documents hold no turn state: as before a first publish.
+    expect(screen.getByText('No turn yet: the game has not been published.')).toBeTruthy()
   })
 })
 

@@ -70,6 +70,8 @@ export interface AdminAppProps {
   readonly registry: ReactRoomTypeRegistry
   /** Shows the game view (ADM-28). Without it, the toggle is not shown. */
   readonly onSwitchToGame?: () => void
+  /** More in the header, before the view toggle: the host's turn control (ADM-43, WP 5.4). */
+  readonly headerItems?: ReactNode
   /** WP 2.8's themes editor; until then the section is an empty slot. */
   readonly themes?: ThemesSlot
   /** The template preview (WP 4.3); by default the player's own form (WP 4.2's `TemplateForm`). */
@@ -163,6 +165,7 @@ export function AdminAppCore({
   loadError,
   saveError,
   onSwitchToGame,
+  headerItems,
   themes,
   templatePreview,
   initialSection = 'game',
@@ -186,6 +189,7 @@ export function AdminAppCore({
             ? 'Draft saved in this browser.'
             : `The draft could not be saved: ${saveError}`}
         </p>
+        {headerItems}
         {onSwitchToGame !== undefined && (
           <div className="wrx-admin-toggle" role="group" aria-label="View">
             <Button aria-pressed="true" className="is-active">

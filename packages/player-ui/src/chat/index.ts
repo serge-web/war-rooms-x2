@@ -7,6 +7,8 @@ import '../templates/templates.css'
 export {
   ChatPanel,
   ChatPanelCore,
+  PAUSED_NOTE,
+  PAUSED_REASON,
   readOnlyExplanation,
   refusalText,
   templateRefusal,
