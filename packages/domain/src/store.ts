@@ -45,13 +45,7 @@ import type {
 } from '@wrx/transport'
 import { byOrderThenId, effectiveAccess, roomsForRole } from './access.ts'
 import type { AccessMatrix } from './access.ts'
-import {
-  OBJECTIVES_ITEM_ID,
-  documentValue,
-  nodeSpec,
-  parseItem,
-  safeNodeName,
-} from './documents.ts'
+import { documentValue, nodeSpec, objectivesItemId, parseItem, safeNodeName } from './documents.ts'
 import type { DocumentValues, LiveDocument, NodeSpec } from './documents.ts'
 import { domainErr, domainOk, fromTransport } from './errors.ts'
 import type { DomainError, DomainResult } from './errors.ts'
@@ -109,8 +103,8 @@ export interface Me {
   readonly isUmpire: boolean
   readonly isObserver: boolean
   /**
-   * May edit every force's objectives: the admin only (PLY-35, §3 rule 14, D21). Every White
-   * Force role reads them, and none edits.
+   * May edit every force's objectives: the admin and White Force roles that are not observers
+   * (PLY-35, §3 rule 14, D21). White Force observers read them only.
    */
   readonly canEditObjectives: boolean
   /**
@@ -344,10 +338,6 @@ interface NodeItem {
   readonly id: string
   readonly doc: LiveDocument
   readonly live: boolean
-  /** This client's clock when the item was read or arrived (ms), for F11's clamp. */
-  readonly receivedAt: number
-  /** The live event it came in, numbered in arrival order; 0 for items read by a fetch. */
-  readonly arrival: number
 }
 
 interface NodeEntry {
@@ -435,8 +425,6 @@ class Store implements SessionStore {
   private readonly offSession: Unsubscribe[] = []
   private readonly readyWaiters: ((status: StoreStatus) => void)[] = []
   private listed = new Set<string>()
-  /** Numbers live item events in arrival order (see `latest`). */
-  private arrivals = 0
   private currentStatus: StoreStatus = { state: 'starting' }
   /** The first load has finished; until then, coming back online means `starting` again. */
   private booted = false
@@ -668,14 +656,12 @@ class Store implements SessionStore {
         this.nodeChanged(entry)
         return
       }
+      // In the server's order (`latest`), then what arrived live during the fetch, newer still.
       const next = new Map<string, NodeItem>()
-      const receivedAt = this.clockMs()
       for (const item of fetched.value) {
-        if (touched.has(item.id) || !shownItem(spec, item.id)) continue
+        if (touched.has(item.id)) continue
         const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
-        if (doc !== undefined) {
-          next.set(item.id, { id: item.id, doc, live: false, receivedAt, arrival: 0 })
-        }
+        if (doc !== undefined) next.set(item.id, { id: item.id, doc, live: false })
       }
       for (const [id, item] of entry.items) if (touched.has(id)) next.set(id, item)
       entry.items = next
@@ -732,16 +718,13 @@ class Store implements SessionStore {
       entry.touched?.add(id)
       changed = entry.items.delete(id) || changed
     }
-    const arrival = ++this.arrivals
-    const receivedAt = this.clockMs()
     for (const item of items) {
-      if (!shownItem(spec, item.id)) continue
       const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
       if (doc === undefined) continue
       entry.touched?.add(item.id)
-      // Delete first so the newest item is last in the map's order.
+      // Delete first so the newest item is last in the map's order (`latest`).
       entry.items.delete(item.id)
-      entry.items.set(item.id, { id: item.id, doc, live: true, receivedAt, arrival })
+      entry.items.set(item.id, { id: item.id, doc, live: true })
       changed = true
     }
     if (!changed) return
@@ -1040,7 +1023,11 @@ class Store implements SessionStore {
         force,
         isUmpire: this.identity.isAdmin || force?.isUmpire === true,
         isObserver: role?.isObserver === true,
-        canEditObjectives: canEditObjectives(this.identity.isAdmin),
+        canEditObjectives: canEditObjectives({
+          isAdmin: this.identity.isAdmin,
+          isUmpire: force?.isUmpire === true,
+          isObserver: role?.isObserver === true,
+        }),
         rooms: Object.freeze(visible),
       })
     })
@@ -1718,8 +1705,12 @@ class Store implements SessionStore {
 
   async publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
-    if (!this.me().data.canEditObjectives) {
-      return domainErr('not-permitted', 'only the admin, as umpire, edits objectives (PLY-35)')
+    const me = this.me().data
+    if (!me.canEditObjectives) {
+      return domainErr(
+        'not-permitted',
+        'only the admin and White Force roles that are not observers edit objectives (PLY-35)',
+      )
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
@@ -1730,8 +1721,11 @@ class Store implements SessionStore {
       updatedAt: this.now(),
     })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    // The admin's single item, replaced on each edit (§3 rule 14).
-    return this.publish(node, OBJECTIVES_ITEM_ID, parsed.value, 'Publishing objectives')
+    // §3 rule 14: every save is a new item with a fresh id, never a re-published one, so the
+    // server's order (by first publish) is edit order; the node keeps one item per author.
+    const author = this.identity.isAdmin ? ADMIN_AUTHOR_ID : (me.identity.loginName ?? 'role')
+    const itemId = objectivesItemId(author, this.newId())
+    return this.publish(node, itemId, parsed.value, 'Publishing objectives')
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -1768,11 +1762,6 @@ class Store implements SessionStore {
       }
     }
     return domainOk(undefined)
-  }
-
-  /** This client's clock in ms, or NaN if the injected clock is not a time. */
-  private clockMs(): number {
-    return Date.parse(this.now())
   }
 
   logout(): Promise<DomainResult<void>> {
@@ -1835,49 +1824,22 @@ const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
 const EMPTY_TEMPLATES: readonly Template[] = Object.freeze([])
 
 /**
- * Whether the store takes this item at all. An objectives node shows the admin's item only
- * (§3 rule 14): a server published before WP 3.5 can still hold White Force editors' items until
- * the next publish purges them, and those are not the force's objectives.
- */
-function shownItem(spec: NodeSpec, itemId: string): boolean {
-  return spec.kind !== 'objectives' || itemId === OBJECTIVES_ITEM_ID
-}
-
-/**
- * The document a node shows. Single-document nodes hold one item, and objectives nodes one too,
- * the admin's (§3 rule 14; `shownItem` drops any other), so the last one received is the newest.
- * The ordering below is kept for any node that still holds several items (review F11; ejabberd
- * returns items in the order they were first created and carries no publish time):
- * - an item that arrived live is newer than any item read by a fetch, and a later live event is
- *   newer than an earlier one: the server notifies in publish order (contract S06). A fetch that
- *   answers after a live event never replaces the item that event brought (`touched`), so a
- *   live notification beats the copy fetched at login, whatever its `updatedAt` says;
- * - among items of one fetch (or one event), the author's `updatedAt` decides, clamped to when
- *   this client received it, so a clock set ahead cannot pin an edit above later live ones.
+ * The document a node shows: the last item the store holds, the newest by the server's order
+ * (§3 rule 14, spike check S15, review F11). Items carry no server time, so nothing here reads
+ * a time, the author's `updatedAt` least of all:
+ * - a fetch lists items in the order each id was first published (contract S15), and every
+ *   objectives save is a new id, so the fetch's last item is the newest edit;
+ * - live events arrive in publish order (contract S06) and each is appended, so a later event
+ *   is newer than an earlier one and than anything fetched; a fetch that answers after a live
+ *   event keeps that event's item last (`touched`);
+ * - a retract (an author's trimmed item, or an owner's clean-up) removes the item, and the one
+ *   before it shows.
+ * Single-document nodes hold one item, so this is simply that item.
  */
 function latest(entry: NodeEntry): LiveDocument | undefined {
-  let best: NodeItem | undefined
-  for (const item of entry.items.values()) {
-    if (best === undefined || item.doc.kind !== 'objectives' || best.doc.kind !== 'objectives') {
-      best = item
-      continue
-    }
-    if (newerObjectives(item, best)) best = item
-  }
-  return best?.doc
-}
-
-/** F11: whether objectives item `a` is a newer edit than `b` (see `latest`). */
-function newerObjectives(a: NodeItem, b: NodeItem): boolean {
-  if (a.arrival !== b.arrival) return a.arrival > b.arrival
-  return effectiveTime(a) >= effectiveTime(b)
-}
-
-/** The author's time, never later than when this client received it; unreadable is oldest. */
-function effectiveTime(item: NodeItem): number {
-  const stamped = item.doc.kind === 'objectives' ? Date.parse(item.doc.value.updatedAt) : NaN
-  if (Number.isNaN(stamped)) return -Infinity
-  return Number.isNaN(item.receivedAt) ? stamped : Math.min(stamped, item.receivedAt)
+  let last: NodeItem | undefined
+  for (const item of entry.items.values()) last = item
+  return last?.doc
 }
 
 function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {
@@ -1915,10 +1877,14 @@ export function whiteForceOf(forces: readonly Force[]): Force | undefined {
 }
 
 /**
- * PLY-35, §3 rule 14, D21: only the admin edits objectives. White Force roles, observers or not,
- * read every force's objectives but never edit them; the server refuses them too (no publisher
- * affiliation).
+ * PLY-35, §3 rule 14, D21: the admin and White Force roles that are not observers edit every
+ * force's objectives; White Force observers and every other role only read (their own force's).
+ * The server enforces it (publisher affiliations, `targetState`); this only shapes the UI.
  */
-export function canEditObjectives(isAdmin: boolean): boolean {
-  return isAdmin
+export function canEditObjectives(who: {
+  readonly isAdmin: boolean
+  readonly isUmpire: boolean
+  readonly isObserver: boolean
+}): boolean {
+  return who.isAdmin || (who.isUmpire && !who.isObserver)
 }

@@ -314,7 +314,7 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
     expect(call?.args[0]).toBe('announcements')
   })
 
-  it('shows a White Force role every room, and its observer read only with no editing', async () => {
+  it('shows a White Force role every room, editing objectives, and its observer read only', async () => {
     const h = harness({ roleId: 'admin' })
     await h.store.ready()
     await flush()
@@ -325,9 +325,11 @@ describe('the admin’s preview as a role (ADM-30, ADM-31)', () => {
       [tid('red-hq'), 'read'],
       [tid('negotiation'), 'read'],
     ])
-    // Read only: no role edits objectives, a White Force role that is not an observer included.
+    // What the role may do: a White Force role that is not an observer edits objectives (PLY-35).
     const preview = previewAsRole(h.store, tid('white-1'))
-    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: false })
+    expect(preview.me().data).toMatchObject({ isUmpire: true, canEditObjectives: true })
+    // A player does not.
+    expect(previewAsRole(h.store, tid('blue-co')).me().data.canEditObjectives).toBe(false)
     expect(preview.me().data.rooms.map((r) => r.room.id)).toEqual([
       tid('blue-hq'),
       tid('red-hq'),

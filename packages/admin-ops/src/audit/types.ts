@@ -56,8 +56,8 @@ export type AuditKind =
   /** A published document differs from the design, or is missing. */
   | 'document'
   /**
-   * An objectives node holds an item that is not the admin's (D21, §3 rule 14), or `templates`
-   * one the design does not have (Annex A).
+   * An objectives node holds an item by a role that left the White Force or was deleted (D21,
+   * §3 rule 14), or `templates` one the design does not have (Annex A).
    */
   | 'stray-items'
   /** The server's design version is not this design's. */

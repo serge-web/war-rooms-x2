@@ -1,12 +1,13 @@
 // The demo scenario (PLY-21, PLY-34): the sample design from @wrx/schemas, "Exercise Northern
 // Gate", with its message templates and the Blue Reports room that offers them, free text off
-// (Annex A, `templatedDesign`), a short morning of message history, provisioned and published as the admin tooling
+// (Annex A, `templatedDesign`), White Cell, a White Force role that is not an observer (D21), a
+// short morning of message history, provisioned and published as the admin tooling
 // would leave it, observer vault included. Every password is a DEMO PASSWORD (NFR-6):
 // `demo-<loginName>`, and `demo-admin` for the admin; the vault opens with the DEMO passphrase
 // DEMO_VAULT_PASSPHRASE.
 import type { DesignFile } from '@wrx/schemas'
 // The schemas package keeps its sample design with its tests and does not export it.
-import { ROOM, templatedDesign } from '../../schemas/src/fixtures.ts'
+import { FORCE, LOGIN, ROLE, ROOM, templatedDesign } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
 import type { DesignSeed, SeedMessage } from './seed.ts'
 import type { MockState } from './state.ts'
@@ -97,7 +98,24 @@ const DEMO_VAULT_ENVELOPE = JSON.stringify({
 
 /** The demo seed: the templated sample design, its history and its demo passwords. */
 export function demoSeed(domain?: string): DesignSeed {
-  const design: DesignFile = templatedDesign()
+  const templated = templatedDesign()
+  // White Cell, a White Force role that is not an observer: it writes in every room and edits
+  // every force's objectives (§3 rules 4 and 14, D21, PLY-35), beside the White observer.
+  const design: DesignFile = {
+    ...templated,
+    roles: [
+      ...templated.roles,
+      {
+        schemaVersion: 1,
+        id: ROLE.whiteCell,
+        loginName: LOGIN.whiteCell,
+        name: 'White Cell',
+        forceId: FORCE.white,
+        isObserver: false,
+        order: 1,
+      },
+    ],
+  }
   return {
     design,
     ...(domain === undefined ? {} : { domain }),

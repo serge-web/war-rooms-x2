@@ -24,6 +24,7 @@ import { s10 } from './checks/s10-anonymous.ts'
 import { s11 } from './checks/s11-two-sessions.ts'
 import { s12 } from './checks/s12-live-changes.ts'
 import { s13 } from './checks/s13-absent-role-change.ts'
+import { s15 } from './checks/s15-item-order.ts'
 import { t01 } from './checks/t01-templates.ts'
 import type { Ctx } from './context.ts'
 import { bare, makeFixture, provision, teardown } from './fixture.ts'
@@ -130,6 +131,7 @@ export function defineContractSuite(backend: ContractBackend, options: SuiteOpti
     s11(ctx)
     s12(ctx)
     s13(ctx, options.raw)
+    s15(ctx)
     t01(ctx)
     errors(ctx)
     ordering(ctx)

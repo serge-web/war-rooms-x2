@@ -54,6 +54,8 @@ As in S14, each test asserts **the behaviour ejabberd 26.09 showed**, and the S1
 
 S15-2 reads the server's SQLite file with the image's `sqlite3 -readonly` (`src/docker.ts`), as evidence of what the order rests on. Everything else goes over XMPP.
 
+**In the contract suite since WP 5.8.** S15-2, S15-7 and S15-8 run on both backends as `packages/contract-suite/src/checks/s15-item-order.ts`, over the transport interface rather than raw stanzas, so the mock must match them (ARC-11). The raw versions here stay as the record of what the server sent. One difference the port found: through the transport, `getItems` with `max` is answered as an RSM page from the oldest item, not as `max_items` from the newest, because StanzaJS sends both.
+
 ## Evidence
 
 - `results/s15-s16-run.jsonl`: the observations of the final clean run (`final-20261104`), copied from `results/observations.jsonl`, which each run appends to and git ignores. One line per observation: `run`, `config`, `check`, `name`, `pass` where the check has a criterion, and the data.

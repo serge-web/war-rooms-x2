@@ -58,10 +58,39 @@ export type LiveDocumentKind = LiveDocument['kind']
 export const DOCUMENT_ITEM_ID = 'current'
 
 /**
- * The one item an objectives node holds: the admin's, the only publisher (§3 rule 14, D21).
- * Readers ignore any other item, which only a server published before WP 3.5 can hold.
+ * The id of one save of a force's objectives (§3 rule 14): the author (a login name, or `admin`)
+ * and a nonce new for each save, so each save is a new item and the server's order, by first
+ * publish, is edit order (spike check S15). Readers never parse it: they take the last item, and
+ * the server's `publisher`, not the id, says whose it is.
  */
-export const OBJECTIVES_ITEM_ID = 'admin'
+export function objectivesItemId(author: string, nonce: string): string {
+  return `${author}-${nonce}`
+}
+
+/**
+ * The item id the admin tooling publishes the draft's objectives under (§3 rule 14), and the
+ * mock's seed uses: a new id for each different payload, so the save is a new item and the
+ * newest by server order. The publish planner is pure, so the nonce is a hash of the payload
+ * rather than random; the draft stamps `updatedAt` on every edit, so each edit gets a new id.
+ * `taken` are the ids already on the node: an id is never re-published, since a re-published
+ * item keeps its old place (spike check S15-2).
+ */
+export function objectivesDraftItemId(payload: string, taken: readonly string[] = []): string {
+  const base = objectivesItemId('admin', contentHash(payload))
+  let id = base
+  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`
+  return id
+}
+
+/** A short, stable, non-cryptographic hash (FNV-1a, 64 bits) of the UTF-8 text, in hex. */
+function contentHash(text: string): string {
+  let hash = 0xcbf29ce484222325n
+  for (const byte of new TextEncoder().encode(text)) {
+    hash ^= BigInt(byte)
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return hash.toString(16).padStart(16, '0')
+}
 
 export interface NodeSpec {
   readonly kind: LiveDocumentKind

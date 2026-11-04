@@ -32,6 +32,14 @@ const step = (plan: PublishPlan, id: string): PlanStep => {
   return found
 }
 const index = (plan: PublishPlan, id: string) => ids(plan).indexOf(step(plan, id).id)
+/** The id of the step publishing a force's draft objectives (a new item id, §3 rule 14). */
+const objectivesStepId = (plan: PublishPlan, force: string): string => {
+  const prefix = `doc:${nodeName.objectives(tid(force))}:admin-`
+  const found = ids(plan).filter((id) => id.startsWith(prefix))
+  if (found.length !== 1)
+    throw new Error(`${found.length} steps ${prefix}* in ${ids(plan).join(', ')}`)
+  return found[0] ?? ''
+}
 
 function edit(change: (d: DesignFile) => DesignFile): DesignFile {
   return change(sampleDesignWithWhiteCell())
@@ -79,12 +87,14 @@ describe('first publish onto an empty server', () => {
     expect(plan.vault).toBe('create')
   })
 
-  it('publishes objectives as the admin’s item, after the force and role documents', () => {
-    const objectives = step(plan, `doc:${nodeName.objectives(tid('blue'))}:admin`)
-    expect(objectives.action).toMatchObject({ type: 'publish', itemId: 'admin' })
-    expect(index(plan, `doc:${nodeName.force(tid('blue'))}:current`)).toBeLessThan(
-      index(plan, `doc:${nodeName.objectives(tid('blue'))}:admin`),
+  it('publishes objectives as a new admin item, after the force and role documents', () => {
+    const id = objectivesStepId(plan, 'blue')
+    const objectives = step(plan, id)
+    expect(objectives.action).toMatchObject({ type: 'publish' })
+    expect(objectives.action.type === 'publish' && objectives.action.itemId).toMatch(
+      /^admin-[0-9a-f]{16}$/,
     )
+    expect(index(plan, `doc:${nodeName.force(tid('blue'))}:current`)).toBeLessThan(index(plan, id))
     expect(index(plan, `doc:${nodeName.asset(tid('game-logo'))}:current`)).toBeLessThan(
       index(plan, `doc:${nodeName.force(tid('blue'))}:current`),
     )
@@ -97,11 +107,13 @@ describe('first publish onto an empty server', () => {
     }
   })
 
-  it('gives every White Force role read on objectives, none publish, and leaves open nodes without affiliations', () => {
+  it('gives White Cell publish on objectives, the White observer read, and leaves open nodes without affiliations', () => {
     const objectives = step(plan, `grant-node:${nodeName.objectives(tid('red'))}`).action
     const changes = objectives.type === 'node-access' ? objectives.changes : []
-    expect(changes).toContainEqual({ roleId: 'white-cell', access: 'read' })
-    expect(changes.filter((c) => c.access === 'publish')).toEqual([])
+    expect(changes).toContainEqual({ roleId: 'white-cell', access: 'publish' })
+    expect(changes.filter((c) => c.access === 'publish')).toEqual([
+      { roleId: 'white-cell', access: 'publish' },
+    ])
     expect(changes).toContainEqual({ roleId: 'white-observer', access: 'read' })
     expect(changes).toContainEqual({ roleId: 'red-co', access: 'read' })
     expect(ids(plan)).not.toContain('grant-node:game-setup')
@@ -429,85 +441,156 @@ describe('changes', () => {
     ])
   })
 
-  it('purges objectives text removed from the draft, and republishes nothing there', () => {
+  it('plans nothing for objectives the draft does not have: what is in play stays', () => {
     const design = edit((d) => ({
       ...d,
       objectives: d.objectives.filter((o) => o.forceId !== tid('red')),
     }))
     const plan = planPublish(design, published)
-    expect(step(plan, `purge:${nodeName.objectives(tid('red'))}`).action).toEqual({
-      type: 'purge-node',
-      node: nodeName.objectives(tid('red')),
-      stray: ['admin'],
-    })
     expect(ids(plan).filter((id) => id.startsWith('doc:objectives:'))).toEqual([])
     expect(plan.warnings).toEqual([])
   })
 })
 
-describe('objectives by the admin only (D21, §3 rule 14, WP 3.5)', () => {
-  // A server published before WP 3.5: White Cell published objectives, beside the admin, on
-  // nodes keeping 10 items.
-  const before = (() => {
-    let view = publishedView(sampleDesignWithWhiteCell())
-    for (const forceId of ['blue', 'red', 'white']) {
-      view = withNode(view, nodeName.objectives(tid(forceId)), (n) => ({
-        ...n,
-        config: { ...n.config, maxItems: 10 },
-        affiliations: n.affiliations.map((a) =>
-          a.jid === jid('white-cell') ? { ...a, affiliation: 'publisher' as const } : a,
-        ),
-        items:
-          forceId === 'red'
-            ? [
-                ...n.items,
-                { id: 'white-cell', payload: '{"stale":true}', publisher: jid('white-cell') },
-              ]
-            : n.items,
-      }))
-    }
-    return view
-  })()
-  const plan = planPublish(sampleDesignWithWhiteCell(), before)
+describe('objectives edited by the White Force (D21, §3 rule 14, WP 5.8)', () => {
+  const design = sampleDesignWithWhiteCell()
+  const published = publishedView(design)
+  const RED = nodeName.objectives(tid('red'))
+  /** The server after a White Force edit during play: White Cell's newest item on Red's node. */
+  const played = withNode(published, RED, (n) => ({
+    ...n,
+    items: [
+      ...n.items,
+      { id: 'white-cell-1', payload: '{"edit":"in play"}', publisher: jid('white-cell') },
+    ],
+  }))
 
-  it('takes the White Force editor’s publisher affiliation, then purges, then republishes', () => {
-    expect(step(plan, `grant-node:${nodeName.objectives(tid('red'))}`).action).toEqual({
+  it('keeps a White Force edit made during play: a second publish plans nothing', () => {
+    expect(planPublish(design, played).steps).toEqual([])
+  })
+
+  it('compares the draft with the admin’s own item by publisher, whatever its id', () => {
+    const renamed = withNode(played, RED, (n) => ({
+      ...n,
+      items: n.items.map((i) => (i.publisher === jid('admin') ? { ...i, id: 'admin-old' } : i)),
+    }))
+    expect(planPublish(design, renamed).steps).toEqual([])
+  })
+
+  it('publishes a changed draft as a new item, never re-publishing an id, so it is the newest edit', () => {
+    const changed = edit((d) => ({
+      ...d,
+      objectives: d.objectives.map((o) =>
+        o.forceId === tid('red')
+          ? { ...o, markdown: 'New orders.', updatedAt: '2026-11-04T12:00:00.000Z' }
+          : o,
+      ),
+    }))
+    const plan = planPublish(changed, played)
+    const action = step(plan, objectivesStepId(plan, 'red')).action
+    expect(action.type).toBe('publish')
+    const itemId = action.type === 'publish' ? action.itemId : ''
+    const onServer = played.nodes.find((n) => n.node === RED)?.items.map((i) => i.id) ?? []
+    expect(onServer).not.toContain(itemId)
+    expect(itemId).toMatch(/^admin-/)
+    // White Cell's edit is not touched: max_items 1 per publisher trims only the admin's old one.
+    expect(plan.steps.some((s) => s.action.type === 'retract-item')).toBe(false)
+  })
+
+  it('publishes the draft again over an admin game-view edit, saying so', () => {
+    const edited = withNode(played, RED, (n) => ({
+      ...n,
+      items: [
+        ...n.items.filter((i) => i.publisher !== jid('admin')),
+        { id: 'admin-live', payload: '{"edit":"admin in play"}', publisher: jid('admin') },
+      ],
+    }))
+    const plan = planPublish(design, edited)
+    const draft = step(plan, objectivesStepId(plan, 'red'))
+    expect(draft.details).toEqual([
+      'The draft differs from the admin’s item on the server; it becomes the newest edit',
+    ])
+  })
+
+  it('a role leaving the White Force loses publish first, then its edits are retracted', () => {
+    const moved = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) =>
+        r.loginName === 'white-cell' ? { ...r, forceId: tid('blue') } : r,
+      ),
+    }))
+    const plan = planPublish(moved, played)
+    const retract = step(plan, `retract:${RED}:white-cell-1`)
+    expect(retract.action).toEqual({ type: 'retract-item', node: RED, itemId: 'white-cell-1' })
+    expect(retract.group).toBe('removals')
+    expect(retract.summary).toContain('White Cell')
+    expect(retract.details[0]).toContain('no longer in the White Force')
+    expect(index(plan, `revoke-node:${RED}`)).toBeLessThan(index(plan, retract.id))
+    // No confirmation of its own: the move is the admin's decision (F9 works it out from the
+    // action, and only a template's retraction is confirmed).
+    expect(stepConfirmation(retract.action)).toBeUndefined()
+    expect(stepConfirmation({ type: 'retract-item', node: 'templates', itemId: 'x' })).toBe(
+      'template:x',
+    )
+  })
+
+  it('a deleted role’s edits are retracted after the role is deleted', () => {
+    const deleted = edit((d) => ({
+      ...d,
+      roles: d.roles.filter((r) => r.loginName !== 'white-cell'),
+      rooms: d.rooms.map((room) => ({
+        ...room,
+        participants: room.participants.filter((p) => p.id !== tid('white-cell')),
+      })),
+    }))
+    const plan = planPublish(deleted, played)
+    const retract = step(plan, `retract:${RED}:white-cell-1`)
+    expect(retract.details[0]).toContain('is deleted')
+    expect(index(plan, 'delete-role:white-cell')).toBeLessThan(index(plan, retract.id))
+  })
+
+  it('a White Force role made an observer becomes a reader, and keeps its edits', () => {
+    const observer = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) => (r.loginName === 'white-cell' ? { ...r, isObserver: true } : r)),
+    }))
+    const plan = planPublish(observer, played)
+    expect(step(plan, `grant-node:${RED}`).action).toEqual({
       type: 'node-access',
-      node: nodeName.objectives(tid('red')),
+      node: RED,
       changes: [{ roleId: 'white-cell', access: 'read' }],
     })
-    expect(step(plan, `purge:${nodeName.objectives(tid('red'))}`).action).toMatchObject({
-      stray: ['white-cell'],
-    })
-    expect(index(plan, `grant-node:${nodeName.objectives(tid('red'))}`)).toBeLessThan(
-      index(plan, `purge:${nodeName.objectives(tid('red'))}`),
-    )
-    expect(index(plan, `purge:${nodeName.objectives(tid('red'))}`)).toBeLessThan(
-      index(plan, `doc:${nodeName.objectives(tid('red'))}:admin`),
-    )
-    // The admin's item is unchanged, but the purge takes it too, so it is published again.
-    expect(step(plan, `doc:${nodeName.objectives(tid('red'))}:admin`).action).toMatchObject({
-      itemId: 'admin',
-    })
-    expect(step(plan, `node:${nodeName.objectives(tid('red'))}`).details).toEqual([
-      'maxItems: 10 → 1',
-    ])
+    expect(plan.steps.some((s) => s.action.type === 'retract-item')).toBe(false)
   })
 
-  it('purges only nodes holding an item that is not the admin’s', () => {
-    expect(ids(plan).filter((id) => id.startsWith('purge:'))).toEqual([
-      `purge:${nodeName.objectives(tid('red'))}`,
-    ])
-    expect(ids(plan)).not.toContain(`doc:${nodeName.objectives(tid('blue'))}:admin`)
+  it('leaves alone items whose publisher the server does not report, and the admin’s', () => {
+    const anonymous = withNode(published, RED, (n) => ({
+      ...n,
+      items: [...n.items, { id: 'who-1', payload: '{}', publisher: undefined }],
+    }))
+    expect(planPublish(design, anonymous).steps).toEqual([])
   })
 
-  it('plans nothing on a second publish', () => {
-    const after = withNode(
-      publishedView(sampleDesignWithWhiteCell()),
-      nodeName.objectives(tid('red')),
-      (n) => n,
-    )
-    expect(planPublish(sampleDesignWithWhiteCell(), after).steps).toEqual([])
+  it('corrects a server published under WP 3.5: White Cell publishes again, the admin’s item stays', () => {
+    // WP 3.5 kept the admin's item under the fixed id `admin`, and White Cell read only.
+    let before = published
+    for (const forceId of ['blue', 'red', 'white']) {
+      before = withNode(before, nodeName.objectives(tid(forceId)), (n) => ({
+        ...n,
+        affiliations: n.affiliations.map((a) =>
+          a.jid === jid('white-cell') ? { ...a, affiliation: 'member' as const } : a,
+        ),
+        items: n.items.map((i) => ({ ...i, id: 'admin' })),
+      }))
+    }
+    const plan = planPublish(design, before)
+    expect(step(plan, `grant-node:${RED}`).action).toEqual({
+      type: 'node-access',
+      node: RED,
+      changes: [{ roleId: 'white-cell', access: 'publish' }],
+    })
+    // The same text under the old id is the admin's own item: nothing to republish.
+    expect(ids(plan).filter((id) => id.startsWith('doc:objectives:'))).toEqual([])
   })
 })
 
