@@ -1,47 +1,47 @@
 [
   {
     "name": "admin-design-editor",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-preview-as-role",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-publish-plan",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-room-templates",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-template-builder",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-template-raw",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "admin-theme-editor",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "app-shell",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "multi-client-column-tab",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "multi-client-two-panes",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "multi-client-view",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "page-architecture",
@@ -49,7 +49,7 @@
   },
   {
     "name": "page-background",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "page-blog",
@@ -57,7 +57,7 @@
   },
   {
     "name": "page-data-dictionary",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "page-home",
@@ -69,50 +69,58 @@
   },
   {
     "name": "player-chat",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-chat-collapsed",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-column",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-map",
-    "status": "new"
+    "status": "unchanged"
   },
   {
     "name": "player-map-table",
-    "status": "new"
+    "status": "unchanged"
   },
   {
     "name": "player-objectives-editor",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-shell",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-turn-adjudication",
-    "status": "new"
+    "status": "unchanged"
   },
   {
     "name": "player-welcome",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "player-workspace",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "template-card",
-    "status": "changed"
+    "status": "unchanged"
   },
   {
     "name": "template-composer",
-    "status": "changed"
+    "status": "unchanged"
+  },
+  {
+    "name": "umpire-world-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "umpire-world-summary",
+    "status": "unchanged"
   }
 ]
