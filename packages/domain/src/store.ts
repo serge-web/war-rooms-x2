@@ -1514,12 +1514,23 @@ class Store implements SessionStore {
       timestamp: message.timestamp,
       sender: this.toSender(message.nick, message.from),
     }
+    const roomType = this.docOf('room', entry.roomId)?.roomType
+    // PLY-58: in the map room only the admin's messages count, so anyone else's is set aside
+    // before its body is read: a modified client's large posts cost every reader nothing to
+    // parse (WP 5.7 review).
+    if (roomType === MAP_ROOM_TYPE && !base.sender.isAdmin) {
+      this.logger.warn('Ignoring a map-room message not from the admin', {
+        room: entry.roomId,
+        stanzaId: message.stanzaId,
+        from: base.sender.jid,
+      })
+      return { ...base, kind: 'unreadable', reason: 'not from the admin' }
+    }
     const parsed = parseDocument('message', message.body)
     if (!parsed.ok) {
       this.logger.warn('Unreadable message', { room: entry.roomId, stanzaId: message.stanzaId })
       return { ...base, kind: 'unreadable', reason: parsed.error.message }
     }
-    const roomType = this.docOf('room', entry.roomId)?.roomType
     const definition = roomType === undefined ? undefined : this.registry.get(roomType)
     if (definition !== undefined && !definition.messageSchema.safeParse(parsed.value).success) {
       if (roomType === MAP_ROOM_TYPE) {

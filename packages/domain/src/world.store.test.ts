@@ -113,8 +113,10 @@ describe('world state (D25, PLY-58, PLY-59)', () => {
     expect(snapshot.data?.ignored).toBe(13)
     // 15 messages in pages of 5: the newest page, then two more.
     expect(queries(h).map((c) => (c.args[1] as { max: number }).max)).toEqual([5, 5, 5])
-    expect(h.warnings).toContain('Ignoring a world state not from the admin')
-    expect(h.warnings).toContain('Ignoring a map-room message that is not a world state')
+    expect(h.warnings).toContain('Ignoring a map-room message not from the admin')
+    expect(
+      h.warnings.filter((w) => w === 'Ignoring a map-room message not from the admin'),
+    ).toHaveLength(13)
     release()
   })
 

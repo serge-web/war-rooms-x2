@@ -10,6 +10,7 @@ import type { Page } from '@playwright/test'
 import { LIMITS } from '@wrx/schemas'
 import { ROOM, sampleWorldState } from '@wrx/schemas/fixtures'
 import type { WorldState } from '@wrx/schemas'
+import { expectNoViolations } from '../a11y.ts'
 import { mapPanel, openMap, symbols, tilesLoaded } from '../map.ts'
 import { expect, logInAs, openApp, test, watchErrors } from './backend.ts'
 
@@ -112,7 +113,7 @@ test('the map room shows the admin’s newest world state, live and after a relo
 test('a world state behind many other map-room posts is found by looking further back, never shown as none (PLY-59, WP 5.7)', async ({
   context,
   backend,
-}) => {
+}, testInfo) => {
   test.setTimeout(180_000)
   const page = await context.newPage()
   await page.setViewportSize({ width: 1400, height: 900 })
@@ -137,6 +138,9 @@ test('a world state behind many other map-room posts is found by looking further
     timeout: 60_000,
   })
   await expect(panel.getByText(/has not published a world state yet/)).toHaveCount(0)
+  await expectNoViolations(page, testInfo, 'map room: the world state is further back', {
+    include: '.wrx-map',
+  })
   await panel.getByRole('button', { name: 'Look further back' }).click()
   await expect(symbols(panel)).toHaveCount(6, { timeout: 60_000 })
   await expect(turnText(page)).toHaveText('World state for turn 1: 6 assets')
