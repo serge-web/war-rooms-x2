@@ -175,6 +175,15 @@ test('SC-10: the admin offers a template to one force in a templates-only room; 
   await region.getByRole('button', { name: 'Show every step' }).click()
   await expect(region.locator('li[data-step]').filter({ hasText: NEW }).first()).toBeVisible()
   await publishPlan(admin, [/Delete Blue Liaison/])
+  // Deleting a role is structural (§3 rule 8): each player's layout resets to the default, with
+  // a notice (PLY-5), and the negotiation is shown again from its tab.
+  for (const page of [red, blue]) {
+    await expect(page.getByRole('region', { name: /^Notifications/ })).toContainText(
+      'Layout reset',
+      { timeout: 30_000 },
+    )
+    await page.getByRole('tab', { name: TALKS, exact: true }).click()
+  }
 
   // 7. The old message keeps its template: its name, its fields, the deleted role's last name
   // (TPL-8, TPL-9); a warning says the room no longer offers it (provisional answer 3).

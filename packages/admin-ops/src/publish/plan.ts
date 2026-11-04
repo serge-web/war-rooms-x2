@@ -19,7 +19,9 @@
 //                    nodes. A deleted role's or force's `retired` record (§3 rule 1) is a
 //                    document of step 5, so it is on the server before the role loses anything
 //                    (ADM-39 order: record, affiliations, subscriptions, account)
-//   7 game-setup     last, carrying the incremented `designVersion` (§3 rule 8)
+//   7 game-setup     last: at the next `designVersion` when the design's structure changed,
+//                    else at the version it has, and only when the game setup itself changed
+//                    (§3 rule 8, PLY-5)
 //
 // Roles are named by login name throughout (the account's localpart, §3 rule 1): the server knows
 // accounts, not role GUIDs. Rooms and nodes carry GUIDs.
@@ -48,7 +50,7 @@ import {
 import type { DesignFile, Force, GameSetup, Retired, Role, Room, Template } from '@wrx/schemas'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 import type { NodeAccessChange, RoomAccessChange } from '../ops.ts'
-import { ROOM_SETTINGS, sameRoomConfig, targetState } from '../target.ts'
+import { ROOM_SETTINGS, designStructure, sameRoomConfig, targetState } from '../target.ts'
 import type { NodeAccess, TargetNode } from '../target.ts'
 import { roleIdOf } from './view.ts'
 import type { NodeView, ServerView } from './view.ts'
@@ -348,6 +350,11 @@ export interface PublishPlan {
   readonly steps: readonly PlanStep[]
   /** The version `game-setup` gets, when the plan publishes it; else undefined. */
   readonly designVersion: number | undefined
+  /**
+   * Whether the design's structure changes (§3 rule 8: forces, roles, rooms, participants), so
+   * `designVersion` moves and online players' layouts reset (PLY-5). False for a reset.
+   */
+  readonly structural: boolean
   /** The version on the server now, if a game is published. */
   readonly publishedVersion: number | undefined
   readonly warnings: readonly PlanWarning[]
@@ -682,6 +689,7 @@ export function planPublish(
       errors,
       steps: [],
       designVersion: undefined,
+      structural: false,
       publishedVersion,
       warnings: [],
       affectedOnline: [],
@@ -696,9 +704,11 @@ export function planPublish(
   const design = withTemplateLocks(withRetiredRecords(given, published), published.templates)
   const target = targetState(design)
   const marker = view.marker
+  // A publish that did not finish. It may have kept the version (no structural change), so a
+  // marker at the published version is still pending; only a version since passed is not.
   const pending =
     marker !== undefined &&
-    (publishedVersion === undefined || marker.designVersion > publishedVersion)
+    (publishedVersion === undefined || marker.designVersion >= publishedVersion)
   const trustDocuments = !pending
 
   const roleName = (login: string) =>
@@ -1122,18 +1132,26 @@ export function planPublish(
     published.game === undefined ||
     canonicalJson({ ...published.game, designVersion: 0 }) !==
       canonicalJson({ ...design.game, designVersion: 0 })
+  // Rule 8: only a structural change moves the version, so saved layouts outlive theme and
+  // text edits (D6). Compared with the published documents, so a first publish is structural.
+  const structural = published.game === undefined || target.structure !== designStructure(published)
+  const owed = pending ? marker.designVersion : undefined
+  const next =
+    publishedVersion === undefined
+      ? Math.max(owed ?? 0, design.game.designVersion, 1)
+      : structural
+        ? Math.max(owed ?? 0, publishedVersion + 1)
+        : Math.max(owed ?? 0, publishedVersion)
   let designVersion: number | undefined
-  if (changes.length > 0 || gameChanged || pending) {
-    const next = pending
-      ? marker.designVersion
-      : publishedVersion === undefined
-        ? design.game.designVersion
-        : publishedVersion + 1
-    designVersion = Math.max(next, (publishedVersion ?? 0) + 1)
+  if (gameChanged || next !== publishedVersion || pending) {
+    designVersion = next
     if (gameNode !== undefined) {
       changes.push({
         ...documentStep(gameNode, DOCUMENT_ITEM_ID, gamePayload(designVersion), gameNode.node),
-        summary: `Publish the game setup, design version ${designVersion}`,
+        summary:
+          designVersion === publishedVersion
+            ? `Publish the game setup, keeping design version ${designVersion}`
+            : `Publish the game setup, design version ${designVersion}`,
       })
     }
   }
@@ -1144,6 +1162,7 @@ export function planPublish(
     errors: [],
     steps: changes,
     designVersion,
+    structural: designVersion !== undefined && designVersion !== publishedVersion,
     publishedVersion,
     warnings,
     affectedOnline: view.online.filter((id) => affected.has(id)),
@@ -1376,6 +1395,7 @@ export function planReset(view: ServerView, options: PlanOptions = {}): PublishP
     errors: [],
     steps,
     designVersion: undefined,
+    structural: false,
     publishedVersion: published.game?.designVersion,
     warnings,
     affectedOnline: view.online.filter((id) => affected.has(id)),

@@ -25,7 +25,9 @@ export const gameSetupSchema = z
     designVersion: z
       .int()
       .min(1)
-      .describe('Incremented on each publish that changes the design; keys saved layouts (PLY-5)'),
+      .describe(
+        'Incremented by a publish that changes the structure: forces, roles, rooms or participants (§3 rule 8); keys saved layouts (PLY-5)',
+      ),
     theme: themeSchema,
     roomTypeDefaults: z
       .record(slugSchema, z.record(z.string(), z.unknown()))

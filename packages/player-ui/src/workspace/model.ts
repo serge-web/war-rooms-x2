@@ -2,15 +2,7 @@
 // goes through `Model.doAction` with `Actions.*`, the library's public API, and runs without a
 // DOM, so the layout rules are unit-tested in Node. FlexLayout's `any` (doAction's result,
 // `Action.data`) stops here: callers see typed functions only.
-import {
-  Actions,
-  BorderNode,
-  DockLocation,
-  Model,
-  RowNode,
-  TabNode,
-  TabSetNode,
-} from 'flexlayout-react'
+import { Actions, BorderNode, DockLocation, Model, TabNode, TabSetNode } from 'flexlayout-react'
 import type {
   Action,
   IGlobalAttributes,
@@ -22,7 +14,7 @@ import type {
 } from 'flexlayout-react'
 import { parseTabId, roomTabId } from './ids.ts'
 import type { TabIds, TabKind } from './ids.ts'
-import { defaultColumns, pickFewest, reconcilePlan } from './rules.ts'
+import { defaultColumns, sameRooms } from './rules.ts'
 import { parseRoomTabState } from './tab-state.ts'
 import type { RoomTabState } from './tab-state.ts'
 
@@ -201,24 +193,20 @@ function panelBorder(model: Model): BorderNode | undefined {
 
 // ---- Changing ----------------------------------------------------------------------------
 
-/** The first docked tabset with the fewest tabs (PLY-41), creating one if there is none. */
-function fewestTabset(model: Model): TabSetNode | undefined {
-  const tabsets = mainTabsets(model)
-  return tabsets[pickFewest(tabsets.map((ts) => ts.getTabNodes().length))]
+/** The first docked tabset, left to right, if any. */
+function firstTabset(model: Model): TabSetNode | undefined {
+  return mainTabsets(model)[0]
 }
 
-/** PLY-41: adds a tab to the tabset with the fewest tabs, without selecting it. */
-export function addToFewest(model: Model, spec: TabSpec, ids: TabIds): void {
-  const target = fewestTabset(model)
-  if (target !== undefined) {
-    act(model, Actions.addTab(tabJson(spec, ids), target.getId(), DockLocation.CENTER, -1, false))
-    return
-  }
-  // No docked tabset left (everything was dragged to the strip): start a column.
-  const root = model.getRootRow()
-  if (root instanceof RowNode) {
-    act(model, Actions.addTab(tabJson(spec, ids), root.getId(), DockLocation.CENTER, -1, false))
-  }
+/**
+ * Adds a tab to the first docked tabset, without selecting it; with none left (everything was
+ * dragged to the strip), it starts a column. Only for tabs that are not rooms: panels with no
+ * strip to go to, and the special tab (FT-1).
+ */
+function addDocked(model: Model, spec: TabSpec, ids: TabIds): void {
+  const target = firstTabset(model) ?? model.getRootRow()
+  if (target === undefined) return
+  act(model, Actions.addTab(tabJson(spec, ids), target.getId(), DockLocation.CENTER, -1, false))
 }
 
 /**
@@ -231,48 +219,51 @@ export function addToFewest(model: Model, spec: TabSpec, ids: TabIds): void {
 function addSpecial(model: Model, spec: TabSpec, ids: TabIds): void {
   const border = panelBorder(model)
   if (border === undefined) {
-    addToFewest(model, spec, ids)
+    addDocked(model, spec, ids)
     return
   }
   act(model, Actions.addTab(tabJson(spec, ids), border.getId(), DockLocation.CENTER, 0, false))
 }
 
-/** Moves a tab, wherever it is, into the tabset with the fewest tabs. */
-function moveToFewest(model: Model, tab: TabNode): void {
-  const target = fewestTabset(model)
-  if (target === undefined) return
-  act(model, Actions.moveNode(tab.getId(), target.getId(), DockLocation.CENTER, -1, false))
+/**
+ * PLY-5: whether the model holds exactly the spec's rooms, wherever the player put them. When it
+ * does not, the workspace replaces it with the default (`defaultModel`): rooms gained or lost
+ * reset the layout, they are never fitted into it (PLY-6 and PLY-41 are retired).
+ */
+export function fitsRooms(model: Model, spec: LayoutSpec, ids: TabIds): boolean {
+  const rooms = [...tabsById(model, ids).keys()].filter((id) => parseTabId(id)?.kind === 'room')
+  return sameRooms(
+    rooms,
+    spec.rooms.map((r) => r.id),
+  )
 }
 
 /**
- * D6, PLY-6: makes the model hold exactly the spec's tabs, through the public API only. Lost
- * rooms close; new rooms go to the tabset with the fewest tabs (PLY-41); missing panels go back
- * to the strip; renamed rooms are relabelled. Everything else stays where the user put it.
+ * Brings everything but the set of rooms in line with the spec, in place, through the public
+ * API only: renamed tabs are relabelled; panels and the special tab (FT-1) the spec no longer
+ * has are removed, and missing ones added (panels at the end of the strip, the special tab first
+ * in it). Room tabs are neither added nor removed: a layout that does not fit the rooms is
+ * replaced (`fitsRooms`).
  */
-export function reconcile(model: Model, spec: LayoutSpec, ids: TabIds): void {
+export function syncTabs(model: Model, spec: LayoutSpec, ids: TabIds): void {
   const present = tabsById(model, ids)
-  const wanted = [
-    ...spec.rooms,
-    ...spec.panels,
-    ...(spec.special === undefined ? [] : [spec.special]),
-  ]
-  const plan = reconcilePlan(
-    [...present.keys()],
-    wanted.map((t) => t.id),
-  )
-  for (const id of plan.remove) act(model, Actions.deleteTab(ids.toModel(id)))
-  for (const t of wanted) {
+  const others = [...spec.panels, ...(spec.special === undefined ? [] : [spec.special])]
+  const wanted = new Set(others.map((t) => t.id))
+  for (const id of present.keys()) {
+    if (parseTabId(id)?.kind !== 'room' && !wanted.has(id)) {
+      act(model, Actions.deleteTab(ids.toModel(id)))
+    }
+  }
+  for (const t of [...spec.rooms, ...others]) {
     const tab = present.get(t.id)
     if (tab !== undefined && tab.getName() !== t.name) {
       act(model, Actions.renameTab(tab.getId(), t.name))
     }
   }
-  const adding = new Set(plan.add)
-  for (const room of spec.rooms) if (adding.has(room.id)) addToFewest(model, room, ids)
   const border = panelBorder(model)
   for (const panel of spec.panels) {
-    if (!adding.has(panel.id)) continue
-    if (border === undefined) addToFewest(model, panel, ids)
+    if (present.has(panel.id)) continue
+    if (border === undefined) addDocked(model, panel, ids)
     else
       act(
         model,
@@ -280,7 +271,7 @@ export function reconcile(model: Model, spec: LayoutSpec, ids: TabIds): void {
       )
   }
   const special = spec.special
-  if (special !== undefined && adding.has(special.id)) addSpecial(model, special, ids)
+  if (special !== undefined && !present.has(special.id)) addSpecial(model, special, ids)
 }
 
 /** The special tab's node, if the model holds it (FT-1). */
@@ -292,15 +283,17 @@ export function specialTab(model: Model, spec: LayoutSpec, ids: TabIds): TabNode
 
 /**
  * Docks tabs back from popouts and floating panels (layout-library.md, weakness 2): FlexLayout
- * turns a closed popout window into a floating panel; this moves its tabs into the tabset with
- * the fewest tabs instead. With a layout id, only that popout's tabs move.
+ * turns a closed popout window into a floating panel; this moves its tabs to the end of the
+ * first docked tabset instead, unselected. With a layout id, only that popout's tabs move.
  */
 export function dockDetached(model: Model, layoutId?: string): void {
   for (const tab of allTabs(model)) {
     const from = tab.getLayoutId()
     if (from === Model.MAIN_LAYOUT_ID) continue
     if (layoutId !== undefined && from !== layoutId) continue
-    moveToFewest(model, tab)
+    const target = firstTabset(model)
+    if (target === undefined) continue
+    act(model, Actions.moveNode(tab.getId(), target.getId(), DockLocation.CENTER, -1, false))
   }
 }
 
@@ -505,8 +498,9 @@ function mapBorders(borders: unknown, rename: Rename, seen: Set<string>): IJsonB
 /**
  * Rebuilds a layout from untrusted JSON, keeping only its shape: rows, tabsets, borders, weights,
  * sizes and selection, and tabs with ids we understand. Popouts and floating panels are dropped
- * (their tabs come back by reconciliation, docked), and the global settings are ours. Tab ids go
- * through `rename`, which returns undefined to drop a tab. Undefined if it is not a layout.
+ * (`restoreLayout` docks their room tabs back from `detached`), and the global settings are
+ * ours. Tab ids go through `rename`, which returns undefined to drop a tab. Undefined if it is
+ * not a layout.
  */
 function rebuild(json: unknown, rename: Rename): IJsonModel | undefined {
   if (!isRecord(json) || !isRecord(json.layout)) return undefined
@@ -522,8 +516,8 @@ function rebuild(json: unknown, rename: Rename): IJsonModel | undefined {
 
 /**
  * PLY-5: the layout to save, with this instance's prefix stripped, as JSON text. Popouts are not
- * saved (their tabs come back docked), but their room tabs' own state is (PLY-54), under
- * `detached` by logical id, so a room popped out keeps its state across a reload.
+ * saved, but their room tabs are, with their own state (PLY-54), under `detached` by logical id,
+ * so a room popped out comes back docked with its state after a reload.
  */
 export function serialiseLayout(model: Model, ids: TabIds): string {
   const json = rebuild(model.toJson(), (id) => {
@@ -535,16 +529,19 @@ export function serialiseLayout(model: Model, ids: TabIds): string {
   for (const tab of allTabs(model)) {
     if (tab.getLayoutId() === Model.MAIN_LAYOUT_ID) continue
     const logical = ids.toLogical(tab.getId())
-    const config = parseRoomTabState(tab.getConfig())
-    if (logical !== undefined && config !== undefined) detached[logical] = config
+    if (logical === undefined || parseTabId(logical)?.kind !== 'room') continue
+    // Every popped-out room, with or without state: a layout missing one would not fit (PLY-5).
+    detached[logical] = parseRoomTabState(tab.getConfig()) ?? {}
   }
   return JSON.stringify(Object.keys(detached).length === 0 ? rest : { ...rest, detached })
 }
 
 /**
- * D6, PLY-6: a saved layout, reconciled with the current tabs before anything renders. Passing
- * the model on screen keeps matching tabs mounted. Undefined when the text is not a usable
- * layout; the caller then uses the default.
+ * PLY-5: a saved layout, if it holds exactly the role's rooms; panels and the special tab are
+ * brought in line (`syncTabs`). Rooms that were popped out come back docked at the end of the
+ * first tabset, with their state. Passing the model on screen keeps matching tabs mounted.
+ * Undefined when the text is not a usable layout or its rooms are not the role's rooms: the
+ * caller then uses the default (a layout is never fitted to other rooms).
  */
 export function restoreLayout(
   text: string,
@@ -560,25 +557,63 @@ export function restoreLayout(
   }
   const json = rebuild(parsed, (id) => ({ logical: id, id: ids.toModel(id) }))
   if (json === undefined) return undefined
+  dockSaved(json, isRecord(parsed) && isRecord(parsed.detached) ? parsed.detached : {}, ids)
   let model: Model
   try {
     model = Model.fromJson(json, previous)
   } catch {
     return undefined
   }
-  reconcile(model, spec, ids)
-  // Popped-out rooms come back docked by reconciliation; give them their saved state (PLY-54).
-  const detached = isRecord(parsed) && isRecord(parsed.detached) ? parsed.detached : {}
-  for (const [logical, value] of Object.entries(detached)) {
-    const ref = parseTabId(logical)
-    const config = parseRoomTabState(value)
-    if (ref?.kind !== 'room' || config === undefined) continue
-    const node = model.getNodeById(ids.toModel(logical))
-    if (node instanceof TabNode && parseRoomTabState(node.getConfig()) === undefined) {
-      act(model, Actions.updateNodeAttributes(node.getId(), { config }))
+  if (!fitsRooms(model, spec, ids)) return undefined
+  syncTabs(model, spec, ids)
+  return model
+}
+
+/**
+ * Puts the room tabs saved as popped out (`detached`, by logical id, each with its state) at the
+ * end of the first tabset of a rebuilt layout, unless the layout has them already.
+ */
+function dockSaved(json: IJsonModel, detached: Readonly<Record<string, unknown>>, ids: TabIds) {
+  const present = new Set<string>()
+  const add = (tabs: readonly { readonly id?: string | undefined }[] | undefined) => {
+    for (const tab of tabs ?? []) if (tab.id !== undefined) present.add(tab.id)
+  }
+  const visit = (row: IJsonRowNode) => {
+    for (const child of row.children ?? []) {
+      if (child.type === 'row') visit(child)
+      else add(child.children)
     }
   }
-  return model
+  visit(json.layout)
+  for (const border of json.borders ?? []) add(border.children)
+  const tabs: IJsonTabNode[] = []
+  for (const [logical, value] of Object.entries(detached)) {
+    const ref = parseTabId(logical)
+    const id = ids.toModel(logical)
+    if (ref?.kind !== 'room' || present.has(id)) continue
+    present.add(id)
+    const tab: IJsonTabNode = { type: 'tab', id, name: logical, component: 'room' }
+    const config = parseRoomTabState(value)
+    if (config !== undefined) tab.config = config
+    tabs.push(tab)
+  }
+  if (tabs.length === 0) return
+  const first = firstTabsetJson(json.layout)
+  if (first === undefined) {
+    json.layout.children = [...(json.layout.children ?? []), { type: 'tabset', children: tabs }]
+  } else {
+    first.children = [...(first.children ?? []), ...tabs]
+  }
+}
+
+/** The first tabset of a layout's row, depth first (left to right). */
+function firstTabsetJson(row: IJsonRowNode): IJsonTabSetNode | undefined {
+  for (const child of row.children ?? []) {
+    if (child.type === 'tabset') return child
+    const inner = firstTabsetJson(child)
+    if (inner !== undefined) return inner
+  }
+  return undefined
 }
 
 // ---- A room tab's own state (PLY-54) -----------------------------------------------------

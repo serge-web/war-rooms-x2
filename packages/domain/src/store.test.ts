@@ -189,19 +189,45 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(getItemsCalls(h, nodeName.room(tid('red-hq')))).toBe(1)
   })
 
-  it('looks for new nodes when the design version changes, and retries failed ones', async () => {
+  it('finds a room created during the session from the new directory, and drops a removed one (PLY-60)', async () => {
     const h = harness()
-    h.refused.set(nodeName.room(tid('red-hq')), 'forbidden')
     await h.store.ready()
+    const subscribed = h.session.calls.filter((c) => c.op === 'subscribe').map((c) => c.args[0])
+    expect(subscribed).toContain('directory')
     h.docs.set(nodeName.room(tid('new-room')), [
       room('new-room', [{ kind: 'force', id: 'blue', access: 'read' }]),
     ])
+    // The room's node and document alone are not announced: nothing changes yet.
+    await flush()
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).not.toContain('new-room')
+    // The publish's new directory names it: read, filtered by rule 4, without logging in again.
+    h.publishDirectory()
+    await flush()
+    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toContain('new-room')
+    expect(h.store.me().data.rooms.find((r) => r.room.id === tid('new-room'))?.access).toBe('read')
+    // A room the directory no longer names goes, and its node is released.
+    h.docs.delete(nodeName.room(tid('negotiation')))
+    h.publishDirectory()
+    await flush()
+    expect(h.store.me().data.rooms.map((r) => nameOf(r.room.id))).toEqual(['blue-hq', 'new-room'])
+    expect(
+      h.session.calls.some(
+        (c) => c.op === 'unsubscribe' && c.args[0] === nodeName.room(tid('negotiation')),
+      ),
+    ).toBe(true)
+    // Nodes are never listed.
+    expect(h.session.calls.some((c) => c.op === 'listNodes')).toBe(false)
+  })
+
+  it('retries failed nodes when the design version changes (§3 rule 8)', async () => {
+    const h = harness()
+    h.refused.set(nodeName.room(tid('red-hq')), 'forbidden')
+    await h.store.ready()
+    expect(h.store.room(tid('red-hq')).status).toBe('error')
     h.refused.delete(nodeName.room(tid('red-hq')))
     h.publish('game-setup', game(2))
     await flush()
-    expect(h.store.rooms().data.map((r) => nameOf(r.id))).toContain('new-room')
     expect(h.store.room(tid('red-hq')).status).toBe('ready')
-    expect(h.store.me().data.rooms.find((r) => r.room.id === tid('new-room'))?.access).toBe('read')
   })
 
   it('does not let a stale fetch overwrite a newer notification', async () => {
@@ -258,7 +284,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     release()
   })
 
-  /** A store for `login` over `docs`, with node listing refused (WP 3.4, fix 1). */
+  /** A store for `login` over `docs`, with node listing refused (WP 3.4, fix 1): never used. */
   async function unlisted(docs: Map<string, unknown[]>, login = 'blue-co') {
     const h = harness({ docs, roleId: login })
     h.session.stub('pubsub', 'listNodes', () => Promise.resolve(err('forbidden')))
@@ -266,6 +292,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     const { createSessionStore } = await import('./store.ts')
     const store = createSessionStore({ session: h.session, logger: h.logger })
     await store.ready()
+    expect(h.session.calls.some((c) => c.op === 'listNodes')).toBe(false)
     return { h, store }
   }
 
@@ -281,14 +308,14 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     return docs
   }
 
-  it('starts when nodes cannot be listed and no directory exists, with nothing to show', async () => {
-    // A server published before the directory: the role is found among listed role documents
-    // only, so with listing refused there is none to find. It starts, failing closed.
-    const { h, store } = await unlisted(sampleDocuments())
+  it('starts with nothing to show when no directory exists, failing closed (PLY-60)', async () => {
+    // A server published before the directory: nothing says where the documents are.
+    const docs = sampleDocuments()
+    docs.set('directory', [])
+    const { store } = await unlisted(docs)
     expect(store.me().data.role).toBeUndefined()
     expect(store.rooms().data).toEqual([])
     expect(store.gameSetup().data?.designVersion).toBe(1)
-    expect(h.warnings).toContain('Could not list nodes')
   })
 
   it('finds its own role, force, objectives and rooms from the directory, without listing (§3 rule 1)', async () => {
@@ -300,7 +327,12 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(store.objectives(tid('blue')).data?.markdown).toBe('Secure the crossing.')
     // Its own force's objectives only: another force's node is never asked for.
     expect(getItemsCalls(h, nodeName.objectives(tid('red')))).toBe(0)
-    expect(h.warnings).toContain('Could not list nodes')
+    // Every room document is read, its own rooms or not (§3 rule 15).
+    expect(store.rooms().data.map((r) => nameOf(r.id))).toEqual([
+      'blue-hq',
+      'red-hq',
+      'negotiation',
+    ])
   })
 
   it('an umpire finds every force’s objectives from the directory, without listing', async () => {
@@ -328,7 +360,7 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     const docs = sampleDocuments()
     const impostor = role('blue-co', 'red', { id: '00000000-0000-4000-8000-000000000001' })
     docs.set(nodeName.role(impostor.id), [impostor])
-    // Listed, and first in display order: without the directory the impostor would be taken.
+    // Both named in the directory, the impostor first: a directory that names it is followed.
     const before = harness({ docs: new Map(docs) })
     await before.store.ready()
     expect(before.store.me().data.role?.id).toBe(impostor.id)
@@ -339,12 +371,13 @@ describe('session store: ready state and documents (ARC-2, NFR-5)', () => {
     expect(h.store.me().data.force?.id).toBe(tid('blue'))
   })
 
-  it('ignores an invalid directory and still uses the listing', async () => {
+  it('ignores an invalid directory, and finds nothing (failing closed)', async () => {
     const docs = sampleDocuments()
     docs.set('directory', [{ schemaVersion: 1, roles: 'not a list' }])
     const h = harness({ docs })
     await h.store.ready()
-    expect(h.store.me().data.role?.id).toBe(tid('blue-co'))
+    expect(h.store.me().data.role).toBeUndefined()
+    expect(h.store.me().data.rooms).toEqual([])
     expect(h.warnings).toContain('Ignoring an invalid item')
   })
 

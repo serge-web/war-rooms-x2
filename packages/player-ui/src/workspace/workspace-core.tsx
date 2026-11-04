@@ -1,6 +1,7 @@
 // The dockable workspace over plain props (NFR-18): FlexLayout's <Layout> with the model rules of
 // `model.ts`. It holds one model per instance (D15), restores and saves it through the host's
-// LayoutStorage (PLY-5), reconciles it whenever the tabs change (PLY-6), docks popouts back when
+// LayoutStorage (PLY-5), resets it to the default when the rooms change or the host says the
+// design changed (PLY-5; PLY-6's in-place reconciliation is retired), docks popouts back when
 // their window closes, and adds the Alt+Shift+Arrow keyboard move with focus kept on the moved
 // tab (NFR-14). `Workspace` (workspace.tsx) wires it to the pane's store.
 import { Layout, OverflowIcon, TabNode } from 'flexlayout-react'
@@ -15,12 +16,13 @@ import {
   closedPopout,
   defaultModel,
   dockDetached,
+  fitsRooms,
   moveTab,
-  reconcile,
   restoreLayout,
   roomTabState,
   serialiseLayout,
   specialTab,
+  syncTabs,
   updateRoomTabState,
 } from './model.ts'
 import type { Action, LayoutSpec } from './model.ts'
@@ -54,8 +56,20 @@ export interface WorkspaceCoreProps {
   readonly panels?: readonly WorkspacePanel[]
   /** Where layouts are saved. Without it (or a key) the layout lasts until unmount. */
   readonly storage?: LayoutStorage | undefined
-  /** The saved layout's key (see `layoutKey`). A new key restores that key's layout. */
+  /**
+   * The saved layout's key (see `layoutKey`). A new key restores that key's layout, if one is
+   * saved and it fits the rooms; otherwise the layout on screen is kept, and saved under it.
+   */
   readonly layoutKey?: string | undefined
+  /**
+   * PLY-5: when this changes after the first render (the game's design version), the layout is
+   * reset to the default for the current rooms and saved under the current key, whatever is
+   * saved there; `onReset` is told. Undefined means not known yet: becoming known resets
+   * nothing.
+   */
+  readonly resetKey?: string | number | undefined
+  /** Called after the layout was reset because `resetKey` changed. */
+  readonly onReset?: (() => void) | undefined
   /** The unread-count slot on room tabs (PLY-11). */
   readonly tabBadge?: RoomTabBadge | undefined
   /** Shown in the docked area when it has no tabs, e.g. the no-rooms empty state. */
@@ -117,6 +131,8 @@ export function WorkspaceCore({
   tabBadge,
   emptyState,
   popoutUrl = 'popout.html',
+  resetKey,
+  onReset,
 }: WorkspaceCoreProps) {
   const instance = useId()
   const ids = useMemo(() => tabIds(instance), [instance])
@@ -134,6 +150,11 @@ export function WorkspaceCore({
   const [announcement, setAnnouncement] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
   const loadedKey = useRef(layoutKey)
+  const seenReset = useRef(resetKey)
+  /** A model was set by an effect in this commit: the next effect leaves it to the next one. */
+  const replaced = useRef(false)
+  const onResetRef = useRef(onReset)
+  onResetRef.current = onReset
 
   // Kept current for the listeners below, which outlive a render.
   const saveRef = useRef<(m: Model) => void>(() => undefined)
@@ -161,18 +182,44 @@ export function WorkspaceCore({
     }
   }, [model, tabState])
 
-  // PLY-5: a new key (another design version) restores that key's layout, or keeps this one.
+  // PLY-5: a structural design change (a new `resetKey`) resets the layout to the default, with
+  // the host's notice; it is saved under the new key, replacing whatever is there. Any other new
+  // key (another role) restores that key's layout, or keeps this one.
   useLayoutEffect(() => {
-    if (loadedKey.current === layoutKey) return
+    const reset = seenReset.current !== undefined && resetKey !== seenReset.current
+    if (resetKey !== undefined) seenReset.current = resetKey
+    if (!reset && loadedKey.current === layoutKey) return
     loadedKey.current = layoutKey
+    if (reset) {
+      const next = defaultModel(spec, ids, model)
+      replaced.current = true
+      setModel(next)
+      saveRef.current(next)
+      setAnnouncement('The game changed: layout reset to the default.')
+      onResetRef.current?.()
+      return
+    }
     const next = initialModel(spec, ids, storage, layoutKey, model)
     if (next === undefined) saveRef.current(model)
     else setModel(next)
-  }, [layoutKey, storage, spec, ids, model])
+  }, [layoutKey, resetKey, storage, spec, ids, model])
 
-  // PLY-6: reconcile the model on screen with the current tabs, before paint.
+  // PLY-5: a layout that no longer holds exactly the current rooms (rooms gained or lost, as a
+  // publish grants and revokes access) is replaced by the default, before paint; panels, the
+  // special tab and names are brought in line in place.
   useLayoutEffect(() => {
-    reconcile(model, spec, ids)
+    if (replaced.current) {
+      replaced.current = false
+      return
+    }
+    if (fitsRooms(model, spec, ids)) {
+      syncTabs(model, spec, ids)
+      return
+    }
+    const next = defaultModel(spec, ids, model)
+    setModel(next)
+    saveRef.current(next)
+    setAnnouncement('Your rooms changed: layout reset to the default.')
   }, [model, spec, ids])
 
   // FT-1: tell the host this workspace can show its special tab, and whether the tab is on

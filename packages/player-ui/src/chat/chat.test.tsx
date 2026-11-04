@@ -4,7 +4,16 @@
 // online, unread counts, and a 10,000-message list rendering only what is in view.
 import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { DOMAIN, MUC, chatBody, flush, harness, message, selfPresence } from '@wrx/domain/fixtures'
+import {
+  DOMAIN,
+  MUC,
+  chatBody,
+  flush,
+  harness,
+  message,
+  sampleDocuments,
+  selfPresence,
+} from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
 import { SessionStoreProvider } from '@wrx/hooks'
 import { err } from '@wrx/transport'
@@ -101,8 +110,8 @@ describe('ChatPanel', () => {
   })
 
   it('shows a deleted role’s messages under its last name, marked deleted (ADM-14, §3 rule 1)', async () => {
-    const h = harness()
-    h.docs.set('retired', [
+    const docs = sampleDocuments()
+    docs.set('retired', [
       {
         schemaVersion: 1,
         id: tid('old-co'),
@@ -113,6 +122,7 @@ describe('ChatPanel', () => {
         deletedAt: '2026-11-01T10:00:00.000Z',
       },
     ])
+    const h = harness({ docs })
     h.archive.set(HQ, [from('old-co', 'An order from before.'), from('red-co', 'Still here.')])
     await h.store.ready()
     const roomDoc = h.store.room(tid('blue-hq')).data

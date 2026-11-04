@@ -163,6 +163,53 @@ function whiteObserverCell(entry: 'write' | 'read' | undefined, assigned: boolea
   return Object.freeze({ access: 'read', reasons: Object.freeze(reasons) })
 }
 
+/**
+ * One of the two rule 4 consequences the access matrix highlights (ADM-9). Both are kept
+ * deliberately; the admin is shown them so neither surprises:
+ *
+ * - `white-observer-limited`: a White Force observer named in any role entry sees only the
+ *   rooms whose entries name it, not every room. One per room it does not see.
+ * - `read-entry-ignored`: a per-room `access: read` entry, for the role or its force, does not
+ *   apply to a White Force role that is not an observer, which writes in every room.
+ */
+export interface AccessHighlight {
+  readonly kind: 'white-observer-limited' | 'read-entry-ignored'
+  readonly roomId: string
+  readonly roleId: string
+}
+
+/** The rule 4 consequences in `input`, by room in display order, then role (ADM-9). */
+export function accessHighlights(
+  input: AccessInput,
+  matrix: AccessMatrix = effectiveAccess(input),
+): readonly AccessHighlight[] {
+  const roles = new Map(input.roles.map((r) => [r.id, r]))
+  const rooms = new Map(input.rooms.map((r) => [r.id, r]))
+  const white = new Set(input.forces.filter((f) => f.isUmpire).map((f) => f.id))
+  const out: AccessHighlight[] = []
+  for (const roomId of matrix.roomIds) {
+    const room = rooms.get(roomId)
+    for (const roleId of matrix.roleIds) {
+      const role = roles.get(roleId)
+      const cell = matrix.cells.get(roomId)?.get(roleId)
+      if (role === undefined || room === undefined || cell === undefined) continue
+      if (cell.reasons.includes('white-observer-unassigned')) {
+        out.push({ kind: 'white-observer-limited', roomId, roleId })
+        continue
+      }
+      if (!white.has(role.forceId) || role.isObserver) continue
+      const readEntry = room.participants.some(
+        (p) =>
+          p.access === 'read' &&
+          ((p.kind === 'role' && p.id === role.id) ||
+            (p.kind === 'force' && p.id === role.forceId)),
+      )
+      if (readEntry) out.push({ kind: 'read-entry-ignored', roomId, roleId })
+    }
+  }
+  return out
+}
+
 /** One cell; `none` for an unknown room or role. */
 export function accessOf(matrix: AccessMatrix, roomId: string, roleId: string): Access {
   return matrix.cells.get(roomId)?.get(roleId)?.access ?? 'none'

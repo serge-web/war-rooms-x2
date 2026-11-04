@@ -183,6 +183,35 @@ describe('drift', () => {
     })
   })
 
+  it.each(['game-state', 'directory', nodeName.room(tid('blue-hq'))])(
+    'a role missing from %s, which every role reads, is a node-access item repaired by a read grant (§3 rule 15)',
+    (node) => {
+      // Red CO is in no Blue room, and reads Blue HQ's document all the same (PLY-60, R24).
+      const drifted = withNode(view, node, (n) => ({
+        ...n,
+        affiliations: n.affiliations.filter((a) => a.jid !== jid('red-co')),
+      }))
+      expect(item(audit(drifted), `node-access:${node}:red-co`)).toMatchObject({
+        expected: 'member',
+        found: 'none',
+        severity: 'medium',
+        repair: [{ type: 'node-access', node, changes: [{ roleId: 'red-co', access: 'read' }] }],
+      })
+      // A role made a publisher there could forge it: critical.
+      const publisher = withNode(view, node, (n) => ({
+        ...n,
+        affiliations: n.affiliations.map((a) =>
+          a.jid === jid('red-co') ? { ...a, affiliation: 'publisher' as const } : a,
+        ),
+      }))
+      expect(item(audit(publisher), `node-access:${node}:red-co`)).toMatchObject({
+        expected: 'member',
+        found: 'publisher',
+        severity: 'critical',
+      })
+    },
+  )
+
   it('F5: a White Force observer left as an objectives publisher is a node-access item', () => {
     // What a publish before the fix left on the server.
     const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({

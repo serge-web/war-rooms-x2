@@ -12,6 +12,7 @@ const EMPTY: TargetState = Object.freeze({
   rooms: [],
   nodes: [],
   loginNames: new Map<string, string>(),
+  structure: '',
 })
 
 function must<T>(

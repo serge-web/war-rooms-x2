@@ -10,6 +10,7 @@ import {
   OBJECTIVES_MAX_ITEMS,
   RETIRED_MAX_ITEMS,
   TEMPLATES_MAX_ITEMS,
+  designStructure,
   targetState,
 } from './target.ts'
 
@@ -143,6 +144,77 @@ describe('targetState(sampleDesign())', () => {
     expect(empty?.documents).toEqual([])
     // Nothing below it, which stays reserved.
     expect(targetState(design).nodes.some((n) => n.node.startsWith('templates:'))).toBe(false)
+  })
+
+  it('every role reads every room document, the turn state and the directory, and none publishes them (§3 rule 15, PLY-60)', () => {
+    const design = withWhiteRoles()
+    const everyone = design.roles.map((r) => [r.loginName, 'read']).sort()
+    const nodes = targetState(design).nodes.filter(
+      (n) => n.node === 'game-state' || n.node === 'directory' || n.node.startsWith('rooms:'),
+    )
+    expect(nodes.map((n) => n.node).sort()).toEqual(
+      ['directory', 'game-state', ...design.rooms.map((r) => nodeName.room(r.id))].sort(),
+    )
+    for (const node of nodes) {
+      expect(node.config, node.node).toMatchObject({
+        accessModel: 'whitelist',
+        publishModel: 'publishers',
+      })
+      // A role a room does not name reads its document too: room names are visible (R24).
+      expect([...node.access.entries()].sort(), node.node).toEqual(everyone)
+    }
+  })
+
+  it('gives the design’s structure, which only structural edits change (§3 rule 8)', () => {
+    const design = withWhiteRoles()
+    const structure = targetState(design).structure
+    const same = (d: typeof design) => targetState(d).structure === structure
+    expect(structure).toBe(designStructure(design))
+    // Text, themes, objectives and templates are not structure.
+    expect(
+      same({
+        ...design,
+        game: { ...design.game, name: 'Renamed', briefing: 'New' },
+        forces: design.forces.map((f) => ({ ...f, name: `${f.name}!`, colour: '#000000' })),
+        roles: design.roles.map((r) => ({ ...r, name: `${r.name}!` })),
+        rooms: design.rooms.map((r) => ({
+          ...r,
+          name: `${r.name}!`,
+          participants: [...r.participants].reverse(),
+        })),
+        objectives: [],
+        templates: [],
+      }),
+    ).toBe(true)
+    // Forces, roles and rooms added, removed or moved, and participants changed, are.
+    expect(same({ ...design, forces: design.forces.slice(1) })).toBe(false)
+    expect(same({ ...design, roles: design.roles.slice(1) })).toBe(false)
+    expect(same({ ...design, rooms: design.rooms.slice(1) })).toBe(false)
+    expect(
+      same({ ...design, rooms: design.rooms.map((r, i) => (i === 0 ? { ...r, order: 99 } : r)) }),
+    ).toBe(false)
+    expect(
+      same({
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'blue-co' ? { ...r, forceId: tid('red') } : r,
+        ),
+      }),
+    ).toBe(false)
+    expect(
+      same({
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'white-cell' ? { ...r, isObserver: true } : r,
+        ),
+      }),
+    ).toBe(false)
+    expect(
+      same({
+        ...design,
+        rooms: design.rooms.map((r, i) => (i === 0 ? { ...r, participants: [] } : r)),
+      }),
+    ).toBe(false)
   })
 
   it('opens only game-setup and the game theme asset; everything is publishers', () => {

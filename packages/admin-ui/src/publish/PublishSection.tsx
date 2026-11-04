@@ -31,6 +31,23 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
+/**
+ * What a plan does to the design version (§3 rule 8): a structural change moves it, and every
+ * online player's layout resets (PLY-5, R28); anything else keeps it, and their layouts.
+ */
+function versionLine(plan: PublishPlan): string {
+  const now = plan.publishedVersion
+  if (plan.kind !== 'publish' || now === undefined) {
+    return plan.designVersion === undefined
+      ? ''
+      : `; the game becomes design version ${plan.designVersion}`
+  }
+  if (plan.structural && plan.designVersion !== undefined) {
+    return `; the game becomes design version ${plan.designVersion} (now ${now}): forces, roles, rooms or participants change, so every online player’s layout resets to the default`
+  }
+  return `; no structural change, so the game stays at design version ${now} and players keep their layouts`
+}
+
 export interface PublishSectionProps {
   /** From `usePublish`, held by the admin app so passwords and the vault outlive the section. */
   readonly publish: ReturnType<typeof usePublish>
@@ -370,10 +387,7 @@ function PlanPanel(
         <>
           <p>
             {plural(plan.steps.length, 'change')}
-            {plan.designVersion === undefined
-              ? ''
-              : `; the game becomes design version ${plan.designVersion}`}
-            {plan.publishedVersion === undefined ? '' : ` (now ${plan.publishedVersion})`}.
+            {versionLine(plan)}.
           </p>
           {stale && (
             <Notice tone="warning" title="The draft changed since this plan.">
@@ -505,7 +519,8 @@ function Result({
       <p>
         <strong>
           {what} complete: {plural(result.done.length, 'step')} applied
-          {plan.designVersion === undefined ? '' : `, design version ${plan.designVersion}`}.
+          {plan.designVersion === undefined ? '' : `, design version ${plan.designVersion}`}
+          {plan.kind === 'publish' && plan.structural ? '; players’ layouts reset' : ''}.
         </strong>
       </p>
       {remaining !== undefined && (

@@ -208,6 +208,16 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }))
     await planAndWait(fresh.user, 'Check the server and plan')
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
+    // A rename is not structural: the version stays, and so do players' layouts (§3 rule 8).
+    fresh.store.commit(
+      updateRoom(fresh.store.getSnapshot().draft, tid('blue-hq'), { name: 'Blue headquarters' }),
+    )
+    await planAndWait(fresh.user, 'Plan again')
+    expect(
+      screen.getByText(
+        /no structural change, so the game stays at design version 1 and players keep their layouts/,
+      ),
+    ).toBeTruthy()
   })
 
   it('F12: will not create a vault under a guessable passphrase, and says why', async () => {

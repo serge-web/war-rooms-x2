@@ -55,7 +55,15 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
     DEFAULT_ROOM_TYPE
 
   return (
-    <SectionFrame title="Rooms" intro={<NodeNamesNotice kind="room" />}>
+    <SectionFrame
+      title="Rooms"
+      intro={
+        <>
+          <RoomNamesNotice />
+          <NodeNamesNotice kind="room" />
+        </>
+      }
+    >
       <ListAndForm
         listLabel="Room list"
         list={
@@ -106,6 +114,19 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
   )
 }
 
+/**
+ * R24: every role reads every room document, since the client finds its rooms by reading them
+ * (§3 rule 15, PLY-60), so a room's name is no secret from any role.
+ */
+function RoomNamesNotice() {
+  return (
+    <Notice tone="warning" title="Room names are visible to every role.">
+      Every player can read the name of every room, including rooms their role cannot use. Do not
+      put plans or anything else confidential in a room&rsquo;s name.
+    </Notice>
+  )
+}
+
 function RoomForm({
   room,
   draft,
@@ -145,6 +166,7 @@ function RoomForm({
       <IdLine id={room.id} />
       <TextField
         label="Name"
+        hint="Every role can read it, even roles not in this room."
         value={room.name}
         maxLength={LIMITS.nameChars}
         issues={validation.at(`${at}.name`)}

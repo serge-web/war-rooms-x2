@@ -91,6 +91,7 @@ function onePlan(step: PlanStep): PublishPlan {
     errors: [],
     steps: [step],
     designVersion: undefined,
+    structural: false,
     publishedVersion: undefined,
     warnings: [],
     affectedOnline: [],

@@ -5,10 +5,10 @@
 // and the builders below accept either. A role's short name is its login name.
 import { nameOf, tid } from '@wrx/schemas/fixtures'
 import { nodeName } from '@wrx/schemas'
-import type { Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
+import type { Directory, Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
 import { FakeSession, err, ok } from '@wrx/transport'
 import type { FakeOptions, Item, MamQuery, OccupantEvent, RoomMessage } from '@wrx/transport'
-import { DOCUMENT_ITEM_ID, objectivesItemId } from './documents.ts'
+import { DOCUMENT_ITEM_ID, directoryOf, objectivesItemId } from './documents.ts'
 import type { Logger } from './logger.ts'
 import { createSessionStore } from './store.ts'
 import type { SessionStore, SessionStoreOptions } from './store.ts'
@@ -119,6 +119,33 @@ export function sampleDocuments(): Map<string, unknown[]> {
   return docs
 }
 
+/**
+ * The `directory` document for the force, role and room documents in `docs`, as a publish
+ * writes it: the client finds them from it (PLY-60).
+ */
+export function directoryOfDocs(docs: ReadonlyMap<string, readonly unknown[]>): Directory {
+  const ids = (kind: 'forces' | 'roles' | 'rooms') =>
+    [...docs.keys()].flatMap((node) => {
+      const [prefix, id, ...rest] = node.split(':')
+      return prefix === kind && id !== undefined && rest.length === 0 ? [id] : []
+    })
+  // A role's login name from its document; one with none (not a role document) is left out.
+  const loginOf = (id: string): string | undefined => {
+    const doc = docs.get(nodeName.role(id))?.[0]
+    return typeof doc === 'object' && doc !== null && 'loginName' in doc
+      ? String(doc.loginName)
+      : undefined
+  }
+  return directoryOf({
+    forces: ids('forces').map((id) => ({ id })),
+    roles: ids('roles').flatMap((id) => {
+      const loginName = loginOf(id)
+      return loginName === undefined ? [] : [{ id, loginName }]
+    }),
+    rooms: ids('rooms').map((id) => ({ id })),
+  })
+}
+
 export interface Harness {
   readonly session: FakeSession
   readonly store: SessionStore
@@ -132,6 +159,12 @@ export interface Harness {
   readonly logger: Logger
   /** Publishes an item and notifies, as the server would. */
   publish(node: string, doc: unknown, itemId?: string): void
+  /**
+   * Notifies the `directory` for the documents now in `docs`, as a publish does after adding
+   * or removing forces, roles or rooms (PLY-60). Unless a test sets `docs.directory`, reads
+   * are derived from `docs` too.
+   */
+  publishDirectory(): void
 }
 
 export interface HarnessOptions extends Partial<Omit<SessionStoreOptions, 'session'>> {
@@ -177,6 +210,12 @@ export function harness(options: HarnessOptions = {}): Harness {
     const name = String(node)
     const refusal = refused.get(name)
     if (refusal !== undefined) return Promise.resolve(err(refusal))
+    // Unless a test sets one, the directory is the one a publish of `docs` would write: it
+    // names every force, role and room document there when it is read (PLY-60).
+    if (name === 'directory' && !docs.has(name)) {
+      const payload = JSON.stringify(directoryOfDocs(docs))
+      return Promise.resolve(ok([{ id: DOCUMENT_ITEM_ID, payload, publisher: undefined }]))
+    }
     if (!docs.has(name)) return Promise.resolve(err('item-not-found'))
     return Promise.resolve(ok(items(name)))
   })
@@ -201,6 +240,21 @@ export function harness(options: HarnessOptions = {}): Harness {
   })
 
   const store = createSessionStore({ session, logger, ...options })
+  const publish = (node: string, doc: unknown, itemId = firstItemId(node)) => {
+    docs.set(node, [doc])
+    session.emitItems({
+      node,
+      items: [
+        {
+          id: itemId,
+          payload: typeof doc === 'string' ? doc : JSON.stringify(doc),
+          publisher: undefined,
+        },
+      ],
+      retracted: [],
+      deleted: false,
+    })
+  }
   return {
     session,
     store,
@@ -209,17 +263,12 @@ export function harness(options: HarnessOptions = {}): Harness {
     refused,
     warnings,
     logger,
-    publish(node, doc, itemId = firstItemId(node)) {
-      docs.set(node, [doc])
+    publish,
+    publishDirectory() {
+      const doc = directoryOfDocs(docs)
       session.emitItems({
-        node,
-        items: [
-          {
-            id: itemId,
-            payload: typeof doc === 'string' ? doc : JSON.stringify(doc),
-            publisher: undefined,
-          },
-        ],
+        node: 'directory',
+        items: [{ id: DOCUMENT_ITEM_ID, payload: JSON.stringify(doc), publisher: undefined }],
         retracted: [],
         deleted: false,
       })

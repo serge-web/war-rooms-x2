@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 // The workspace over a store, rendered (happy-dom): tabs per visible room, room panels in their
-// theme, the registry and badge slots, saving and restoring, live reconciliation, reset, the
-// keyboard move, two instances on one page, and the non-room panels.
+// theme, the registry and badge slots, saving and restoring, the reset when the rooms or the
+// design version change (PLY-5), Reset layout, the keyboard move, two instances on one page,
+// and the non-room panels.
 import { tid } from '@wrx/schemas/fixtures'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
@@ -130,36 +131,70 @@ describe('Workspace', () => {
     expect(tab('negotiation').hasAttribute('aria-describedby')).toBe(false)
   })
 
-  it('reconciles live: a new room goes to the fewest-tab tabset, a lost one closes (PLY-6, PLY-41)', async () => {
+  it('a room gained or lost resets the layout to the default; a rename relabels in place (PLY-5)', async () => {
     const h = await mount()
-    // Move negotiation next to blue-hq, so red-hq's tabset is the smallest... then add one.
     fireEvent.keyDown(tab('negotiation'), { key: 'ArrowLeft', altKey: true, shiftKey: true })
     await act(() => flush())
     expect(columns()).toEqual([['blue-hq'], ['red-hq', 'negotiation']])
-    // PubSub does not announce new nodes: publishing bumps the design version (§3 rule 8).
+    // A rename is not structural: the arrangement stays.
+    act(() => {
+      h.publish(
+        nodeName.room(tid('red-hq')),
+        room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }], {
+          name: 'Red Main',
+          order: 1,
+        }),
+      )
+    })
+    await act(() => flush())
+    expect(columns()).toEqual([['blue-hq'], ['Red Main', 'negotiation']])
+    // A room is added: the publish's directory names it, and the layout is the default again,
+    // never the room fitted into it (PLY-6 and PLY-41 are retired).
     act(() => {
       h.publish(
         nodeName.room(tid('press')),
         room('press', [{ kind: 'force', id: 'blue', access: 'write' }], { order: 3 }),
       )
-      h.publish('game-setup', game(2))
+      h.publishDirectory()
     })
     await act(() => flush())
+    expect(columns()).toEqual([['blue-hq', 'Red Main'], ['negotiation'], ['press']])
+    expect(screen.getByRole('status').textContent).toBe(
+      'Your rooms changed: layout reset to the default.',
+    )
+    // And lost: the default again.
+    fireEvent.keyDown(tab('press'), { key: 'ArrowLeft', altKey: true, shiftKey: true })
+    await act(() => flush())
     expect(columns()).toEqual([
-      ['blue-hq', 'press'],
-      ['red-hq', 'negotiation'],
+      ['blue-hq', 'Red Main'],
+      ['negotiation', 'press'],
     ])
     act(() => {
       h.publish(
-        nodeName.room(tid('red-hq')),
-        room('red-hq', [{ kind: 'force', id: 'red', access: 'write' }], { name: 'Red Main' }),
+        nodeName.room(tid('negotiation')),
+        room('negotiation', [{ kind: 'role', id: 'red-co', access: 'write' }], { order: 2 }),
       )
     })
     await act(() => flush())
+    // The White Force writes everywhere: White 1 keeps it, and nothing changes.
     expect(columns()).toEqual([
-      ['blue-hq', 'press'],
-      ['Red Main', 'negotiation'],
+      ['blue-hq', 'Red Main'],
+      ['negotiation', 'press'],
     ])
+    // Destroyed by a publish: its node is deleted (which is announced), and the directory no
+    // longer names it.
+    act(() => {
+      h.docs.delete(nodeName.room(tid('press')))
+      h.session.emitItems({
+        node: nodeName.room(tid('press')),
+        items: [],
+        retracted: [],
+        deleted: true,
+      })
+      h.publishDirectory()
+    })
+    await act(() => flush())
+    expect(columns()).toEqual([['blue-hq'], ['Red Main'], ['negotiation']])
   })
 
   it('says which rooms closed when the role loses them during play, and not on login (PLY-30)', async () => {
@@ -201,43 +236,74 @@ describe('Workspace', () => {
     expect(columns()).toEqual([['red-hq', 'blue-hq'], ['negotiation']])
   })
 
-  it('a new design version carries the layout over, or restores the one saved for it (PLY-5)', async () => {
+  it('a new design version resets the layout to the default, with a notice, saved under the new key (PLY-5, R28)', async () => {
     const storage = memoryLayoutStorage()
-    const h = await mount({ storage })
+    const h = harness({ roleId: 'white-1' })
+    render(
+      <ToastProvider>
+        <SessionStoreProvider store={h.store}>
+          <Workspace storage={storage} />
+        </SessionStoreProvider>
+      </ToastProvider>,
+    )
+    await act(() => h.store.ready())
+    await act(() => flush())
     fireEvent.keyDown(tab('red-hq'), { key: 'ArrowLeft', altKey: true, shiftKey: true })
     await act(() => flush())
-    act(() => {
-      h.publish('game-setup', game(2))
-    })
-    await act(() => flush())
-    const v2 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 2 })
-    expect(storage.entries.get(v2)).toBe(storage.entries.get(KEY('white-1')))
     expect(columns()).toEqual([['blue-hq', 'red-hq'], ['negotiation']])
-
-    // Version 3 has a saved layout of its own: it replaces the one on screen.
-    const v3 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 3 })
+    expect(screen.queryByText('Layout reset')).toBeNull()
+    // Something is saved for version 2 already (another tab of this role, say): the reset wins.
+    const v2 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 2 })
     storage.save(
-      v3,
+      v2,
       JSON.stringify({
         layout: {
           type: 'row',
           children: [
             {
               type: 'tabset',
-              children: [{ type: 'tab', id: `room:${tid('negotiation')}`, name: 'n' }],
+              children: ['negotiation', 'blue-hq', 'red-hq'].map((n) => ({
+                type: 'tab',
+                id: `room:${tid(n)}`,
+                name: n,
+              })),
             },
           ],
         },
       }),
     )
+    // The same rooms, but a structural change elsewhere (§3 rule 8).
     act(() => {
-      h.publish('game-setup', game(3))
+      h.publish('game-setup', game(2))
     })
     await act(() => flush())
-    expect(columns()).toEqual([['negotiation', 'blue-hq', 'red-hq']])
+    expect(columns()).toEqual([['blue-hq'], ['red-hq'], ['negotiation']])
+    expect(screen.getByText('Layout reset')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'The admin changed the game’s forces, roles or rooms, so your workspace is back to the default layout.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText('The game changed: layout reset to the default.')).toBeTruthy()
+    expect(JSON.parse(storage.entries.get(v2) ?? '{}')).toMatchObject({
+      layout: { children: [{}, {}, {}] },
+    })
+    // The version-1 layout is left as it was.
+    expect(JSON.parse(storage.entries.get(KEY('white-1')) ?? '{}')).toMatchObject({
+      layout: { children: [{}, {}] },
+    })
+    // A change that is not structural keeps the version, and the layout.
+    fireEvent.keyDown(tab('red-hq'), { key: 'ArrowLeft', altKey: true, shiftKey: true })
+    await act(() => flush())
+    act(() => {
+      h.publish('game-setup', { ...game(2), name: 'Renamed' })
+    })
+    await act(() => flush())
+    expect(columns()).toEqual([['blue-hq', 'red-hq'], ['negotiation']])
+    expect(screen.getAllByText('Layout reset')).toHaveLength(1)
   })
 
-  it('restores a saved layout reconciled with today’s rooms (D6)', async () => {
+  it('a saved layout for other rooms is not restored: the default is used (PLY-5)', async () => {
     const saved = JSON.stringify({
       layout: {
         type: 'row',
@@ -259,10 +325,33 @@ describe('Workspace', () => {
     })
     const storage: LayoutStorage = memoryLayoutStorage([[KEY('white-1'), saved]])
     await mount({ storage })
-    expect(columns()).toEqual([
-      ['negotiation', 'Online'],
-      ['blue-hq', 'red-hq'],
-    ])
+    expect(columns()).toEqual([['blue-hq'], ['red-hq'], ['negotiation']])
+    expect(stripTabs()).toEqual(['Game info', 'Online'])
+  })
+
+  it('restores a saved layout of the same rooms, its panels kept where they were (D6)', async () => {
+    const saved = JSON.stringify({
+      layout: {
+        type: 'row',
+        children: [
+          {
+            type: 'tabset',
+            children: [
+              { type: 'tab', id: `room:${tid('red-hq')}`, name: 'red-hq' },
+              { type: 'tab', id: `room:${tid('negotiation')}`, name: 'negotiation' },
+              { type: 'tab', id: 'panel:online', name: 'Online' },
+            ],
+          },
+          {
+            type: 'tabset',
+            children: [{ type: 'tab', id: `room:${tid('blue-hq')}`, name: 'blue-hq' }],
+          },
+        ],
+      },
+    })
+    const storage: LayoutStorage = memoryLayoutStorage([[KEY('white-1'), saved]])
+    await mount({ storage })
+    expect(columns()).toEqual([['red-hq', 'negotiation', 'Online'], ['blue-hq']])
     expect(stripTabs()).toEqual(['Game info'])
   })
 
@@ -392,6 +481,30 @@ describe('the collapsed composer, remembered per room (PLY-54)', () => {
     expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('true')
     expect(within(panel('blue-hq')).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Kept')
     expect(storage.entries.get(KEY('white-1'))).not.toContain('composerCollapsed')
+  })
+
+  it('a design change’s reset returns every room to its default, keeping what was typed; the state set after it is saved under the new key (PLY-5)', async () => {
+    const storage = memoryLayoutStorage()
+    const h = await mount({ storage, registry: CHAT })
+    fireEvent.change(within(panel('blue-hq')).getByRole('textbox'), {
+      target: { value: 'Kept' },
+    })
+    fireEvent.click(toggleIn('blue-hq'))
+    await act(() => flush())
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('false')
+    act(() => {
+      h.publish('game-setup', game(2))
+    })
+    await act(() => flush())
+    expect(toggleIn('blue-hq').getAttribute('aria-expanded')).toBe('true')
+    expect(within(panel('blue-hq')).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Kept')
+    const v2 = layoutKey({ server: 'wrx.test', role: tid('white-1'), designVersion: 2 })
+    expect(storage.entries.get(v2)).not.toContain('composerCollapsed')
+    // Collapsed again, under version 2: saved there, and restored on the next login.
+    fireEvent.click(toggleIn('red-hq'))
+    await act(() => flush())
+    expect(storage.entries.get(v2)).toContain('"config":{"composerCollapsed":true}')
+    expect(storage.entries.get(KEY('white-1'))).toContain('"config":{"composerCollapsed":true}')
   })
 
   it('starts collapsed for an observer, who can still expand it', async () => {

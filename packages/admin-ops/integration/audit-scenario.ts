@@ -225,6 +225,45 @@ export function defineAuditIntegration(backend: AuditBackend): void {
       expect(items.map((i) => JSON.parse(i.payload) as unknown)).toEqual([INITIAL_GAME_STATE])
     })
 
+    it('1d. a role taken off a room document, the turn state or the directory is found, and repair lets it read again (§3 rule 15, PLY-60)', async () => {
+      const pubsub = theOps().session.pubsub
+      // Red CO is in no Blue room, and still reads Blue HQ's document: every role reads every
+      // room document, since the client finds its rooms by reading them (R24).
+      const nodes = [nodeName.room(tid('blue-hq')), 'game-state', 'directory']
+      const red = await login('red-co')
+      for (const node of nodes) {
+        expect(must(await red.pubsub.getItems(node), `red-co reads ${node}`)).toHaveLength(1)
+        must(
+          await pubsub.setAffiliations(node, [
+            { jid: theOps().roleJid('red-co'), affiliation: 'none' },
+          ]),
+          `drop red-co from ${node}`,
+        )
+      }
+      const report = await audit()
+      expect(describeFindings(report).sort()).toEqual(
+        nodes.map((n) => `node-access:${n}:red-co [none]`).sort(),
+      )
+      const result = mustOps(
+        await repairAndAudit(theOps(), design, findings(report), {
+          confirmed: new Set(),
+          passwordFor: (id) => book.passwordFor(id),
+          audit: auditOptions(),
+        }),
+        'repair',
+      )
+      expect(result.repair.ok).toBe(true)
+      expect(describeFindings(result.after)).toEqual([])
+      for (const node of nodes) {
+        expect(must(await red.pubsub.getItems(node), `red-co reads ${node} again`)).toHaveLength(1)
+        // Read only: the admin alone publishes them.
+        expect(errorOf(await red.pubsub.publish(node, 'current', '{}'))?.condition).toBe(
+          'forbidden',
+        )
+      }
+      await closeAll()
+    })
+
     describe('2. drift, injected with ordinary admin and moderator operations', () => {
       beforeAll(async () => {
         const session = theOps().session
