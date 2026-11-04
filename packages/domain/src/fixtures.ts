@@ -8,7 +8,7 @@ import { nodeName } from '@wrx/schemas'
 import type { Force, GameSetup, Objectives, Role, Room } from '@wrx/schemas'
 import { FakeSession, err, ok } from '@wrx/transport'
 import type { FakeOptions, Item, MamQuery, OccupantEvent, RoomMessage } from '@wrx/transport'
-import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID } from './documents.ts'
+import { DOCUMENT_ITEM_ID, objectivesItemId } from './documents.ts'
 import type { Logger } from './logger.ts'
 import { createSessionStore } from './store.ts'
 import type { SessionStore, SessionStoreOptions } from './store.ts'
@@ -227,9 +227,9 @@ export function harness(options: HarnessOptions = {}): Harness {
   }
 }
 
-/** The id a node's first item has: the admin's on objectives nodes (§3 rule 14), else `current`. */
+/** The id a node's first item has: an admin save on objectives nodes (§3 rule 14), else `current`. */
 function firstItemId(node: string): string {
-  return node.startsWith('objectives:') ? OBJECTIVES_ITEM_ID : DOCUMENT_ITEM_ID
+  return node.startsWith('objectives:') ? objectivesItemId('admin', 'seed') : DOCUMENT_ITEM_ID
 }
 
 let counter = 0

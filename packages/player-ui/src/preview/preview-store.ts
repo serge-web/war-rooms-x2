@@ -43,8 +43,13 @@ export function previewAsRole(store: SessionStore, roleId: string): SessionStore
       force,
       isUmpire: force?.isUmpire === true,
       isObserver: role?.isObserver === true,
-      // What the role itself may do: no role edits objectives, so the preview is read only.
-      canEditObjectives: canEditObjectives(false),
+      // What the role itself may do (PLY-35): a White Force role that is not an observer edits
+      // objectives. As with a post from the preview, the edit goes from the admin's account.
+      canEditObjectives: canEditObjectives({
+        isAdmin: false,
+        isUmpire: force?.isUmpire === true,
+        isObserver: role?.isObserver === true,
+      }),
       rooms: Object.freeze(rooms),
     })
     const value: Snapshot<Me> = Object.freeze({ ...base, data })

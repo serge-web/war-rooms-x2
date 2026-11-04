@@ -3,7 +3,8 @@
 import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { nodeName, parseDocument } from '@wrx/schemas'
+import { objectivesDraftItemId } from '@wrx/domain'
+import { nodeName, parseDocument, parseNodeName } from '@wrx/schemas'
 import { TEMPLATE, sampleDesign, templatedDesign, tid } from '../../schemas/src/fixtures.ts'
 import {
   OBJECTIVES_MAX_ITEMS,
@@ -150,7 +151,7 @@ describe('targetState(sampleDesign())', () => {
     expect(target.nodes.every((n) => n.config.publishModel === 'publishers')).toBe(true)
   })
 
-  it('sizes objectives for the admin, with the force and the White observer reading (§3 rule 14)', () => {
+  it('sizes objectives at one item per publisher, with the force and the White observer reading (§3 rule 14)', () => {
     const blue = target.nodes.find((n) => n.node === nodeName.objectives(tid('blue')))
     expect(Object.fromEntries(blue?.access ?? [])).toEqual({
       'blue-co': 'read',
@@ -159,24 +160,46 @@ describe('targetState(sampleDesign())', () => {
     })
     expect(blue?.config.maxItems).toBe(OBJECTIVES_MAX_ITEMS)
     expect(OBJECTIVES_MAX_ITEMS).toBe(1)
-    expect(blue?.documents.map((d) => d.itemId)).toEqual(['admin'])
+    // The draft as the admin's save: an id from its payload, never the fixed `admin` of WP 3.5.
+    const draft = blue?.documents[0]
+    expect(blue?.documents).toHaveLength(1)
+    expect(draft?.itemId).toBe(objectivesDraftItemId(draft?.payload ?? ''))
+    expect(draft?.itemId).toMatch(/^admin-[0-9a-f]{16}$/)
+    expect(blue?.objectives?.authors).toEqual(new Set(['white-observer']))
   })
 
-  it('D21: every White Force role reads objectives and none publishes, observer or not', () => {
+  it('a new draft item id for every edit of the draft, and never one already on the node', () => {
+    const one = JSON.stringify({ markdown: 'a', updatedAt: '2026-11-04T10:00:00.000Z' })
+    const two = JSON.stringify({ markdown: 'a', updatedAt: '2026-11-04T10:00:01.000Z' })
+    expect(objectivesDraftItemId(one)).toBe(objectivesDraftItemId(one))
+    expect(objectivesDraftItemId(one)).not.toBe(objectivesDraftItemId(two))
+    const taken = objectivesDraftItemId(one)
+    expect(objectivesDraftItemId(one, [taken])).toBe(`${taken}-2`)
+    expect(objectivesDraftItemId(one, [taken, `${taken}-2`])).toBe(`${taken}-3`)
+  })
+
+  it('D21: White Force roles that are not observers publish every force’s objectives; observers read', () => {
     const white = targetState(withWhiteRoles())
     for (const forceId of ['blue', 'red', 'white']) {
       const node = white.nodes.find((n) => n.node === nodeName.objectives(tid(forceId)))
-      // Before WP 3.5 the White Force role that is not an observer published.
-      expect(node?.access.get('white-cell'), forceId).toBe('read')
+      // WP 3.5 made White Cell read only; the owner's Nov 3 revision gives it publish back.
+      expect(node?.access.get('white-cell'), forceId).toBe('publish')
+      // Observers never publish (review F5).
       expect(node?.access.get('white-observer'), forceId).toBe('read')
       expect(node?.access.get('mediator'), forceId).toBe('read')
       expect(node?.config.maxItems).toBe(1)
+      expect(node?.objectives?.authors, forceId).toEqual(
+        new Set(['white-observer', 'white-cell', 'mediator']),
+      )
     }
-    // No role publishes anywhere: the admin, as owner, is the only publisher of every node.
+    // Nowhere else does a role publish: the admin, as owner, is the only other publisher.
     const publishers = white.nodes.flatMap((n) =>
-      [...n.access].filter(([, a]) => a === 'publish').map(([id]) => `${n.node}:${id}`),
+      [...n.access]
+        .filter(([, a]) => a === 'publish')
+        .map(([id]) => `${parseNodeName(n.node)?.kind ?? n.node}:${id}`),
     )
-    expect(publishers).toEqual([])
+    expect(new Set(publishers)).toEqual(new Set(['objectives:white-cell']))
+    expect(publishers).toHaveLength(3)
   })
 
   it('F5: a White observer with an assigned room is a read-only member of that room only', () => {

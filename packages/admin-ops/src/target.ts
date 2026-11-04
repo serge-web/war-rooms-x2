@@ -6,7 +6,7 @@
 // The server knows a role by its account, so here, and in the planner, the audit and AdminOps,
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
-import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, directoryOf, effectiveAccess } from '@wrx/domain'
+import { DOCUMENT_ITEM_ID, directoryOf, effectiveAccess, objectivesDraftItemId } from '@wrx/domain'
 import { SINGLETON_NODES, TEMPLATE_LIMITS, nodeName, publicAssetIds } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
@@ -34,12 +34,9 @@ export const RETIRED_MAX_ITEMS = 1000
 export const TEMPLATES_MAX_ITEMS = TEMPLATE_LIMITS.templates
 
 /**
- * The admin's item on an objectives node: the only item it holds, since only the admin publishes
- * objectives (§3 rule 14, D21).
+ * §3 rule 14: one item per publisher. ejabberd applies `max_items` per publisher (spike checks
+ * S14, S15-7), so each author keeps its newest save and nothing else.
  */
-export const OBJECTIVES_ADMIN_ITEM_ID = OBJECTIVES_ITEM_ID
-
-/** §3 rule 14: one item, the admin's, replaced on each edit. */
 export const OBJECTIVES_MAX_ITEMS = 1
 
 /** A room's settings: every RoomConfig field except the name and description. */
@@ -107,6 +104,16 @@ export interface TargetDocument {
   readonly payload: string
 }
 
+/**
+ * Who may hold items on an objectives node (§3 rule 14, D21), by login name: the White Force's
+ * roles, observers included (an observer's items are from before it became one). The admin's are
+ * always kept. A role outside these, one that left the White Force or was deleted, has its items
+ * retracted by the next publish.
+ */
+export interface ObjectivesAuthors {
+  readonly authors: ReadonlySet<string>
+}
+
 export interface TargetRoom {
   readonly roomId: string
   readonly config: RoomConfig
@@ -120,6 +127,11 @@ export interface TargetNode {
   /** Every role with an affiliation; roles not listed have none. The admin owns every node. */
   readonly access: ReadonlyMap<string, 'publish' | 'read'>
   readonly documents: readonly TargetDocument[]
+  /**
+   * Objectives nodes only (§3 rule 14): each save is a new item, so `documents` holds the
+   * admin's draft under `objectivesDraftItemId`, and other authors' items are expected.
+   */
+  readonly objectives?: ObjectivesAuthors
 }
 
 export interface TargetState {
@@ -160,10 +172,14 @@ export function targetState(design: DesignFile): TargetState {
     return { roomId: room.id, config: gameRoomConfig(room.name), access }
   })
 
-  // Every White Force role (the umpire-flag force), observer or not, reads every force's
-  // objectives; only the admin, the node's owner, publishes them (§3 rule 14, D21, WP 3.5).
+  // White Force roles (the umpire-flag force) read every force's objectives; those that are not
+  // observers publish them too, and the admin, the node's owner, does (§3 rule 14, D21).
+  // Observers never publish (review F5).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => r.loginName)
+  const whiteRoles = design.roles.filter((r) => whiteForces.has(r.forceId))
+  const white = whiteRoles.map((r) => r.loginName)
+  const editors = whiteRoles.filter((r) => !r.isObserver).map((r) => r.loginName)
+  const authors: ObjectivesAuthors = { authors: new Set(white) }
   const publicAssets = new Set(publicAssetIds(design.game))
   const whitelist1 = gameNodeConfig('whitelist', 1)
 
@@ -232,19 +248,23 @@ export function targetState(design: DesignFile): TargetState {
       documents: [doc(room)],
     })),
     ...design.forces.map((force) => {
-      // §3 rule 14, D21: the force's roles and every White Force role read; nobody but the
-      // admin, who owns the node, publishes.
+      // §3 rule 14, D21: the force's roles and the White Force's observers read; the White
+      // Force's other roles publish (and so read). The admin owns the node.
       const access = new Map<string, 'publish' | 'read'>()
       for (const role of design.roles) {
         if (role.forceId === force.id) access.set(role.loginName, 'read')
       }
       for (const id of white) access.set(id, 'read')
+      for (const id of editors) access.set(id, 'publish')
       const objectives = design.objectives.find((o) => o.forceId === force.id)
+      const payload = objectives === undefined ? undefined : JSON.stringify(objectives)
       return {
         node: nodeName.objectives(force.id),
         config: gameNodeConfig('whitelist', OBJECTIVES_MAX_ITEMS),
         access,
-        documents: objectives === undefined ? [] : [doc(objectives, OBJECTIVES_ADMIN_ITEM_ID)],
+        documents:
+          payload === undefined ? [] : [{ itemId: objectivesDraftItemId(payload), payload }],
+        objectives: authors,
       }
     }),
     ...design.assets.map((asset) => {

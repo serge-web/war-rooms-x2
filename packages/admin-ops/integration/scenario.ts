@@ -275,7 +275,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(outsider.joined?.condition).toBe('registration-required')
       })
 
-      it('documents are readable by their readers only, and only the admin publishes objectives (§3 rule 14, D21)', async () => {
+      it('documents are readable by their readers only; the admin and White Cell publish objectives (§3 rule 14, D21)', async () => {
         const blue = await login('blue-co')
         const red = await login('red-co')
         const cell = await login('white-cell')
@@ -285,24 +285,40 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
         expect(
           errorOf(await red.pubsub.getItems(nodeName.objectives(tid('blue'))))?.condition,
         ).toBe('not-allowed')
-        // A White Force role that is not an observer reads every force's objectives, and
-        // publishes none (WP 3.5; before, it published its own item).
+        // A White Force role that is not an observer reads every force's objectives and
+        // publishes its own items there, but cannot overwrite the admin's (§3 rule 14, S14-8).
+        const adminItem = must(
+          await cell.pubsub.getItems(nodeName.objectives(tid('red'))),
+          'White Cell reads',
+        )
+        expect(adminItem.length).toBe(1)
+        const adminId = adminItem[0]?.id ?? ''
         expect(
-          must(await cell.pubsub.getItems(nodeName.objectives(tid('red'))), 'White Cell reads')
-            .length,
-        ).toBe(1)
-        for (const itemId of ['white-cell', 'admin']) {
-          expect(
-            errorOf(
-              await cell.pubsub.publish(
-                nodeName.objectives(tid('blue')),
-                itemId,
-                JSON.stringify({ x: 1 }),
-              ),
-            )?.condition,
-            itemId,
-          ).toBe('forbidden')
-        }
+          errorOf(
+            await cell.pubsub.publish(
+              nodeName.objectives(tid('red')),
+              adminId,
+              JSON.stringify({ x: 1 }),
+            ),
+          )?.condition,
+        ).toBe('forbidden')
+        must(
+          await cell.pubsub.publish(
+            nodeName.objectives(tid('blue')),
+            'white-cell-1',
+            JSON.stringify({ x: 1 }),
+          ),
+          'White Cell edits Blue’s objectives',
+        )
+        expect(
+          must(await blue.pubsub.getItems(nodeName.objectives(tid('blue'))), 'two items').map(
+            (i) => i.id,
+          ),
+        ).toEqual([expect.stringMatching(/^admin-/), 'white-cell-1'])
+        must(
+          await cell.pubsub.retract(nodeName.objectives(tid('blue')), 'white-cell-1'),
+          'White Cell retracts its own',
+        )
         expect(
           must(await blue.pubsub.getItems(nodeName.objectives(tid('blue'))), 'one item').length,
         ).toBe(1)
@@ -448,7 +464,9 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           'publish before',
         )
         await sleep(300)
-        expect(notifications.map((n) => n.length)).toEqual([1, 1])
+        // Item events only: the publish also trims the admin’s earlier item (max_items per
+        // publisher), announced as a retract.
+        expect(notifications.map((n) => n.filter((e) => e.items.length > 0).length)).toEqual([1, 1])
 
         const result = await provision(theOps(), second, first, passwordOf)
         destroyed = result.destroyed
@@ -495,7 +513,7 @@ export function defineAdminOpsIntegration(backend: IntegrationBackend): void {
           'publish after',
         )
         await sleep(QUIET_MS)
-        expect(notifications.map((n) => n.length)).toEqual([1, 1])
+        expect(notifications.map((n) => n.filter((e) => e.items.length > 0).length)).toEqual([1, 1])
       })
 
       it('the deleted role cannot log in and holds no affiliation (R-E)', async () => {

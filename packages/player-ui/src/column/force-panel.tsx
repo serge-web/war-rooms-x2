@@ -2,7 +2,7 @@
 // theme, the force logo, the role name and the force's objectives in Markdown. White Force roles
 // and the admin (the umpire) may choose any force; the admin and White Force roles that are not
 // observers may also edit its objectives with a preview. The edit is published through the
-// store, one item per author, and readers show the newest (§3 rule 14).
+// store as a new item each save, and readers show the newest by server order (§3 rule 14).
 import { UMPIRE_NAME } from '@wrx/domain'
 import type { DomainResult } from '@wrx/domain'
 import { useForces, useMe, useObjectives, useSessionStore } from '@wrx/hooks'
@@ -246,7 +246,8 @@ export function ForcePanel() {
   const store = useSessionStore()
   const me = useMe().data
   const forces = useForces().data
-  // Every White Force role reads every force's objectives; only the admin edits (PLY-35, D21).
+  // Every White Force role reads every force's objectives; the admin and White Force roles that
+  // are not observers edit them (PLY-35, D21).
   const canChoose = me.isUmpire || me.identity.isAdmin
   const canEdit = me.canEditObjectives
   const ownForce = me.force

@@ -219,16 +219,15 @@ export function repairRank(action: StepAction): number {
     case 'room-access':
     case 'node-access':
       return action.changes.some((c) => c.access !== 'none') ? 3 : 4
-    // A purge runs before the publish that puts the admin's objectives back (D21).
-    case 'purge-node':
-      return 5
     case 'publish':
-      return 6
-    // A template is retracted after the rooms' documents stop offering it, as the planner does.
-    case 'retract-item':
+      return 5
+    // A template is retracted after the rooms' documents stop offering it, and an objectives
+    // item after its author lost the publisher affiliation, as the planner does.
     case 'delete-role':
     case 'destroy-room':
     case 'delete-node':
+      return 6
+    case 'retract-item':
       return 7
   }
 }
@@ -380,16 +379,11 @@ export function diffAudit(design: DesignFile, input: AuditInput): AuditReport {
     })
   }
 
-  const purged = new Set(
-    plan.steps.flatMap((s) => (s.action.type === 'purge-node' ? [s.action.node] : [])),
-  )
   for (const step of plan.steps) {
     roomAccessItems(step, view, roleName, out)
     nodeAccessItems(step, view, roleName, out)
-    strayItems(step, plan.steps, out)
-    if (step.action.type !== 'publish' || !purged.has(step.action.node)) {
-      documentItems(step, view, out)
-    }
+    strayItems(step, out)
+    documentItems(step, view, out)
     removalItems(step, view, input.messageCounts, out)
   }
 
@@ -763,55 +757,69 @@ function nodeAccessItems(
 }
 
 /**
- * Items on an objectives node that are not the admin's (D21, §3 rule 14): a White Force editor's
- * from a publish before WP 3.5, or text the design no longer has. The repair is the planner's:
- * purge the node, then publish the admin's item again, in that order (`repairRank`).
+ * Items the design does not account for: a template it no longer has (Annex A), or an objectives
+ * item whose publisher is neither the admin nor a White Force role (§3 rule 14, D21): a role
+ * that left the White Force or was deleted. New item ids on every save are expected, so ids are
+ * never compared. The repair is the planner's retraction, after any access repair
+ * (`repairRank`).
  */
-function strayItems(step: PlanStep, steps: readonly PlanStep[], out: Builder): void {
+function strayItems(step: PlanStep, out: Builder): void {
   const action = step.action
-  if (action.type === 'retract-item') {
-    // A template the design does not have (Annex A). Removing it is destructive and confirmed:
-    // if it is locked, the messages that used it show as plain text afterwards.
+  if (action.type !== 'retract-item') return
+  if (parseNodeName(action.node)?.kind === 'objectives') {
     out.add({
       id: `stray-items:${action.node}:${action.itemId}`,
       kind: 'stray-items',
       target: action.node,
-      expected: 'the design’s templates only',
-      found: `${step.summary.replace(/^Remove the template /, 'the template ')}, which the design does not have`,
-      severity: 'low',
+      expected: 'objectives edits by the admin and White Force roles only (D21)',
+      found: step.summary.replace(/^Remove /, '').replace(/ from .*$/, ''),
+      severity: 'medium',
       repair: [action],
-      note: `${step.details.join(' ')}. Repair removes it.`,
+      note: `${step.details.join('. ')}. While it stays, the force may see it as its objectives.`,
     })
     return
   }
-  if (action.type !== 'purge-node') return
-  const republish = steps
-    .map((s) => s.action)
-    .filter((a) => a.type === 'publish' && a.node === action.node)
+  // A template the design does not have (Annex A). Removing it is destructive and confirmed:
+  // if it is locked, the messages that used it show as plain text afterwards.
   out.add({
-    id: `stray-items:${action.node}`,
+    id: `stray-items:${action.node}:${action.itemId}`,
     kind: 'stray-items',
     target: action.node,
-    expected: 'the admin’s item only: only the admin publishes objectives (D21)',
-    found: `${action.stray.length === 1 ? 'an item' : `${action.stray.length} items`} the design does not hold: ${action.stray.join(', ')}`,
-    severity: 'medium',
-    repair: [action, ...republish],
-    note: 'Repair removes every item, then publishes the admin’s again. The game client shows the admin’s item only, but other XMPP clients of the force’s roles read the rest.',
+    expected: 'the design’s templates only',
+    found: `${step.summary.replace(/^Remove the template /, 'the template ')}, which the design does not have`,
+    severity: 'low',
+    repair: [action],
+    note: `${step.details.join(' ')}. Repair removes it.`,
   })
 }
 
 function documentItems(step: PlanStep, view: ServerView, out: Builder): void {
   const action = step.action
   if (action.type !== 'publish' || action.node === SINGLETON_NODES.gameSetup) return
-  const present = view.nodes
-    .find((n) => n.node === action.node)
-    ?.items.some((i) => i.id === action.itemId)
+  const items = view.nodes.find((n) => n.node === action.node)?.items ?? []
+  if (parseNodeName(action.node)?.kind === 'objectives') {
+    // §3 rule 14: the draft goes out as a new item, so ids differ by design; what is compared is
+    // the admin's own item, found by publisher, whatever its id.
+    const own = items.some((i) => i.publisher?.split('/')[0] === `admin@${view.domain}`)
+    out.add({
+      id: `document:${action.node}`,
+      kind: 'document',
+      target: action.node,
+      expected: 'the admin’s item as the design’s objectives',
+      found: own ? 'the admin’s item differs from the design' : 'no item by the admin',
+      severity: 'medium',
+      repair: [action],
+      note: 'Repair publishes the design’s objectives as a new item, the newest edit: it replaces what the force sees, including later White Force edits.',
+    })
+    return
+  }
+  const present = items.some((i) => i.id === action.itemId)
   out.add({
     id: `document:${action.node}:${action.itemId}`,
     kind: 'document',
     target: action.node,
     expected: `item ${action.itemId} as in the design`,
-    found: present === true ? 'differs' : 'missing',
+    found: present ? 'differs' : 'missing',
     severity: 'medium',
     repair: [action],
   })
