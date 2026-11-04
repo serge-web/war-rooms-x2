@@ -7,7 +7,7 @@ import type { WorldAssetField } from '@wrx/domain'
 import { LIMITS, sidcSchema, worldAssetSchema } from '@wrx/schemas'
 import type { Force, WorldAsset } from '@wrx/schemas'
 import { Button, Spinner, TextField } from '@wrx/ui'
-import { Suspense, useId, useState } from 'react'
+import { Suspense, useEffect, useId, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { LazySymbolPreview } from './lazy.tsx'
 
@@ -128,6 +128,26 @@ export function AssetForm({ asset, mode, forces, onSave, onCancel }: AssetFormPr
   const [refused, setRefused] = useState<string | undefined>(undefined)
   const headingId = useId()
   const forceId = useId()
+  // The form takes focus when it opens, as the confirmations do, so a keyboard user who chose
+  // "Add asset…" or "Edit…" is in it, not left on the button (NFR-14; WP 5.7 review).
+  // When it closes and focus would be lost with it, focus goes back to the button that opened it
+  // if it is still there ("Add asset…"), else to the first action of the panel that replaces the
+  // form (the asset's "Edit…").
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    const opener = document.activeElement
+    const panel = heading.current?.closest('.wrx-map')
+    heading.current?.focus()
+    return () => {
+      const lost = document.activeElement === null || document.activeElement === document.body
+      if (!lost) return
+      if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) {
+        opener.focus()
+        return
+      }
+      panel?.querySelector<HTMLElement>('.wrx-map__details button')?.focus()
+    }
+  }, [])
   const set = (field: WorldAssetField) => (value: string) => {
     setValues((v) => ({ ...v, [field]: value }))
     if (errors[field] !== undefined) setErrors((e) => ({ ...e, [field]: undefined }))
@@ -161,7 +181,7 @@ export function AssetForm({ asset, mode, forces, onSave, onCancel }: AssetFormPr
   const known = forces.some((f) => f.id === values.forceId)
   return (
     <form className="wrx-asset-form" aria-labelledby={headingId} onSubmit={submit} noValidate>
-      <h3 id={headingId} className="wrx-map__details-title">
+      <h3 id={headingId} ref={heading} tabIndex={-1} className="wrx-map__details-title">
         {mode === 'add' ? 'Add an asset' : `Edit ${asset.title}`}
       </h3>
       {text('title', { maxLength: LIMITS.nameChars })}

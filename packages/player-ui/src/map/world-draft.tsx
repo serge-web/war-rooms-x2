@@ -115,6 +115,12 @@ export interface AdminWorldDraft {
   readonly dirty: boolean
   /** A newer state was published since the draft started (another admin tab). */
   readonly stale: boolean
+  /**
+   * The draft started from a published state that the map room no longer holds, and none
+   * replaced it: the game was reset (or its room cleared) after the draft began, so the draft
+   * may belong to the game before (WP 5.7 review).
+   */
+  readonly orphaned: boolean
   /** Why the browser did not keep the last edit, if it did not. */
   readonly saveProblem: string | undefined
   /** Applies an edit to what the map shows and saves it; returns why it was refused. */
@@ -198,6 +204,11 @@ export function useAdminWorldDraft(
       draft !== undefined &&
       publishedStanzaId !== undefined &&
       draft.baseStanzaId !== publishedStanzaId,
+    orphaned:
+      draft?.baseStanzaId !== undefined &&
+      !searching &&
+      published === undefined &&
+      recent === undefined,
     saveProblem,
     edit,
     discard,
@@ -216,40 +227,58 @@ export function sizeRefusal(state: WorldState): string | undefined {
   return `The world state is ${size.bytes.toLocaleString('en-GB')} bytes as a message; the map room takes at most ${size.limitBytes.toLocaleString('en-GB')} (500 KB). Remove assets, or shorten their titles and labels, then publish.`
 }
 
+/** What reading a map room's latest published world state found (ADM-16). */
+export type PublishedWorldStateRead =
+  | { readonly status: 'found'; readonly state: WorldState }
+  | { readonly status: 'none' }
+  | { readonly status: 'unavailable'; readonly reason: string }
+
 /**
  * The latest published world state of a map room, for export (ADM-16): joins it, waits for the
- * search to end, and leaves again. Undefined when none is published, the room cannot be read, or
- * it takes longer than `timeoutMs`.
+ * search to end, and leaves again. `none` when the room's history holds none; `unavailable`, with
+ * why, when the room cannot be read or the search has not ended after `timeoutMs`, so the caller
+ * can say the export holds no world state rather than drop it silently (WP 5.7 review).
  */
 export function readPublishedWorldState(
   store: SessionStore,
   roomId: string,
   timeoutMs = 20_000,
-): Promise<WorldState | undefined> {
+): Promise<PublishedWorldStateRead> {
   return new Promise((resolve) => {
     let done = false
     const unsubscribers: (() => void)[] = []
     const release = store.acquireWorldState(roomId)
-    const finish = (state: WorldState | undefined) => {
+    const finish = (read: PublishedWorldStateRead) => {
       if (done) return
       done = true
       clearTimeout(timer)
       for (const unsubscribe of unsubscribers) unsubscribe()
       release()
-      resolve(state)
+      resolve(read)
     }
     const check = () => {
       const snapshot = store.worldState(roomId)
       if (snapshot.status === 'error') {
-        finish(undefined)
+        finish({
+          status: 'unavailable',
+          reason: `the map room could not be read (${snapshot.error?.message ?? 'no reason given'})`,
+        })
         return
       }
       const view = snapshot.data
-      if (view?.state !== undefined) finish(view.state)
-      else if (view?.none === true) finish(undefined)
+      if (view?.state !== undefined) finish({ status: 'found', state: view.state })
+      else if (view?.none === true) finish({ status: 'none' })
     }
     const timer = setTimeout(() => {
-      finish(store.worldState(roomId).data?.state)
+      const state = store.worldState(roomId).data?.state
+      finish(
+        state === undefined
+          ? {
+              status: 'unavailable',
+              reason: `the map room did not answer within ${Math.round(timeoutMs / 1000)} seconds`,
+            }
+          : { status: 'found', state },
+      )
     }, timeoutMs)
     unsubscribers.push(store.subscribe(check))
     check()

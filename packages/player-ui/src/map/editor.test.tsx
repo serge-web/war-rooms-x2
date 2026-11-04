@@ -3,9 +3,10 @@
 // the admin's own view, edits into a draft in browser storage, the change summary, a publish on
 // its own and with a phase change, discarding, the form's checks, and the storage itself.
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { worldDraftKey } from '@wrx/domain'
+import { serialiseWorldDraft, worldDraftKey } from '@wrx/domain'
 import { DOMAIN, MUC, flush, harness, message, room, sampleDocuments } from '@wrx/domain/fixtures'
 import type { Harness } from '@wrx/domain/fixtures'
+import type { SessionStore } from '@wrx/domain'
 import { SessionStoreProvider } from '@wrx/hooks'
 import { nodeName } from '@wrx/schemas'
 import { WORLD_ASSET, sampleDesign, sampleWorldState, tid } from '@wrx/schemas/fixtures'
@@ -19,7 +20,7 @@ import { describeChange } from './change-summary.tsx'
 import { memoryWorldDraftStorage, webWorldDraftStorage } from './draft-storage.ts'
 import type { WorldDraftStorage } from './draft-storage.ts'
 import { MapPanel } from './map-panel.tsx'
-import { WorldDraftProvider, sizeRefusal } from './world-draft.tsx'
+import { WorldDraftProvider, readPublishedWorldState, sizeRefusal } from './world-draft.tsx'
 
 afterEach(cleanup)
 
@@ -41,6 +42,7 @@ async function mount(
   children: ReactNode,
   storage: WorldDraftStorage = memoryWorldDraftStorage(),
   turn = at(1, 'planning'),
+  published: readonly WorldState[] = [sampleWorldState()],
 ): Promise<{ h: Harness; storage: WorldDraftStorage }> {
   const docs = sampleDocuments()
   const map = room(
@@ -55,7 +57,7 @@ async function mount(
   docs.set(nodeName.room(map.id), [map])
   docs.set('game-state', [turn])
   const h = harness({ roleId, docs })
-  h.archive.set(MAP_JID, [worldMessage(sampleWorldState())])
+  h.archive.set(MAP_JID, published.map(worldMessage))
   render(
     <StrictMode>
       <WorldDraftProvider storage={storage}>
@@ -120,6 +122,7 @@ describe('the world-state editor (ADM-44, ADM-45)', () => {
     expect(banner?.textContent).toContain('Unpublished edits: 1 asset changed')
     expect(banner?.textContent).toContain('held only in this browser')
     expect(screen.getByText('Your draft for turn 1: 6 assets, not published')).toBeTruthy()
+    expect(screen.queryByText(/may belong to an earlier game/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard draft…' }))
     const confirm = screen.getByRole('region', { name: 'Discard the draft?' })
@@ -240,6 +243,21 @@ describe('the world-state editor (ADM-44, ADM-45)', () => {
     expect(sends(h)).toEqual([])
   })
 
+  it('warns when the state a draft began from is gone from the room, as after a reset (WP 5.7 review)', async () => {
+    const storage = memoryWorldDraftStorage()
+    storage.save(
+      KEY,
+      serialiseWorldDraft({
+        state: sampleWorldState(),
+        baseStanzaId: 'a-state-from-the-game-before',
+        savedAt: '2026-11-01T10:00:00.000Z',
+      }),
+    )
+    await mount('admin', mapPanel, storage, at(1, 'planning'), [])
+    expect(screen.getByText(/^Unpublished edits: 6 assets changed/)).toBeTruthy()
+    expect(screen.getByText('This draft may belong to an earlier game')).toBeTruthy()
+  })
+
   it('reports a draft the browser would not keep', async () => {
     await mount('admin', mapPanel, memoryWorldDraftStorage({ failWith: 'QuotaExceededError' }))
     await editHealth('Tank Company', '40')
@@ -286,6 +304,32 @@ describe('the editor’s parts', () => {
     expect(
       describeChange({ before, after, fields: ['lat', 'lon', 'fuel'] }, sampleDesign().forces),
     ).toBe(`position 51.9700° N, 5.8500° E → 52.0000° N, 6.0000° E; fuel 100% → 10%`)
+  })
+
+  it('reads the published state for export, says when there is none, and when it could not be read in time (WP 5.7 review)', async () => {
+    const found = await mount('admin', null)
+    expect(await readPublishedWorldState(found.h.store, tid('map'))).toEqual({
+      status: 'found',
+      state: sampleWorldState(),
+    })
+    cleanup()
+    const none = await mount('admin', null, memoryWorldDraftStorage(), at(1, 'planning'), [])
+    expect(await readPublishedWorldState(none.h.store, tid('map'))).toEqual({ status: 'none' })
+    cleanup()
+    // A search that never ends: after the timeout it is unavailable, with why, not none.
+    let released = false
+    const silent = {
+      acquireWorldState: () => () => {
+        released = true
+      },
+      worldState: () => ({ status: 'loading', data: undefined }),
+      subscribe: () => () => undefined,
+    } as unknown as SessionStore
+    expect(await readPublishedWorldState(silent, tid('map'), 50)).toEqual({
+      status: 'unavailable',
+      reason: 'the map room did not answer within 0 seconds',
+    })
+    expect(released).toBe(true)
   })
 
   it('refuses a state over 500 KB, with its size', () => {

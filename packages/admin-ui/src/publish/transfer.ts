@@ -40,15 +40,27 @@ export function exportDesign(
 }
 
 /**
+ * The world state for an export, and where it came from (ADM-16): the admin's draft, the latest
+ * published state, none published, or none because the published state could not be read (the
+ * map room did not answer in time, or could not be joined). The last is never silent: the export
+ * says the file holds no world state, and why (WP 5.7 review).
+ */
+export type WorldStateForExport =
+  | { readonly source: 'draft'; readonly state: WorldState }
+  | { readonly source: 'published'; readonly state: WorldState }
+  | { readonly source: 'none' }
+  | { readonly source: 'unavailable'; readonly reason: string }
+
+/**
  * The host's side of the world state in a design file (ADM-16, WP 5.6): the admin's world-state
  * draft lives in the browser, apart from the design draft, and the published state on the server.
  */
 export interface WorldStateTransfer {
   /**
    * The world state to export for the game whose map room is `mapRoomId`: the admin's draft if
-   * this browser holds one, otherwise the latest published state, otherwise undefined.
+   * this browser holds one, otherwise the latest published state, otherwise none, saying which.
    */
-  forExport(mapRoomId: string): Promise<WorldState | undefined>
+  forExport(mapRoomId: string): Promise<WorldStateForExport>
   /**
    * Keeps an imported world state as the admin's world-state draft of that game, to be published
    * by the admin (ADM-45). Returns why it could not be kept, if it could not.

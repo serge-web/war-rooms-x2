@@ -26,6 +26,8 @@ export interface MapEditing {
   readonly anyPublished: boolean
   /** A newer state was published since the draft started. */
   readonly stale: boolean
+  /** The state the draft started from is gone from the map room, e.g. after a reset. */
+  readonly orphaned?: boolean | undefined
   /** Why the browser did not keep the last edit, if it did not. */
   readonly saveProblem?: string | undefined
   /** A stored draft that could not be read, and was set aside. */
@@ -106,6 +108,12 @@ export function DraftBanner({ editing }: { readonly editing: MapEditing }) {
           ? ' A newer world state was published since this draft began; publishing replaces it with your draft.'
           : null}
       </Banner>
+      {editing.orphaned === true ? (
+        <Banner tone="warning" title="This draft may belong to an earlier game">
+          It began from a world state that the map room no longer holds, so the game may have been
+          reset since. Check every asset before you publish, or discard the draft.
+        </Banner>
+      ) : null}
     </>
   )
 }

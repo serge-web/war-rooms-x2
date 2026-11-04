@@ -8,6 +8,8 @@ import {
   templateMessageBodySchema,
   worldStateSchema,
 } from '@wrx/schemas'
+import { diffWorldStates, moveWorldAsset, worldStateSize } from '@wrx/domain'
+import type { WorldAsset, WorldState } from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator } from '@wrx/templates'
 import type { TemplateValidator } from '@wrx/templates'
 import { describe, expect, it } from 'vitest'
@@ -138,5 +140,90 @@ describe('the scale fixture’s world state (WP 5.5, NFR-11)', () => {
     expect(parseMockState(JSON.stringify(scaleState({ messages: 50, worldAssets: 600 }))).ok).toBe(
       true,
     )
+  })
+})
+
+/** The median of five timed runs of `run`, in ms. */
+function medianMs(run: () => void): number {
+  const times: number[] = []
+  for (let i = 0; i < 5; i++) {
+    const start = performance.now()
+    run()
+    times.push(performance.now() - start)
+  }
+  return times.sort((a, b) => a - b)[2] ?? Number.NaN
+}
+
+/** The most assets like `asset` that fit one map-room message (PLY-53), by halving. */
+function mostThatFit(asset: (i: number) => WorldAsset): number {
+  const state = (n: number): WorldState => ({
+    turn: 1,
+    assets: Object.fromEntries(
+      Array.from({ length: n }, (_, i) => {
+        const a = asset(i)
+        return [a.id, a]
+      }),
+    ),
+  })
+  let low = 0
+  let high = LIMITS.worldStateAssets
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (worldStateSize(state(mid)).ok) low = mid
+    else high = mid - 1
+  }
+  return low
+}
+
+describe('the world state against the 500 KB map-room cap (WP 5.7, PLY-53, NFR-11)', () => {
+  it('measures a 600-asset state, the most assets that fit, and the client-side costs', () => {
+    const design = scaleDesign()
+    const state = scaleWorldState(design, 600)
+    const size = worldStateSize(state)
+    expect(size.ok).toBe(true)
+    const assets = Object.values(state.assets)
+    const first = assets[0]
+    if (first === undefined) throw new Error('fixture')
+    const typical = (i: number): WorldAsset => ({
+      ...(assets[i % assets.length] ?? first),
+      id: `a0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`,
+    })
+    // Every text field at its longest, plain ASCII, and a 30-digit code.
+    const longest = (i: number): WorldAsset => ({
+      ...typical(i),
+      title: 'T'.repeat(LIMITS.nameChars),
+      category: 'C'.repeat(LIMITS.worldLabelChars),
+      state: 'S'.repeat(LIMITS.worldLabelChars),
+      sidc: '1'.repeat(30),
+      lat: -12.345678901234,
+      lon: -123.45678901234,
+    })
+    // The same, every character one XML escapes to five bytes (&amp;): the worst case.
+    const escaped = (i: number): WorldAsset => ({
+      ...longest(i),
+      title: '&'.repeat(LIMITS.nameChars),
+      category: '&'.repeat(LIMITS.worldLabelChars),
+      state: '&'.repeat(LIMITS.worldLabelChars),
+    })
+    const fit = {
+      typical: mostThatFit(typical),
+      longest: mostThatFit(longest),
+      escaped: mostThatFit(escaped),
+    }
+    const parse = medianMs(() => worldStateSchema.parse(state))
+    const measure = medianMs(() => worldStateSize(state))
+    const moved = moveWorldAsset(state, first.id, first.lat + 0.01, first.lon)
+    if (!moved.ok) throw new Error(moved.error)
+    const diff = medianMs(() => diffWorldStates(state, moved.value))
+    console.log(
+      `[perf] world state, 600 assets: ${size.bytes.toLocaleString('en-GB')} bytes as a message (${((100 * size.bytes) / size.limitBytes).toFixed(0)}% of the cap), ${Math.round(size.bytes / 600)} bytes per asset; most that fit: ${fit.typical} typical, ${fit.longest} with every field at its longest, ${fit.escaped} with every character escaped; parse ${parse.toFixed(1)} ms, size check ${measure.toFixed(1)} ms, diff ${diff.toFixed(1)} ms (medians of 5)`,
+    )
+    // NFR-11's 600 assets fit with room to spare, even at the longest plain field values.
+    expect(size.bytes).toBeLessThan(LIMITS.worldStateStanzaBytes / 2)
+    expect(fit.typical).toBeGreaterThan(1_200)
+    expect(fit.longest).toBeGreaterThan(600)
+    // The worst case does not: the editor refuses the publish with its size (WP 5.6).
+    expect(fit.escaped).toBeLessThan(600)
+    expect(parse + measure + diff).toBeLessThan(250)
   })
 })

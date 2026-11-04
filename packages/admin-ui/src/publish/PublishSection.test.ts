@@ -31,7 +31,7 @@ import {
 import type { DraftStore } from '../draft/index.ts'
 import type { PublishConnection } from './controller.ts'
 import { mapRoomIdOf } from './transfer.ts'
-import type { WorldStateTransfer } from './transfer.ts'
+import type { WorldStateForExport, WorldStateTransfer } from './transfer.ts'
 import { PublishSectionCore } from './PublishSection.tsx'
 import type { PublishSectionCoreProps } from './PublishSection.tsx'
 import { validateDraft } from '../draft/index.ts'
@@ -544,7 +544,9 @@ describe('design export and import (ADM-16)', () => {
 
   it('exports the world state the host gives, and imports a file’s as the draft (WP 5.6)', async () => {
     const kept: { roomId: string; state: WorldState }[] = []
-    const forExport = vi.fn((_roomId: string) => Promise.resolve(sampleWorldState()))
+    const forExport = vi.fn((_roomId: string) =>
+      Promise.resolve({ source: 'published' as const, state: sampleWorldState() }),
+    )
     const { user, download, store } = await setup({
       forExport,
       importDraft: (roomId, state) => {
@@ -583,6 +585,33 @@ describe('design export and import (ADM-16)', () => {
     await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
     expect(screen.getByText('Imported old.json.')).toBeTruthy()
     expect(kept).toHaveLength(1)
+  })
+
+  it('says when the file holds the unpublished draft, and when it holds no world state because the published one could not be read (WP 5.7 review)', async () => {
+    const answers: WorldStateForExport[] = [
+      { source: 'draft', state: sampleWorldState() },
+      { source: 'unavailable', reason: 'the map room did not answer within 20 seconds' },
+    ]
+    const { user, download } = await setup({
+      forExport: () => Promise.resolve(answers.shift() ?? { source: 'none' }),
+      importDraft: () => undefined,
+    })
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    expect(await screen.findByText('The file holds your world-state draft.')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    expect(await screen.findByText('The file holds no world state.')).toBeTruthy()
+    expect(screen.getByText(/did not answer within 20 seconds/)).toBeTruthy()
+    expect(screen.queryByText('The file holds your world-state draft.')).toBeNull()
+    const [, text] = download.mock.calls[1] ?? []
+    expect('worldState' in (JSON.parse(text ?? '{}') as DesignFile)).toBe(false)
+
+    // Nothing to say about a file with the published state, or with none published.
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledTimes(3)
+    })
+    expect(screen.queryByText(/^The file holds/)).toBeNull()
   })
 })
 
@@ -658,7 +687,7 @@ describe('PublishSectionCore', () => {
     onUnlockVault: () => Promise.resolve(undefined),
     onLockVault: vi.fn(),
     onResetPassword: () => Promise.resolve(undefined),
-    onExport: vi.fn(),
+    onExport: vi.fn(() => Promise.resolve(undefined)),
     onImport: () => [],
   }
 

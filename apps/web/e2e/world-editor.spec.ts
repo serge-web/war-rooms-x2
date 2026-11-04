@@ -313,3 +313,79 @@ test('the design export carries the world-state draft, and an import makes the f
   })
   expect(errors).toEqual([])
 })
+
+test('the keyboard alone adds an asset and moves one, then publishes (ADM-44, NFR-14)', async ({
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  const umpire = await context.newPage()
+  const errors = watch(umpire)
+  const panel = await admin(umpire)
+  const key = umpire.keyboard
+
+  // Add: "Add asset…" opens the form with focus on it, at the assets' centre.
+  await panel.getByRole('button', { name: 'Add asset…' }).focus()
+  await key.press('Enter')
+  const add = panel.getByRole('form', { name: 'Add an asset' })
+  await expect(add.getByRole('heading', { name: 'Add an asset' })).toBeFocused()
+  await key.press('Tab')
+  await expect(add.getByLabel('Title', { exact: true })).toBeFocused()
+  await key.type('Bridging Troop')
+  await key.press('Tab')
+  await expect(add.getByLabel('Force', { exact: true })).toBeFocused()
+  await key.press('Tab')
+  await key.type('engineers')
+  await add.getByLabel('Latitude', { exact: true }).focus()
+  await key.press('ControlOrMeta+A')
+  await key.type('51.99')
+  await key.press('Tab')
+  await expect(add.getByLabel('Longitude', { exact: true })).toBeFocused()
+  await key.press('ControlOrMeta+A')
+  await key.type('5.9')
+  // Enter in a field submits the form.
+  await key.press('Enter')
+  await expect(add).toHaveCount(0)
+  // Focus goes back to the button that opened the form.
+  await expect(panel.getByRole('button', { name: 'Add asset…' })).toBeFocused()
+  await expect(panel.getByText('Unpublished edits: 1 asset changed')).toBeVisible()
+  await expect(symbols(panel)).toHaveCount(7)
+
+  // Move: the table's row, then "Edit…", then the latitude and longitude, in place of a drag.
+  await panel.getByRole('button', { name: 'Table', exact: true }).focus()
+  await key.press('Enter')
+  const row = panel.getByRole('button', { name: 'A Squadron', exact: true })
+  await row.focus()
+  await key.press('Enter')
+  await expect(row).toHaveAttribute('aria-pressed', 'true')
+  await side(panel).getByRole('button', { name: 'Edit…' }).focus()
+  await key.press('Enter')
+  const form = panel.getByRole('form', { name: 'Edit A Squadron' })
+  await expect(form.getByRole('heading', { name: 'Edit A Squadron' })).toBeFocused()
+  await form.getByLabel('Latitude', { exact: true }).focus()
+  await key.press('ControlOrMeta+A')
+  await key.type('51.96')
+  await key.press('Tab')
+  await key.press('ControlOrMeta+A')
+  await key.type('5.86')
+  await key.press('Enter')
+  await expect(form).toHaveCount(0)
+  await expect(side(panel).getByRole('button', { name: 'Edit…' })).toBeFocused()
+  await expect(panel.getByText('Unpublished edits: 2 assets changed')).toBeVisible()
+  await expect(panel.getByRole('region', { name: 'Asset details' })).toContainText(
+    '51.9600° N, 5.8600° E',
+  )
+  await expectNoViolations(umpire, testInfo, 'world-state editor in the table, with a draft', {
+    include: '.wrx-map',
+  })
+
+  // Publish: the summary takes focus; its button publishes.
+  await panel.getByRole('button', { name: 'Publish world state…' }).focus()
+  await key.press('Enter')
+  const confirm = panel.getByRole('region', { name: 'Publish world state?' })
+  await expect(confirm.getByRole('heading', { name: 'Publish world state?' })).toBeFocused()
+  await confirm.getByRole('button', { name: 'Publish world state', exact: true }).focus()
+  await key.press('Enter')
+  await expect(panel.getByText(/Unpublished edits/)).toHaveCount(0, { timeout: 20_000 })
+  expect(errors).toEqual([])
+})

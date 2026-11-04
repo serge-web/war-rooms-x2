@@ -567,6 +567,7 @@ export function MapPanel({ roomId, room, config }: PlayerPanelProps) {
           toPublish,
           anyPublished: draft.published !== undefined,
           stale: draft.stale,
+          orphaned: draft.orphaned,
           saveProblem: draft.saveProblem,
           unreadable: draft.unreadable,
           onEdit: draft.edit,

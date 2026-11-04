@@ -30,7 +30,7 @@ export {
   useWorldDraftStorage,
   worldPublishErrorText,
 } from './world-draft.tsx'
-export type { AdminWorldDraft } from './world-draft.tsx'
+export type { AdminWorldDraft, PublishedWorldStateRead } from './world-draft.tsx'
 export type { MapViewProps } from './leaflet-map.tsx'
 export { MapTilesProvider, TILE_MAX_ZOOM, TILE_PLACEHOLDERS, useMapTiles } from './tiles.tsx'
 export type { MapTiles } from './tiles.tsx'

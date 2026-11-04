@@ -24,7 +24,7 @@ import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
 import { exportDesign, importDesign, mapRoomIdOf, newDesign } from './transfer.ts'
-import type { WorldStateTransfer } from './transfer.ts'
+import type { WorldStateForExport, WorldStateTransfer } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
@@ -99,12 +99,13 @@ export function PublishSection({
         const draft = store.getSnapshot().draft
         const mapRoomId = mapRoomIdOf(draft)
         // ADM-16: the admin's world-state draft, else the latest published state.
-        const state =
+        const world: WorldStateForExport =
           worldState === undefined || mapRoomId === undefined
-            ? undefined
+            ? { source: 'none' }
             : await worldState.forExport(mapRoomId)
-        const file = exportDesign(draft, new Date(), state)
+        const file = exportDesign(draft, new Date(), 'state' in world ? world.state : undefined)
         save(file.name, file.text)
+        return exportNote(world)
       }}
       onImport={(text) => {
         const imported = importDesign(text, store.getSnapshot().draft)
@@ -135,6 +136,38 @@ export function PublishSection({
   )
 }
 
+/** What the admin is told after an export about the world state in the file. */
+export interface ExportNote {
+  readonly tone: 'info' | 'warning'
+  readonly title: string
+  readonly text: string
+}
+
+/**
+ * The note for an export's world state (ADM-16): a file that holds an unpublished draft says so,
+ * since it holds the umpire's plans; one that could not read the published state says it holds
+ * none, and why, rather than leaving a file without a world state unremarked (WP 5.7 review).
+ */
+export function exportNote(world: WorldStateForExport): ExportNote | undefined {
+  switch (world.source) {
+    case 'draft':
+      return {
+        tone: 'info',
+        title: 'The file holds your world-state draft.',
+        text: 'It includes edits players have not seen yet; share it only with people who may see them.',
+      }
+    case 'unavailable':
+      return {
+        tone: 'warning',
+        title: 'The file holds no world state.',
+        text: `The published world state could not be read: ${world.reason}. Export again once the map room can be reached, or the design moves without its map.`,
+      }
+    case 'published':
+    case 'none':
+      return undefined
+  }
+}
+
 function browserDownload(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
   const link = document.createElement('a')
@@ -162,7 +195,7 @@ export interface PublishSectionCoreProps {
   readonly onUnlockVault: (passphrase: string) => Promise<string | undefined>
   readonly onLockVault: () => void
   readonly onResetPassword: (roleId: string) => Promise<string | undefined>
-  readonly onExport: () => void | Promise<void>
+  readonly onExport: () => Promise<ExportNote | undefined>
   /** Imports a file's text; returns the blocking issues, or the warnings when it was imported. */
   readonly onImport: (text: string) => readonly DesignIssue[]
   /** Replaces the draft with an empty design (SC-1: designing a game from nothing). */
@@ -707,13 +740,14 @@ function DesignTransfer({
   onImport,
   onNewDesign,
 }: {
-  readonly onExport: () => void | Promise<void>
+  readonly onExport: () => Promise<ExportNote | undefined>
   readonly onImport: (text: string) => readonly DesignIssue[]
   readonly onNewDesign?: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
   const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<ExportNote | undefined>(undefined)
   const [outcome, setOutcome] = useState<
     | { readonly ok: boolean; readonly issues: readonly DesignIssue[]; readonly name: string }
     | 'new'
@@ -756,9 +790,14 @@ function DesignTransfer({
           disabled={exporting}
           onClick={() => {
             setExporting(true)
-            void Promise.resolve(onExport()).finally(() => {
-              setExporting(false)
-            })
+            setExported(undefined)
+            void Promise.resolve(onExport())
+              .then((note) => {
+                setExported(note ?? undefined)
+              })
+              .finally(() => {
+                setExporting(false)
+              })
           }}
         >
           Export the design
@@ -791,6 +830,14 @@ function DesignTransfer({
           >
             Start a new design…
           </Button>
+        )}
+      </div>
+      {/* Announced when an export ends, so the note is heard as well as seen. */}
+      <div role="status">
+        {exported === undefined ? null : (
+          <Notice tone={exported.tone} title={exported.title}>
+            {exported.text}
+          </Notice>
         )}
       </div>
       {pending === 'new' && onNewDesign !== undefined && (

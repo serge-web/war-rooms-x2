@@ -69,8 +69,16 @@ export function AdminApp({
       forExport: async (mapRoomId) => {
         const text = drafts.snapshot(key(mapRoomId)).text
         const held = text === undefined ? undefined : parseWorldDraft(text)
-        if (held?.ok === true) return held.value.state
-        return readPublishedWorldState(session, mapRoomId)
+        if (held?.ok === true) return { source: 'draft', state: held.value.state }
+        const read = await readPublishedWorldState(session, mapRoomId)
+        switch (read.status) {
+          case 'found':
+            return { source: 'published', state: read.state }
+          case 'none':
+            return { source: 'none' }
+          case 'unavailable':
+            return { source: 'unavailable', reason: read.reason }
+        }
       },
       importDraft: (mapRoomId, state) =>
         drafts.save(
