@@ -12,6 +12,7 @@ import type { DesignFile } from '@wrx/schemas'
 import { expectNoViolations } from './a11y.ts'
 import { isTileNoise, mapPanel, openMap, stubTiles, symbols } from './map.ts'
 import { logIn } from './mock.ts'
+import { loadScale } from './scale.ts'
 
 const WIDE = { width: 1500, height: 950 }
 
@@ -438,5 +439,81 @@ test('the keyboard alone adds an asset and moves one, then publishes (ADM-44, NF
   await confirm.getByRole('button', { name: 'Publish world state', exact: true }).focus()
   await key.press('Enter')
   await expect(panel.getByText(/Unpublished edits/)).toHaveCount(0, { timeout: 20_000 })
+  expect(errors).toEqual([])
+})
+
+// A2 (WP 5.9): at NFR-11's 600 assets, the table is one Tab stop; the arrow keys move between
+// rows, and an asset's "Edit…" is a few Tab presses from its row, wherever it is in the table.
+test('the asset table is one Tab stop at 600 assets; Edit… is a few Tab presses from any row (NFR-14, WP 5.9)', async ({
+  context,
+}, testInfo) => {
+  test.setTimeout(150_000)
+  await stubTiles(context)
+  const umpire = await context.newPage()
+  const errors = watch(umpire)
+  await umpire.setViewportSize(WIDE)
+  await loadScale(umpire, './', { messages: 200, worldAssets: 600 })
+  await logIn(umpire, 'admin', 'demo-admin')
+  const panel = await openMap(umpire, 600)
+  const key = umpire.keyboard
+  await panel.getByRole('button', { name: 'Table', exact: true }).focus()
+  await key.press('Enter')
+  const picks = panel.locator('.wrx-map__pick')
+  await expect(picks).toHaveCount(600)
+  await expect(panel.locator('.wrx-map__pick[tabindex="0"]')).toHaveCount(1)
+
+  /** Tab presses from the focused element to the details' "Edit…", at most `limit`. */
+  const tabsToEdit = async (limit: number): Promise<number> => {
+    for (let n = 1; n <= limit; n++) {
+      await key.press('Tab')
+      const text = await umpire.evaluate(() => document.activeElement?.textContent ?? '')
+      if (text === 'Edit…') return n
+    }
+    return Number.POSITIVE_INFINITY
+  }
+
+  // Into the table, past the editor's tools and the table's scrollable region, to its one row
+  // stop: the first row.
+  let into = 0
+  while (into < 8 && !(await picks.first().evaluate((b) => b === document.activeElement))) {
+    await key.press('Tab')
+    into++
+  }
+  await expect(picks.first()).toBeFocused()
+  expect(into).toBeLessThanOrEqual(5)
+  // The first row, the middle one and the last: each a few Tab presses from its "Edit…".
+  const presses: number[] = []
+  for (const move of [[], Array<string>(30).fill('PageDown'), ['End']]) {
+    for (const k of move) await key.press(k)
+    const title = await umpire.evaluate(() => document.activeElement?.textContent ?? '')
+    await key.press('Enter')
+    await expect(panel.getByRole('button', { name: title, exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    presses.push(await tabsToEdit(5))
+    await expect(side(panel).getByRole('heading', { name: title })).toBeVisible()
+    // Shift+Tab goes back into the table at the selected row, which kept the stop.
+    for (let n = presses.at(-1) ?? 0; n > 0; n--) await key.press('Shift+Tab')
+    await expect(panel.getByRole('button', { name: title, exact: true })).toBeFocused()
+  }
+  expect(
+    presses.every((n) => n <= 3),
+    JSON.stringify(presses),
+  ).toBe(true)
+  // The arrow keys: Home, Down, Up.
+  await key.press('Home')
+  await expect(picks.first()).toBeFocused()
+  await key.press('ArrowDown')
+  await expect(picks.nth(1)).toBeFocused()
+  await key.press('ArrowUp')
+  await expect(picks.first()).toBeFocused()
+  await expectNoViolations(umpire, testInfo, 'asset table at 600 assets, one Tab stop', {
+    include: '.wrx-map__body',
+  })
+  testInfo.annotations.push({
+    type: 'Tab presses from a row to its Edit… (first, middle, last of 600)',
+    description: presses.join(', '),
+  })
   expect(errors).toEqual([])
 })

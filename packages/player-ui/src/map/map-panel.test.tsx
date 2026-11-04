@@ -4,7 +4,7 @@ import { FORCE, WORLD_ASSET, sampleDesign, sampleWorldState } from '@wrx/schemas
 import type { WorldState } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { MapPanelCore } from './map-panel.tsx'
+import { MapPanelCore, rowKeyTarget } from './map-panel.tsx'
 import type { MapPanelCoreProps } from './map-panel.tsx'
 import { createSymbolCache } from './symbols.ts'
 import type { MapTiles } from './tiles.tsx'
@@ -208,6 +208,42 @@ describe('the map room panel (PLY-57, PLY-59)', () => {
     await expect
       .poll(() => map.querySelector('img.wrx-map__symbol--selected')?.getAttribute('data-asset'))
       .toBe(WORLD_ASSET.redArmour)
+  })
+
+  it('gives the table one Tab stop; the arrow keys move between rows (A2, WP 5.9)', () => {
+    render(panel())
+    fireEvent.click(screen.getByRole('button', { name: 'Table' }))
+    const table = screen.getByRole('table')
+    const picks = within(table).getAllByRole('button')
+    const stops = () => picks.filter((b) => b.tabIndex === 0)
+    expect(picks).toHaveLength(6)
+    expect(stops()).toEqual([picks[0]])
+    picks[0]?.focus()
+    fireEvent.keyDown(picks[0]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(picks[1])
+    expect(stops()).toEqual([picks[1]])
+    fireEvent.keyDown(picks[1]!, { key: 'End' })
+    expect(document.activeElement).toBe(picks[5])
+    fireEvent.keyDown(picks[5]!, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(picks[5])
+    fireEvent.keyDown(picks[5]!, { key: 'Home' })
+    expect(document.activeElement).toBe(picks[0])
+    fireEvent.keyDown(picks[0]!, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(picks[0])
+    // Selecting a row keeps it the stop.
+    fireEvent.click(picks[3]!)
+    expect(stops()).toEqual([picks[3]])
+  })
+
+  it('moves by rows, pages and ends', () => {
+    const ids = Array.from({ length: 25 }, (_, i) => `a${String(i)}`)
+    expect(rowKeyTarget('ArrowDown', ids, 'a0')).toBe('a1')
+    expect(rowKeyTarget('PageDown', ids, 'a0')).toBe('a10')
+    expect(rowKeyTarget('PageDown', ids, 'a20')).toBe('a24')
+    expect(rowKeyTarget('PageUp', ids, 'a5')).toBe('a0')
+    expect(rowKeyTarget('End', ids, 'a3')).toBe('a24')
+    expect(rowKeyTarget('Enter', ids, 'a3')).toBeUndefined()
+    expect(rowKeyTarget('ArrowDown', [], undefined)).toBeUndefined()
   })
 
   it('drops a selection the newer state no longer holds', () => {
