@@ -17,15 +17,15 @@
   },
   {
     "name": "admin-template-builder",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-template-raw",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-theme-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "app-shell",
@@ -49,7 +49,7 @@
   },
   {
     "name": "page-background",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-blog",
@@ -90,6 +90,10 @@
   {
     "name": "player-shell",
     "status": "changed"
+  },
+  {
+    "name": "player-turn-adjudication",
+    "status": "new"
   },
   {
     "name": "player-welcome",
