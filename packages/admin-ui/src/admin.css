@@ -703,3 +703,20 @@ textarea.wrx-admin-input {
   font-weight: 400;
   color: var(--wrx-muted, #4b5563);
 }
+
+/* ADM-9: a rule 4 consequence, outlined and named in the cell (not by colour alone). */
+.wrx-admin-access-highlight {
+  outline: 2px dashed var(--wrx-secondary, #b45309);
+  outline-offset: -3px;
+}
+
+.wrx-admin-access-note {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.wrx-admin-access-highlights {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
