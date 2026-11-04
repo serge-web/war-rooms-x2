@@ -2,7 +2,7 @@
 // store's `{data, status, error}` snapshot unchanged. Hooks that need a node or room acquire it
 // inside `subscribe` and release it in the cleanup, so React StrictMode's double mount
 // balances, and the store's deferred release absorbs the remount without network churn.
-import { effectiveAccess, safeNodeName } from '@wrx/domain'
+import { effectiveAccess, postingPaused, safeNodeName } from '@wrx/domain'
 import type {
   AccessInput,
   AccessMatrix,
@@ -134,6 +134,17 @@ export function useGameState(): Snapshot<GameState | undefined> {
     (s) => s.acquire('game-state'),
     'game-state',
   )
+}
+
+/**
+ * PLY-56: posting is paused for this pane's role, because the game is in adjudication and the
+ * role is outside the White Force. Advisory (R27). Read from `me()`, so the admin's preview as a
+ * role (ADM-30) is paused as that role is.
+ */
+export function usePostingPaused(): boolean {
+  const me = useMe().data
+  const state = useGameState().data
+  return postingPaused(me, state)
 }
 
 /**

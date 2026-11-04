@@ -19,6 +19,10 @@ export type DomainErrorCode =
   | 'session-ended'
   /** Any other transport failure: timeout, disconnection, server error. */
   | 'transport'
+  /** Posting is paused for this role during adjudication (PLY-56); advisory, checked locally. */
+  | 'paused'
+  /** What it would change has changed since it was read, e.g. the turn moved on; nothing sent. */
+  | 'stale'
 
 export interface DomainError {
   readonly code: DomainErrorCode

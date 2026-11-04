@@ -48,7 +48,14 @@ import type {
 } from '@wrx/transport'
 import { byOrderThenId, effectiveAccess, roomsForRole } from './access.ts'
 import type { AccessMatrix } from './access.ts'
-import { documentValue, nodeSpec, objectivesItemId, parseItem, safeNodeName } from './documents.ts'
+import {
+  DOCUMENT_ITEM_ID,
+  documentValue,
+  nodeSpec,
+  objectivesItemId,
+  parseItem,
+  safeNodeName,
+} from './documents.ts'
 import type { DocumentValues, LiveDocument, NodeSpec } from './documents.ts'
 import { domainErr, domainOk, fromTransport } from './errors.ts'
 import type { DomainError, DomainResult } from './errors.ts'
@@ -59,6 +66,7 @@ import { defaultRoomTypes, roomConfig } from './registry.ts'
 import type { RoomTypeRegistry } from './registry.ts'
 import { fitsInStanza, fitsWorldStateStanza } from './size.ts'
 import { Timeline, timeKey } from './timeline.ts'
+import { nextGameState, postingPaused, sameGameState } from './turns.ts'
 import type { ReadableEntry, Sender, TimelineEntry } from './timeline.ts'
 
 export type Release = () => void
@@ -256,6 +264,24 @@ export interface WorldStateView {
   readonly ignored: number
 }
 
+/**
+ * What the admin asks for when moving the game on (ADM-43). An object so that WP 5.6 can add
+ * "publish this world state with the change" without changing callers.
+ */
+export interface AdvancePhaseOptions {
+  /**
+   * The turn state the admin confirmed moving on from. If `game-state` holds anything else by
+   * the time the change is sent (another admin tab moved it first), nothing is sent: `stale`.
+   */
+  readonly from: GameState
+}
+
+/** A phase change the admin made: from where, to where. */
+export interface PhaseChange {
+  readonly from: GameState
+  readonly to: GameState
+}
+
 export interface RoomWatch {
   readonly joined: Joined
   readonly release: Release
@@ -371,6 +397,13 @@ export interface SessionStore {
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
+  /**
+   * The admin only (ADM-43): moves the game from `options.from` to its next phase
+   * (`nextGameState`) and publishes it to `game-state`. Refused before sending for any role,
+   * when `game-state` no longer holds `from` (`stale`), when none is published (`not-found`), and
+   * after the last turn (`invalid`).
+   */
+  advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>>
   /** Re-lists nodes and retries failed ones; run after a design change and on reconnection. */
   refresh(): Promise<void>
   /** Leaves rooms, releases subscriptions, clears data and disconnects (PLY-3). Idempotent. */
@@ -1837,6 +1870,7 @@ class Store implements SessionStore {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
     if (text.trim() === '') return refuse({ code: 'invalid', message: 'the message is empty' })
+    if (this.postingPaused()) return refuse(PAUSED)
     // TD3: a room may take templates only. Advisory, like every template rule (T-R1).
     if (!this.roomTemplates(roomId).data.freeText) {
       return refuse({ code: 'not-permitted', message: 'this room takes templated messages only' })
@@ -1900,6 +1934,7 @@ class Store implements SessionStore {
     if (entry.joined.role === 'visitor' || entry.joined.role === 'none') {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
+    if (this.postingPaused()) return refuse(PAUSED)
     const candidate = parseDocument('message', {
       type: 'template',
       schemaVersion: 1,
@@ -1976,6 +2011,39 @@ class Store implements SessionStore {
     const author = this.identity.isAdmin ? ADMIN_AUTHOR_ID : (me.identity.loginName ?? 'role')
     const itemId = objectivesItemId(author, this.newId())
     return this.publish(node, itemId, parsed.value, 'Publishing objectives')
+  }
+
+  /** PLY-56 for this store's own session: adjudication, and outside the White Force (R27). */
+  private postingPaused(): boolean {
+    return postingPaused(this.me().data, this.gameState().data)
+  }
+
+  async advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>> {
+    if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
+    if (!this.identity.isAdmin) {
+      return domainErr('not-permitted', 'only the admin advances the game (ADM-43)')
+    }
+    const current = this.gameState().data
+    if (current === undefined) return domainErr('not-found', 'no turn state is published yet')
+    if (!sameGameState(current, options.from)) {
+      return domainErr(
+        'stale',
+        `the game is at turn ${current.turn} ${current.phase}, not turn ${options.from.turn} ${options.from.phase}`,
+      )
+    }
+    const next = nextGameState(current)
+    if (next === undefined) return domainErr('invalid', 'the last turn has no next phase')
+    const parsed = parseDocument('game-state', next)
+    if (!parsed.ok) return domainErr('invalid', parsed.error.message)
+    // WP 5.6 publishes the world state here, before the turn moves, when the options carry one.
+    const published = await this.publish(
+      SINGLETON_NODES.gameState,
+      DOCUMENT_ITEM_ID,
+      parsed.value,
+      'Advancing the game',
+    )
+    if (!published.ok) return published
+    return domainOk(Object.freeze({ from: current, to: parsed.value }))
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -2071,6 +2139,12 @@ function noop(): void {
 }
 
 const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+
+/** PLY-56: the advisory refusal of a post during adjudication (R27). */
+const PAUSED: DomainError = Object.freeze({
+  code: 'paused',
+  message: 'posting is paused for roles outside the White Force during adjudication (PLY-56)',
+})
 const EMPTY_TEMPLATES: readonly Template[] = Object.freeze([])
 
 /**
