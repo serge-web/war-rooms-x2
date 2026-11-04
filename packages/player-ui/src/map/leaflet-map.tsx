@@ -7,9 +7,9 @@
 // `placing`, so a click on the map picks a new asset's position (`onPlace`); the edits themselves
 // are the editor's.
 import * as L from 'leaflet'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import type { MapRoomConfig, WorldAsset } from '@wrx/schemas'
-import { createSymbolCache } from './symbols.ts'
+import { sharedSymbols, warmSymbols } from './symbols.ts'
 import type { SymbolCache } from './symbols.ts'
 import type { MapTiles } from './tiles.tsx'
 import { initialView } from './view.ts'
@@ -190,8 +190,7 @@ export function MapView({
   const mapRef = useRef<L.Map | undefined>(undefined)
   const layerRef = useRef<L.LayerGroup | undefined>(undefined)
   const placedRef = useRef(new Map<string, Placed>())
-  const [symbols] = useState<SymbolCache>(createSymbolCache)
-  const symbolsRef = useRef(symbols)
+  const symbolsRef = useRef<SymbolCache>(sharedSymbols)
   const openedRef = useRef(false)
   const onSelectRef = useRef(onSelect)
   const onMoveRef = useRef(onMove)
@@ -374,6 +373,45 @@ export function MapView({
       aria-roledescription="map"
     />
   )
+}
+
+/**
+ * Runs Leaflet's code paths for a map with a draggable marker, on a map that is never shown, so
+ * the first real map does not also pay for compiling them.
+ */
+function warmLeaflet(): void {
+  const container = document.createElement('div')
+  const map = L.map(container, { attributionControl: false, zoomControl: false })
+  map.setView([WORLD_LAT, WORLD_LON], WORLD_ZOOM)
+  const marker = L.marker([WORLD_LAT, WORLD_LON], {
+    icon: iconFor(sharedSymbols, 'SFGPUCI----K---'),
+    keyboard: false,
+    riseOnHover: true,
+  })
+  L.layerGroup().addTo(map).addLayer(marker)
+  marker.dragging?.enable()
+  marker.setZIndexOffset(0)
+  marker.getElement()?.classList.toggle(SELECTED_CLASS, false)
+  map.remove()
+}
+
+/**
+ * Work the map's first render would otherwise do, done ahead while the browser is idle (WP 5.9,
+ * NFR-11): milsymbol's set-up, then Leaflet's, one step per call. Returns false when there is
+ * nothing left.
+ */
+export const warmUp: () => boolean = createWarmUp()
+
+/** The warm-up's steps, each once; holds only whether Leaflet's step has run (no session data). */
+function createWarmUp(): () => boolean {
+  let leafletDone = false
+  return () => {
+    if (warmSymbols()) return true
+    if (leafletDone) return false
+    leafletDone = true
+    warmLeaflet()
+    return true
+  }
 }
 
 export default MapView

@@ -199,7 +199,7 @@ function AppRoutes({
   // own session, so unread counts per room (PLY-11) stay per pane.
   const workspace = (
     <UnreadProvider>
-      {/* Every role has the map room (§3 rule 18): its chunk loads while the browser is idle. */}
+      {/* Every role has the map room (§3 rule 18): its chunk loads at once, warmed up when idle. */}
       <MapPreload />
       <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
     </UnreadProvider>

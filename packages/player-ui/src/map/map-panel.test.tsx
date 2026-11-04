@@ -6,7 +6,7 @@ import { createElement } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MapPanelCore, rowKeyTarget } from './map-panel.tsx'
 import type { MapPanelCoreProps } from './map-panel.tsx'
-import { createSymbolCache } from './symbols.ts'
+import { createSymbolCache, sharedSymbols, warmSymbols } from './symbols.ts'
 import type { MapTiles } from './tiles.tsx'
 import {
   assetBounds,
@@ -141,6 +141,20 @@ describe('symbols (milsymbol, NFR-7)', () => {
     // A code milsymbol does not know still draws a frame.
     const unknown = symbols.image('SFGPZZZZZZ-----')
     expect(unknown.url).toContain('svg')
+  })
+})
+
+describe('the symbols’ warm-up (WP 5.9, NFR-11)', () => {
+  it('draws a few symbols into the shared cache, a step per call, then stops', () => {
+    const before = sharedSymbols.size
+    let steps = 0
+    while (warmSymbols()) steps++
+    expect(steps).toBeGreaterThan(0)
+    expect(steps).toBeLessThanOrEqual(3)
+    expect(sharedSymbols.size).toBeGreaterThanOrEqual(Math.min(before + 1, 3))
+    expect(warmSymbols()).toBe(false)
+    // Drawn once: the cache answers with the same image.
+    expect(sharedSymbols.image('SFGPUCI----K---')).toBe(sharedSymbols.image('SFGPUCI----K---'))
   })
 })
 

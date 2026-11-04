@@ -1319,6 +1319,10 @@ class Store implements SessionStore {
     let entry = this.roomEntries.get(roomId)
     if (entry === undefined) {
       entry = this.createRoom(roomId)
+      // A map room is watched for its world state from its first join, whoever joins it (the
+      // online list joins every room): small pages of up to 500 KB messages, only the newest
+      // state kept, and the state found by the time the map is opened (WP 5.9, NFR-11).
+      entry.world = this.docOf('room', roomId)?.roomType === MAP_ROOM_TYPE
       this.roomEntries.set(roomId, entry)
       entry.joining = this.join(entry, 'initial')
     }

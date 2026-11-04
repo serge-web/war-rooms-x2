@@ -296,10 +296,61 @@ test('NFR-12: four panes; a message reaches all four within 1 s, and typing does
   expect(typing.max).toBeLessThan(100 * MARGIN)
 })
 
+// WP 5.9: the map tab's first render at 600 assets once the map's chunk has loaded and warmed up
+// (it starts loading with the login, `MapPreload`): click to the frame showing all 600 symbols,
+// the map room's MAM search included. The usual case: a player looks at the map a moment after
+// logging in. Recorded in plan/reviews/phase-5-performance.md.
+test('NFR-11: a world state of 600 assets renders on the map in under 1 s, the map preloaded', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await loadScale(page, './', { messages: 200, worldAssets: 600 })
+  const chunks = Promise.all([
+    page.waitForResponse(/\/leaflet-map-[\w-]+\.js$/),
+    page.waitForResponse(/\/symbols-[\w-]+\.js$/),
+  ])
+  await asUmpire(page)
+  await chunks
+  // The warm-up takes one step per idle period (lazy.tsx); six idle periods see it done.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let periods = 0
+        const next = () => {
+          periods++
+          if (periods >= 6) resolve()
+          else requestIdleCallback(next)
+        }
+        requestIdleCallback(next)
+      }),
+  )
+  const SYMBOLS = 'img.wrx-map__symbol'
+  const preloaded = await timeToFrame(
+    page,
+    'map-600-preloaded',
+    { click: '.flexlayout__layout_main [role="tab"][aria-label="Map"]' },
+    { selector: SYMBOLS, count: 600 },
+  )
+  await expect(page.locator(SYMBOLS)).toHaveCount(600)
+  await record(testInfo, [
+    {
+      name: 'map tab, first render, map preloaded (600 assets)',
+      value: preloaded,
+      unit: 'ms',
+      target: 1000,
+    },
+  ])
+  expect(preloaded).toBeLessThan(1000 * MARGIN)
+})
+
 // WP 5.5: a world state of 600 assets on the map (NFR-11), to the frame that shows all 600
-// symbols. Cold: the map tab's first render, which also loads the map's chunk and pages back
-// through MAM for the state. Live: a new 600-asset state from the admin, every asset a new one,
-// from the send to the frame that shows it. Recorded in plan/reviews/phase-5-security-notes.md.
+// symbols. Cold: the map tab's first render as soon as the workspace shows its tabs, which may
+// also wait for the map's chunk, and for the map room's join and MAM search while the mock
+// serves every other room's join. Live: a new 600-asset state from the admin, every asset a new
+// one, from the send to the frame that shows it. Recorded in plan/reviews/phase-5-performance.md.
 test('NFR-11: a world state of 600 assets renders on the map in under 1 s', async ({
   page,
   context,
@@ -370,7 +421,12 @@ test('NFR-11: a world state of 600 assets renders on the map in under 1 s', asyn
   await expect(page.getByText('World state for turn 2: 600 assets')).toBeVisible()
 
   await record(testInfo, [
-    { name: 'map tab, cold render (600 assets)', value: cold, unit: 'ms', target: 1000 },
+    {
+      name: 'map tab, cold render right after login (600 assets)',
+      value: cold,
+      unit: 'ms',
+      target: 1000,
+    },
     {
       name: 'new 600-asset world state, live, to rendered',
       value: live,
