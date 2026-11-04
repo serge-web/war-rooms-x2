@@ -21,6 +21,7 @@ import type {
   Recovery,
   RoomJid,
   RoomMessage,
+  SendOptions,
   Services,
   Session,
   TransportError,
@@ -184,9 +185,13 @@ class MockMuc implements MucApi {
     return result
   }
 
-  send = async (room: RoomJid, body: string): Outcome<{ readonly stanzaId: string }> => {
+  send = async (
+    room: RoomJid,
+    body: string,
+    options?: SendOptions,
+  ): Outcome<{ readonly stanzaId: string }> => {
     const stanza = messageStanza(this.caller.nextId(), room, body)
-    if (!messageWithinCap(stanza)) {
+    if (!messageWithinCap(stanza, options?.maxBytes)) {
       return err('too-large', `message stanza is ${utf8Bytes(stanza)} bytes, over the cap`)
     }
     const r = await this.caller.call({ op: 'muc.send', args: [room, body] })

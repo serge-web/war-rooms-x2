@@ -2,7 +2,7 @@
 // store's `{data, status, error}` snapshot unchanged. Hooks that need a node or room acquire it
 // inside `subscribe` and release it in the cleanup, so React StrictMode's double mount
 // balances, and the store's deferred release absorbs the remount without network churn.
-import { effectiveAccess, safeNodeName } from '@wrx/domain'
+import { effectiveAccess, postingPaused, safeNodeName } from '@wrx/domain'
 import type {
   AccessInput,
   AccessMatrix,
@@ -18,11 +18,13 @@ import type {
   Snapshot,
   StoreStatus,
   TimelineEntry,
+  WorldStateView,
 } from '@wrx/domain'
 import type {
   Asset,
   Force,
   GameSetup,
+  GameState,
   Objectives,
   Retired,
   Role,
@@ -120,6 +122,42 @@ export function useObjectives(forceId: string): Snapshot<Objectives | undefined>
 export function useAsset(assetId: string): Snapshot<Asset | undefined> {
   const node = safeNodeName('asset', assetId)
   return useStoreSnapshot((s) => s.asset(assetId), acquireNode(node), `asset:${assetId}`)
+}
+
+/**
+ * The turn state (D7, PLY-55): `data` is `{turn, phase}` once `game-state` is read, undefined
+ * before a first publish; live as the admin advances it.
+ */
+export function useGameState(): Snapshot<GameState | undefined> {
+  return useStoreSnapshot(
+    (s) => s.gameState(),
+    (s) => s.acquire('game-state'),
+    'game-state',
+  )
+}
+
+/**
+ * PLY-56: posting is paused for this pane's role, because the game is in adjudication and the
+ * role is outside the White Force. Advisory (R27). Read from `me()`, so the admin's preview as a
+ * role (ADM-30) is paused as that role is.
+ */
+export function usePostingPaused(): boolean {
+  const me = useMe().data
+  const state = useGameState().data
+  return postingPaused(me, state)
+}
+
+/**
+ * The map room's world state (D25, PLY-58, PLY-59), joining the room while mounted: the newest
+ * valid world-state message from the admin's real JID, found by paging back through MAM and
+ * replaced live; anyone else's is ignored. `data.none` says the admin has published none yet.
+ */
+export function useWorldState(roomId: string): Snapshot<WorldStateView | undefined> {
+  return useStoreSnapshot(
+    (s) => s.worldState(roomId),
+    (s) => s.acquireWorldState(roomId),
+    `world-state:${roomId}`,
+  )
 }
 
 /** Announcements, oldest first (PLY-37, PLY-38). */

@@ -2,6 +2,7 @@
 // the key, so each server, or each mock deployment, has its own draft (mock-host's
 // `names.storageKey`). Reading and writing go through a `DraftPersistence`, so tests inject one.
 import {
+  DESIGN_FILE_VERSION,
   convertDesignV1,
   designFileSchema,
   designFileV1Schema,
@@ -117,6 +118,19 @@ function migrateDraftV1(stored: z.infer<typeof storedDraftV1Schema>): Draft {
   return draftFromDesign(design, { publishedRoleIds, publishedForceIds })
 }
 
+/**
+ * A draft saved while design files were version 2 holds a version 2 design: version 3 without a
+ * world state (WP 5.6), so it is read as version 3. A world state is never part of the design
+ * draft; the admin's world-state draft is kept apart (ADM-45).
+ */
+function withDesignVersion3(json: unknown): unknown {
+  if (typeof json !== 'object' || json === null || !('design' in json)) return json
+  const design = json.design
+  if (typeof design !== 'object' || design === null || !('schemaVersion' in design)) return json
+  if (design.schemaVersion !== 2 || 'worldState' in design) return json
+  return { ...json, design: { ...design, schemaVersion: DESIGN_FILE_VERSION } }
+}
+
 /** Reads a saved draft; fails on text that is not one, without throwing. */
 export function parseStoredDraft(text: string): Result<Draft, string> {
   let json: unknown
@@ -135,7 +149,7 @@ export function parseStoredDraft(text: string): Result<Draft, string> {
       }
     }
   }
-  const parsed = storedDraftSchema.safeParse(json)
+  const parsed = storedDraftSchema.safeParse(withDesignVersion3(json))
   if (!parsed.success) {
     return { ok: false, error: `the saved draft is not readable: ${z.prettifyError(parsed.error)}` }
   }

@@ -8,6 +8,7 @@ import {
   sampleDesignWithWhiteCell,
   templatedDesign,
   tid,
+  withSampleMapRoom,
 } from '@wrx/schemas/fixtures'
 import { describe, expect, it } from 'vitest'
 import { DOMAIN, emptyView, jid, publishedView, withNode } from './fixtures.ts'
@@ -32,6 +33,14 @@ const step = (plan: PublishPlan, id: string): PlanStep => {
   return found
 }
 const index = (plan: PublishPlan, id: string) => ids(plan).indexOf(step(plan, id).id)
+/** The id of the step publishing a force's draft objectives (a new item id, §3 rule 14). */
+const objectivesStepId = (plan: PublishPlan, force: string): string => {
+  const prefix = `doc:${nodeName.objectives(tid(force))}:admin-`
+  const found = ids(plan).filter((id) => id.startsWith(prefix))
+  if (found.length !== 1)
+    throw new Error(`${found.length} steps ${prefix}* in ${ids(plan).join(', ')}`)
+  return found[0] ?? ''
+}
 
 function edit(change: (d: DesignFile) => DesignFile): DesignFile {
   return change(sampleDesignWithWhiteCell())
@@ -79,12 +88,14 @@ describe('first publish onto an empty server', () => {
     expect(plan.vault).toBe('create')
   })
 
-  it('publishes objectives as the admin’s item, after the force and role documents', () => {
-    const objectives = step(plan, `doc:${nodeName.objectives(tid('blue'))}:admin`)
-    expect(objectives.action).toMatchObject({ type: 'publish', itemId: 'admin' })
-    expect(index(plan, `doc:${nodeName.force(tid('blue'))}:current`)).toBeLessThan(
-      index(plan, `doc:${nodeName.objectives(tid('blue'))}:admin`),
+  it('publishes objectives as a new admin item, after the force and role documents', () => {
+    const id = objectivesStepId(plan, 'blue')
+    const objectives = step(plan, id)
+    expect(objectives.action).toMatchObject({ type: 'publish' })
+    expect(objectives.action.type === 'publish' && objectives.action.itemId).toMatch(
+      /^admin-[0-9a-f]{16}$/,
     )
+    expect(index(plan, `doc:${nodeName.force(tid('blue'))}:current`)).toBeLessThan(index(plan, id))
     expect(index(plan, `doc:${nodeName.asset(tid('game-logo'))}:current`)).toBeLessThan(
       index(plan, `doc:${nodeName.force(tid('blue'))}:current`),
     )
@@ -97,15 +108,76 @@ describe('first publish onto an empty server', () => {
     }
   })
 
-  it('gives every White Force role read on objectives, none publish, and leaves open nodes without affiliations', () => {
+  it('gives White Cell publish on objectives, the White observer read, and leaves open nodes without affiliations', () => {
     const objectives = step(plan, `grant-node:${nodeName.objectives(tid('red'))}`).action
     const changes = objectives.type === 'node-access' ? objectives.changes : []
-    expect(changes).toContainEqual({ roleId: 'white-cell', access: 'read' })
-    expect(changes.filter((c) => c.access === 'publish')).toEqual([])
+    expect(changes).toContainEqual({ roleId: 'white-cell', access: 'publish' })
+    expect(changes.filter((c) => c.access === 'publish')).toEqual([
+      { roleId: 'white-cell', access: 'publish' },
+    ])
     expect(changes).toContainEqual({ roleId: 'white-observer', access: 'read' })
     expect(changes).toContainEqual({ roleId: 'red-co', access: 'read' })
     expect(ids(plan)).not.toContain('grant-node:game-setup')
     expect(ids(plan)).not.toContain(`grant-node:${nodeName.asset(tid('game-logo'))}`)
+  })
+})
+
+describe('the turn state and the map room (WP 5.2)', () => {
+  const turnStep = 'doc:game-state:current'
+  const state = (turn: number, phase: string) => JSON.stringify({ schemaVersion: 1, turn, phase })
+
+  it('a first publish sets turn 1, planning', () => {
+    const plan = planPublish(sampleDesignWithWhiteCell(), emptyView())
+    expect(step(plan, turnStep)).toMatchObject({
+      summary: 'Publish the turn state: turn 1, planning',
+      action: { type: 'publish', node: 'game-state', payload: state(1, 'planning') },
+    })
+  })
+
+  it('a later publish leaves an advanced turn alone, and plans nothing for it', () => {
+    const design = sampleDesignWithWhiteCell()
+    const advanced = withNode(publishedView(design), 'game-state', (n) => ({
+      ...n,
+      items: [{ id: 'current', payload: state(3, 'adjudication'), publisher: jid('admin') }],
+    }))
+    expect(ids(planPublish(design, advanced))).toEqual([])
+  })
+
+  it('sets turn 1 again when the item is missing or invalid', () => {
+    const design = sampleDesignWithWhiteCell()
+    for (const items of [
+      [],
+      [{ id: 'current', payload: '{"schemaVersion":1}', publisher: undefined }],
+    ]) {
+      const view = withNode(publishedView(design), 'game-state', (n) => ({ ...n, items }))
+      // A repair, not a structural change: the design version stays (§3 rule 8).
+      expect(ids(planPublish(design, view))).toEqual([turnStep])
+    }
+  })
+
+  it('provisions the map room like any room: every writer has voice, only observers are read only (D25)', () => {
+    const design = withSampleMapRoom(sampleDesignWithWhiteCell())
+    const plan = planPublish(design, emptyView())
+    expect(step(plan, `room:${ROOM.map}`).action).toMatchObject({
+      type: 'ensure-room',
+      create: true,
+    })
+    expect(step(plan, `grant-room:${ROOM.map}`).details).toEqual([
+      'Blue CO: becomes a member with voice',
+      'Red CO: becomes a member with voice',
+      'White Cell: becomes a member with voice',
+    ])
+    for (const role of ['blue-observer', 'white-observer']) {
+      const readOnly = step(plan, `read-only-grant:${role}`).action
+      expect(readOnly.type === 'read-only' && readOnly.roomIds).toContain(ROOM.map)
+    }
+    // The map room adds nobody to the vault: no read-only step for a writer.
+    expect(
+      ids(plan)
+        .filter((id) => id.startsWith('read-only-grant:'))
+        .sort(),
+    ).toEqual(['read-only-grant:blue-observer', 'read-only-grant:white-observer'])
+    expect(ids(planPublish(design, publishedView(design)))).toEqual([])
   })
 })
 
@@ -164,7 +236,7 @@ describe('idempotency (ADM-10)', () => {
 describe('changes', () => {
   const published = publishedView(sampleDesignWithWhiteCell())
 
-  it('a rename changes the room config and documents only, and bumps the version', () => {
+  it('a rename changes the room config and documents only, and keeps the version (§3 rule 8)', () => {
     const design = edit((d) => ({
       ...d,
       rooms: d.rooms.map((r) => (r.id === tid('red-hq') ? { ...r, name: 'Red headquarters' } : r)),
@@ -173,13 +245,10 @@ describe('changes', () => {
     expect(ids(plan)).toEqual([
       `room:${tid('red-hq')}`,
       `doc:${nodeName.room(tid('red-hq'))}:current`,
-      'doc:game-setup:current',
     ])
     expect(step(plan, `room:${tid('red-hq')}`).details).toEqual(['name: Red HQ → Red headquarters'])
-    expect(plan.designVersion).toBe(2)
-    expect(
-      JSON.parse((step(plan, 'doc:game-setup:current').action as { payload: string }).payload),
-    ).toMatchObject({ designVersion: 2 })
+    expect(plan.designVersion).toBeUndefined()
+    expect(plan.structural).toBe(false)
   })
 
   it('a room whose side channels drifted is reconfigured, and says which (review F6)', () => {
@@ -423,91 +492,159 @@ describe('changes', () => {
       ...n,
       affiliations: [...n.affiliations, { jid: jid('ghost'), affiliation: 'member' }],
     }))
-    expect(ids(planPublish(sampleDesignWithWhiteCell(), view))).toEqual([
-      'delete-role:ghost',
-      'doc:game-setup:current',
-    ])
+    expect(ids(planPublish(sampleDesignWithWhiteCell(), view))).toEqual(['delete-role:ghost'])
   })
 
-  it('purges objectives text removed from the draft, and republishes nothing there', () => {
+  it('plans nothing for objectives the draft does not have: what is in play stays', () => {
     const design = edit((d) => ({
       ...d,
       objectives: d.objectives.filter((o) => o.forceId !== tid('red')),
     }))
     const plan = planPublish(design, published)
-    expect(step(plan, `purge:${nodeName.objectives(tid('red'))}`).action).toEqual({
-      type: 'purge-node',
-      node: nodeName.objectives(tid('red')),
-      stray: ['admin'],
-    })
     expect(ids(plan).filter((id) => id.startsWith('doc:objectives:'))).toEqual([])
     expect(plan.warnings).toEqual([])
   })
 })
 
-describe('objectives by the admin only (D21, §3 rule 14, WP 3.5)', () => {
-  // A server published before WP 3.5: White Cell published objectives, beside the admin, on
-  // nodes keeping 10 items.
-  const before = (() => {
-    let view = publishedView(sampleDesignWithWhiteCell())
-    for (const forceId of ['blue', 'red', 'white']) {
-      view = withNode(view, nodeName.objectives(tid(forceId)), (n) => ({
-        ...n,
-        config: { ...n.config, maxItems: 10 },
-        affiliations: n.affiliations.map((a) =>
-          a.jid === jid('white-cell') ? { ...a, affiliation: 'publisher' as const } : a,
-        ),
-        items:
-          forceId === 'red'
-            ? [
-                ...n.items,
-                { id: 'white-cell', payload: '{"stale":true}', publisher: jid('white-cell') },
-              ]
-            : n.items,
-      }))
-    }
-    return view
-  })()
-  const plan = planPublish(sampleDesignWithWhiteCell(), before)
+describe('objectives edited by the White Force (D21, §3 rule 14, WP 5.8)', () => {
+  const design = sampleDesignWithWhiteCell()
+  const published = publishedView(design)
+  const RED = nodeName.objectives(tid('red'))
+  /** The server after a White Force edit during play: White Cell's newest item on Red's node. */
+  const played = withNode(published, RED, (n) => ({
+    ...n,
+    items: [
+      ...n.items,
+      { id: 'white-cell-1', payload: '{"edit":"in play"}', publisher: jid('white-cell') },
+    ],
+  }))
 
-  it('takes the White Force editor’s publisher affiliation, then purges, then republishes', () => {
-    expect(step(plan, `grant-node:${nodeName.objectives(tid('red'))}`).action).toEqual({
+  it('keeps a White Force edit made during play: a second publish plans nothing', () => {
+    expect(planPublish(design, played).steps).toEqual([])
+  })
+
+  it('compares the draft with the admin’s own item by publisher, whatever its id', () => {
+    const renamed = withNode(played, RED, (n) => ({
+      ...n,
+      items: n.items.map((i) => (i.publisher === jid('admin') ? { ...i, id: 'admin-old' } : i)),
+    }))
+    expect(planPublish(design, renamed).steps).toEqual([])
+  })
+
+  it('publishes a changed draft as a new item, never re-publishing an id, so it is the newest edit', () => {
+    const changed = edit((d) => ({
+      ...d,
+      objectives: d.objectives.map((o) =>
+        o.forceId === tid('red')
+          ? { ...o, markdown: 'New orders.', updatedAt: '2026-11-04T12:00:00.000Z' }
+          : o,
+      ),
+    }))
+    const plan = planPublish(changed, played)
+    const action = step(plan, objectivesStepId(plan, 'red')).action
+    expect(action.type).toBe('publish')
+    const itemId = action.type === 'publish' ? action.itemId : ''
+    const onServer = played.nodes.find((n) => n.node === RED)?.items.map((i) => i.id) ?? []
+    expect(onServer).not.toContain(itemId)
+    expect(itemId).toMatch(/^admin-/)
+    // White Cell's edit is not touched: max_items 1 per publisher trims only the admin's old one.
+    expect(plan.steps.some((s) => s.action.type === 'retract-item')).toBe(false)
+  })
+
+  it('publishes the draft again over an admin game-view edit, saying so', () => {
+    const edited = withNode(played, RED, (n) => ({
+      ...n,
+      items: [
+        ...n.items.filter((i) => i.publisher !== jid('admin')),
+        { id: 'admin-live', payload: '{"edit":"admin in play"}', publisher: jid('admin') },
+      ],
+    }))
+    const plan = planPublish(design, edited)
+    const draft = step(plan, objectivesStepId(plan, 'red'))
+    expect(draft.details).toEqual([
+      'The draft differs from the admin’s item on the server; it becomes the newest edit',
+    ])
+  })
+
+  it('a role leaving the White Force loses publish first, then its edits are retracted', () => {
+    const moved = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) =>
+        r.loginName === 'white-cell' ? { ...r, forceId: tid('blue') } : r,
+      ),
+    }))
+    const plan = planPublish(moved, played)
+    const retract = step(plan, `retract:${RED}:white-cell-1`)
+    expect(retract.action).toEqual({ type: 'retract-item', node: RED, itemId: 'white-cell-1' })
+    expect(retract.group).toBe('removals')
+    expect(retract.summary).toContain('White Cell')
+    expect(retract.details[0]).toContain('no longer in the White Force')
+    expect(index(plan, `revoke-node:${RED}`)).toBeLessThan(index(plan, retract.id))
+    // No confirmation of its own: the move is the admin's decision (F9 works it out from the
+    // action, and only a template's retraction is confirmed).
+    expect(stepConfirmation(retract.action)).toBeUndefined()
+    expect(stepConfirmation({ type: 'retract-item', node: 'templates', itemId: 'x' })).toBe(
+      'template:x',
+    )
+  })
+
+  it('a deleted role’s edits are retracted after the role is deleted', () => {
+    const deleted = edit((d) => ({
+      ...d,
+      roles: d.roles.filter((r) => r.loginName !== 'white-cell'),
+      rooms: d.rooms.map((room) => ({
+        ...room,
+        participants: room.participants.filter((p) => p.id !== tid('white-cell')),
+      })),
+    }))
+    const plan = planPublish(deleted, played)
+    const retract = step(plan, `retract:${RED}:white-cell-1`)
+    expect(retract.details[0]).toContain('is deleted')
+    expect(index(plan, 'delete-role:white-cell')).toBeLessThan(index(plan, retract.id))
+  })
+
+  it('a White Force role made an observer becomes a reader, and keeps its edits', () => {
+    const observer = edit((d) => ({
+      ...d,
+      roles: d.roles.map((r) => (r.loginName === 'white-cell' ? { ...r, isObserver: true } : r)),
+    }))
+    const plan = planPublish(observer, played)
+    expect(step(plan, `grant-node:${RED}`).action).toEqual({
       type: 'node-access',
-      node: nodeName.objectives(tid('red')),
+      node: RED,
       changes: [{ roleId: 'white-cell', access: 'read' }],
     })
-    expect(step(plan, `purge:${nodeName.objectives(tid('red'))}`).action).toMatchObject({
-      stray: ['white-cell'],
-    })
-    expect(index(plan, `grant-node:${nodeName.objectives(tid('red'))}`)).toBeLessThan(
-      index(plan, `purge:${nodeName.objectives(tid('red'))}`),
-    )
-    expect(index(plan, `purge:${nodeName.objectives(tid('red'))}`)).toBeLessThan(
-      index(plan, `doc:${nodeName.objectives(tid('red'))}:admin`),
-    )
-    // The admin's item is unchanged, but the purge takes it too, so it is published again.
-    expect(step(plan, `doc:${nodeName.objectives(tid('red'))}:admin`).action).toMatchObject({
-      itemId: 'admin',
-    })
-    expect(step(plan, `node:${nodeName.objectives(tid('red'))}`).details).toEqual([
-      'maxItems: 10 → 1',
-    ])
+    expect(plan.steps.some((s) => s.action.type === 'retract-item')).toBe(false)
   })
 
-  it('purges only nodes holding an item that is not the admin’s', () => {
-    expect(ids(plan).filter((id) => id.startsWith('purge:'))).toEqual([
-      `purge:${nodeName.objectives(tid('red'))}`,
-    ])
-    expect(ids(plan)).not.toContain(`doc:${nodeName.objectives(tid('blue'))}:admin`)
+  it('leaves alone items whose publisher the server does not report, and the admin’s', () => {
+    const anonymous = withNode(published, RED, (n) => ({
+      ...n,
+      items: [...n.items, { id: 'who-1', payload: '{}', publisher: undefined }],
+    }))
+    expect(planPublish(design, anonymous).steps).toEqual([])
   })
 
-  it('plans nothing on a second publish', () => {
-    const after = withNode(
-      publishedView(sampleDesignWithWhiteCell()),
-      nodeName.objectives(tid('red')),
-      (n) => n,
-    )
-    expect(planPublish(sampleDesignWithWhiteCell(), after).steps).toEqual([])
+  it('corrects a server published under WP 3.5: White Cell publishes again, the admin’s item stays', () => {
+    // WP 3.5 kept the admin's item under the fixed id `admin`, and White Cell read only.
+    let before = published
+    for (const forceId of ['blue', 'red', 'white']) {
+      before = withNode(before, nodeName.objectives(tid(forceId)), (n) => ({
+        ...n,
+        affiliations: n.affiliations.map((a) =>
+          a.jid === jid('white-cell') ? { ...a, affiliation: 'member' as const } : a,
+        ),
+        items: n.items.map((i) => ({ ...i, id: 'admin' })),
+      }))
+    }
+    const plan = planPublish(design, before)
+    expect(step(plan, `grant-node:${RED}`).action).toEqual({
+      type: 'node-access',
+      node: RED,
+      changes: [{ roleId: 'white-cell', access: 'publish' }],
+    })
+    // The same text under the old id is the admin's own item: nothing to republish.
+    expect(ids(plan).filter((id) => id.startsWith('doc:objectives:'))).toEqual([])
   })
 })
 
@@ -571,7 +708,231 @@ describe('accounts against the registered list (security review F3)', () => {
       ...view,
       registered: view.registered.filter((j) => j !== jid('red-co')),
     })
-    expect(ids(plan)).toEqual(['account:red-co', 'doc:game-setup:current'])
+    expect(ids(plan)).toEqual(['account:red-co'])
+    expect(plan.designVersion).toBeUndefined()
+  })
+})
+
+describe('the design version moves only on structural changes (§3 rule 8, PLY-5)', () => {
+  const published = publishedView(sampleDesignWithWhiteCell())
+  const versionOf = (plan: PublishPlan) =>
+    plan.steps.some((s) => s.id === 'doc:game-setup:current')
+      ? (
+          JSON.parse(
+            (step(plan, 'doc:game-setup:current').action as { payload: string }).payload,
+          ) as { designVersion: number }
+        ).designVersion
+      : undefined
+  const role = (login: string) => {
+    const found = sampleDesignWithWhiteCell().roles.find((r) => r.loginName === login)
+    if (found === undefined) throw new Error(login)
+    return found
+  }
+
+  it.each<[string, (d: DesignFile) => DesignFile]>([
+    ['a force removed', (d) => ({ ...d, forces: d.forces.filter((f) => f.id !== tid('red')) })],
+    [
+      'a role added',
+      (d) => ({
+        ...d,
+        roles: [...d.roles, { ...role('red-co'), id: tid('red-xo'), loginName: 'red-xo' }],
+      }),
+    ],
+    ['a role removed', (d) => ({ ...d, roles: d.roles.filter((r) => r.loginName !== 'red-co') })],
+    [
+      'a role moved to another force',
+      (d) => ({
+        ...d,
+        roles: d.roles.map((r) => (r.loginName === 'blue-co' ? { ...r, forceId: tid('red') } : r)),
+      }),
+    ],
+    [
+      'a role becoming an observer',
+      (d) => ({
+        ...d,
+        roles: d.roles.map((r) => (r.loginName === 'white-cell' ? { ...r, isObserver: true } : r)),
+      }),
+    ],
+    [
+      'a room added',
+      (d) => ({
+        ...d,
+        rooms: [...d.rooms, { ...d.rooms[0]!, id: tid('press'), name: 'Press', order: 9 }],
+      }),
+    ],
+    ['a room removed', (d) => ({ ...d, rooms: d.rooms.filter((r) => r.id !== tid('red-hq')) })],
+    [
+      'a room’s participants changed',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) =>
+          r.id === tid('red-hq')
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: tid('blue-co'), access: 'read' as const },
+                ],
+              }
+            : r,
+        ),
+      }),
+    ],
+    [
+      'a participant’s access changed',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) =>
+          r.id === tid('red-hq')
+            ? { ...r, participants: r.participants.map((p) => ({ ...p, access: 'read' as const })) }
+            : r,
+        ),
+      }),
+    ],
+  ])('%s: the next version, and the plan says so', (_, change) => {
+    const plan = planPublish(edit(change), published)
+    expect(plan.errors).toEqual([])
+    expect(plan.designVersion).toBe(2)
+    expect(plan.structural).toBe(true)
+    expect(versionOf(plan)).toBe(2)
+    expect(ids(plan).at(-1)).toBe('doc:game-setup:current')
+  })
+
+  it.each<[string, (d: DesignFile) => DesignFile, boolean]>([
+    ['the game renamed', (d) => ({ ...d, game: { ...d.game, name: 'Renamed' } }), true],
+    ['the briefing edited', (d) => ({ ...d, game: { ...d.game, briefing: '## New' } }), true],
+    [
+      'the game theme changed',
+      (d) => ({
+        ...d,
+        game: { ...d.game, theme: { ...d.game.theme, tokens: { primary: '#000000' } } },
+      }),
+      true,
+    ],
+    [
+      'a force renamed and recoloured',
+      (d) => ({
+        ...d,
+        forces: d.forces.map((f) =>
+          f.id === tid('red') ? { ...f, name: 'Crimson', colour: '#7f1d1d' } : f,
+        ),
+      }),
+      false,
+    ],
+    [
+      'a role renamed',
+      (d) => ({
+        ...d,
+        roles: d.roles.map((r) => (r.loginName === 'red-co' ? { ...r, name: 'Red Boss' } : r)),
+      }),
+      false,
+    ],
+    [
+      'objectives edited',
+      (d) => ({
+        ...d,
+        objectives: d.objectives.map((o) =>
+          o.forceId === tid('red')
+            ? { ...o, markdown: 'Hold.', updatedAt: '2026-11-04T10:00:00Z' }
+            : o,
+        ),
+      }),
+      false,
+    ],
+    // Not structural since Nov 4, 2026: a force with no roles changes no role's access, and
+    // order never counts (§3 rule 8).
+    [
+      'a force added',
+      (d) => ({
+        ...d,
+        forces: [
+          ...d.forces,
+          { ...d.forces[0]!, id: tid('green'), name: 'Green', order: 9, isUmpire: false },
+        ],
+      }),
+      false,
+    ],
+    [
+      'forces reordered',
+      (d) => ({
+        ...d,
+        forces: d.forces.map((f) => (f.id === tid('red') ? { ...f, order: 9 } : f)),
+      }),
+      false,
+    ],
+    [
+      'roles reordered',
+      (d) => ({
+        ...d,
+        roles: d.roles.map((r) => (r.loginName === 'red-co' ? { ...r, order: 9 } : r)),
+      }),
+      false,
+    ],
+    [
+      'rooms reordered',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) => (r.id === tid('blue-hq') ? { ...r, order: 9 } : r)),
+      }),
+      false,
+    ],
+    [
+      'a participant entry that changes no role’s access',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) =>
+          r.id === tid('red-hq')
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: tid('red-co'), access: 'write' as const },
+                ],
+              }
+            : r,
+        ),
+      }),
+      false,
+    ],
+    [
+      'participant entries listed in another order',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) => ({ ...r, participants: [...r.participants].reverse() })),
+      }),
+      false,
+    ],
+  ])('%s: the version stays', (_, change, gameChanged) => {
+    const plan = planPublish(edit(change), published)
+    expect(plan.errors).toEqual([])
+    expect(plan.structural).toBe(false)
+    // The game setup is published again only when it changed, at the version it has.
+    expect(plan.designVersion).toBe(gameChanged ? 1 : undefined)
+    expect(versionOf(plan)).toBe(gameChanged ? 1 : undefined)
+    if (gameChanged) {
+      expect(step(plan, 'doc:game-setup:current').summary).toBe(
+        'Publish the game setup, keeping design version 1',
+      )
+    }
+  })
+
+  it('templates published: the version stays', () => {
+    const design = templatedDesign()
+    const plan = planPublish(design, publishedView({ ...design, templates: [] }))
+    expect(plan.errors).toEqual([])
+    expect(ids(plan).some((id) => id.startsWith('doc:templates:'))).toBe(true)
+    expect(plan.structural).toBe(false)
+    expect(plan.designVersion).toBeUndefined()
+  })
+
+  it('a structural change after a text-only one is the next version', () => {
+    // Published at version 1, the draft also renamed: one version up, not two.
+    const design = edit((d) => ({
+      ...d,
+      game: { ...d.game, name: 'Renamed' },
+      rooms: d.rooms.filter((r) => r.id !== tid('red-hq')),
+    }))
+    expect(planPublish(design, published).designVersion).toBe(2)
   })
 })
 
@@ -605,10 +966,25 @@ describe('a publish that did not finish (the marker)', () => {
   })
 
   it('ignores a marker the published version has passed', () => {
+    const design = edit((d) => ({ ...d, game: { ...d.game, designVersion: 2 } }))
+    const view = publishedView(design, {
+      marker: { format: 'wrx1-publish-pending', designVersion: 1, startedAt: '' },
+    })
+    expect(planPublish(design, view).steps).toEqual([])
+  })
+
+  it('a marker at the published version is pending: a publish that kept the version (rule 8)', () => {
     const view = publishedView(sampleDesignWithWhiteCell(), {
       marker: { format: 'wrx1-publish-pending', designVersion: 1, startedAt: '' },
     })
-    expect(planPublish(sampleDesignWithWhiteCell(), view).steps).toEqual([])
+    const plan = planPublish(sampleDesignWithWhiteCell(), view)
+    expect(ids(plan)).toEqual([
+      'read-only-revoke:blue-observer',
+      'read-only-revoke:white-observer',
+      'doc:game-setup:current',
+    ])
+    expect(plan.designVersion).toBe(1)
+    expect(plan.structural).toBe(false)
   })
 })
 

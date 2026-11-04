@@ -1,9 +1,10 @@
 // The effective-access matrix (ADM-9): rooms × roles, write / read / none, computed by
-// `effectiveAccess` (via `useDesignAccess`) from the draft, so it is live before publishing.
-// Also lists every design check, since errors block publishing (WP 2.3).
-import type { AccessCell, AccessMatrix as Matrix, AccessReason } from '@wrx/domain'
+// `effectiveAccess` (via `useDesignAccess`) from the draft, so it is live before publishing. It
+// highlights the two rule 4 consequences (`accessHighlights`), in the cells and in a list above
+// the table. Also lists every design check, since errors block publishing (WP 2.3).
+import type { AccessCell, AccessHighlight, AccessMatrix as Matrix, AccessReason } from '@wrx/domain'
 import { useDesignAccess } from '@wrx/hooks'
-import { byOrderThenId } from '@wrx/domain'
+import { accessHighlights, byOrderThenId } from '@wrx/domain'
 import type { DesignFile, DesignIssue } from '@wrx/schemas'
 import { templatesFor } from '@wrx/templates'
 import { IssueList, Notice, SectionFrame } from '../components/index.ts'
@@ -21,14 +22,22 @@ const REASON_LABEL: Readonly<Record<AccessReason, string>> = Object.freeze({
 
 const ACCESS_LABEL = Object.freeze({ write: 'Write', read: 'Read', none: 'None' })
 
+const HIGHLIGHT_LABEL: Readonly<Record<AccessHighlight['kind'], string>> = Object.freeze({
+  'white-observer-limited': 'limited by its role entries elsewhere',
+  'read-entry-ignored': 'the read entry here does not apply',
+})
+
 export interface AccessMatrixCoreProps {
   readonly matrix: Matrix
   /** For display names; ids are shown for anything it does not name. */
   readonly design: Pick<DesignFile, 'forces' | 'roles' | 'rooms'>
+  /** The rule 4 consequences to highlight in the cells (ADM-9); none by default. */
+  readonly highlights?: readonly AccessHighlight[]
 }
 
 /** The matrix as a table: a header row of forces, one of roles, then a row per room. */
-export function AccessMatrixCore({ matrix, design }: AccessMatrixCoreProps) {
+export function AccessMatrixCore({ matrix, design, highlights = [] }: AccessMatrixCoreProps) {
+  const flagged = new Map(highlights.map((h) => [`${h.roomId}|${h.roleId}`, h.kind]))
   const roles = new Map(design.roles.map((r) => [r.id, r]))
   const forces = new Map(design.forces.map((f) => [f.id, f]))
   const roomName = (id: string) => design.rooms.find((r) => r.id === id)?.name ?? id
@@ -89,7 +98,11 @@ export function AccessMatrixCore({ matrix, design }: AccessMatrixCoreProps) {
             <tr key={roomId}>
               <th scope="row">{roomName(roomId)}</th>
               {matrix.roleIds.map((roleId) => (
-                <Cell key={roleId} cell={matrix.cells.get(roomId)?.get(roleId)} />
+                <Cell
+                  key={roleId}
+                  cell={matrix.cells.get(roomId)?.get(roleId)}
+                  highlight={flagged.get(`${roomId}|${roleId}`)}
+                />
               ))}
             </tr>
           ))}
@@ -99,11 +112,23 @@ export function AccessMatrixCore({ matrix, design }: AccessMatrixCoreProps) {
   )
 }
 
-function Cell({ cell }: { readonly cell: AccessCell | undefined }) {
+function Cell({
+  cell,
+  highlight,
+}: {
+  readonly cell: AccessCell | undefined
+  readonly highlight: AccessHighlight['kind'] | undefined
+}) {
   const access = cell?.access ?? 'none'
   const reasons = cell?.reasons ?? []
   return (
-    <td className={`wrx-admin-access wrx-admin-access-${access}`} data-access={access}>
+    <td
+      className={`wrx-admin-access wrx-admin-access-${access}${
+        highlight === undefined ? '' : ' wrx-admin-access-highlight'
+      }`}
+      data-access={access}
+      data-highlight={highlight}
+    >
       <span className="wrx-admin-access-value">{ACCESS_LABEL[access]}</span>
       {reasons.length > 0 && (
         <span className="wrx-admin-access-why">
@@ -111,7 +136,56 @@ function Cell({ cell }: { readonly cell: AccessCell | undefined }) {
           ({reasons.map((r) => REASON_LABEL[r]).join(', ')})
         </span>
       )}
+      {highlight !== undefined && (
+        <span className="wrx-admin-access-note">Rule 4: {HIGHLIGHT_LABEL[highlight]}</span>
+      )}
     </td>
+  )
+}
+
+/**
+ * ADM-9: the two rule 4 consequences in this design, one line per role, above the matrix whose
+ * cells they mark. Nothing when the design has neither.
+ */
+export function AccessHighlightsCore({
+  highlights,
+  design,
+}: {
+  readonly highlights: readonly AccessHighlight[]
+  readonly design: Pick<DesignFile, 'roles' | 'rooms'>
+}) {
+  if (highlights.length === 0) return null
+  const roleName = (id: string) => design.roles.find((r) => r.id === id)?.name ?? id
+  const roomName = (id: string) => design.rooms.find((r) => r.id === id)?.name ?? id
+  const byRole = (kind: AccessHighlight['kind']) => {
+    const out = new Map<string, string[]>()
+    for (const h of highlights) {
+      if (h.kind !== kind) continue
+      out.set(h.roleId, [...(out.get(h.roleId) ?? []), roomName(h.roomId)])
+    }
+    return [...out]
+  }
+  const limited = byRole('white-observer-limited')
+  const ignored = byRole('read-entry-ignored')
+  return (
+    <Notice tone="warning" title="Two rules to check (§3 rule 4).">
+      <ul className="wrx-admin-access-highlights" aria-label="Rule 4 consequences">
+        {limited.map(([roleId, rooms]) => (
+          <li key={`limited-${roleId}`} data-highlight="white-observer-limited">
+            <strong>{roleName(roleId)}</strong> does not see {rooms.join(', ')}: a White Force
+            observer named in any role entry sees only the rooms whose entries name it, not every
+            room.
+          </li>
+        ))}
+        {ignored.map(([roleId, rooms]) => (
+          <li key={`ignored-${roleId}`} data-highlight="read-entry-ignored">
+            <strong>{roleName(roleId)}</strong> writes in {rooms.join(', ')} although an entry there
+            says read: a per-room read entry does not apply to White Force roles that are not
+            observers. Make the role an observer to make it read only.
+          </li>
+        ))}
+      </ul>
+    </Notice>
   )
 }
 
@@ -210,7 +284,13 @@ export function TemplateMatrixCore({
 /** The matrix over a design, through `useDesignAccess` (NFR-18: the hook half). */
 export function AccessMatrix({ design }: { readonly design: DesignFile }) {
   const matrix = useDesignAccess(design)
-  return <AccessMatrixCore matrix={matrix} design={design} />
+  return (
+    <AccessMatrixCore
+      matrix={matrix}
+      design={design}
+      highlights={accessHighlights(design, matrix)}
+    />
+  )
 }
 
 export interface AccessSectionCoreProps {
@@ -221,6 +301,7 @@ export interface AccessSectionCoreProps {
 
 export function AccessSectionCore({ matrix, design, validation }: AccessSectionCoreProps) {
   const roomName = (id: string) => design.rooms.find((r) => r.id === id)?.name ?? id
+  const highlights = accessHighlights(design, matrix)
   const problems: DesignIssue[] = matrix.problems.map((p) => ({
     severity: 'error',
     path: `rooms:${p.roomId}`,
@@ -234,11 +315,13 @@ export function AccessSectionCore({ matrix, design, validation }: AccessSectionC
           Who can use each room once published. Precedence, weakest first: a force entry, a role
           entry, White Force membership (write everywhere), observer status (read only, always). A
           White Force observer sees only the rooms that name it in a role entry, or every room when
-          none does. You, the umpire, write in every room.
+          none does. You, the umpire, write in every room. Every role can read every room&rsquo;s
+          name, even of rooms it cannot use.
         </p>
       }
     >
-      <AccessMatrixCore matrix={matrix} design={design} />
+      <AccessHighlightsCore highlights={highlights} design={design} />
+      <AccessMatrixCore matrix={matrix} design={design} highlights={highlights} />
       <h3>Templates</h3>
       <p className="wrx-admin-hint">
         Which templates each role may use where it can write: its force&rsquo;s entry plus its own.

@@ -19,7 +19,7 @@ War Rooms X1 (WRX1) is a browser-based wargaming tool whose v1 delivers admin-de
 | Admin | The XMPP server's `admin` account: the sole game designer and controller, and in play the umpire, a member of the White Force |
 | Force | A side in the game; a PubSub document plus its roles' room and node affiliations |
 | Role | A player position; one XMPP user account |
-| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4). Every White Force role reads every force's objectives, but only the admin edits the game, objectives included (D21) |
+| White Force | The force with the umpire flag: the admin (the umpire) and other control roles. Its non-observer roles write in every room; its observers are read only (§3 rule 4). Every White Force role reads every force's objectives; the admin and its non-observer roles edit them during play (D21) |
 | GUID | A random, lowercase UUID: the id of every force, role, room and asset (§3 rule 1) |
 | Login name | The readable name a player types to log in as a role; the role's XMPP account name, separate from its GUID (§3 rule 1) |
 | Observer | A role that can read, but not post in, its rooms |
@@ -40,7 +40,7 @@ Twenty-six decisions frame v1; each has a consequence the requirements below dep
 | D3 | The server's `admin` account is the game admin | Admin rights come from server-side authorisation, not a UI username check |
 | D4 | v1 room types: chat and map; others anticipated | A room-type registry is mandatory from v1 (ARC-5) |
 | D5 | One XMPP account per role | Several people may log in to one role; they are indistinguishable to the server |
-| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device. It survives theme and text edits, but structural design changes (forces, roles, rooms, participants) reset it to the default (PLY-5) |
+| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device. It survives theme and text edits, but structural design changes (rooms added or removed, or a role's access to a room changing) reset it to the default (PLY-5) |
 | D7 | Full turn model in v1: numbered turns, each with planning then adjudication phases; only the admin advances them | State in the `game-state` node. Phase-dependent behaviour is advisory only (client-side), consistent with D2 |
 | D8 | White Force (all rooms) and observers (read-only) | The admin is the umpire, in the White Force; White Force roles that are not observers are MUC members of every room; an observer is a MUC `visitor` in moderated rooms, enforced by ejabberd's stored role (ADM-37) |
 | D9 | Participants per room by force or role, mixed | Force entries expand to roles at provisioning; re-sync on change |
@@ -100,7 +100,7 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
 6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents by the author's login name, kept live by subscription; a deleted role's or force's name comes from its `retired` record (rule 1).
 7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
-8. `game-setup.designVersion` SHALL be a positive integer that publishing increments only on structural design changes: adding, removing or moving forces, roles or rooms, or changing room participants. Theme, text, briefing, objectives and template changes SHALL NOT increment it. It keys saved layouts (PLY-5).
+8. `game-setup.designVersion` SHALL be a positive integer that publishing increments only on structural design changes: a room added or removed, or any role's effective access to a room (none, read or write, under rules 4 and 5) changing. Re-ordering forces, roles or rooms SHALL NOT increment it; moving a role to another force, its observer flag, a force's White Force flag and participant entries count only through the access they change. Theme, text, briefing, objectives and template changes SHALL NOT increment it. It keys saved layouts (PLY-5).
 9. Role passwords SHALL NOT be stored in any PubSub document or design export (ADM-16, ADM-26, NFR-1).
 
 **Themes and assets**
@@ -119,14 +119,14 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 12. Assets SHALL be PNG, WebP or SVG, within a configurable size limit (default 100 KB) checked against the server's PubSub item limit (ejabberd: 250,000 bytes); SVG SHALL be sanitised on upload and rendered only via `<img>`, never inlined.
 13. Force colour (used for message authors) remains a separate force field, not a theme token.
 
-14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item, with readers showing the newest by server timestamp (the PubSub delay stamp, not the author's `updatedAt`; spike check S15). A role's items SHALL be deleted when it leaves the White Force or is deleted; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
+14. Objectives SHALL be stored per force in `objectives:<forceId>` (Markdown text, `updatedAt`, `schemaVersion`), one item per author because a publisher cannot overwrite another publisher's item. Fetched items carry no server time and the server orders items by first publish (spike check S15), so each save SHALL publish a new item with a fresh id to a node that keeps one item per publisher (`max_items` 1), and readers SHALL show the newest by server order: the last item of a fetch, or a later live event, never the author's `updatedAt`. A role's items SHALL be deleted when it leaves the White Force or is deleted; whitelist read for that force's roles, the White Force's roles and the admin, and publish by the admin and White Force roles that are not observers.
 15. `game-setup` and the game theme's assets SHALL be anonymously readable and SHALL contain nothing sensitive; every other node SHALL use whitelist access, never open. The announcements, `game-state`, `directory` and `rooms:*` nodes SHALL be readable by every role and publishable only by the admin (PLY-37, PLY-60); room names are therefore visible to every role (R24).
 
 **World state**
 
 16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
 17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
-18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a read entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); clients treat only the admin's messages as world state.
+18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a write entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); members keep voice, so the map room adds no role to the observer vault, and clients accept only the admin's messages as world state (D25, PLY-58).
 
 ## 4. Functional requirements — admin backend
 
@@ -451,7 +451,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 
 - R13 **R1 depends on ejabberd's stored-role behaviour**, which is deliberate but not an XMPP standard. Medium. Mitigation: R1 contract tests gate every ejabberd upgrade (NFR-22); fallback is Prosody with a small module, which would relax D2.
 - R14 **Enforcement depends on correct admin tooling.** A missed step (subscription left in place, observer voice not re-applied, room left unmoderated) silently leaks access or voice. Medium–High. Mitigation: ADM-35 and ADM-41, contract test C01.
-- R15 **No WebSocket stanza size cap.** WP 0.1 found no size limit on the WebSocket listener: room messages up to 64 MiB were delivered, `max_stanza_size` does not apply to it, and the \~885 KB connection drop seen earlier did not reproduce. Medium. Mitigation: the client caps (PLY-53) and the per-player rate limit, which counts messages, not bytes. Spike check S16 tests whether ejabberd's byte shapers apply to the WebSocket listener; adopt them if so. Otherwise a modified client can still post large messages; accepted for v1.
+- R15 **No WebSocket stanza size cap.** WP 0.1 found no size limit on the WebSocket listener: room messages up to 64 MiB were delivered, `max_stanza_size` does not apply to it, and the \~885 KB connection drop seen earlier did not reproduce. Medium. Mitigation: the client caps (PLY-53) and the per-player rate limit, a byte-rate shaper. Spike check S16 (WP 5.1) confirmed that it applies to WebSocket sessions: a player's sending is held to about 50 kB/s after a 300 kB burst, per connection (so about 500 kB/s for an account's ten sessions), and the admin is not limited, so 500 KB world states go through at once. The shaper slows large messages but never refuses them, so a modified client can still post large messages slowly; accepted for v1.
 - R16 **Destroying a room destroys its history.** Medium, given live editing (D23). Mitigation: ADM-40.
 - R17 **Anonymous users can list PubSub node names** (not contents). Low, accepted. Mitigation: ADM-42.
 
@@ -471,7 +471,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - R25 **Admin's world-state draft is browser-only.** Clearing storage or switching device loses unpublished edits. Medium during adjudication. Mitigation: ADM-45 indicator; server-side drafts post-v1.
 - R26 **Archive growth from full-state messages.** About 100 KB per publish at 600 assets; small at v1 scale. Low. Mitigation: snapshots plus deltas post-v1.
 - R27 **Phase rules are advisory.** A modified client can post during adjudication. Low in v1, since no orders exist.
-- R28 **Layout resets during play.** Any structural change resets every online player's layout. Low–Medium. Mitigation: notice to the user (PLY-5); admins batch structural changes.
+- R28 **Layout resets during play.** Any structural change (a room added or removed, or a role's access to a room changing, §3 rule 8) resets every online player's layout, including players whose own rooms did not change. Low–Medium. Mitigation: notice to the user (PLY-5); re-ordering and text edits never reset layouts; admins batch structural changes.
 - R29 **No session eviction.** A leaked password stays usable by sessions already open; the only remedy is deleting and recreating the role, which loses attribution of its history (ADM-14). Medium. Accepted.
 - R30 **Map needs internet in v1.** Air-gapped deployments have no base map. Medium for some customers. Accepted for v1 (D12).
 
@@ -485,7 +485,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - [x] Follow-up spike S13: failed, so ADM-37 uses the encrypted vault (§10)
 - [x] Repo visibility: repos stay public; exposure accepted (R18)
 - [x] Server certificates: chosen per install, the organisation's CA or a small internal one, so each site keeps its own security model; the scripts support both (Nov 4, 2026)
-- [ ] Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers), §10
+- [x] Spike checks S15 (PubSub item timestamps) and S16 (WebSocket byte shapers), §10: S15 failed, so objectives use a new item per edit, ordered by the server (§3 rule 14); S16 passed, and the reference shaper is kept as it is (R15)
 - [x] Welcome page: before login, via anonymous read access (D20)
 - [x] Objectives: admin-written per force, force read-only, the White Force reads all and, except its observers, may edit (D21, Nov 3, 2026)
 - [x] Spike S14: collection-level access on ejabberd failed (collections need the `dag` plugin, which no longer starts on 26.09), so force assets use two flat whitelist nodes per force (Annex B, `plan/decisions/S14.md`)
@@ -506,7 +506,7 @@ The server question is settled. These remaining checks come first in the develop
 | P4 | StanzaJS health: maintenance status, typing of ad-hoc commands, MAM and RSM, and a fallback library if needed | Sprint 1 | Claude Code / dev | ARC-12 |
 | P5 | JSON schemas for every PubSub document in §3 | Sprint 1, first | Dev team | Mock, contract suite, design import/export |
 | P6 | Retired: the plan keeps no time estimates | After P5 | Dev team | Plan |
-| P7 | Spike checks S15–S16 (§10) | Before map and objectives work | Claude Code / dev | §3 rule 14, R15 |
+| P7 | Spike checks S15–S16 (§10). **Done** (WP 5.1): S15 failed (a new item per edit, server order); S16 passed (shaper kept) | Before map and objectives work | Claude Code / dev | §3 rule 14, R15 |
 | P8 | JSON schemas for world state and `game-state` (§3 rules 16–17) | With the map work | Dev team | Mock, contract suite, map room |
 
 ## 10. Server selection spike
@@ -543,10 +543,14 @@ OpenFire, ejabberd and Prosody were each evaluated against the same pass/fail cr
 
 **Follow-up checks from the Nov 3 revision**
 
-| # | Check | Pass criterion | If it fails |
-| --- | --- | --- | --- |
-| S15 | Item timestamps | Fetched PubSub items (not only live events) carry a server timestamp usable for ordering | Order by server item order; else fall back to `updatedAt` |
-| S16 | WebSocket byte shaping | An ejabberd byte-rate shaper throttles a client sending large stanzas over WebSocket | R15 stays accepted |
+| # | Check | Pass criterion | If it fails | Outcome (WP 5.1, Nov 4, 2026) |
+| --- | --- | --- | --- | --- |
+| S15 | Item timestamps | Fetched PubSub items (not only live events) carry a server timestamp usable for ordering | Order by server item order; else fall back to `updatedAt` | **Fail.** Server item order, with a new item per edit |
+| S16 | WebSocket byte shaping | An ejabberd byte-rate shaper throttles a client sending large stanzas over WebSocket | R15 stays accepted | **Pass.** The reference shaper already applies; no config change |
+
+**S15 outcome: fail.** A fetched item holds only its id, its publisher and the payload: no delay stamp or other time, by any kind of items request, and the service offers no MAM for nodes and no entity time. ejabberd orders items by their first publish, not their last edit: a full fetch lists the oldest first, `max_items` returns the newest first, and re-publishing an item does not move it. The order held over 80 items, concurrent publishes and a restart. So the fallback applies, with a change that makes server order mean edit order: each save publishes a new item with a fresh id to a node with `max_items` 1, which ejabberd trims per publisher, leaving each author's newest edit; readers show the last item (§3 rule 14). The mock orders and trims differently and must follow the server (ARC-11, WP 5.8). The full record is internal (`plan/decisions/S15.md`).
+
+**S16 outcome: pass.** The reference config's `player` shaper, set on the c2s listener, reaches every WebSocket session: a player's single 500 KB, 1 MB and 2 MB messages took 3.6, 13.3 and 33.1 s (about 50 kB/s after the 300 kB burst), the admin's 2 MB 0.5 s, and a lower shaper gave proportionally longer times. The limit is per connection and slows rather than refuses. A shaper cannot be set on the WebSocket listener itself (ejabberd refuses to start). The shaper is kept as it is, and the deployment checks already measure it (R15). The full record is internal (`plan/decisions/S16.md`).
 
 ## 11. Mock development process
 
@@ -616,14 +620,15 @@ Nine end-to-end scenarios walk each actor through v1, SC-10 through message temp
 
 ### SC-5 Umpire monitors the game
 
-**Actor:** The admin, as umpire.
+**Actors:** The admin, as umpire; a White Force role that is not an observer.
 
 1. Logs in to the game view and sees every room.
 2. Places Red HQ and the negotiation room side by side in the workspace.
 3. Posts a clarification in Red HQ, which Red sees attributed to the umpire.
 4. Opens Red's objectives, amends one, and Red's force panel updates live.
+5. The White Force role amends Red's objectives too; Red's force panel and the umpire's show its edit live, and Red still shows it after logging in again.
 
-**Outcome:** the umpire sees all play and can adjust any force's objectives. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
+**Outcome:** the umpire, and the White Force roles that are not observers, see all play and can adjust any force's objectives; the newest edit is the one shown. **Traces to:** PLY-15, PLY-25, PLY-35, D8, D21, §3 rule 14.
 
 ### SC-6 Admin changes the game during play
 
@@ -822,7 +827,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - **Maps need internet in v1** (D12, NFR-7, NFR-9, R30).
 - **Size cap.** Map-room messages may reach 500 KB (PLY-53).
 - **Room discovery (PLY-60).** `rooms:*` readable by every role (§3 table, rule 15, R24). The draft's `rooms` collection is replaced by the existing `directory` index node, since collections do not exist on ejabberd 26.09 (S14); the draft's check S14 is therefore dropped and S15–S16 kept.
-- **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired.
+- **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired. Narrowed on Nov 4, 2026 to rooms added or removed and changes of a role's room access (see below).
 - **Objectives (D21, §3 rule 14, PLY-35, R10).** The owner chose the draft's rule over WP 3.5's: White Force roles that are not observers edit objectives again, one item per author, newest by server timestamp (S15), with cleanup when a role leaves the White Force.
 - **Kept as built:** rule 4 consequences, now highlighted in ADM-9; PLY-31, with delete-and-recreate as the eviction route (ADM-26, R29).
 - **Accepted risks:** lost vault passphrase (R22), public repos (R18). New risks R23–R30.
@@ -834,7 +839,20 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
 - Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
 - Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
+- Corrected (Nov 4, 2026, WP 5.2): §3 rule 18 said "every force as a read entry"; the forces are write entries, as D25 assumed (members keep voice, clients ignore non-admin senders, PLY-58), so the map room adds no role to the observer vault.
 - Decided (Nov 4, 2026): the design export includes a world state, imported as the admin's draft (ADM-16).
+- Decided (Nov 4, 2026): structural change narrowed: rooms added/removed or a role's room access changes (§3 rule 8, D6, R28). Re-ordering forces, roles or rooms no longer resets layouts; moving a role between forces and the observer and White Force flags count only when they change a role's effective access.
+
+Changes from WP 5.1, the follow-up checks S15 and S16 (Nov 4, 2026):
+
+- §10: both outcomes added; the open issue and P7 are closed.
+- §3 rule 14: S15 failed, so readers order objectives by the server's item order, not a delay stamp, and each save publishes a new item with a fresh id to a node keeping one item per publisher.
+- R15: the per-player rate limit is a byte-rate shaper, and S16 confirmed it applies to WebSocket sessions; no config change.
+
+Changes from WP 5.8, White Force edits objectives (Nov 4, 2026):
+
+- SC-5: a fifth step, in which a White Force role that is not an observer amends Red's objectives too, and Red shows the newest edit; a second actor.
+- Glossary, White Force: its non-observer roles edit objectives (D21), as decided on Nov 3; the line still said only the admin.
 
 ## Annex A. Message templates (built in Phase 4)
 

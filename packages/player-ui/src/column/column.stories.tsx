@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { AnnouncementsPanelCore } from './announcements.tsx'
 import { OutOfGameColumnCore } from './column.tsx'
+import { TurnPanelCore } from './turn-panel.tsx'
 import { ForcePanelCore, ObjectivesEditorCore } from './force-panel.tsx'
 
 const ITEMS = [
@@ -35,6 +36,13 @@ function Column({
   return (
     <aside style={{ width: '18rem', padding: '1rem' }} aria-label="Out-of-game column">
       <OutOfGameColumnCore
+        turn={
+          <TurnPanelCore
+            state={{ schemaVersion: 1, turn: 2, phase: admin ? 'planning' : 'adjudication' }}
+            paused={!chooses}
+            onAdvance={admin ? () => Promise.resolve(undefined) : undefined}
+          />
+        }
         announcements={
           <AnnouncementsPanelCore
             items={ITEMS}
@@ -73,6 +81,7 @@ export const Empty: Story = {
   render: () => (
     <aside style={{ width: '18rem', padding: '1rem' }} aria-label="Out-of-game column">
       <OutOfGameColumnCore
+        turn={<TurnPanelCore state={undefined} />}
         announcements={<AnnouncementsPanelCore items={[]} />}
         force={
           <section className="wrx-force-panel" aria-label="Force panel">

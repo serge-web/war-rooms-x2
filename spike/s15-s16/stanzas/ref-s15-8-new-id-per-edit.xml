@@ -1,0 +1,137 @@
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhb5-4c'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-per-edit'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#publish_model'><value>publishers</value></field><field var='pubsub#max_items'><value>1</value></field><field var='pubsub#notify_retract'><value>true</value></field><field var='pubsub#persist_items'><value>true</value></field><field var='pubsub#deliver_payloads'><value>true</value></field><field var='pubsub#notify_delete'><value>true</value></field><field var='pubsub#send_last_published_item'><value>never</value></field><field var='pubsub#itemreply'><value>publisher</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhb5-4c'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-per-edit'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhbe-4d'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN-per-edit'><affiliation jid='RUN-umpire@localhost' affiliation='publisher'/><affiliation jid='RUN-reader@localhost' affiliation='member'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhbe-4d'/>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhep-4e'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN-per-edit' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhep-4e'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='701BE073A6B3A' node='RUN-per-edit' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- admin-e1 published -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhet-4f'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='admin-e1'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"admin-e1","updatedAt":"2026-11-04T07:45:55.685Z"}</json></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhet-4f'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='admin-e1'/></publish></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhex-4g'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhex-4g'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.685Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhf0-4h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit' max_items='1'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhf0-4h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.685Z&quot;}</json></item></items><set xmlns='http://jabber.org/protocol/rsm'><count>1</count><first index='0'>2026-11-04T07:45:55.686815Z</first><last>2026-11-04T07:45:55.686815Z</last></set></pubsub></iq>
+
+<!-- umpire-e1 published -->
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhf3-4i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e1'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"umpire-e1","updatedAt":"2026-11-04T07:45:55.695Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' from='pubsub.localhost' type='result' id='s14-mw1tbhf3-4i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e1'/></publish></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhf8-4j'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhf8-4j'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.685Z&quot;}</json></item><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.695Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhfa-4k'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit' max_items='1'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhfa-4k'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.695Z&quot;}</json></item></items><set xmlns='http://jabber.org/protocol/rsm'><count>2</count><first index='0'>2026-11-04T07:45:55.696916Z</first><last>2026-11-04T07:45:55.696916Z</last></set></pubsub></iq>
+
+<!-- admin-e2 published -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhfc-4l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='admin-e2'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"admin-e2","updatedAt":"2026-11-04T07:45:55.704Z"}</json></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhfc-4l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='admin-e2'/></publish></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhfi-4m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhfi-4m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e1'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e1&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.695Z&quot;}</json></item><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhfk-4n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit' max_items='1'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhfk-4n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item></items><set xmlns='http://jabber.org/protocol/rsm'><count>2</count><first index='0'>2026-11-04T07:45:55.706192Z</first><last>2026-11-04T07:45:55.706192Z</last></set></pubsub></iq>
+
+<!-- umpire-e2 published -->
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhfn-4o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e2'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"umpire-e2","updatedAt":"2026-11-04T07:45:55.715Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' from='pubsub.localhost' type='result' id='s14-mw1tbhfn-4o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e2'/></publish></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhfu-4p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhfu-4p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.715Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhfw-4q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit' max_items='1'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhfw-4q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.715Z&quot;}</json></item></items><set xmlns='http://jabber.org/protocol/rsm'><count>2</count><first index='0'>2026-11-04T07:45:55.716834Z</first><last>2026-11-04T07:45:55.716834Z</last></set></pubsub></iq>
+
+<!-- umpire-e3 published -->
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhfz-4r'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e3'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"umpire-e3","updatedAt":"2026-11-04T07:45:55.727Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' from='pubsub.localhost' type='result' id='s14-mw1tbhfz-4r'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-per-edit'><item id='umpire-e3'/></publish></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhg5-4s'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhg5-4s'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e3'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e3&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.727Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhg8-4t'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit' max_items='1'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhg8-4t'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e3'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e3&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.727Z&quot;}</json></item></items><set xmlns='http://jabber.org/protocol/rsm'><count>2</count><first index='0'>2026-11-04T07:45:55.728747Z</first><last>2026-11-04T07:45:55.728747Z</last></set></pubsub></iq>
+
+<!-- the owner retracts the umpire’s item -->
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhgb-4u'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhgb-4u'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item><item publisher='RUN-umpire@localhost/umpire-mw1tbhbk-edo13' id='umpire-e3'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire-e3&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.727Z&quot;}</json></item></items></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbhgd-4v'><pubsub xmlns='http://jabber.org/protocol/pubsub'><retract node='RUN-per-edit' notify='true'><item id='umpire-e3'/></retract></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbhgd-4v'/>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='get' to='pubsub.localhost' id='s14-mw1tbhgh-4w'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbhd9-2bg67' from='pubsub.localhost' type='result' id='s14-mw1tbhgh-4w'><pubsub xmlns='http://jabber.org/protocol/pubsub'><items node='RUN-per-edit'><item publisher='admin@localhost/s1516-pb1can' id='admin-e2'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;admin-e2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:55.704Z&quot;}</json></item></items></pubsub></iq>

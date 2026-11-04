@@ -20,13 +20,15 @@ Every part of a game maps to one native XMPP construct, plus a JSON document in 
 | Entity | XMPP construct | Document |
 | --- | --- | --- |
 | Wargame | — | `game-setup`: name, description, briefing, theme, room-type defaults, design version |
+| Turn | — | `game-state`: turn number and phase, published by the admin |
 | Force | Room memberships of its roles | `forces:<forceId>`: name, colour, icon, umpire flag |
 | Role | One user account | `roles:<roleId>`: name, force, observer flag |
 | Room | One chat room | `rooms:<roomId>`: name, room type, participants, type-specific settings |
+| World state | Messages in the game's one map room, each the whole state, from the admin only | Body `{type: "world-state", schemaVersion, content}`: the turn and every asset |
 | Message | A chat message | Body is JSON: `{type, schemaVersion, content}` |
 | History | The server's message archive | — |
 | Announcement | — | One item per announcement in `announcements` |
-| Objectives | — | `objectives:<forceId>`, Markdown |
+| Objectives | — | `objectives:<forceId>`, Markdown, one item per author; readers show the newest |
 
 Every document carries `schemaVersion`. Clients validate each document as they read it, migrate older versions, and log and ignore anything invalid rather than failing.
 
@@ -56,4 +58,4 @@ Blog posts that show the app embed a **frozen snapshot**: a build of the exact c
 
 Every pull request runs type checking, lint, formatting, unit tests, a traceability check that every requirement belongs to a work package, a check that every Mermaid diagram parses, and Playwright end-to-end tests. The site build adds a scan for secrets and real-server addresses, a review scan of the published text, and the size report.
 
-The nine user scenarios of the requirements, from the admin designing and publishing a game to two people sharing one role, are Playwright tests too. Each runs on the mock in every pull request and against the reference ejabberd in the server workflow, the same test code on both, including a dropped network connection, a modified client trying to post as an observer, and a game changed while players are online.
+The eleven user scenarios of the requirements, from the admin designing and publishing a game to the admin running a turn and updating the map, are Playwright tests too. Each runs on the mock in every pull request and against the reference ejabberd in the server workflow, the same test code on both, including a dropped network connection, a modified client trying to post as an observer, and a game changed while players are online.

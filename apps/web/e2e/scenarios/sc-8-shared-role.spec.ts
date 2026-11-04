@@ -14,6 +14,18 @@ const messages = (page: Page, room: string) =>
 const composer = (page: Page, room: string) =>
   page.getByRole('textbox', { name: `Message ${room}`, exact: true })
 
+/**
+ * Blue CO has four rooms, the map room included, in three columns, so the negotiation starts
+ * behind Blue HQ: moved to the next column with the keyboard and put on show, so both are open.
+ */
+async function talksBeside(page: Page): Promise<void> {
+  await page.getByRole('tab', { name: TALKS, exact: true }).focus()
+  await page.keyboard.press('Alt+Shift+ArrowRight')
+  await expect(page.getByRole('tab', { name: TALKS, exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(composer(page, TALKS)).toBeVisible()
+}
+
 async function post(page: Page, room: string, text: string): Promise<void> {
   await composer(page, room).fill(text)
   await composer(page, room).press('Enter')
@@ -43,7 +55,8 @@ test('SC-8: two people logged in as Blue CO both get every message, and each pos
   // 1. The same rooms in both, and every message reaches both.
   for (const page of [first, second]) {
     await expect(page.getByLabel('Logged in as Blue CO, Blue')).toBeVisible()
-    await expect(tabs(page)).toHaveText(['Blue HQ', TALKS, 'Blue Reports'])
+    await expect(tabs(page)).toHaveText(['Blue HQ', TALKS, 'Blue Reports', 'Map'])
+    await talksBeside(page)
   }
   await post(red, TALKS, 'Red asks: who speaks for Blue?')
   await post(first, 'Blue HQ', 'First Blue CO: I will take the talks.')

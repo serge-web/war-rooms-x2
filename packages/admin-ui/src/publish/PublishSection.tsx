@@ -23,12 +23,30 @@ import { describeError } from './controller.ts'
 import { ApplyDialog, DemoPassphrase, VaultDialog } from './dialogs.tsx'
 import { PlanSteps } from './PlanSteps.tsx'
 import type { Acknowledgement } from './dialogs.tsx'
-import { exportDesign, importDesign, newDesign } from './transfer.ts'
+import { exportDesign, importDesign, mapRoomIdOf, newDesign } from './transfer.ts'
+import type { WorldStateForExport, WorldStateTransfer } from './transfer.ts'
 import type { usePublish } from './usePublish.ts'
 import './publish.css'
 
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
+}
+
+/**
+ * What a plan does to the design version (§3 rule 8): a structural change moves it, and every
+ * online player's layout resets (PLY-5, R28); anything else keeps it, and their layouts.
+ */
+function versionLine(plan: PublishPlan): string {
+  const now = plan.publishedVersion
+  if (plan.kind !== 'publish' || now === undefined) {
+    return plan.designVersion === undefined
+      ? ''
+      : `; the game becomes design version ${plan.designVersion}`
+  }
+  if (plan.structural && plan.designVersion !== undefined) {
+    return `; the game becomes design version ${plan.designVersion} (now ${now}): rooms are added or removed, or a role’s access to a room changes, so every online player’s layout resets to the default`
+  }
+  return `; no structural change, so the game stays at design version ${now} and players keep their layouts`
 }
 
 export interface PublishSectionProps {
@@ -44,6 +62,8 @@ export interface PublishSectionProps {
   readonly download?: (name: string, text: string) => void
   /** Prints the page; default `window.print`. */
   readonly print?: () => void
+  /** The world state in the design file (ADM-16, WP 5.6); without it, files carry none. */
+  readonly worldState?: WorldStateTransfer
 }
 
 export function PublishSection({
@@ -52,6 +72,7 @@ export function PublishSection({
   demoVaultPassphrase,
   store,
   download,
+  worldState,
   ...rest
 }: PublishSectionProps) {
   const { snapshot, controller } = publish
@@ -74,21 +95,77 @@ export function PublishSection({
       onUnlockVault={(p) => controller?.unlockVault(p) ?? notConnected()}
       onLockVault={() => controller?.lockVault()}
       onResetPassword={(id) => controller?.resetPassword(id) ?? notConnected()}
-      onExport={() => {
-        const file = exportDesign(store.getSnapshot().draft)
+      onExport={async () => {
+        const draft = store.getSnapshot().draft
+        const mapRoomId = mapRoomIdOf(draft)
+        // ADM-16: the admin's world-state draft, else the latest published state.
+        const world: WorldStateForExport =
+          worldState === undefined || mapRoomId === undefined
+            ? { source: 'none' }
+            : await worldState.forExport(mapRoomId)
+        const file = exportDesign(draft, new Date(), 'state' in world ? world.state : undefined)
         save(file.name, file.text)
+        return exportNote(world)
       }}
       onImport={(text) => {
         const imported = importDesign(text, store.getSnapshot().draft)
         if (!imported.ok) return imported.error
         store.commit(imported.value.draft)
-        return imported.value.warnings
+        const world = imported.value.worldState
+        if (world === undefined || worldState === undefined) return imported.value.warnings
+        const problem = worldState.importDraft(world.mapRoomId, world.state)
+        const note: DesignIssue =
+          problem === undefined
+            ? {
+                severity: 'warning',
+                path: '',
+                message:
+                  'The file’s world state is now your world-state draft, held in this browser. Players see it only when you publish it from the map room (ADM-45).',
+              }
+            : {
+                severity: 'warning',
+                path: '',
+                message: `The file’s world state was not kept as your world-state draft: ${problem}`,
+              }
+        return [...imported.value.warnings, note]
       }}
       onNewDesign={() => {
         store.commit(newDesign(store.getSnapshot().draft))
       }}
     />
   )
+}
+
+/** What the admin is told after an export about the world state in the file. */
+export interface ExportNote {
+  readonly tone: 'info' | 'warning'
+  readonly title: string
+  readonly text: string
+}
+
+/**
+ * The note for an export's world state (ADM-16): a file that holds an unpublished draft says so,
+ * since it holds the umpire's plans; one that could not read the published state says it holds
+ * none, and why, rather than leaving a file without a world state unremarked (WP 5.7 review).
+ */
+export function exportNote(world: WorldStateForExport): ExportNote | undefined {
+  switch (world.source) {
+    case 'draft':
+      return {
+        tone: 'info',
+        title: 'The file holds your world-state draft.',
+        text: 'It includes edits players have not seen yet; share it only with people who may see them.',
+      }
+    case 'unavailable':
+      return {
+        tone: 'warning',
+        title: 'The file holds no world state.',
+        text: `The published world state could not be read: ${world.reason}. Export again once the map room can be reached, or the design moves without its map.`,
+      }
+    case 'published':
+    case 'none':
+      return undefined
+  }
 }
 
 function browserDownload(name: string, text: string): void {
@@ -118,7 +195,7 @@ export interface PublishSectionCoreProps {
   readonly onUnlockVault: (passphrase: string) => Promise<string | undefined>
   readonly onLockVault: () => void
   readonly onResetPassword: (roleId: string) => Promise<string | undefined>
-  readonly onExport: () => void
+  readonly onExport: () => Promise<ExportNote | undefined>
   /** Imports a file's text; returns the blocking issues, or the warnings when it was imported. */
   readonly onImport: (text: string) => readonly DesignIssue[]
   /** Replaces the draft with an empty design (SC-1: designing a game from nothing). */
@@ -370,10 +447,7 @@ function PlanPanel(
         <>
           <p>
             {plural(plan.steps.length, 'change')}
-            {plan.designVersion === undefined
-              ? ''
-              : `; the game becomes design version ${plan.designVersion}`}
-            {plan.publishedVersion === undefined ? '' : ` (now ${plan.publishedVersion})`}.
+            {versionLine(plan)}.
           </p>
           {stale && (
             <Notice tone="warning" title="The draft changed since this plan.">
@@ -505,7 +579,8 @@ function Result({
       <p>
         <strong>
           {what} complete: {plural(result.done.length, 'step')} applied
-          {plan.designVersion === undefined ? '' : `, design version ${plan.designVersion}`}.
+          {plan.designVersion === undefined ? '' : `, design version ${plan.designVersion}`}
+          {plan.kind === 'publish' && plan.structural ? '; players’ layouts reset' : ''}.
         </strong>
       </p>
       {remaining !== undefined && (
@@ -665,12 +740,14 @@ function DesignTransfer({
   onImport,
   onNewDesign,
 }: {
-  readonly onExport: () => void
+  readonly onExport: () => Promise<ExportNote | undefined>
   readonly onImport: (text: string) => readonly DesignIssue[]
   readonly onNewDesign?: () => void
 }) {
   const id = useId()
   const input = useRef<HTMLInputElement>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exported, setExported] = useState<ExportNote | undefined>(undefined)
   const [outcome, setOutcome] = useState<
     | { readonly ok: boolean; readonly issues: readonly DesignIssue[]; readonly name: string }
     | 'new'
@@ -703,10 +780,28 @@ function DesignTransfer({
       <h3 id={`${id}-h`}>Export and import the design</h3>
       <p>
         A design file moves a game between the mock and a server, or between servers. It never holds
-        passwords.
+        passwords. It holds the world state too: your world-state draft if this browser has one,
+        otherwise the latest published one. An import makes the file’s world state your draft;
+        players see it only when you publish it from the map room.
       </p>
       <div className="wrx-publish-toolbar">
-        <Button onClick={onExport}>Export the design</Button>
+        <Button
+          aria-busy={exporting}
+          disabled={exporting}
+          onClick={() => {
+            setExporting(true)
+            setExported(undefined)
+            void Promise.resolve(onExport())
+              .then((note) => {
+                setExported(note ?? undefined)
+              })
+              .finally(() => {
+                setExporting(false)
+              })
+          }}
+        >
+          Export the design
+        </Button>
         <label className="wrx-admin-button wrx-admin-button-secondary" htmlFor={id}>
           Import a design…
         </label>
@@ -735,6 +830,14 @@ function DesignTransfer({
           >
             Start a new design…
           </Button>
+        )}
+      </div>
+      {/* Announced when an export ends, so the note is heard as well as seen. */}
+      <div role="status">
+        {exported === undefined ? null : (
+          <Notice tone={exported.tone} title={exported.title}>
+            {exported.text}
+          </Notice>
         )}
       </div>
       {pending === 'new' && onNewDesign !== undefined && (

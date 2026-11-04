@@ -183,6 +183,35 @@ describe('drift', () => {
     })
   })
 
+  it.each(['game-state', 'directory', nodeName.room(tid('blue-hq'))])(
+    'a role missing from %s, which every role reads, is a node-access item repaired by a read grant (§3 rule 15)',
+    (node) => {
+      // Red CO is in no Blue room, and reads Blue HQ's document all the same (PLY-60, R24).
+      const drifted = withNode(view, node, (n) => ({
+        ...n,
+        affiliations: n.affiliations.filter((a) => a.jid !== jid('red-co')),
+      }))
+      expect(item(audit(drifted), `node-access:${node}:red-co`)).toMatchObject({
+        expected: 'member',
+        found: 'none',
+        severity: 'medium',
+        repair: [{ type: 'node-access', node, changes: [{ roleId: 'red-co', access: 'read' }] }],
+      })
+      // A role made a publisher there could forge it: critical.
+      const publisher = withNode(view, node, (n) => ({
+        ...n,
+        affiliations: n.affiliations.map((a) =>
+          a.jid === jid('red-co') ? { ...a, affiliation: 'publisher' as const } : a,
+        ),
+      }))
+      expect(item(audit(publisher), `node-access:${node}:red-co`)).toMatchObject({
+        expected: 'member',
+        found: 'publisher',
+        severity: 'critical',
+      })
+    },
+  )
+
   it('F5: a White Force observer left as an objectives publisher is a node-access item', () => {
     // What a publish before the fix left on the server.
     const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
@@ -201,40 +230,76 @@ describe('drift', () => {
     })
   })
 
-  it('D21: a White Force editor left as an objectives publisher, and its item, are found', () => {
-    // What a publish before WP 3.5 left: White Cell publishing, with its own item.
-    const drifted = withNode(view, nodeName.objectives(tid('red')), (n) => ({
+  it('D21: White Force edits with new ids on every save are expected, not flagged', () => {
+    const played = withNode(view, nodeName.objectives(tid('red')), (n) => ({
       ...n,
-      affiliations: n.affiliations.map((a) =>
-        a.jid === jid('white-cell') ? { ...a, affiliation: 'publisher' as const } : a,
-      ),
-      items: [...n.items, { id: 'white-cell', payload: '{}', publisher: jid('white-cell') }],
+      items: [
+        // The admin's item under another id (a save from the game view of the same text).
+        ...n.items.map((i) => ({ ...i, id: 'admin-from-the-game-view' })),
+        { id: 'white-cell-8f2c', payload: '{"edit":1}', publisher: jid('white-cell') },
+      ],
     }))
-    const report = audit(drifted)
-    expect(item(report, `node-access:${nodeName.objectives(tid('red'))}:white-cell`)).toMatchObject(
-      {
-        expected: 'member',
-        found: 'publisher',
-        severity: 'critical',
-        repair: [{ type: 'node-access', changes: [{ roleId: 'white-cell', access: 'read' }] }],
-      },
-    )
-    const stray = item(report, `stray-items:${nodeName.objectives(tid('red'))}`)
+    expect(findings(audit(played))).toEqual([])
+  })
+
+  it('D21: a White Force observer left publishing, and a former editor’s edit, are found', () => {
+    // White Cell has left the White Force for Blue, but still publishes, with its edit on Red's
+    // node; the White observer was left a publisher too (review F5).
+    const moved: DesignFile = {
+      ...design,
+      roles: design.roles.map((r) =>
+        r.loginName === 'white-cell' ? { ...r, forceId: tid('blue') } : r,
+      ),
+    }
+    const RED = nodeName.objectives(tid('red'))
+    const drifted = withNode(publishedView(moved), RED, (n) => ({
+      ...n,
+      affiliations: [
+        ...n.affiliations.map((a) =>
+          a.jid === jid('white-observer') ? { ...a, affiliation: 'publisher' as const } : a,
+        ),
+        { jid: jid('white-cell'), affiliation: 'publisher' as const },
+      ],
+      items: [...n.items, { id: 'white-cell-1', payload: '{}', publisher: jid('white-cell') }],
+    }))
+    const report = audit(drifted, {}, moved)
+    expect(item(report, `node-access:${RED}:white-observer`)).toMatchObject({
+      expected: 'member',
+      found: 'publisher',
+      severity: 'critical',
+      repair: [{ type: 'node-access', changes: [{ roleId: 'white-observer', access: 'read' }] }],
+    })
+    expect(item(report, `node-access:${RED}:white-cell`)).toMatchObject({
+      expected: 'none',
+      found: 'publisher',
+      severity: 'critical',
+    })
+    const stray = item(report, `stray-items:${RED}:white-cell-1`)
     expect(stray).toMatchObject({
       kind: 'stray-items',
       severity: 'medium',
       repairable: true,
       destructive: false,
+      repair: [{ type: 'retract-item', node: RED, itemId: 'white-cell-1' }],
     })
-    // Purge, then the admin's item again; no separate document item for it.
-    expect(stray.repair.map((a) => a.type)).toEqual(['purge-node', 'publish'])
-    expect(stray.repair[1]).toMatchObject({
-      node: nodeName.objectives(tid('red')),
-      itemId: 'admin',
+    expect(stray.found).toContain('White Cell')
+  })
+
+  it('the draft’s objectives missing from the admin’s own item are a document item, repaired as a new item', () => {
+    const RED = nodeName.objectives(tid('red'))
+    const drifted = withNode(view, RED, (n) => ({
+      ...n,
+      items: n.items.map((i) => ({ ...i, payload: '{"edit":"admin in play"}' })),
+    }))
+    const found = item(audit(drifted), `document:${RED}`)
+    expect(found).toMatchObject({
+      kind: 'document',
+      found: 'the admin’s item differs from the design',
+      repair: [{ type: 'publish', node: RED }],
     })
-    expect(report.items.map((i) => i.id)).not.toContain(
-      `document:${nodeName.objectives(tid('red'))}:admin`,
-    )
+    const repair = found.repair[0]
+    // A new id: the old item holds the draft's own id, so it takes the next free one.
+    expect(repair?.type === 'publish' && repair.itemId).toMatch(/^admin-[0-9a-f]{16}-2$/)
   })
 
   it('an owner affiliation the planner does not model is still found', () => {

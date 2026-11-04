@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { accessOf, effectiveAccess, participantsOf, roomsForRole } from './access.ts'
+import {
+  accessHighlights,
+  accessOf,
+  effectiveAccess,
+  participantsOf,
+  roomsForRole,
+} from './access.ts'
 import type { AccessInput } from './access.ts'
 import { force as forceDoc, role as roleDoc, room as roomDoc } from './fixtures.ts'
 import type { Force, Role, Room } from '@wrx/schemas'
@@ -261,5 +267,55 @@ describe('effectiveAccess (§3 rules 4 and 5)', () => {
     const copy = structuredClone(input)
     expect(effectiveAccess(input)).toEqual(effectiveAccess(input))
     expect(input).toEqual(copy)
+  })
+})
+
+describe('accessHighlights: the rule 4 consequences the matrix highlights (ADM-9)', () => {
+  it('finds none in a design without either', () => {
+    const input = {
+      ...base(),
+      rooms: [room('hq', [{ kind: 'force', id: 'blue', access: 'write' }])],
+    }
+    expect(accessHighlights(input)).toEqual([])
+  })
+
+  it('a White Force observer named in one role entry is limited to that room', () => {
+    const input = {
+      ...base(),
+      rooms: [
+        room('hq', [{ kind: 'force', id: 'blue', access: 'write' }]),
+        room('talks', [{ kind: 'role', id: 'white-observer', access: 'read' }], { order: 1 }),
+        room('press', [], { order: 2 }),
+      ],
+    }
+    expect(accessHighlights(input)).toEqual([
+      { kind: 'white-observer-limited', roomId: 'hq', roleId: 'white-observer' },
+      { kind: 'white-observer-limited', roomId: 'press', roleId: 'white-observer' },
+    ])
+  })
+
+  it('a read entry for a White Force role that is not an observer, by role or by force, does not apply', () => {
+    const input = {
+      ...base(),
+      rooms: [
+        room('hq', [{ kind: 'role', id: 'white-1', access: 'read' }]),
+        room('talks', [{ kind: 'force', id: 'white', access: 'read' }], { order: 1 }),
+        // A write entry is no surprise, nor a read entry for another role.
+        room(
+          'press',
+          [
+            { kind: 'role', id: 'white-1', access: 'write' },
+            { kind: 'role', id: 'blue-co', access: 'read' },
+          ],
+          { order: 2 },
+        ),
+      ],
+    }
+    const matrix = effectiveAccess(input)
+    expect(accessOf(matrix, 'hq', 'white-1')).toBe('write')
+    expect(accessHighlights(input, matrix)).toEqual([
+      { kind: 'read-entry-ignored', roomId: 'hq', roleId: 'white-1' },
+      { kind: 'read-entry-ignored', roomId: 'talks', roleId: 'white-1' },
+    ])
   })
 })

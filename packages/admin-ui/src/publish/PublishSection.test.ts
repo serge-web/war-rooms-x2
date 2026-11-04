@@ -8,8 +8,16 @@ import { userEvent } from '@testing-library/user-event'
 import { AdminOps, VAULT_KDF, memoryMarkerStore } from '@wrx/admin-ops'
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
 import type { AdminEditor, PlayerPanel } from '@wrx/hooks'
-import { DEMO_VAULT_PASSPHRASE, MockServer, MockTransport, demoState } from '@wrx/mock-server'
-import { sampleDesign, templatedDesign, tid } from '@wrx/schemas/fixtures'
+import {
+  DEMO_VAULT_PASSPHRASE,
+  MockServer,
+  MockTransport,
+  demoSeed,
+  demoState,
+} from '@wrx/mock-server'
+import type { DesignFile } from '@wrx/schemas'
+import { sampleDesign, sampleWorldState, tid } from '@wrx/schemas/fixtures'
+import type { WorldState } from '@wrx/schemas'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AdminApp } from '../AdminApp.tsx'
@@ -22,9 +30,14 @@ import {
 } from '../draft/index.ts'
 import type { DraftStore } from '../draft/index.ts'
 import type { PublishConnection } from './controller.ts'
+import { mapRoomIdOf } from './transfer.ts'
+import type { WorldStateForExport, WorldStateTransfer } from './transfer.ts'
 import { PublishSectionCore } from './PublishSection.tsx'
 import type { PublishSectionCoreProps } from './PublishSection.tsx'
 import { validateDraft } from '../draft/index.ts'
+
+/** The mock's demo design, as its seed holds it (a valid design file). */
+const demoDesign = (): DesignFile => demoSeed().design as DesignFile
 
 vi.setConfig({ testTimeout: 30_000 })
 afterEach(cleanup)
@@ -51,7 +64,7 @@ async function connected(): Promise<{ connection: PublishConnection; transport: 
   }
 }
 
-async function setup() {
+async function setup(worldState?: WorldStateTransfer) {
   const { connection, transport } = await connected()
   const store = createDraftStore({
     persistence: memoryDraftPersistence(),
@@ -67,6 +80,7 @@ async function setup() {
       publish: connection,
       download,
       print,
+      ...(worldState === undefined ? {} : { worldState }),
     }),
   )
   return { user: userEvent.setup(), store, connection, transport, download, print }
@@ -146,25 +160,25 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
     expect(stepItems()).toEqual([])
-    expect(groupButton('Access').textContent).toBe('▸Access23 stepsTo do')
-    expect(groupButton('Nodes').textContent).toContain('Create nodes: 20 nodes')
+    expect(groupButton('Access').textContent).toBe('▸Access25 stepsTo do')
+    expect(groupButton('Nodes').textContent).toContain('Create nodes: 21 nodes')
     // Repeated access steps read as one line each kind, expandable to every step.
     await user.click(groupButton('Access'))
     expect(groupButton('Access').getAttribute('aria-expanded')).toBe('true')
     const access = within(plan).getByRole('region', { name: 'Access' })
     const nodeGrants = within(access).getByRole('button', {
-      name: /^Give node access: 18 nodes × roles \(66 grants\)/,
+      name: /^Give node access: 19 nodes × roles \(70 grants\)/,
     })
     expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
     // The two observers' read-only steps read as one line too.
     expect(stepItems()).toEqual([])
     await user.click(nodeGrants)
-    expect(stepItems()).toHaveLength(18)
+    expect(stepItems()).toHaveLength(19)
     expect(access.textContent).toContain('Blue CO: read')
     await user.click(groupButton('Access'))
     expect(stepItems()).toEqual([])
     await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
-    expect(stepItems()).toHaveLength(65)
+    expect(stepItems()).toHaveLength(71)
     await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
     expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
@@ -181,15 +195,15 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const groups = within(planRegion()).getAllByRole('region')
     expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
     expect(groupButton('Access').textContent).toContain('Done')
-    expect(within(planRegion()).getByText(/^All 65 steps done\.$/)).toBeTruthy()
+    expect(within(planRegion()).getByText(/^All 71 steps done\.$/)).toBeTruthy()
     await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     const steps = stepItems()
-    expect(steps).toHaveLength(65)
+    expect(steps).toHaveLength(71)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
     // After the publish the room checks run and pass (NFR-4).
-    expect(screen.getByText(/All 3 rooms are members-only/)).toBeTruthy()
+    expect(screen.getByText(/All 4 rooms are members-only/)).toBeTruthy()
     expect(screen.getByText(/The archive of .* answers/)).toBeTruthy()
     // The draft records the publish: login names are fixed (ADM-5).
     expect(fresh.store.getSnapshot().draft.meta.publishedRoleIds).toContain(tid('blue-co'))
@@ -198,6 +212,16 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }))
     await planAndWait(fresh.user, 'Check the server and plan')
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
+    // A rename is not structural: the version stays, and so do players' layouts (§3 rule 8).
+    fresh.store.commit(
+      updateRoom(fresh.store.getSnapshot().draft, tid('blue-hq'), { name: 'Blue headquarters' }),
+    )
+    await planAndWait(fresh.user, 'Plan again')
+    expect(
+      screen.getByText(
+        /no structural change, so the game stays at design version 1 and players keep their layouts/,
+      ),
+    ).toBeTruthy()
   })
 
   it('F12: will not create a vault under a guessable passphrase, and says why', async () => {
@@ -333,12 +357,12 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     })
     // The group holding the failure opens by itself and says so; the others stay closed.
     expect(groupButton('Rooms').getAttribute('aria-expanded')).toBe('true')
-    expect(groupButton('Rooms').textContent).toContain('Failed: 1 of 3 done')
+    expect(groupButton('Rooms').textContent).toContain('Failed: 1 of 4 done')
     expect(groupButton('Accounts').getAttribute('aria-expanded')).toBe('false')
     expect(groupButton('Accounts').textContent).toContain('Done')
     expect(groupButton('Nodes').textContent).toContain('Not run')
     expect(
-      within(planRegion()).getByText(/^Stopped at a failure: 5 of 65 steps done\.$/),
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 71 steps done\.$/),
     ).toBeTruthy()
     const failed = stepItems().filter((li) => li.dataset.state === 'failed')
     expect(failed.map((li) => li.dataset.step)).toEqual([`room:${tid('red-hq')}`])
@@ -351,7 +375,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Plan the rest again' }))
     await waitFor(() => {
-      expect(groupButton('Rooms').textContent).toContain('Create rooms: 2 rooms')
+      expect(groupButton('Rooms').textContent).toContain('Create rooms: 3 rooms')
     })
     await user.click(groupButton('Rooms'))
     expect(within(planRegion()).queryByText('Create room Blue HQ')).toBeNull()
@@ -408,7 +432,7 @@ describe('on the mock’s demo seed, which starts published with its vault', () 
     // A draft saved before the seed was published here: no role recorded as published.
     const store = createDraftStore({
       persistence: memoryDraftPersistence(),
-      initial: () => draftFromDesign(templatedDesign()),
+      initial: () => draftFromDesign(demoDesign()),
     })
     render(
       createElement(AdminApp, {
@@ -436,7 +460,7 @@ describe('on the mock’s demo seed, which starts published with its vault', () 
     await planAndWait(user, 'Check the server and plan')
     expect(screen.getByText('Nothing to publish: the server matches the draft.')).toBeTruthy()
     expect([...store.getSnapshot().draft.meta.publishedRoleIds].sort()).toEqual(
-      sampleDesign()
+      demoDesign()
         .roles.map((r) => r.id)
         .sort(),
     )
@@ -517,6 +541,78 @@ describe('design export and import (ADM-16)', () => {
     expect(screen.getByText(new RegExp(`unknown force "${tid('nowhere')}"`))).toBeTruthy()
     expect(store.getSnapshot().draft.design.game.name).toBe('Imported game')
   })
+
+  it('exports the world state the host gives, and imports a file’s as the draft (WP 5.6)', async () => {
+    const kept: { roomId: string; state: WorldState }[] = []
+    const forExport = vi.fn((_roomId: string) =>
+      Promise.resolve({ source: 'published' as const, state: sampleWorldState() }),
+    )
+    const { user, download, store } = await setup({
+      forExport,
+      importDraft: (roomId, state) => {
+        kept.push({ roomId, state })
+        return undefined
+      },
+    })
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledTimes(1)
+    })
+    const mapRoomId = mapRoomIdOf(store.getSnapshot().draft)
+    expect(forExport).toHaveBeenCalledWith(mapRoomId)
+    const [, text] = download.mock.calls[0] ?? []
+    const exported = JSON.parse(text ?? '{}') as DesignFile
+    expect(exported).toMatchObject({ schemaVersion: 3, worldState: sampleWorldState() })
+
+    const moved = { ...sampleWorldState(), turn: 4 }
+    const file = { ...exported, worldState: moved, game: { ...exported.game, name: 'Moved game' } }
+    await user.upload(
+      screen.getByLabelText('Import a design…'),
+      new File([JSON.stringify(file)], 'moved.json'),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
+    expect(screen.getByText('Imported moved.json.')).toBeTruthy()
+    expect(screen.getByText(/is now your world-state draft, held in this browser/)).toBeTruthy()
+    expect(kept).toEqual([{ roomId: mapRoomId, state: moved }])
+    expect('worldState' in store.getSnapshot().draft.design).toBe(false)
+
+    // A version 2 file, from before world states, imports with none.
+    const v2 = { ...sampleDesign(), schemaVersion: 2 }
+    await user.upload(
+      screen.getByLabelText('Import a design…'),
+      new File([JSON.stringify(v2)], 'old.json'),
+    )
+    await user.click(await screen.findByRole('button', { name: 'Replace the draft' }))
+    expect(screen.getByText('Imported old.json.')).toBeTruthy()
+    expect(kept).toHaveLength(1)
+  })
+
+  it('says when the file holds the unpublished draft, and when it holds no world state because the published one could not be read (WP 5.7 review)', async () => {
+    const answers: WorldStateForExport[] = [
+      { source: 'draft', state: sampleWorldState() },
+      { source: 'unavailable', reason: 'the map room did not answer within 20 seconds' },
+    ]
+    const { user, download } = await setup({
+      forExport: () => Promise.resolve(answers.shift() ?? { source: 'none' }),
+      importDraft: () => undefined,
+    })
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    expect(await screen.findByText('The file holds your world-state draft.')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    expect(await screen.findByText('The file holds no world state.')).toBeTruthy()
+    expect(screen.getByText(/did not answer within 20 seconds/)).toBeTruthy()
+    expect(screen.queryByText('The file holds your world-state draft.')).toBeNull()
+    const [, text] = download.mock.calls[1] ?? []
+    expect('worldState' in (JSON.parse(text ?? '{}') as DesignFile)).toBe(false)
+
+    // Nothing to say about a file with the published state, or with none published.
+    await user.click(screen.getByRole('button', { name: 'Export the design' }))
+    await waitFor(() => {
+      expect(download).toHaveBeenCalledTimes(3)
+    })
+    expect(screen.queryByText(/^The file holds/)).toBeNull()
+  })
 })
 
 describe('a re-plan', () => {
@@ -558,7 +654,8 @@ describe('a new design (SC-1)', () => {
     expect(after.design.game.name).toBe('New exercise')
     expect(after.design.forces.map((f) => f.name)).toEqual(['White'])
     expect(after.design.roles).toEqual([])
-    expect(after.design.rooms).toEqual([])
+    // Only the map room, which every design has (§3 rule 18).
+    expect(after.design.rooms.map((r) => r.roomType)).toEqual(['map'])
     expect(after.meta).toEqual(before.meta)
   })
 })
@@ -590,7 +687,7 @@ describe('PublishSectionCore', () => {
     onUnlockVault: () => Promise.resolve(undefined),
     onLockVault: vi.fn(),
     onResetPassword: () => Promise.resolve(undefined),
-    onExport: vi.fn(),
+    onExport: vi.fn(() => Promise.resolve(undefined)),
     onImport: () => [],
   }
 

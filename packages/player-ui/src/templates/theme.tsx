@@ -141,7 +141,13 @@ function ObjectFieldTemplate(
   const context = props.registry.formContext
   const description = typeof props.description === 'string' ? props.description : undefined
   return (
-    <fieldset className="wrx-tform__fields" id={props.fieldPathId.$id}>
+    <fieldset
+      className="wrx-tform__fields"
+      id={props.fieldPathId.$id}
+      // Disabled, its fields cannot take focus, so the fieldset does, for scrolling it from the
+      // keyboard when it overflows (WCAG 2.1.1; a paused composer, PLY-56).
+      tabIndex={props.disabled === true ? 0 : undefined}
+    >
       <legend className="wrx-visually-hidden">{context.templateName}</legend>
       {hasText(description) ? <p className="wrx-tfield__hint">{description}</p> : null}
       {props.properties.map((property) => property.content)}

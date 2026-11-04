@@ -1,0 +1,73 @@
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcl0-3h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-live'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#publish_model'><value>publishers</value></field><field var='pubsub#max_items'><value>10</value></field><field var='pubsub#notify_retract'><value>true</value></field><field var='pubsub#persist_items'><value>true</value></field><field var='pubsub#deliver_payloads'><value>true</value></field><field var='pubsub#notify_delete'><value>true</value></field><field var='pubsub#send_last_published_item'><value>never</value></field><field var='pubsub#itemreply'><value>publisher</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbcl0-3h'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-live'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbclo-3i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-replay'/><configure><x xmlns='jabber:x:data' type='submit'><field var='FORM_TYPE' type='hidden'><value>http://jabber.org/protocol/pubsub#node_config</value></field><field var='pubsub#access_model'><value>whitelist</value></field><field var='pubsub#publish_model'><value>publishers</value></field><field var='pubsub#max_items'><value>10</value></field><field var='pubsub#notify_retract'><value>true</value></field><field var='pubsub#persist_items'><value>true</value></field><field var='pubsub#deliver_payloads'><value>true</value></field><field var='pubsub#notify_delete'><value>true</value></field><field var='pubsub#send_last_published_item'><value>on_sub</value></field><field var='pubsub#itemreply'><value>publisher</value></field></x></configure></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbclo-3i'><pubsub xmlns='http://jabber.org/protocol/pubsub'><create node='RUN-replay'/></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcm3-3j'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN-live'><affiliation jid='RUN-umpire@localhost' affiliation='publisher'/><affiliation jid='RUN-reader@localhost' affiliation='member'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbcm3-3j'/>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcm7-3k'><pubsub xmlns='http://jabber.org/protocol/pubsub#owner'><affiliations node='RUN-replay'><affiliation jid='RUN-umpire@localhost' affiliation='publisher'/><affiliation jid='RUN-reader@localhost' affiliation='member'/></affiliations></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbcm7-3k'/>
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcqa-3l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN-live' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbcmp-xjidd' from='pubsub.localhost' type='result' id='s14-mw1tbcqa-3l'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='701BE06D974B9' node='RUN-live' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- umpire publishes to a node the reader subscribes to -->
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcqv-3m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-live'><item id='umpire'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"live","updatedAt":"2026-11-04T07:45:49.639Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbcon-aei1h' from='pubsub.localhost' type='result' id='s14-mw1tbcqv-3m'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-live'><item id='umpire'/></publish></pubsub></iq>
+
+<!-- replay node: umpire publishes umpire, admin publishes admin, umpire re-publishes umpire -->
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbcrk-3n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='umpire'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"umpire v1","updatedAt":"2026-11-04T07:45:49.664Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbcon-aei1h' from='pubsub.localhost' type='result' id='s14-mw1tbcrk-3n'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='umpire'/></publish></pubsub></iq>
+
+<!-- admin: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbdmu-3o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='admin'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"admin v1","updatedAt":"2026-11-04T07:45:50.790Z"}</json></item></publish></pubsub></iq>
+
+<!-- admin: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='admin@localhost/s1516-pb1can' from='pubsub.localhost' type='result' id='s14-mw1tbdmu-3o'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='admin'/></publish></pubsub></iq>
+
+<!-- umpire: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbehm-3p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='umpire'><json xmlns='urn:xmpp:json:0'>{"schemaVersion":1,"text":"umpire v2","updatedAt":"2026-11-04T07:45:51.898Z"}</json></item></publish></pubsub></iq>
+
+<!-- umpire: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-umpire@localhost/umpire-mw1tbcon-aei1h' from='pubsub.localhost' type='result' id='s14-mw1tbehm-3p'><pubsub xmlns='http://jabber.org/protocol/pubsub'><publish node='RUN-replay'><item id='umpire'/></publish></pubsub></iq>
+
+<!-- reader subscribes to a node with send_last_published_item on_sub -->
+
+<!-- reader: out -->
+<iq xmlns='jabber:client' type='set' to='pubsub.localhost' id='s14-mw1tbfnl-3q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscribe node='RUN-replay' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- reader: in -->
+<iq xmlns='jabber:client' xml:lang='en' to='RUN-reader@localhost/reader-mw1tbcmp-xjidd' from='pubsub.localhost' type='result' id='s14-mw1tbfnl-3q'><pubsub xmlns='http://jabber.org/protocol/pubsub'><subscription subscription='subscribed' subid='701BE071657F9' node='RUN-replay' jid='RUN-reader@localhost'/></pubsub></iq>
+
+<!-- live event as received -->
+
+<message xmlns='jabber:client' to='RUN-reader@localhost' from='pubsub.localhost' type='headline'><event xmlns='http://jabber.org/protocol/pubsub#event'><items node='RUN-live'><item publisher='RUN-umpire@localhost/umpire-mw1tbcon-aei1h' id='umpire'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;live&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:49.639Z&quot;}</json></item></items></event></message>
+
+<!-- last-item replay on subscribe as received -->
+
+<message xmlns='jabber:client' to='RUN-reader@localhost' from='pubsub.localhost' type='headline'><event xmlns='http://jabber.org/protocol/pubsub#event'><items node='RUN-replay'><item publisher='RUN-umpire@localhost/umpire-mw1tbcon-aei1h' id='umpire'><json xmlns='urn:xmpp:json:0'>{&quot;schemaVersion&quot;:1,&quot;text&quot;:&quot;umpire v2&quot;,&quot;updatedAt&quot;:&quot;2026-11-04T07:45:51.898Z&quot;}</json></item></items></event><delay stamp='2026-11-04T07:45:51.900821Z' xmlns='urn:xmpp:delay'/></message>

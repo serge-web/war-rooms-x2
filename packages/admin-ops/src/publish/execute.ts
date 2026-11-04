@@ -109,10 +109,12 @@ export async function executePlan(
     }
   }
 
-  if (plan.kind === 'publish' && plan.designVersion !== undefined && options.marker !== undefined) {
+  if (plan.kind === 'publish' && options.marker !== undefined) {
     // Fail closed: without the marker another admin browser could trust documents this publish
-    // leaves behind half-done.
-    const marked = await options.marker.write(newMarker(plan.designVersion, now()))
+    // leaves behind half-done. Every publish sets it, at the version it leaves the game at: one
+    // that changes no structure keeps the version (§3 rule 8), and is pending all the same.
+    const version = plan.designVersion ?? plan.publishedVersion ?? 1
+    const marked = await options.marker.write(newMarker(version, now()))
     if (!marked.ok) return failAt(-1, MARKER_STEP, marked.error)
   }
 
@@ -191,8 +193,6 @@ async function runStep(
     }
     case 'delete-node':
       return none(await ops.deleteNode(action.node))
-    case 'purge-node':
-      return none(await ops.purgeNode(action.node))
     case 'retract-item':
       return none(await ops.retractItem(action.node, action.itemId))
   }

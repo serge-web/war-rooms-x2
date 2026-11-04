@@ -37,6 +37,22 @@ export const AUTO_CREATE_CONFIG: ServerNodeConfig = Object.freeze({
 
 const missingNode = (): Outcome<never> => err('item-not-found', 'Node not found', 'cancel')
 
+/**
+ * ejabberd keeps `max_items` per publisher (spike checks S14 and S15-7): drops the publisher's
+ * items beyond it and returns their ids. The item just published (`keep`) stays; the others go
+ * oldest created first. (ejabberd drops the least recently published, which differs only when a
+ * publisher re-publishes on a node keeping several items each, which WRX1 does not use.)
+ */
+function trimPerPublisher(node: PubsubNode, publisher: string, keep?: string): string[] {
+  const own = node.items.filter((i) => i.publisher === publisher && i.id !== keep)
+  const room = Math.max(0, node.config.maxItems - (keep === undefined ? 0 : 1))
+  const excess = own.slice(0, Math.max(0, own.length - room)).map((i) => i.id)
+  if (excess.length === 0) return []
+  const drop = new Set(excess)
+  node.items = node.items.filter((i) => !drop.has(i.id))
+  return excess
+}
+
 export class PubsubService {
   constructor(private readonly world: World) {}
 
@@ -92,14 +108,18 @@ export class PubsubService {
 
   // ---- entity use (§6, §7) ------------------------------------------------------------------
 
-  /** §6.5; newest first, as ejabberd returns them. `max` keeps the newest. */
+  /**
+   * §6.5 in ejabberd's order (spike check S15, contract S15): `node.items` is kept in creation
+   * order, the order in which each id was first published, and a full fetch lists it oldest
+   * first. `max` is what ejabberd answers the transport, which sends it as an RSM page as well
+   * as `max_items`: the first `max` items of that order, the oldest.
+   */
   getItems(conn: Connection, name: string, max: number | undefined): Outcome<readonly Item[]> {
     const node = this.world.nodes.get(name)
     if (node === undefined) return missingNode()
     const allowed = this.mayRead(node, conn)
     if (!allowed.ok) return allowed
-    const newest = [...node.items].reverse()
-    const chosen = max === undefined ? newest : newest.slice(0, Math.max(0, max))
+    const chosen = max === undefined ? node.items : node.items.slice(0, Math.max(0, max))
     return ok(chosen.map((item) => this.toItem(node, item)))
   }
 
@@ -108,6 +128,10 @@ export class PubsubService {
    * anyone else (errors check). Publishers publish; a publisher may not overwrite an item
    * someone else published, while the owner may (S02). Subscribers are notified before the
    * publisher's reply, the publisher included (S6).
+   *
+   * As ejabberd 26.09 (S15): re-publishing an id replaces its payload where it stands, without
+   * moving it; a new id goes last. `max_items` is kept per publisher: the publisher's oldest
+   * items beyond it are deleted, each announced as a retract after the new item's event.
    */
   publish(conn: Connection, name: string, itemId: string, payload: string): Outcome<undefined> {
     let node = this.world.nodes.get(name)
@@ -128,13 +152,22 @@ export class PubsubService {
       return err('forbidden', 'The item was published by another entity', 'auth')
     }
     const item: StoredItem = { id: itemId, payload, publisher: conn.bare }
-    node.items = [...node.items.filter((i) => i.id !== itemId), item].slice(-node.config.maxItems)
+    node.items =
+      previous === undefined
+        ? [...node.items, item]
+        : node.items.map((i) => (i.id === itemId ? item : i))
+    const trimmed = trimPerPublisher(node, conn.bare, itemId)
     this.notify(node, {
       node: name,
       items: [this.toItem(node, item)],
       retracted: [],
       deleted: false,
     })
+    if (node.config.notifyRetract) {
+      for (const id of trimmed) {
+        this.notify(node, { node: name, items: [], retracted: [id], deleted: false })
+      }
+    }
     return ok0
   }
 
@@ -227,7 +260,9 @@ export class PubsubService {
     const node = this.owned(conn, name)
     if (!node.ok) return node
     node.value.config = { ...config }
-    node.value.items = node.value.items.slice(-config.maxItems)
+    for (const publisher of new Set(node.value.items.map((i) => i.publisher))) {
+      trimPerPublisher(node.value, publisher)
+    }
     return ok0
   }
 

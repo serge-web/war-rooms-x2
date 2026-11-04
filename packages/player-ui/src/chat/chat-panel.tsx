@@ -20,6 +20,7 @@ import {
   useForces,
   useMe,
   useOccupants,
+  usePostingPaused,
   useRetired,
   useRoles,
   useRoomMessages,
@@ -65,8 +66,10 @@ export interface ChatPanelCoreProps {
   readonly olderError?: string | undefined
   readonly onLoadOlder?: () => void
   readonly onSend: (text: string) => Promise<SendOutcome>
-  /** Why this role cannot post here (PLY-12); the composer is disabled with it. */
+  /** Why this role cannot post here (PLY-12, PLY-56); the composer is disabled with it. */
   readonly disabledReason?: string | undefined
+  /** Posting is paused by the phase (PLY-56): the collapsed bar says so too. */
+  readonly paused?: boolean
   /** A post refused earlier, with why (PLY-33). */
   readonly unsent?: { readonly text: string; readonly reason: string } | undefined
   /** The templates this role may use here (TD4); with none, the plain composer. */
@@ -104,6 +107,13 @@ export const DRAFT_NOTES: Readonly<Record<Exclude<DraftState, 'none'>, string>> 
   unsent: 'Message not sent',
 })
 
+/** The collapsed composer bar's note while posting is paused (PLY-56). */
+export const PAUSED_NOTE = 'Posting paused for adjudication'
+
+/** Why the composer is disabled during adjudication for a role outside the White Force. */
+export const PAUSED_REASON =
+  'The game is in adjudication, so posting is paused for your role until the next turn’s planning starts. Anything you have written is kept.'
+
 export function ChatPanelCore({
   roomName,
   messages,
@@ -115,6 +125,7 @@ export function ChatPanelCore({
   onLoadOlder,
   onSend,
   disabledReason,
+  paused = false,
   unsent,
   templates,
   freeText,
@@ -141,7 +152,11 @@ export function ChatPanelCore({
     if (controlled) onComposerCollapsedChange(!collapsed)
     else setOwnCollapsed(!collapsed)
   }
-  const note = collapsed && draft !== 'none' ? DRAFT_NOTES[draft] : undefined
+  const note = collapsed
+    ? [draft === 'none' ? undefined : DRAFT_NOTES[draft], paused ? PAUSED_NOTE : undefined]
+        .filter((n) => n !== undefined)
+        .join('. ') || undefined
+    : undefined
   return (
     <div className="wrx-chat">
       <OnlineStrip online={online} />
@@ -278,6 +293,10 @@ export function refusalText(error: DomainError): string {
       return 'the room no longer exists.'
     case 'transport':
       return 'the server did not accept it. Check your connection and try again.'
+    case 'paused':
+      return 'posting is paused for your role during adjudication.'
+    case 'stale':
+      return 'the room changed. Try again.'
   }
 }
 
@@ -513,6 +532,8 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
   const [olderError, setOlderError] = useState<string | undefined>(undefined)
   // PLY-54: known from the role before the room is joined, so the default never flips.
   const observer = useMe().data.isObserver
+  // PLY-56: advisory, from the turn state; the read-only reasons come first.
+  const paused = usePostingPaused()
   const [composerCollapsed, setComposerCollapsed] = useComposerCollapsed(roomId)
 
   const onLoadOlder = useCallback(() => {
@@ -564,7 +585,8 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
       olderError={olderError}
       onLoadOlder={onLoadOlder}
       onSend={onSend}
-      disabledReason={readOnlyExplanation(view, access)}
+      disabledReason={readOnlyExplanation(view, access) ?? (paused ? PAUSED_REASON : undefined)}
+      paused={paused}
       unsent={
         view?.unsent === undefined
           ? undefined

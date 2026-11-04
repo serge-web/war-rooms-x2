@@ -1,0 +1,29 @@
+# S15-S16 stack: one throwaway ejabberd per config, each its own compose project and port, so the
+# configs (and other stacks) can run side by side. Started by scripts/up.sh, stopped (volume
+# deleted) by scripts/down.sh.
+#
+#   S1516_CONFIG  which config file to mount: ref (reference), tight (low shaper), http (probe)
+#   S1516_PORT    host port for wss://localhost:<port>/ws (up.sh: ref 35980, tight 35981, http 35982)
+#
+# Same image, pinned by the same digest, as deploy/ejabberd/compose.yaml. Same listener as the
+# contract-suite stack: TLS WebSocket only, on loopback, with a throwaway test CA (make-ca.sh).
+name: wrx-s1516-${S1516_CONFIG:-ref}
+services:
+  ejabberd:
+    image: ejabberd/ecs:26.09@sha256:8ebff5b218e686d5dbd93850ea17556d5b70d4c15918c3613e9302a357798e0e
+    ports:
+      - '127.0.0.1:${S1516_PORT:-35980}:5443'
+    volumes:
+      - ./ejabberd-${S1516_CONFIG:-ref}.yml:/home/ejabberd/conf/ejabberd.yml:ro
+      - ./bootstrap.sh:/home/ejabberd/bootstrap.sh:ro
+      - ./tls-out/server.pem:/home/ejabberd/conf/server.pem:ro
+      - ./tls-out/ca.crt:/home/ejabberd/conf/cacert.pem:ro
+      - ./www:/home/ejabberd/www:ro
+      - db:/home/ejabberd/database
+    healthcheck:
+      test: ['CMD', 'ejabberdctl', 'status']
+      interval: 3s
+      timeout: 5s
+      retries: 30
+volumes:
+  db:

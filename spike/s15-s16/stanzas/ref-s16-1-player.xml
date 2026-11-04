@@ -1,0 +1,19 @@
+<!-- player sends 65536 bytes: {"sender":"player","bytes":65536,"reflectedMs":40,"receivedMs":37,"pingAfterMs":7,"connectionUp":true,"predictedMs":0} -->
+
+<message xmlns='jabber:client' to='RUN-player-65536@conference.localhost' type='groupchat' id='s16-65536-52f9fd08'><body>S16:s16-65536-52f9fd08:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 300000 bytes: {"sender":"player","bytes":300000,"reflectedMs":74,"receivedMs":59,"pingAfterMs":9,"connectionUp":true,"predictedMs":0} -->
+
+<message xmlns='jabber:client' to='RUN-player-300000@conference.localhost' type='groupchat' id='s16-300000-7ea1b48e'><body>S16:s16-300000-7ea1b48e:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 500000 bytes: {"sender":"player","bytes":500000,"reflectedMs":3642,"receivedMs":3612,"pingAfterMs":3517,"connectionUp":true,"rateBytesPerSecond":54915,"predictedMs":4000} -->
+
+<message xmlns='jabber:client' to='RUN-player-500000@conference.localhost' type='groupchat' id='s16-500000-0ac91a29'><body>S16:s16-500000-0ac91a29:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 1000000 bytes: {"sender":"player","bytes":1000000,"reflectedMs":13251,"receivedMs":13195,"pingAfterMs":13023,"connectionUp":true,"rateBytesPerSecond":52826,"predictedMs":14000} -->
+
+<message xmlns='jabber:client' to='RUN-player-1000000@conference.localhost' type='groupchat' id='s16-1000000-9a9ae09d'><body>S16:s16-1000000-9a9ae09d:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>
+
+<!-- player sends 2000000 bytes: {"sender":"player","bytes":2000000,"reflectedMs":33138,"receivedMs":33012,"pingAfterMs":32692,"connectionUp":true,"rateBytesPerSecond":51301,"predictedMs":34000} -->
+
+<message xmlns='jabber:client' to='RUN-player-2000000@conference.localhost' type='groupchat' id='s16-2000000-30d3b1c3'><body>S16:s16-2000000-30d3b1c3:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…xxxxxxxxxxxxxxxxxxxxxxx</body></message>

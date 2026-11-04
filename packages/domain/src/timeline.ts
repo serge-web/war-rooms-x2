@@ -68,6 +68,8 @@ function compare(a: Keyed, b: Keyed): number {
 
 export class Timeline {
   private readonly byId = new Map<string, Keyed>()
+  /** Ids dropped by `retainOnly`: still known, so a page that holds them again adds nothing. */
+  private readonly dropped = new Set<string>()
   private ordered: Keyed[] = []
   private snapshot: readonly TimelineEntry[] = Object.freeze([])
   private dirty = false
@@ -76,8 +78,9 @@ export class Timeline {
     return this.ordered.length
   }
 
+  /** Whether the entry is held, or was held and dropped by `retainOnly`. */
   has(id: string): boolean {
-    return this.byId.has(id)
+    return this.byId.has(id) || this.dropped.has(id)
   }
 
   /** Oldest entry, or `undefined` when empty. */
@@ -96,7 +99,7 @@ export class Timeline {
   merge(entries: readonly TimelineEntry[]): number {
     const fresh: Keyed[] = []
     for (const entry of entries) {
-      if (this.byId.has(entry.id)) continue
+      if (this.byId.has(entry.id) || this.dropped.has(entry.id)) continue
       const key = timeKey(entry.timestamp)
       if (key === undefined) continue
       const keyed = { entry, ...key }
@@ -123,8 +126,29 @@ export class Timeline {
     return fresh.length
   }
 
+  /**
+   * Keeps only the entry `keep` (none if undefined) and drops the rest, remembering their ids so
+   * they are never merged back; returns what was dropped. The map room keeps only its newest
+   * accepted world state this way (R26): each is the full state, up to 500 KB.
+   */
+  retainOnly(keep: string | undefined): TimelineEntry[] {
+    const kept = keep === undefined ? undefined : this.byId.get(keep)
+    if (this.ordered.length === (kept === undefined ? 0 : 1)) return []
+    const removed: TimelineEntry[] = []
+    for (const keyed of this.ordered) {
+      if (keyed === kept) continue
+      this.byId.delete(keyed.entry.id)
+      this.dropped.add(keyed.entry.id)
+      removed.push(keyed.entry)
+    }
+    this.ordered = kept === undefined ? [] : [kept]
+    this.dirty = true
+    return removed
+  }
+
   /** Drops everything, e.g. when a reconnection gap is too large to bridge. */
   clear(): void {
+    this.dropped.clear()
     this.byId.clear()
     this.ordered = []
     this.dirty = true

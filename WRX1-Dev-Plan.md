@@ -237,6 +237,7 @@ flowchart TB
 - At each gate, the chart is compared with this baseline, and the differences are recorded in the gate's blog post.
 | Phase 4 added: WPs 4.1 to 4.4 for message templates (Annex A A1 to A4), one phase PR, gate G4 | The product owner started Annex A on Nov 1, 2026 and deferred its open questions; Phase 4 builds on the recommended answers (`plan/decisions/annex-a-b-implementation.md`, "Provisional answers") |
 | Phase 5 added: WPs 5.1 to 5.8 for turns, the map and White Force objective editing (the product owner's Nov 3, 2026 revision), one phase PR, gate G5; FT-3 superseded; PLY-6 and PLY-41 retired from WPs 0.2 and 2.5 | The owner moved a turn model and a map room with an admin-edited world state into v1. v1's release now waits for G5 as well as the WP 3.3 hardware check |
+| WP 5.7 also narrows the structural change (§3 rule 8): only rooms added or removed, or a role's effective access to a room changing, move `designVersion` and reset layouts | The product owner's decision of Nov 4, 2026, made during WP 5.7; it changes `designStructure` in the publish planner (WP 5.3) |
 
 ## CI gates and human checkpoints
 

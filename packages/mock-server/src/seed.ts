@@ -6,15 +6,20 @@
 //   entries) stored as visitors, the state the vault route leaves behind (ADM-37);
 // - the §3 nodes: `game-setup` and the game theme's assets open, everything else whitelist with
 //   the admin as owner and publisher; objectives readable by their force and every White Force
-//   role, published by the admin only, with the design's text as the admin's single item
-//   (§3 rule 14, D21); `retired` holds the design's deleted-entity records; `directory` the
+//   role, published by the admin and the White Force's roles that are not observers, with the
+//   design's text as the admin's item under the id a publish gives it (§3 rule 14, D21); `retired` holds the design's deleted-entity records; `directory` the
 //   entity GUIDs and each role's GUID by login name (§3 rule 1); `templates` one item per
 //   message template, locked if a room offers it, as a publish leaves it (Annex A, TD6);
-// - optional message history, archived for MAM;
+//   `game-state` turn 1, planning, as a first publish leaves it (D7);
+// - optional message history, archived for MAM, and an optional world state, posted by the
+//   admin to the map room before it (D25, §3 rule 18);
 // - optional private storage of the admin account (the demo seed's observer vault).
 // White Force roles reach rooms through effective access (D8, §3 rule 4).
-import { directoryOf, effectiveAccess } from '@wrx/domain'
+import { directoryOf, effectiveAccess, objectivesDraftItemId } from '@wrx/domain'
 import {
+  INITIAL_GAME_STATE,
+  LIMITS,
+  MAP_ROOM_TYPE,
   SINGLETON_NODES,
   checkDesign,
   designFileSchema,
@@ -24,7 +29,8 @@ import {
   TEMPLATE_LIMITS,
   withTemplateLocks,
 } from '@wrx/schemas'
-import type { DesignFile, Result } from '@wrx/schemas'
+import type { DesignFile, Result, WorldState } from '@wrx/schemas'
+import { worldStateSchema } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { RoomConfig } from '@wrx/transport'
 import { z } from 'zod'
@@ -62,6 +68,13 @@ export interface DesignSeed {
     readonly roles?: Readonly<Record<string, string>>
   }
   readonly history?: readonly SeedMessage[]
+  /**
+   * The world state the admin has published to the design's map room (D25), as the first
+   * message of its history, at `worldStateAt` (default: the earliest history time, else the
+   * design's export time). Refused if the design has no map room.
+   */
+  readonly worldState?: WorldState
+  readonly worldStateAt?: string
   /**
    * XEP-0049 private storage of the admin account, by key: e.g. the demo observer vault's
    * ciphertext (ADM-37), as the admin tooling stores it.
@@ -206,10 +219,12 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     })
   }
 
-  // The White Force (umpire flag): every one of its roles, observer or not, reads every force's
-  // objectives; only the admin publishes them (§3 rule 14, D21).
+  // The White Force (umpire flag): every one of its roles reads every force's objectives, and
+  // those that are not observers publish them (§3 rule 14, D21).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => jidOf(r.id))
+  const whiteRoles = design.roles.filter((r) => whiteForces.has(r.forceId))
+  const white = whiteRoles.map((r) => jidOf(r.id))
+  const editors = whiteRoles.filter((r) => !r.isObserver).map((r) => jidOf(r.id))
   const publicAssets = new Set(publicAssetIds(design.game))
 
   addNode(
@@ -226,7 +241,13 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     [],
     [],
   )
-  addNode(SINGLETON_NODES.gameState, gameNode('whitelist', 1), everyRole, [], [])
+  addNode(
+    SINGLETON_NODES.gameState,
+    gameNode('whitelist', 1),
+    everyRole,
+    [],
+    [{ id: CURRENT, doc: INITIAL_GAME_STATE }],
+  )
   addNode(
     SINGLETON_NODES.retired,
     gameNode('whitelist', RETIRED_MAX_ITEMS),
@@ -267,8 +288,8 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
   for (const room of design.rooms) {
-    // §3: room participants SHOULD read their room's document and all users MAY; the store
-    // reads every room document, so every role does.
+    // §3 rule 15, PLY-60: every role reads every room document (the client finds its rooms by
+    // reading each one the directory names), so room names are visible to every role (R24).
     addNode(
       nodeName.room(room.id),
       gameNode('whitelist', 1),
@@ -278,7 +299,7 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
   for (const force of design.forces) {
-    // §3 rule 14: one item, the admin's.
+    // §3 rule 14: one item per publisher; the design's text is the admin's.
     const readers = [
       ...design.roles.filter((r) => r.forceId === force.id).map((r) => jidOf(r.id)),
       ...white,
@@ -288,8 +309,10 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
       nodeName.objectives(force.id),
       gameNode('whitelist', 1),
       [...new Set(readers)],
-      [],
-      objectives === undefined ? [] : [{ id: 'admin', doc: objectives }],
+      editors,
+      objectives === undefined
+        ? []
+        : [{ id: objectivesDraftItemId(JSON.stringify(objectives)), doc: objectives }],
     )
   }
   for (const asset of design.assets) {
@@ -303,7 +326,13 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
     )
   }
 
-  const history = seedHistory(seed.history ?? [], design, matrix, domain, issues)
+  const history = seedHistory(
+    [...worldStateMessage(seed, design, issues), ...(seed.history ?? [])],
+    design,
+    matrix,
+    domain,
+    issues,
+  )
   for (const room of rooms) {
     const id = room.jid.slice(0, room.jid.indexOf('@'))
     room.archive = history.filter((h) => h.room === id).map((h) => h.message)
@@ -327,6 +356,30 @@ export function stateFromDesign(seed: DesignSeed): Result<MockState, string> {
       lastStanzaId: history.at(-1)?.message.stanzaId ?? '0',
     },
   }
+}
+
+/** The seed's world state as the admin's message in the map room (D25), or nothing. */
+function worldStateMessage(seed: DesignSeed, design: DesignFile, issues: string[]): SeedMessage[] {
+  if (seed.worldState === undefined) return []
+  const map = design.rooms.find((r) => r.roomType === MAP_ROOM_TYPE)
+  if (map === undefined) {
+    issues.push('worldState: the design has no map room')
+    return []
+  }
+  const parsed = worldStateSchema.safeParse(seed.worldState)
+  if (!parsed.success) {
+    issues.push(`worldState: ${z.prettifyError(parsed.error)}`)
+    return []
+  }
+  const earliest = [...(seed.history ?? [])].map((m) => m.at).sort()[0]
+  return [
+    {
+      room: map.id,
+      author: 'admin',
+      body: JSON.stringify({ type: 'world-state', schemaVersion: 1, content: parsed.data }),
+      at: seed.worldStateAt ?? earliest ?? design.exportedAt,
+    },
+  ]
 }
 
 function seedHistory(
@@ -354,8 +407,13 @@ function seedHistory(
       issues.push(`history[${index}]: "${message.author}" cannot post in "${message.room}"`)
       return
     }
+    // World states in the map room take the larger cap (PLY-53), as the client sends them.
+    const worldState = message.body.startsWith('{"type":"world-state"')
     if (
-      !messageWithinCap(messageStanza('seed', `${message.room}@conference.${domain}`, message.body))
+      !messageWithinCap(
+        messageStanza('seed', `${message.room}@conference.${domain}`, message.body),
+        worldState ? LIMITS.worldStateStanzaBytes : undefined,
+      )
     ) {
       issues.push(`history[${index}]: the message is over the stanza cap`)
       return

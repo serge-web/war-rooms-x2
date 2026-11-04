@@ -153,17 +153,18 @@ function kindOf(step: PlanStep): Kind {
       }
     case 'delete-node':
       return { key: 'delete-node', summary: (s) => `Delete nodes: ${plural(s.length, 'node')}` }
-    case 'purge-node':
-      return {
-        key: 'purge-node',
-        summary: (s) => `Remove objectives items not the admin's: ${plural(s.length, 'node')}`,
-      }
     case 'retract-item':
-      return {
-        key: 'retract-item',
-        summary: (s) =>
-          `Remove templates the design no longer has: ${plural(s.length, 'template')}`,
-      }
+      return a.node === SINGLETON_NODES.templates
+        ? {
+            key: 'retract-item',
+            summary: (s) =>
+              `Remove templates the design no longer has: ${plural(s.length, 'template')}`,
+          }
+        : {
+            key: 'retract-objectives',
+            summary: (s) =>
+              `Remove objectives edits of roles no longer in the White Force: ${plural(s.length, 'edit')}`,
+          }
   }
 }
 

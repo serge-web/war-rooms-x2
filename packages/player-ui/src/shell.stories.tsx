@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite'
 import { BackendBadge } from './backend.tsx'
-import { AnnouncementsPanelCore, ForcePanelCore, OutOfGameColumnCore } from './column/index.ts'
+import {
+  AnnouncementsPanelCore,
+  ForcePanelCore,
+  OutOfGameColumnCore,
+  TurnPanelCore,
+} from './column/index.ts'
 import { RoomListCore, ShellCore } from './shell.tsx'
 
 const meta: Meta<typeof ShellCore> = {
@@ -25,6 +30,7 @@ const meta: Meta<typeof ShellCore> = {
     ),
     column: (
       <OutOfGameColumnCore
+        turn={<TurnPanelCore state={{ schemaVersion: 1, turn: 1, phase: 'planning' }} />}
         announcements={
           <AnnouncementsPanelCore
             items={[

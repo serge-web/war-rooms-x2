@@ -6,9 +6,21 @@
 // The server knows a role by its account, so here, and in the planner, the audit and AdminOps,
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
-import { DOCUMENT_ITEM_ID, OBJECTIVES_ITEM_ID, directoryOf, effectiveAccess } from '@wrx/domain'
-import { SINGLETON_NODES, TEMPLATE_LIMITS, nodeName, publicAssetIds } from '@wrx/schemas'
-import type { DesignFile } from '@wrx/schemas'
+import {
+  DOCUMENT_ITEM_ID,
+  accessOf,
+  directoryOf,
+  effectiveAccess,
+  objectivesDraftItemId,
+} from '@wrx/domain'
+import {
+  INITIAL_GAME_STATE,
+  SINGLETON_NODES,
+  TEMPLATE_LIMITS,
+  nodeName,
+  publicAssetIds,
+} from '@wrx/schemas'
+import type { DesignFile, Force, Role, Room } from '@wrx/schemas'
 import { CLOSED_SIDE_CHANNELS } from '@wrx/transport'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 
@@ -34,12 +46,9 @@ export const RETIRED_MAX_ITEMS = 1000
 export const TEMPLATES_MAX_ITEMS = TEMPLATE_LIMITS.templates
 
 /**
- * The admin's item on an objectives node: the only item it holds, since only the admin publishes
- * objectives (§3 rule 14, D21).
+ * §3 rule 14: one item per publisher. ejabberd applies `max_items` per publisher (spike checks
+ * S14, S15-7), so each author keeps its newest save and nothing else.
  */
-export const OBJECTIVES_ADMIN_ITEM_ID = OBJECTIVES_ITEM_ID
-
-/** §3 rule 14: one item, the admin's, replaced on each edit. */
 export const OBJECTIVES_MAX_ITEMS = 1
 
 /** A room's settings: every RoomConfig field except the name and description. */
@@ -105,6 +114,21 @@ export interface TargetDocument {
   readonly itemId: string
   /** JSON text, as published. */
   readonly payload: string
+  /**
+   * Published only when the node holds no valid document of its kind: the turn state, which
+   * the admin advances during play (ADM-43), so a publish must never set it back to turn 1.
+   */
+  readonly initial?: boolean
+}
+
+/**
+ * Who may hold items on an objectives node (§3 rule 14, D21), by login name: the White Force's
+ * roles, observers included (an observer's items are from before it became one). The admin's are
+ * always kept. A role outside these, one that left the White Force or was deleted, has its items
+ * retracted by the next publish.
+ */
+export interface ObjectivesAuthors {
+  readonly authors: ReadonlySet<string>
 }
 
 export interface TargetRoom {
@@ -120,6 +144,11 @@ export interface TargetNode {
   /** Every role with an affiliation; roles not listed have none. The admin owns every node. */
   readonly access: ReadonlyMap<string, 'publish' | 'read'>
   readonly documents: readonly TargetDocument[]
+  /**
+   * Objectives nodes only (§3 rule 14): each save is a new item, so `documents` holds the
+   * admin's draft under `objectivesDraftItemId`, and other authors' items are expected.
+   */
+  readonly objectives?: ObjectivesAuthors
 }
 
 export interface TargetState {
@@ -134,6 +163,46 @@ export interface TargetState {
   readonly nodes: readonly TargetNode[]
   /** Each role's login name, by role GUID. */
   readonly loginNames: ReadonlyMap<string, string>
+  /**
+   * The design's structure (§3 rule 8, `designStructure`): what, when it changes, makes a
+   * publish increment `designVersion` and so reset players' layouts (PLY-5).
+   */
+  readonly structure: string
+}
+
+/** The documents a design's structure is read from: a design file, or the published documents. */
+export interface StructureInput {
+  readonly forces: readonly Pick<Force, 'id' | 'order' | 'isUmpire'>[]
+  readonly roles: readonly Pick<Role, 'id' | 'forceId' | 'order' | 'isObserver'>[]
+  readonly rooms: readonly Pick<Room, 'id' | 'order' | 'participants'>[]
+}
+
+/**
+ * §3 rule 8: the structure of a design, as canonical text. Two designs with the same text
+ * differ only in what does not move `designVersion`, so players' layouts survive it (PLY-5, D6).
+ *
+ * Structural are only (product owner, Nov 4, 2026): a room added or removed, and a change to any
+ * role's effective access to any room (none, read or write, as `effectiveAccess` computes it).
+ * Re-ordering forces, roles or rooms is not structural. Moving a role to another force, its
+ * observer flag and a force's White Force flag count only through the access they change; so do
+ * participant entries. Themes, names, descriptions, the briefing, objectives, templates, room
+ * types and configs never count. A role added or removed counts through its access: one that
+ * sees no room changes nothing, and one that sees a room moves the version, so every online
+ * player's layout resets although their own access is unchanged (layouts are saved per role, so
+ * the new role itself has none to lose).
+ */
+export function designStructure(design: StructureInput): string {
+  const matrix = effectiveAccess(design)
+  const sorted = (ids: Iterable<string>) => [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+  const rooms = sorted(matrix.roomIds)
+  const access = sorted(matrix.roleIds).map((roleId) => [
+    roleId,
+    rooms.flatMap((roomId) => {
+      const cell = accessOf(matrix, roomId, roleId)
+      return cell === 'none' ? [] : [`${roomId}:${cell}`]
+    }),
+  ])
+  return JSON.stringify({ rooms, access })
 }
 
 /** The state publishing `design` should leave on the server. Assumes a design that passed `checkDesign`. */
@@ -160,10 +229,14 @@ export function targetState(design: DesignFile): TargetState {
     return { roomId: room.id, config: gameRoomConfig(room.name), access }
   })
 
-  // Every White Force role (the umpire-flag force), observer or not, reads every force's
-  // objectives; only the admin, the node's owner, publishes them (§3 rule 14, D21, WP 3.5).
+  // White Force roles (the umpire-flag force) read every force's objectives; those that are not
+  // observers publish them too, and the admin, the node's owner, does (§3 rule 14, D21).
+  // Observers never publish (review F5).
   const whiteForces = new Set(design.forces.filter((f) => f.isUmpire).map((f) => f.id))
-  const white = design.roles.filter((r) => whiteForces.has(r.forceId)).map((r) => r.loginName)
+  const whiteRoles = design.roles.filter((r) => whiteForces.has(r.forceId))
+  const white = whiteRoles.map((r) => r.loginName)
+  const editors = whiteRoles.filter((r) => !r.isObserver).map((r) => r.loginName)
+  const authors: ObjectivesAuthors = { authors: new Set(white) }
   const publicAssets = new Set(publicAssetIds(design.game))
   const whitelist1 = gameNodeConfig('whitelist', 1)
 
@@ -180,11 +253,13 @@ export function targetState(design: DesignFile): TargetState {
       access: everyRole('read'),
       documents: [],
     },
+    // D7: the turn state, read by every role (§3 rule 15), published by the admin. A first
+    // publish starts the game at turn 1, planning; later ones leave the turn where it is.
     {
       node: SINGLETON_NODES.gameState,
       config: whitelist1,
       access: everyRole('read'),
-      documents: [],
+      documents: [{ ...doc(INITIAL_GAME_STATE), initial: true }],
     },
     // §3 rule 1: deleted forces' and roles' last names, read by every role, for message authors.
     // Published with the other documents, before any removal (ADM-39).
@@ -223,8 +298,9 @@ export function targetState(design: DesignFile): TargetState {
       access: everyRole('read'),
       documents: [doc(role)],
     })),
-    // §3: room participants SHOULD read their room's document and all users MAY; the client's
-    // store reads every room document, so every role does (as the mock's seed).
+    // §3 rule 15, PLY-60: every role reads every room document, since the client finds its
+    // rooms by reading each room the directory names; room names are therefore visible to every
+    // role (R24). As the mock's seed.
     ...design.rooms.map((room) => ({
       node: nodeName.room(room.id),
       config: whitelist1,
@@ -232,19 +308,23 @@ export function targetState(design: DesignFile): TargetState {
       documents: [doc(room)],
     })),
     ...design.forces.map((force) => {
-      // §3 rule 14, D21: the force's roles and every White Force role read; nobody but the
-      // admin, who owns the node, publishes.
+      // §3 rule 14, D21: the force's roles and the White Force's observers read; the White
+      // Force's other roles publish (and so read). The admin owns the node.
       const access = new Map<string, 'publish' | 'read'>()
       for (const role of design.roles) {
         if (role.forceId === force.id) access.set(role.loginName, 'read')
       }
       for (const id of white) access.set(id, 'read')
+      for (const id of editors) access.set(id, 'publish')
       const objectives = design.objectives.find((o) => o.forceId === force.id)
+      const payload = objectives === undefined ? undefined : JSON.stringify(objectives)
       return {
         node: nodeName.objectives(force.id),
         config: gameNodeConfig('whitelist', OBJECTIVES_MAX_ITEMS),
         access,
-        documents: objectives === undefined ? [] : [doc(objectives, OBJECTIVES_ADMIN_ITEM_ID)],
+        documents:
+          payload === undefined ? [] : [{ itemId: objectivesDraftItemId(payload), payload }],
+        objectives: authors,
       }
     }),
     ...design.assets.map((asset) => {
@@ -264,5 +344,6 @@ export function targetState(design: DesignFile): TargetState {
     rooms,
     nodes,
     loginNames,
+    structure: designStructure(design),
   }
 }

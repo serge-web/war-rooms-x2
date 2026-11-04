@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:chat-room-config.schema.json",
+  "title": "Chat room config, version 2",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 2
+    },
+    "freeText": {
+      "type": "boolean",
+      "description": "Free text allowed beside templates (TD3)"
+    },
+    "templates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "force",
+              "role"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "description": "Force or role GUID"
+          },
+          "templateIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+            },
+            "description": "Templates this force or role may use here; a role entry adds to its force’s"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "templateIds"
+        ],
+        "description": "Templates a force or role may use in a room (TD4, TPL-2)"
+      },
+      "description": "Template entries per force or role (TD4)"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "freeText",
+    "templates"
+  ],
+  "description": "Chat room config: free text and templates"
+}

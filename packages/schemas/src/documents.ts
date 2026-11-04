@@ -25,7 +25,9 @@ export const gameSetupSchema = z
     designVersion: z
       .int()
       .min(1)
-      .describe('Incremented on each publish that changes the design; keys saved layouts (PLY-5)'),
+      .describe(
+        'Incremented by a publish that changes the structure: a room added or removed, or a role’s effective access to a room (§3 rule 8); keys saved layouts (PLY-5)',
+      ),
     theme: themeSchema,
     roomTypeDefaults: z
       .record(slugSchema, z.record(z.string(), z.unknown()))
@@ -81,7 +83,7 @@ export const roomSchema = z
     schemaVersion: z.literal(1),
     id: idSchema,
     name: nameSchema,
-    roomType: slugSchema.describe('Room type id from the registry (v1: chat)'),
+    roomType: slugSchema.describe('Room type id from the registry (v1: chat and map)'),
     participants: z
       .array(participantSchema)
       .refine(
@@ -110,6 +112,9 @@ export const objectivesSchema = z
     ),
   })
   .describe("A force's objectives; confidential to that force, the White Force and the admin")
+
+/** The phases of a turn, in order (D7). */
+export const GAME_PHASES = Object.freeze(['planning', 'adjudication'] as const)
 
 export const ASSET_MIME_TYPES = Object.freeze(['image/png', 'image/webp', 'image/svg+xml'] as const)
 
@@ -194,12 +199,26 @@ export const directorySchema = z
   })
   .describe('Where each entity document is, by GUID, and each role by login name')
 
-/** `game-state`: reserved for the turn model; created empty in v1 (§8). */
+/**
+ * `game-state`: the turn state (D7, §3 table). Read by every role, published by the admin only
+ * (rule 15); the admin advances it (ADM-43), and a first publish starts it at turn 1, planning.
+ */
 export const gameStateSchema = z
   .object({
     schemaVersion: z.literal(1),
+    turn: z.int().min(1).max(LIMITS.turnMax).describe('The turn number, from 1'),
+    phase: z
+      .enum(GAME_PHASES)
+      .describe('Each turn has a planning phase, then an adjudication phase (D7)'),
   })
-  .describe('Reserved for turns and the game clock')
+  .describe('The current turn and phase')
+
+/** The turn state a first publish leaves: turn 1, planning (WP 5.2). */
+export const INITIAL_GAME_STATE: Readonly<z.infer<typeof gameStateSchema>> = Object.freeze({
+  schemaVersion: 1,
+  turn: 1,
+  phase: 'planning',
+})
 
 export type GameSetup = z.infer<typeof gameSetupSchema>
 export type Force = z.infer<typeof forceSchema>
@@ -211,6 +230,7 @@ export type Asset = z.infer<typeof assetSchema>
 export type AssetMimeType = (typeof ASSET_MIME_TYPES)[number]
 export type Announcement = z.infer<typeof announcementSchema>
 export type GameState = z.infer<typeof gameStateSchema>
+export type GamePhase = (typeof GAME_PHASES)[number]
 export type Retired = z.infer<typeof retiredSchema>
 export type Directory = z.infer<typeof directorySchema>
 

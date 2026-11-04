@@ -60,13 +60,15 @@ test('SC-7: a stakeholder demo on the mock, offline: three panes and a second wi
     'Blue HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
-  await expect(tabsIn(pane(page, 2))).toHaveText(['Red HQ', 'Blue–Red negotiation'])
+  await expect(tabsIn(pane(page, 2))).toHaveText(['Red HQ', 'Blue–Red negotiation', 'Map'])
   await expect(tabsIn(pane(page, 3))).toHaveText([
     'Blue HQ',
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
 
   // The umpire's change (the admin login, SC-5) reaches Red's pane live.

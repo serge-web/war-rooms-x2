@@ -41,14 +41,15 @@ function item(id: string, text: string, live = false, at = '10:00'): Announcemen
 }
 
 describe('the out-of-game column (PLY-36)', () => {
-  it('shows the game-time slot, the admin panel and the force panel, top to bottom', async () => {
+  it('shows the turn panel, the admin panel and the force panel, top to bottom', async () => {
     await mount('blue-co')
     const column = screen.getByRole('complementary', { name: 'Out-of-game column' })
     const names = [...column.querySelectorAll('section[aria-label], section[aria-labelledby]')]
       .filter((s) => s.parentElement?.classList.contains('wrx-column') === true)
       .map((s) => s.getAttribute('aria-label') ?? s.querySelector('h2')?.textContent)
-    expect(names).toEqual(['Game time', 'Announcements', 'Force panel'])
-    expect(screen.getByText('Game time and turn: not used in this version.')).toBeTruthy()
+    expect(names).toEqual(['Turn', 'Announcements', 'Force panel'])
+    // The sample documents hold no turn state: as before a first publish.
+    expect(screen.getByText('No turn yet: the game has not been published.')).toBeTruthy()
   })
 })
 
@@ -197,8 +198,9 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Publish objectives' }))
     await act(() => flush())
     const call = h.session.calls.find((c) => c.op === 'publish')
-    // One item, the admin's (§3 rule 14).
-    expect(call?.args.slice(0, 2)).toEqual([nodeName.objectives(tid('red')), 'admin'])
+    // A new item for each save, the admin's (§3 rule 14).
+    expect(call?.args[0]).toBe(nodeName.objectives(tid('red')))
+    expect(String(call?.args[1])).toMatch(/^admin-./)
     expect(JSON.parse(String(call?.args[2]))).toMatchObject({
       forceId: tid('red'),
       markdown: '1. Delay **Blue** until noon.',
@@ -218,7 +220,7 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     )
   })
 
-  it('lets a White Force role that is not an observer read any force’s objectives, not edit them (D21)', async () => {
+  it('lets a White Force role that is not an observer edit any force’s objectives, shown live (D21, PLY-35)', async () => {
     const h = await mount('white-1')
     const panel = forcePanel()
     const choice = within(panel).getByRole('combobox', { name: 'Show objectives for' })
@@ -227,10 +229,34 @@ describe('the force panel (PLY-25, PLY-35)', () => {
     expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
       'Delay Blue.',
     )
-    // Before WP 3.5 it had an editor here.
-    expect(within(panel).queryByRole('button', { name: /Edit/ })).toBeNull()
+    // WP 3.5 took this editor away; the owner's Nov 3 revision gives it back.
+    fireEvent.click(within(panel).getByRole('button', { name: 'Edit RED objectives' }))
+    const dialog = screen.getByRole('dialog', { name: 'Edit RED objectives' })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Objectives (Markdown)' }), {
+      target: { value: 'Delay Blue, *then* withdraw.' },
+    })
+    expect(
+      within(dialog).getByRole('region', { name: 'Objectives preview' }).querySelector('em')
+        ?.textContent,
+    ).toBe('then')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Publish objectives' }))
+    await act(() => flush())
+    const call = h.session.calls.find((c) => c.op === 'publish')
+    expect(call?.args[0]).toBe(nodeName.objectives(tid('red')))
+    // Its own new item: an author's id, a fresh one per save (§3 rule 14).
+    expect(String(call?.args[1])).toMatch(/^white-1-./)
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(h.session.calls.some((c) => c.op === 'publish')).toBe(false)
+    // The server's event, as every subscriber gets it: the panel shows the newest edit.
+    act(() => {
+      h.publish(
+        nodeName.objectives(tid('red')),
+        JSON.parse(String(call?.args[2])),
+        String(call?.args[1]),
+      )
+    })
+    expect(within(panel).getByRole('region', { name: 'RED objectives' }).textContent).toContain(
+      'Delay Blue, then withdraw.',
+    )
   })
 
   it('shows the admin as the umpire in the White Force, choosing and editing any force (SC-5)', async () => {

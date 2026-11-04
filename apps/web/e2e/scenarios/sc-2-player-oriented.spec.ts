@@ -72,7 +72,7 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
   // 3. One tab per permitted room, and the force panel at the bottom of the column: Blue's logo,
   // the role name and Blue's objectives, in Blue's theme (PLY-4, PLY-24, PLY-25).
   const tabs = page.locator('.flexlayout__layout_main').getByRole('tab')
-  await expect(tabs).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports'])
+  await expect(tabs).toHaveText(['Blue HQ', 'Blue–Red negotiation', 'Blue Reports', 'Map'])
   const column = page.getByRole('complementary', { name: 'Out-of-game column' })
   const forcePanel = column.getByRole('region', { name: 'Force panel' })
   await expect(forcePanel.getByRole('heading', { name: 'Blue CO' })).toBeVisible()
@@ -91,7 +91,8 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
   })
   expect(last).toBe('Force panel')
 
-  // 4. The negotiation room into a second tabset, below Blue HQ, then resized.
+  // 4. The negotiation room (by default behind Blue HQ: four rooms, three columns) into a
+  // tabset of its own, below Blue HQ, then resized.
   const tabsets = page.locator('.flexlayout__layout_main .flexlayout__tabset')
   /** Each docked tabset's tabs and box, top to bottom then left to right. */
   const boxes = () =>
@@ -115,9 +116,10 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
     .toEqual([
       [['Blue HQ'], expect.any(Number)],
       [['Blue Reports'], expect.any(Number)],
+      [['Map'], expect.any(Number)],
       [['Blue–Red negotiation'], expect.any(Number)],
     ])
-  const [upper, , lower] = await boxes()
+  const [upper, , , lower] = await boxes()
   expect(upper?.x).toBe(lower?.x)
   const heights = async () => (await boxes()).map((b) => b.height)
   const before = await heights()
@@ -134,12 +136,12 @@ test('SC-2: a Blue role sees the themed welcome page, exactly its rooms and obje
   // 5. After a reload, the same layout (PLY-5).
   await page.reload()
   await logInAs(page, backend, 'blue-co')
-  await expect(tabs).toHaveCount(3, { timeout: 20_000 })
+  await expect(tabs).toHaveCount(4, { timeout: 20_000 })
   await expect
     .poll(async () => (await boxes()).map((b) => b.tabs))
-    .toEqual([['Blue HQ'], ['Blue Reports'], ['Blue–Red negotiation']])
+    .toEqual([['Blue HQ'], ['Blue Reports'], ['Map'], ['Blue–Red negotiation']])
   await expect
     .poll(async () => (await heights()).map((h, i) => Math.abs(h - (resized[i] ?? 0)) <= 2))
-    .toEqual([true, true, true])
+    .toEqual([true, true, true, true])
   expect(errors).toEqual([])
 })

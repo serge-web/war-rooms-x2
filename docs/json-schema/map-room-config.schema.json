@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:map-room-config.schema.json",
+  "title": "Map room config",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "centre": {
+      "description": "Where the map opens; unset, it fits the assets",
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ]
+    },
+    "zoom": {
+      "description": "The zoom it opens at; unset, it fits the assets",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 22
+    }
+  },
+  "required": [
+    "schemaVersion"
+  ],
+  "description": "Map room config: the opening view"
+}

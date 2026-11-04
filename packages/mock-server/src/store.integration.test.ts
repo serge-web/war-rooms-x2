@@ -1,9 +1,10 @@
-// The session store (@wrx/domain) on the demo mock, where the two meet over node deletion: a
-// room node removed mid-session leaves the player's rooms at once when the node was created as
-// the admin tooling creates nodes (notify_delete on), with no later game-setup publish needed.
-// A node auto-created by a bare publish keeps ejabberd's default (notify_delete off), so its
-// deletion is silent and only the next design version reveals it: the admin tooling never
-// relies on auto-create.
+// The session store (@wrx/domain) on the demo mock, where the two meet over rooms created and
+// deleted mid-session. A room created during the session appears when the admin publishes the
+// new `directory`, which the store reads live (PLY-60); nodes are never listed. A room node
+// removed mid-session leaves the player's rooms at once when the node was created as the admin
+// tooling creates nodes (notify_delete on), with no later publish needed. A node auto-created by
+// a bare publish keeps ejabberd's default (notify_delete off), so its deletion is silent and only
+// the next directory reveals it: the admin tooling never relies on auto-create.
 import { nodeName } from '@wrx/schemas'
 import { nameOf, tid } from '@wrx/schemas/fixtures'
 import { createSessionStore } from '@wrx/domain'
@@ -44,24 +45,29 @@ async function demo() {
   const admin = await login('admin')
   const umpire = createSessionStore({ session: await login('white-observer'), logger: silent })
   await umpire.ready()
-  const game = unwrap(await admin.pubsub.getItems('game-setup'))[0]
-  if (game === undefined) throw new Error('no game-setup')
-  const bumpDesign = async (designVersion: number) => {
-    const setup = { ...(JSON.parse(game.payload) as object), designVersion }
-    unwrap(await admin.pubsub.publish('game-setup', game.id, JSON.stringify(setup)))
+  const directory = unwrap(await admin.pubsub.getItems('directory'))[0]
+  if (directory === undefined) throw new Error('no directory')
+  /** Publishes the directory with Press added or taken out, as a publish does (PLY-60). */
+  const publishDirectory = async (withPress: boolean) => {
+    const doc = JSON.parse(directory.payload) as { rooms: string[] }
+    const rooms = doc.rooms.filter((id) => id !== tid('press'))
+    if (withPress) rooms.push(tid('press'))
+    rooms.sort()
+    unwrap(await admin.pubsub.publish('directory', directory.id, JSON.stringify({ ...doc, rooms })))
   }
-  return { state, admin, umpire, bumpDesign }
+  return { state, admin, umpire, publishDirectory }
 }
 
 const silent = { debug: () => undefined, warn: () => undefined }
 
 const roomIds = (store: SessionStore) => store.me().data.rooms.map((r) => nameOf(r.room.id))
 
-describe('a room node deleted mid-session (PLY-6)', () => {
-  it('leaves the White observer’s rooms at once when the node was created as a publish creates it', async () => {
-    const { state, admin, umpire, bumpDesign } = await demo()
+describe('rooms created and deleted mid-session (PLY-60)', () => {
+  it('a new room appears with the new directory; deleted, it leaves the White observer’s rooms at once when the node was created as a publish creates it', async () => {
+    const { state, admin, umpire, publishDirectory } = await demo()
     expect(roomIds(umpire)).not.toContain('press')
-    // As the publish does: create and configure the node, grant access, publish, bump.
+    // As the publish does: create and configure the node, grant access, publish the room,
+    // then the directory.
     unwrap(
       await admin.pubsub.createNode(nodeName.room(tid('press')), {
         accessModel: 'whitelist',
@@ -78,7 +84,9 @@ describe('a room node deleted mid-session (PLY-6)', () => {
     unwrap(
       await admin.pubsub.publish(nodeName.room(tid('press')), 'current', JSON.stringify(PRESS)),
     )
-    await bumpDesign(2)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(roomIds(umpire)).not.toContain('press')
+    await publishDirectory(true)
     await vi.waitFor(() => {
       expect(roomIds(umpire)).toContain('press')
     })
@@ -87,23 +95,23 @@ describe('a room node deleted mid-session (PLY-6)', () => {
     await vi.waitFor(() => {
       expect(roomIds(umpire)).not.toContain('press')
     })
-    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports'])
+    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports', 'map'])
     await umpire.logout()
   })
 
-  it('an auto-created node is deleted silently (ejabberd’s default), until the next design version', async () => {
-    const { admin, umpire, bumpDesign } = await demo()
+  it('an auto-created node is deleted silently (ejabberd’s default), until the next directory', async () => {
+    const { admin, umpire, publishDirectory } = await demo()
     unwrap(
       await admin.pubsub.publish(nodeName.room(tid('press')), 'current', JSON.stringify(PRESS)),
     )
-    await bumpDesign(2)
+    await publishDirectory(true)
     await vi.waitFor(() => {
       expect(roomIds(umpire)).toContain('press')
     })
     unwrap(await admin.pubsub.deleteNode(nodeName.room(tid('press'))))
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(roomIds(umpire)).toContain('press')
-    await bumpDesign(3)
+    await publishDirectory(false)
     await vi.waitFor(() => {
       expect(roomIds(umpire)).not.toContain('press')
     })

@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 import { nodeName } from '@wrx/schemas'
-import { TEMPLATE, blueReportsConfig, nameOf, sampleTemplates, tid } from '@wrx/schemas/fixtures'
+import {
+  TEMPLATE,
+  blueReportsConfig,
+  nameOf,
+  sampleTemplates,
+  sampleWorldState,
+  tid,
+} from '@wrx/schemas/fixtures'
 import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { withSlots, defaultRoomTypes } from '@wrx/domain'
 import type { SessionStore } from '@wrx/domain'
@@ -30,6 +37,7 @@ import {
   useForce,
   useForces,
   useGameSetup,
+  useGameState,
   useMe,
   useObjectives,
   useOccupants,
@@ -42,6 +50,7 @@ import {
   useSessionStatus,
   useTemplateCheck,
   useTemplates,
+  useWorldState,
 } from './hooks.ts'
 import type { PlayerPanel, PlayerPanelProps, ReactRoomTypeRegistry } from './registry.ts'
 
@@ -317,6 +326,53 @@ describe('template hooks (Annex A, WP 4.1)', () => {
     const view = render(createElement(Room), { wrapper: strictWrapper(h.store) })
     await act(() => flush())
     expect(view.container.textContent).toBe('valid;chat;')
+  })
+})
+
+describe('turn and world-state hooks (WP 5.2)', () => {
+  it('gives the turn state live (PLY-55)', async () => {
+    const h = await ready()
+    const { result } = renderHook(() => useGameState(), { wrapper: strictWrapper(h.store) })
+    expect(result.current.data).toBeUndefined()
+    act(() => {
+      h.publish('game-state', { schemaVersion: 1, turn: 2, phase: 'adjudication' })
+    })
+    expect(result.current.data).toEqual({ schemaVersion: 1, turn: 2, phase: 'adjudication' })
+  })
+
+  it('joins the map room once under StrictMode for its world state, and leaves after (PLY-59)', async () => {
+    const docs = sampleDocuments()
+    const map = room('map', [{ kind: 'force', id: 'blue', access: 'read' }], { roomType: 'map' })
+    docs.set(nodeName.room(map.id), [map])
+    const h = await ready({ docs })
+    const jid = `${tid('map')}@${MUC}`
+    const body = (turn: number) =>
+      JSON.stringify({
+        type: 'world-state',
+        schemaVersion: 1,
+        content: { ...sampleWorldState(), turn },
+      })
+    h.archive.set(jid, [
+      message('map', { nick: 'admin', from: `admin@${DOMAIN}/a`, body: body(1) }),
+      message('map', { nick: 'red-co', from: `red-co@${DOMAIN}/r`, body: body(8) }),
+    ])
+    function Map(): ReactNode {
+      const world = useWorldState(tid('map'))
+      return createElement('p', null, `${world.status}:${String(world.data?.state?.turn)}`)
+    }
+    const view = render(createElement(Map), { wrapper: strictWrapper(h.store) })
+    await act(() => flush(20))
+    expect(view.container.textContent).toBe('ready:1')
+    expect(h.session.calls.filter((c) => c.op === 'join')).toHaveLength(1)
+    act(() => {
+      h.session.emitMessage(
+        message('map', { nick: 'admin', from: `admin@${DOMAIN}/a`, body: body(2) }),
+      )
+    })
+    expect(view.container.textContent).toBe('ready:2')
+    view.unmount()
+    await flush()
+    expect(h.session.calls.filter((c) => c.op === 'leave')).toHaveLength(1)
   })
 })
 

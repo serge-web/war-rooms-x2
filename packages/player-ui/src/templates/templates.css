@@ -136,6 +136,11 @@
   padding: 0.125rem 0.125rem 0;
 }
 
+.wrx-tform__fields:focus-visible {
+  outline: 3px solid var(--wrx-focus);
+  outline-offset: 2px;
+}
+
 .wrx-composer__actions {
   display: flex;
   flex: none;

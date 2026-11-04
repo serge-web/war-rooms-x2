@@ -5,8 +5,22 @@
 // live in `@wrx/hooks` (`ReactRoomTypeDefinition`). WP 2.6 and WP 2.2 fill them by building a
 // registry with `withSlots`, which returns a new registry; nothing is ever mutated, so one
 // registry can be shared by every pane (ARC-2).
-import { chatRoomConfigReader, messageBodySchema, slugSchema } from '@wrx/schemas'
-import type { ChatRoomConfig, GameSetup, MessageBody, Result, Room } from '@wrx/schemas'
+import {
+  MAP_ROOM_TYPE,
+  chatRoomConfigReader,
+  mapRoomConfigReader,
+  messageBodySchema,
+  slugSchema,
+  worldStateMessageBodySchema,
+} from '@wrx/schemas'
+import type {
+  ChatRoomConfig,
+  GameSetup,
+  MapRoomConfig,
+  MessageBody,
+  Result,
+  Room,
+} from '@wrx/schemas'
 import { z } from 'zod'
 
 export interface RoomTypeDefinition<Player = unknown, Editor = unknown, Config = unknown> {
@@ -55,6 +69,25 @@ export const chatRoomType: RoomTypeDefinition<never, never, ChatConfig> = Object
   adminEditor: undefined,
 })
 
+/** Config of the map room: its opening view; `{}` reads as the defaults (fit the assets). */
+export const mapConfigSchema: z.ZodType<MapRoomConfig> = mapRoomConfigReader
+export type MapConfig = MapRoomConfig
+
+/**
+ * The `map` room type (D25, §3 rule 18): the game's one map room, whose messages each carry the
+ * full world state. Only world-state bodies are its messages; a client then accepts them only
+ * from the admin's real JID (PLY-58, the store's `worldState`). WP 5.5 fills the player panel.
+ */
+export const mapRoomType: RoomTypeDefinition<never, never, MapConfig> = Object.freeze({
+  type: MAP_ROOM_TYPE,
+  label: 'Map',
+  icon: 'map',
+  configSchema: mapConfigSchema,
+  messageSchema: worldStateMessageBodySchema,
+  playerComponent: undefined,
+  adminEditor: undefined,
+})
+
 /** Builds a registry. Throws on a bad or duplicate type: registries are code, not network data. */
 export function createRoomTypeRegistry<Player, Editor>(
   definitions: readonly RoomTypeDefinition<Player, Editor>[],
@@ -75,7 +108,7 @@ export function createRoomTypeRegistry<Player, Editor>(
 
 /** The v1 registry with empty UI slots: what the domain layer and tests use. */
 export function defaultRoomTypes(): RoomTypeRegistry<never, never> {
-  return createRoomTypeRegistry([chatRoomType])
+  return createRoomTypeRegistry([chatRoomType, mapRoomType])
 }
 
 /**

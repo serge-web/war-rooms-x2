@@ -313,7 +313,8 @@ test('SC-1: the admin designs a game on the mock, publishes it, moves it to the 
   const serverPlayer = await serverContext.newPage()
   const seenOnMock = await playerView(mockPlayer, 'blue-lead', onMock['blue-lead'] ?? '')
   const seenOnServer = await playerView(serverPlayer, 'blue-lead', sheet['blue-lead'] ?? '')
-  expect(seenOnMock.tabs).toEqual(['Blue HQ', NEGOTIATION])
+  // The map room came with the new design, first, and every role sees it (§3 rule 18).
+  expect(seenOnMock.tabs).toEqual(['Map', 'Blue HQ', NEGOTIATION])
   expect(seenOnServer).toEqual(seenOnMock)
   expect(seenOnServer.objectives).toContain('Hold the harbour.')
   expect(errors).toEqual([])

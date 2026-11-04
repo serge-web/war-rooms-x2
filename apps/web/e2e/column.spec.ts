@@ -20,12 +20,14 @@ async function player(page: Page, roleId: string): Promise<void> {
   await expect(column(page)).toBeVisible()
 }
 
-test('the column sits outside the workspace: game time, admin panel, force panel (PLY-36, PLY-25)', async ({
+test('the column sits outside the workspace: turn panel, admin panel, force panel (PLY-36, PLY-55, PLY-25)', async ({
   page,
 }) => {
   await player(page, 'blue-co')
   const aside = column(page)
-  await expect(aside.getByRole('region', { name: 'Game time' })).toContainText('not used')
+  await expect(aside.getByRole('region', { name: 'Turn' }).getByRole('status')).toHaveText(
+    'Turn 1, Planning',
+  )
   await expect(announcements(page)).toContainText('None yet')
   await expect(forcePanel(page).getByRole('heading', { name: 'Blue CO' })).toBeVisible()
   await expect(forcePanel(page)).toContainText('Blue')
@@ -36,7 +38,7 @@ test('the column sits outside the workspace: game time, admin panel, force panel
   const order = await aside.evaluate((el) =>
     [...el.querySelectorAll('.wrx-column > section')].map((s) => s.getAttribute('aria-label')),
   )
-  expect(order).toEqual(['Game time', null, 'Force panel'])
+  expect(order).toEqual(['Turn', null, 'Force panel'])
   expect(
     await page
       .getByRole('main', { name: 'Workspace' })
@@ -61,6 +63,7 @@ test('a White Force observer sees every room read only and reads, but cannot edi
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   // The composers start collapsed for a read-only role (PLY-54); expanded, it says why.
   await page.getByRole('button', { name: 'Show message entry' }).first().click()
@@ -133,7 +136,7 @@ test('objectives the admin writes in the editor reach the player live on publish
   await plan.getByRole('button', { name: /^Publish \d+ changes?…$/ }).click()
   const confirm = admin.getByRole('alertdialog', { name: 'Publish these changes?' })
   await confirm.getByRole('button', { name: 'Publish', exact: true }).click()
-  await expect(admin.getByText(/Publish complete: \d+ steps applied/)).toBeVisible({
+  await expect(admin.getByText(/Publish complete: \d+ steps? applied/)).toBeVisible({
     timeout: 60_000,
   })
 
@@ -151,6 +154,7 @@ test('the umpire posts in every room; a White observer reads every room and post
     'Red HQ',
     'Blue–Red negotiation',
     'Blue Reports',
+    'Map',
   ])
   // ...and the server, which enforces it (PLY-39), lets the umpire post in each, makes the White
   // observer a visitor in each, and keeps Blue out of Red HQ.

@@ -814,9 +814,9 @@ export class AdminOps {
 
   /**
    * Deletes every item on a node, keeping its config and affiliations (XEP-0060 §8.5), then
-   * reads it back: no item may be left. Publish uses it on an objectives node that holds items
-   * other than the admin's (§3 rule 14), after the White Force editors' publisher affiliations
-   * are gone, so no stale editor's text survives and nobody can write a new one.
+   * reads it back: no item may be left. No publish step uses it since WP 5.8 (objectives keep
+   * every author's newest edit, §3 rule 14, and leave by `retractItem`); it stays an owner
+   * operation for tooling and tests.
    */
   async purgeNode(node: string): OpsOutcome<void> {
     const op = 'purgeNode'
@@ -839,7 +839,8 @@ export class AdminOps {
   /**
    * Retracts one item (XEP-0060 §7.2, as the node's owner), then reads the node back: the item
    * must be gone; already gone is success. Publish uses it on `templates` for a template the
-   * design no longer has (never a locked one: the planner refuses that, TD6).
+   * design no longer has (never a locked one: the planner refuses that, TD6), and on an
+   * objectives node for an edit by a role that left the White Force or was deleted (§3 rule 14).
    */
   async retractItem(node: string, itemId: string): OpsOutcome<void> {
     const op = 'retractItem'

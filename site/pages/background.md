@@ -14,12 +14,12 @@ WRX1 keeps Serge's way of describing a game and War Rooms X's XMPP transport, an
 ## What version 1 does
 
 - **An admin backend** to design one wargame and provision it on the server in one step. Publishing is repeatable: it works out what changed and applies only that.
-- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a column for announcements, the player's force and its objectives. In a narrow window or multi-client pane the column becomes a tab of its own. Each room's message entry can be collapsed to a slim bar for players who only read, so the messages get the space; each room remembers it, and observers, who cannot post, start with it collapsed.
+- **A player client** with a themed welcome page, a dockable workspace of chat rooms and a column with the current turn and phase, announcements, the player's force and its objectives. In a narrow window or multi-client pane the column becomes a tab of its own. Each room's message entry can be collapsed to a slim bar for players who only read, so the messages get the space; each room remembers it, and observers, who cannot post, start with it collapsed. During adjudication the message entry of every role outside the White Force is paused, with a note saying why; anything already typed is kept for the next turn.
 - **A mock backend** that runs entirely in the browser, for reviews and demos with no server at all.
 - **A multi-client view** that shows two to four independent clients on one page, so a demo can show several players at once.
 - **This site**, which explains the project and hosts a live build of every pull request.
 
-Other kinds of room (structured forms, maps, requests for information), turns and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers just one, `chat`.
+Other kinds of room (structured forms, requests for information) and exports are planned for later. Version 1 is built so they can be added without restructuring: every room has a type, and v1 registers two, `chat` and `map`. [Turns and the map](./turns-and-map) describes the second in full.
 
 ## Key decisions
 
@@ -51,15 +51,23 @@ The admin may change a published game while players are online, and changes appl
 
 ### Layouts stay in the browser
 
-Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout.
+Players arrange rooms in a dockable workspace, which is saved in their browser. A new browser or device starts with the default layout. The layout survives theme and text edits, renaming and re-ordering, but when the admin adds or removes a room, or changes which rooms a role can see or write in, every player's layout goes back to the default, and they are told.
 
-### No turns in v1
+### Turns, moved on by the admin
 
-There is no turn model yet, so permissions don't change during play. A reserved document keeps space for one.
+A game runs in numbered turns, each a planning phase and then an adjudication phase. Only the admin moves the game on, from the turn panel at the top of the column in the game view or from the admin backend's header, and confirms each change first. Every player's turn panel updates at once.
+
+While the umpires adjudicate, roles outside the White Force cannot post: their message entry is paused, with a note saying why, and anything they had typed is kept until the next turn's planning. The White Force and the admin keep posting. This is a rule the app applies, not the server: a modified client could still post during adjudication, which is accepted in version 1.
+
+### The map, edited by the admin
+
+Every game has one map room, which every role sees. It shows the world state: each force's units and platforms, drawn as standard military symbols, with their position, state, health and fuel. Only the admin changes it. In the umpire's game view the admin adds assets (with a form, or by clicking the map), drags them to new positions, edits any of their details in a form that previews the symbol, and deletes them.
+
+Edits build up as a draft, kept only in the admin's browser until published: the map says so while there are unpublished edits, because clearing that browser's data or changing device loses them. The admin publishes the draft with the next phase change, or at any time with "Publish world state", for example to set up the starting position before play or to correct a mistake. Either way, the admin first sees a summary of what changes (assets added, removed, and changed with the fields that changed) and confirms. Every publish sends the whole world state as one message, and every player's map updates at once. A design export carries the world state too, so a game can be set up again on another server with its map; importing it makes it the admin's draft, which players see only once it is published.
 
 ### Offline and air-gapped
 
-The client is a static build with every font, icon and library bundled, and makes no calls to the internet. It can be served next to the XMPP server, from a separate static host, or as plain files with the mock backend.
+The client is a static build with every font, icon, library and map symbol bundled, and makes no calls to the internet. The one exception is the map's background, which comes from a tile server the deployment names; without one, the map shows the assets on a plain background. The client can be served next to the XMPP server, from a separate static host, or as plain files with the mock backend.
 
 ### A mock that behaves like the server
 
@@ -71,4 +79,4 @@ All code is strict TypeScript, and the types for every stored document come from
 
 ## How it is built
 
-WRX1 is built in four phases, each ending in a reviewed gate: foundations; contracts and transports; features; and acceptance. Work packages within a phase run in parallel, each on its own branch, and every pull request gets a live preview listed in the [PR index](./prs). The [blog](./blog/) reports progress, including work that hasn't yet passed its gate.
+WRX1 is built in phases, each ending in a reviewed gate: foundations; contracts and transports; features; acceptance; message templates; and turns and the map. Work packages within a phase run in parallel, each on its own branch, and every pull request gets a live preview listed in the [PR index](./prs). The [blog](./blog/) reports progress, including work that hasn't yet passed its gate.

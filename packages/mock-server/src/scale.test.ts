@@ -1,21 +1,37 @@
 // The scale fixture (WP 3.2, NFR-11): the v1 sizes, valid, deterministic, and usable through the
 // transport, with the busy room's history paged by MAM as a client reads it; and its templated
 // form (WP 4.4): 2,000 templated messages, each valid, and the receiver's check timed per message.
-import { chatRoomConfigReader, checkDesign, templateMessageBodySchema } from '@wrx/schemas'
+import {
+  LIMITS,
+  chatRoomConfigReader,
+  checkDesign,
+  templateMessageBodySchema,
+  worldStateSchema,
+} from '@wrx/schemas'
+import { diffWorldStates, moveWorldAsset, worldStateSize } from '@wrx/domain'
+import type { WorldAsset, WorldState } from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator } from '@wrx/templates'
 import type { TemplateValidator } from '@wrx/templates'
 import { describe, expect, it } from 'vitest'
-import { SCALE_BUSY_ROOM, SCALE_PLAYER, scaleDesign, scaleHistory, scaleState } from './scale.ts'
+import {
+  SCALE_BUSY_ROOM,
+  SCALE_PLAYER,
+  scaleDesign,
+  scaleHistory,
+  scaleState,
+  scaleWorldState,
+} from './scale.ts'
 import { demoPassword } from './seed.ts'
 import { MockServer } from './server.ts'
 import { parseMockState } from './state.ts'
 import { MockTransport } from './transport.ts'
 
 describe('the scale fixture', () => {
-  it('has 50 roles, 30 rooms and 10,000 messages in the busy room, and a clean design', () => {
+  it('has 50 roles, 30 rooms and the map room, 10,000 messages in the busy room, and a clean design', () => {
     const design = scaleDesign()
     expect(design.roles).toHaveLength(50)
-    expect(design.rooms).toHaveLength(30)
+    expect(design.rooms.filter((r) => r.roomType === 'chat')).toHaveLength(30)
+    expect(design.rooms.filter((r) => r.roomType === 'map')).toHaveLength(1)
     expect(checkDesign(design).filter((i) => i.severity === 'error')).toEqual([])
     const state = scaleState()
     const busy = state.rooms.find((r) => r.jid.startsWith(`${SCALE_BUSY_ROOM}@`))
@@ -106,5 +122,108 @@ describe('the templated scale fixture (WP 4.4)', () => {
       `[perf] receiver check: ${(median * 1000).toFixed(1)} µs per message (median of 5 runs of 2,000); first three, new validator: ${coldMs.toFixed(1)} ms`,
     )
     expect(median).toBeLessThan(1)
+  })
+})
+
+describe('the scale fixture’s world state (WP 5.5, NFR-11)', () => {
+  it('holds 600 valid assets over the player forces, within the map-room cap', () => {
+    const design = scaleDesign()
+    const state = scaleWorldState(design, 600)
+    expect(worldStateSchema.safeParse(state).success).toBe(true)
+    const assets = Object.values(state.assets)
+    expect(assets).toHaveLength(600)
+    expect(new Set(assets.map((a) => a.forceId)).size).toBe(4)
+    expect(assets.some((a) => /^\d{20}$/.test(a.sidc))).toBe(true)
+    const body = JSON.stringify({ type: 'world-state', schemaVersion: 1, content: state })
+    expect(body.length).toBeLessThan(LIMITS.worldStateStanzaBytes / 2)
+    expect(JSON.stringify(scaleWorldState(design, 600))).toBe(JSON.stringify(state))
+    expect(parseMockState(JSON.stringify(scaleState({ messages: 50, worldAssets: 600 }))).ok).toBe(
+      true,
+    )
+  })
+})
+
+/** The median of five timed runs of `run`, in ms. */
+function medianMs(run: () => void): number {
+  const times: number[] = []
+  for (let i = 0; i < 5; i++) {
+    const start = performance.now()
+    run()
+    times.push(performance.now() - start)
+  }
+  return times.sort((a, b) => a - b)[2] ?? Number.NaN
+}
+
+/** The most assets like `asset` that fit one map-room message (PLY-53), by halving. */
+function mostThatFit(asset: (i: number) => WorldAsset): number {
+  const state = (n: number): WorldState => ({
+    turn: 1,
+    assets: Object.fromEntries(
+      Array.from({ length: n }, (_, i) => {
+        const a = asset(i)
+        return [a.id, a]
+      }),
+    ),
+  })
+  let low = 0
+  let high = LIMITS.worldStateAssets
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2)
+    if (worldStateSize(state(mid)).ok) low = mid
+    else high = mid - 1
+  }
+  return low
+}
+
+describe('the world state against the 500 KB map-room cap (WP 5.7, PLY-53, NFR-11)', () => {
+  it('measures a 600-asset state, the most assets that fit, and the client-side costs', () => {
+    const design = scaleDesign()
+    const state = scaleWorldState(design, 600)
+    const size = worldStateSize(state)
+    expect(size.ok).toBe(true)
+    const assets = Object.values(state.assets)
+    const first = assets[0]
+    if (first === undefined) throw new Error('fixture')
+    const typical = (i: number): WorldAsset => ({
+      ...(assets[i % assets.length] ?? first),
+      id: `a0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`,
+    })
+    // Every text field at its longest, plain ASCII, and a 30-digit code.
+    const longest = (i: number): WorldAsset => ({
+      ...typical(i),
+      title: 'T'.repeat(LIMITS.nameChars),
+      category: 'C'.repeat(LIMITS.worldLabelChars),
+      state: 'S'.repeat(LIMITS.worldLabelChars),
+      sidc: '1'.repeat(30),
+      lat: -12.345678901234,
+      lon: -123.45678901234,
+    })
+    // The same, every character one XML escapes to five bytes (&amp;): the worst case.
+    const escaped = (i: number): WorldAsset => ({
+      ...longest(i),
+      title: '&'.repeat(LIMITS.nameChars),
+      category: '&'.repeat(LIMITS.worldLabelChars),
+      state: '&'.repeat(LIMITS.worldLabelChars),
+    })
+    const fit = {
+      typical: mostThatFit(typical),
+      longest: mostThatFit(longest),
+      escaped: mostThatFit(escaped),
+    }
+    const parse = medianMs(() => worldStateSchema.parse(state))
+    const measure = medianMs(() => worldStateSize(state))
+    const moved = moveWorldAsset(state, first.id, first.lat + 0.01, first.lon)
+    if (!moved.ok) throw new Error(moved.error)
+    const diff = medianMs(() => diffWorldStates(state, moved.value))
+    console.log(
+      `[perf] world state, 600 assets: ${size.bytes.toLocaleString('en-GB')} bytes as a message (${((100 * size.bytes) / size.limitBytes).toFixed(0)}% of the cap), ${Math.round(size.bytes / 600)} bytes per asset; most that fit: ${fit.typical} typical, ${fit.longest} with every field at its longest, ${fit.escaped} with every character escaped; parse ${parse.toFixed(1)} ms, size check ${measure.toFixed(1)} ms, diff ${diff.toFixed(1)} ms (medians of 5)`,
+    )
+    // NFR-11's 600 assets fit with room to spare, even at the longest plain field values.
+    expect(size.bytes).toBeLessThan(LIMITS.worldStateStanzaBytes / 2)
+    expect(fit.typical).toBeGreaterThan(1_200)
+    expect(fit.longest).toBeGreaterThan(600)
+    // The worst case does not: the editor refuses the publish with its size (WP 5.6).
+    expect(fit.escaped).toBeLessThan(600)
+    expect(parse + measure + diff).toBeLessThan(250)
   })
 })

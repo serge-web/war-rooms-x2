@@ -10,6 +10,7 @@
 //   changes, so they can be passed straight to `useSyncExternalStore`.
 import {
   LIMITS,
+  MAP_ROOM_TYPE,
   SINGLETON_NODES,
   checkItemSize,
   chatRoomConfigReader,
@@ -22,12 +23,14 @@ import type {
   Directory,
   Force,
   GameSetup,
+  GameState,
   Objectives,
   Retired,
   Role,
   Room,
   Template,
   TemplateValue,
+  WorldState,
 } from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator, templatesFor } from '@wrx/templates'
 import type { TemplateCheck, TemplateValidator } from '@wrx/templates'
@@ -46,9 +49,10 @@ import type {
 import { byOrderThenId, effectiveAccess, roomsForRole } from './access.ts'
 import type { AccessMatrix } from './access.ts'
 import {
-  OBJECTIVES_ITEM_ID,
+  DOCUMENT_ITEM_ID,
   documentValue,
   nodeSpec,
+  objectivesItemId,
   parseItem,
   safeNodeName,
 } from './documents.ts'
@@ -60,8 +64,9 @@ import { consoleLogger } from './logger.ts'
 import type { Logger } from './logger.ts'
 import { defaultRoomTypes, roomConfig } from './registry.ts'
 import type { RoomTypeRegistry } from './registry.ts'
-import { fitsInStanza } from './size.ts'
+import { fitsInStanza, fitsWorldStateStanza } from './size.ts'
 import { Timeline, timeKey } from './timeline.ts'
+import { nextGameState, postingPaused, sameGameState } from './turns.ts'
 import type { ReadableEntry, Sender, TimelineEntry } from './timeline.ts'
 
 export type Release = () => void
@@ -109,8 +114,8 @@ export interface Me {
   readonly isUmpire: boolean
   readonly isObserver: boolean
   /**
-   * May edit every force's objectives: the admin only (PLY-35, §3 rule 14, D21). Every White
-   * Force role reads them, and none edits.
+   * May edit every force's objectives: the admin and White Force roles that are not observers
+   * (PLY-35, §3 rule 14, D21). White Force observers read them only.
    */
   readonly canEditObjectives: boolean
   /**
@@ -236,6 +241,59 @@ export interface RoomTemplates {
   readonly templates: readonly Template[]
 }
 
+/**
+ * The map room's world state as this client accepts it (D25, PLY-58, PLY-59): the newest valid
+ * world-state message from the admin's real JID, found by paging back through MAM on joining and
+ * replaced live by later ones. Messages from anyone else, and invalid ones, are ignored.
+ */
+export interface WorldStateView {
+  readonly roomId: string
+  /** The newest accepted world state; undefined while none has been found. */
+  readonly state: WorldState | undefined
+  /** The stanza-id and server time of the message it came in. */
+  readonly stanzaId: string | undefined
+  readonly timestamp: string | undefined
+  /** Still paging back through the archive for one. */
+  readonly searching: boolean
+  /**
+   * The archive was searched to its start and held no valid world state from the admin: the
+   * admin has not published one yet.
+   */
+  readonly none: boolean
+  /**
+   * The search reached its page limit with older messages still in the archive and no valid
+   * world state from the admin among the newer ones: there may be one further back, behind many
+   * other messages (a modified client can post them, WP 5.7 review). Not `none`: nothing may be
+   * built on the room being empty. `searchWorldStateFurther` looks again.
+   */
+  readonly unreached: boolean
+  /** Messages in the room that were not accepted: not from the admin, or not a valid state. */
+  readonly ignored: number
+}
+
+/**
+ * What the admin asks for when moving the game on (ADM-43), and optionally the world state to
+ * publish with the change (ADM-45, WP 5.6).
+ */
+export interface AdvancePhaseOptions {
+  /**
+   * The turn state the admin confirmed moving on from. If `game-state` holds anything else by
+   * the time the change is sent (another admin tab moved it first), nothing is sent: `stale`.
+   */
+  readonly from: GameState
+  /**
+   * A full world state to publish to the map room with the change (ADM-45), sent with
+   * `sendWorldState` before `game-state` moves. If it is refused, the phase does not change.
+   */
+  readonly worldState?: { readonly roomId: string; readonly state: WorldState }
+}
+
+/** A phase change the admin made: from where, to where. */
+export interface PhaseChange {
+  readonly from: GameState
+  readonly to: GameState
+}
+
 export interface RoomWatch {
   readonly joined: Joined
   readonly release: Release
@@ -244,6 +302,13 @@ export interface RoomWatch {
 export interface SessionStoreOptions {
   readonly session: Session
   readonly logger?: Logger
+  /**
+   * MAM page size in the map room, whose messages are full world states of up to 500 KB each
+   * (D25): small pages, so the newest is found without fetching megabytes. Default 5.
+   */
+  readonly worldStatePageSize?: number
+  /** Most pages paged back for a world state before giving up (PLY-59). Default 40. */
+  readonly worldStatePageLimit?: number
   /** Room types, for validating message bodies per room. Defaults to {@link defaultRoomTypes}. */
   readonly registry?: RoomTypeRegistry
   /** MAM page size. Default 50. */
@@ -274,6 +339,8 @@ export interface SessionStore {
   /** The newest valid document in a node. */
   document(node: string): Snapshot<LiveDocument | undefined>
   gameSetup(): Snapshot<GameSetup | undefined>
+  /** The turn state, `game-state` (D7, PLY-55): turn number and phase, live. */
+  gameState(): Snapshot<GameState | undefined>
   forces(): Snapshot<readonly Force[]>
   roles(): Snapshot<readonly Role[]>
   rooms(): Snapshot<readonly Room[]>
@@ -326,11 +393,40 @@ export interface SessionStore {
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
+  /**
+   * Joins the map room and looks for its world state (PLY-59): reference-counted like
+   * `acquireRoom`, with small MAM pages, paging back to the newest valid one from the admin.
+   */
+  acquireWorldState(roomId: string): Release
+  /**
+   * After a search that stopped at its page limit (`unreached`), pages back once more, up to the
+   * limit again, from where it stopped. Does nothing while a search runs or once one is found.
+   */
+  searchWorldStateFurther(roomId: string): Promise<void>
+  /** The map room's accepted world state (PLY-58, PLY-59); see {@link WorldStateView}. */
+  worldState(roomId: string): Snapshot<WorldStateView | undefined>
+  /**
+   * Posts the full world state to the map room, as the admin only (D25): checked against the
+   * schema, the room's type and the 500 KB map-room cap (PLY-53) before it is sent.
+   */
+  sendWorldState(roomId: string, state: WorldState): Promise<DomainResult<{ stanzaId: string }>>
   /** The admin only (§3 rule 14, D21); refused for every role before anything is sent. */
   publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>>
   /** The admin only (PLY-37). */
   postAnnouncement(text: string): Promise<DomainResult<void>>
-  /** Re-lists nodes and retries failed ones; run after a design change and on reconnection. */
+  /**
+   * The admin only (ADM-43): moves the game from `options.from` to its next phase
+   * (`nextGameState`) and publishes it to `game-state`. Refused before sending for any role,
+   * when `game-state` no longer holds `from` (`stale`), when none is published (`not-found`), and
+   * after the last turn (`invalid`). With `options.worldState`, publishes it first (ADM-45), and
+   * refuses the change if it is refused.
+   */
+  advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>>
+  /**
+   * Retries the nodes that failed and picks up what the directory names; run after a design
+   * change and on reconnection. Nodes are never listed: rooms, forces and roles are found from
+   * `directory` (PLY-60).
+   */
   refresh(): Promise<void>
   /** Leaves rooms, releases subscriptions, clears data and disconnects (PLY-3). Idempotent. */
   logout(): Promise<DomainResult<void>>
@@ -344,10 +440,6 @@ interface NodeItem {
   readonly id: string
   readonly doc: LiveDocument
   readonly live: boolean
-  /** This client's clock when the item was read or arrived (ms), for F11's clamp. */
-  readonly receivedAt: number
-  /** The live event it came in, numbered in arrival order; 0 for items read by a fetch. */
-  readonly arrival: number
 }
 
 interface NodeEntry {
@@ -389,6 +481,14 @@ interface RoomEntry {
   generation: number
   unsent: UnsentMessage | undefined
   unsentTemplate: UnsentTemplateMessage | undefined
+  /** Watched for its world state (`acquireWorldState`): small pages, and the search below. */
+  world: boolean
+  /** The search back through MAM for a world state, while it runs. */
+  seeking: Promise<void> | undefined
+  /** A search has finished since the last join. */
+  sought: boolean
+  /** Ignored messages dropped from a world-state room's timeline (R26), still counted. */
+  droppedIgnored: number
 }
 
 const LOADING: Snapshot<undefined> = Object.freeze({
@@ -416,6 +516,8 @@ class Store implements SessionStore {
   private readonly logger: Logger
   private readonly registry: RoomTypeRegistry
   private readonly pageSize: number
+  private readonly worldStatePageSize: number
+  private readonly worldStatePageLimit: number
   private readonly gapPageLimit: number
   private readonly now: () => string
   private readonly newId: () => string
@@ -434,9 +536,6 @@ class Store implements SessionStore {
   private readonly memos = new Map<string, { deps: readonly unknown[]; value: unknown }>()
   private readonly offSession: Unsubscribe[] = []
   private readonly readyWaiters: ((status: StoreStatus) => void)[] = []
-  private listed = new Set<string>()
-  /** Numbers live item events in arrival order (see `latest`). */
-  private arrivals = 0
   private currentStatus: StoreStatus = { state: 'starting' }
   /** The first load has finished; until then, coming back online means `starting` again. */
   private booted = false
@@ -449,6 +548,8 @@ class Store implements SessionStore {
     this.logger = options.logger ?? consoleLogger()
     this.registry = options.registry ?? defaultRoomTypes()
     this.pageSize = options.pageSize ?? 50
+    this.worldStatePageSize = options.worldStatePageSize ?? 5
+    this.worldStatePageLimit = options.worldStatePageLimit ?? 40
     this.gapPageLimit = options.gapPageLimit ?? 20
     this.now = options.now ?? (() => new Date().toISOString())
     this.newId = options.newId ?? (() => globalThis.crypto.randomUUID())
@@ -530,8 +631,8 @@ class Store implements SessionStore {
   }
 
   private async start(): Promise<void> {
-    if (!this.identity.anonymous) await this.listNodes()
-    // Each pass may reveal nodes to add: the role's force, then that force's objectives.
+    // Each pass may reveal nodes to add: the directory's forces, roles and rooms, then the
+    // role's force, then that force's objectives.
     for (let pass = 0; pass < 4 && !this.isEnded(); pass++) {
       const before = this.core.size
       this.reconcileCore()
@@ -668,14 +769,12 @@ class Store implements SessionStore {
         this.nodeChanged(entry)
         return
       }
+      // In the server's order (`latest`), then what arrived live during the fetch, newer still.
       const next = new Map<string, NodeItem>()
-      const receivedAt = this.clockMs()
       for (const item of fetched.value) {
-        if (touched.has(item.id) || !shownItem(spec, item.id)) continue
+        if (touched.has(item.id)) continue
         const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
-        if (doc !== undefined) {
-          next.set(item.id, { id: item.id, doc, live: false, receivedAt, arrival: 0 })
-        }
+        if (doc !== undefined) next.set(item.id, { id: item.id, doc, live: false })
       }
       for (const [id, item] of entry.items) if (touched.has(id)) next.set(id, item)
       entry.items = next
@@ -732,16 +831,13 @@ class Store implements SessionStore {
       entry.touched?.add(id)
       changed = entry.items.delete(id) || changed
     }
-    const arrival = ++this.arrivals
-    const receivedAt = this.clockMs()
     for (const item of items) {
-      if (!shownItem(spec, item.id)) continue
       const doc = this.parseNodeItem(entry, spec, item.id, item.payload)
       if (doc === undefined) continue
       entry.touched?.add(item.id)
-      // Delete first so the newest item is last in the map's order.
+      // Delete first so the newest item is last in the map's order (`latest`).
       entry.items.delete(item.id)
-      entry.items.set(item.id, { id: item.id, doc, live: true, receivedAt, arrival })
+      entry.items.set(item.id, { id: item.id, doc, live: true })
       changed = true
     }
     if (!changed) return
@@ -758,8 +854,8 @@ class Store implements SessionStore {
     const doc = latest(entry)
     if (doc?.kind === 'game-setup') {
       const version = doc.value.designVersion
-      // Publishing bumps designVersion whenever the design changes (rule 8): the signal to look
-      // for new forces, roles and rooms, since PubSub does not announce new nodes.
+      // A structural change (rule 8): retry what failed, since access may have changed. New
+      // forces, roles and rooms come from the directory, which is read live (PLY-60).
       if (this.designVersion !== undefined && version !== this.designVersion) void this.refresh()
       this.designVersion = version
     }
@@ -807,15 +903,6 @@ class Store implements SessionStore {
     return this.directory()?.roles.find((r) => r.loginName === login)?.id
   }
 
-  private async listNodes(): Promise<void> {
-    const listed = await this.session.pubsub.listNodes()
-    if (!listed.ok) {
-      this.logger.warn('Could not list nodes', { error: listed.error })
-      return
-    }
-    this.listed = new Set(listed.value)
-  }
-
   /** The nodes the store itself holds: everything the session's documents need. */
   private desiredCore(): Set<string> {
     const desired = new Set<string>([SINGLETON_NODES.gameSetup])
@@ -827,9 +914,16 @@ class Store implements SessionStore {
     desired.add(SINGLETON_NODES.directory)
     // Message templates, read by every role (Annex A, TPL-1).
     desired.add(SINGLETON_NODES.templates)
+    // The turn state, read by every role (D7, §3 rule 15).
+    desired.add(SINGLETON_NODES.gameState)
     const add = (node: string | undefined) => {
       if (node !== undefined) desired.add(node)
     }
+    // PLY-60: every force, role and room the directory names, read and kept live by
+    // subscription; the directory itself is subscribed, so one created or deleted during the
+    // session is picked up (or dropped) when the admin publishes the new directory. Nodes are
+    // never listed. Each room document is read, and the role's rooms are those rule 4 gives it
+    // (`me`). With no directory the role finds nothing (failing closed).
     const directory = this.directory()
     if (directory !== undefined) {
       for (const f of directory.forces) add(safeNodeName('force', f))
@@ -839,12 +933,6 @@ class Store implements SessionStore {
     const role = this.ownRole()
     const force = role === undefined ? undefined : this.docOf('force', role.forceId)
     const allObjectives = this.identity.isAdmin || force?.isUmpire === true
-    for (const node of this.listed) {
-      const spec = nodeSpec(node)
-      if (spec === undefined) continue
-      if (spec.kind === 'force' || spec.kind === 'role' || spec.kind === 'room') desired.add(node)
-      if (spec.kind === 'objectives' && allObjectives) desired.add(node)
-    }
     if (allObjectives) {
       for (const force of this.collection('force')) add(safeNodeName('objectives', force.id))
     }
@@ -880,14 +968,13 @@ class Store implements SessionStore {
     }
   }
 
-  async refresh(): Promise<void> {
-    if (this.isEnded() || this.identity.anonymous) return
-    await this.listNodes()
-    if (this.isEnded()) return
+  refresh(): Promise<void> {
+    if (this.isEnded() || this.identity.anonymous) return Promise.resolve()
     this.reconcileCore()
     for (const entry of this.nodes.values()) {
       if (entry.status === 'error' && entry.loading === undefined) void this.loadNode(entry)
     }
+    return Promise.resolve()
   }
 
   // ---- Document getters -------------------------------------------------------------------
@@ -926,6 +1013,10 @@ class Store implements SessionStore {
 
   gameSetup(): Snapshot<GameSetup | undefined> {
     return this.typedDocument('game-setup', SINGLETON_NODES.gameSetup)
+  }
+
+  gameState(): Snapshot<GameState | undefined> {
+    return this.typedDocument('game-state', SINGLETON_NODES.gameState)
   }
 
   force(forceId: string): Snapshot<Force | undefined> {
@@ -1040,7 +1131,11 @@ class Store implements SessionStore {
         force,
         isUmpire: this.identity.isAdmin || force?.isUmpire === true,
         isObserver: role?.isObserver === true,
-        canEditObjectives: canEditObjectives(this.identity.isAdmin),
+        canEditObjectives: canEditObjectives({
+          isAdmin: this.identity.isAdmin,
+          isUmpire: force?.isUmpire === true,
+          isObserver: role?.isObserver === true,
+        }),
         rooms: Object.freeze(visible),
       })
     })
@@ -1249,6 +1344,10 @@ class Store implements SessionStore {
       generation: 0,
       unsent: undefined,
       unsentTemplate: undefined,
+      world: false,
+      seeking: undefined,
+      sought: false,
+      droppedIgnored: 0,
     }
   }
 
@@ -1279,6 +1378,7 @@ class Store implements SessionStore {
     entry.status = 'joining'
     entry.closeReason = undefined
     entry.error = undefined
+    entry.sought = false
     this.attachRoom(entry)
     this.roomChanged(entry)
     const nick = this.identity.loginName ?? localpart(this.identity.bareJid) ?? 'admin'
@@ -1308,6 +1408,7 @@ class Store implements SessionStore {
         this.logger.warn('Could not load history', { room: entry.roomId, error: history.error })
         this.roomChanged(entry)
       }
+      if (current() && entry.world) void this.seekWorldState(entry)
       return domainOk(joined.value)
     }
     const joining = run()
@@ -1327,7 +1428,7 @@ class Store implements SessionStore {
   }
 
   private async loadLatest(entry: RoomEntry, current: () => boolean): Promise<DomainResult<void>> {
-    const page = await this.session.mam.queryRoom(entry.jid, { max: this.pageSize })
+    const page = await this.session.mam.queryRoom(entry.jid, { max: this.pageSizeOf(entry) })
     if (!current()) return domainOk(undefined)
     if (!page.ok) return { ok: false, error: fromTransport(page.error, 'Loading history') }
     this.mergeMessages(entry, page.value.messages)
@@ -1341,8 +1442,9 @@ class Store implements SessionStore {
   private async fillGap(entry: RoomEntry, current: () => boolean): Promise<DomainResult<void>> {
     const pages: (readonly RoomMessage[])[] = []
     let before: string | undefined
+    const max = this.pageSizeOf(entry)
     for (let i = 0; i < this.gapPageLimit; i++) {
-      const query = before === undefined ? { max: this.pageSize } : { before, max: this.pageSize }
+      const query = before === undefined ? { max } : { before, max }
       const page = await this.session.mam.queryRoom(entry.jid, query)
       if (!current()) return domainOk(undefined)
       if (!page.ok)
@@ -1360,6 +1462,7 @@ class Store implements SessionStore {
     // Too much was missed to bridge: start again from what was fetched, so there is no hole.
     this.logger.warn('Reconnection gap too large; history restarted', { room: entry.roomId })
     entry.timeline.clear()
+    entry.droppedIgnored = 0
     for (const messages of pages) this.mergeMessages(entry, messages)
     entry.olderCursor = before
     entry.hasOlder = true
@@ -1373,7 +1476,26 @@ class Store implements SessionStore {
       const normalised = this.toEntry(entry, message)
       if (normalised !== undefined) entries.push(normalised)
     }
-    return entry.timeline.merge(entries)
+    const added = entry.timeline.merge(entries)
+    if (added > 0 && entry.world) this.trimWorldState(entry)
+    return added
+  }
+
+  /**
+   * R26: a room watched for its world state keeps only its newest accepted world state. Each is
+   * the full state (about 100 KB at 600 assets, up to 500 KB), the panel shows only the newest,
+   * and a modified client's posts are never shown, so nothing else is worth its memory. Dropped
+   * ids stay known to the timeline, so paging back never adds them again.
+   */
+  private trimWorldState(entry: RoomEntry): void {
+    const removed = entry.timeline.retainOnly(this.acceptedWorldState(entry)?.id)
+    for (const dropped of removed) {
+      if (!(dropped.kind === 'message' && this.isAccepted(dropped))) entry.droppedIgnored++
+    }
+  }
+
+  private isAccepted(entry: ReadableEntry): boolean {
+    return entry.body.type === 'world-state' && entry.sender.isAdmin
   }
 
   private toEntry(entry: RoomEntry, message: RoomMessage): TimelineEntry | undefined {
@@ -1392,15 +1514,40 @@ class Store implements SessionStore {
       timestamp: message.timestamp,
       sender: this.toSender(message.nick, message.from),
     }
+    const roomType = this.docOf('room', entry.roomId)?.roomType
+    // PLY-58: in the map room only the admin's messages count, so anyone else's is set aside
+    // before its body is read: a modified client's large posts cost every reader nothing to
+    // parse (WP 5.7 review).
+    if (roomType === MAP_ROOM_TYPE && !base.sender.isAdmin) {
+      this.logger.warn('Ignoring a map-room message not from the admin', {
+        room: entry.roomId,
+        stanzaId: message.stanzaId,
+        from: base.sender.jid,
+      })
+      return { ...base, kind: 'unreadable', reason: 'not from the admin' }
+    }
     const parsed = parseDocument('message', message.body)
     if (!parsed.ok) {
       this.logger.warn('Unreadable message', { room: entry.roomId, stanzaId: message.stanzaId })
       return { ...base, kind: 'unreadable', reason: parsed.error.message }
     }
-    const roomType = this.docOf('room', entry.roomId)?.roomType
     const definition = roomType === undefined ? undefined : this.registry.get(roomType)
     if (definition !== undefined && !definition.messageSchema.safeParse(parsed.value).success) {
+      if (roomType === MAP_ROOM_TYPE) {
+        this.logger.warn('Ignoring a map-room message that is not a world state', {
+          room: entry.roomId,
+          stanzaId: message.stanzaId,
+        })
+      }
       return { ...base, kind: 'unreadable', reason: `not a ${definition.type} message` }
+    }
+    // PLY-58: only the admin's world states count; anyone else's is ignored, and logged.
+    if (parsed.value.type === 'world-state' && !base.sender.isAdmin) {
+      this.logger.warn('Ignoring a world state not from the admin', {
+        room: entry.roomId,
+        stanzaId: message.stanzaId,
+        from: base.sender.jid,
+      })
     }
     return { ...base, kind: 'message', body: parsed.value }
   }
@@ -1514,6 +1661,180 @@ class Store implements SessionStore {
     })
   }
 
+  // ---- The map room's world state (D25, PLY-58, PLY-59) ----------------------------------
+
+  /** MAM page size for a room: small in a room watched for its world state. */
+  private pageSizeOf(entry: RoomEntry): number {
+    return entry.world ? this.worldStatePageSize : this.pageSize
+  }
+
+  acquireWorldState(roomId: string): Release {
+    const existing = this.roomEntries.get(roomId)
+    const release = this.acquireRoom(roomId)
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined) return release
+    if (!entry.world) {
+      entry.world = true
+      this.trimWorldState(entry)
+      // Joined already, for another reason: look now. A join under way looks when it is done.
+      if (existing !== undefined && entry.status === 'joined' && entry.historyLoaded) {
+        void this.seekWorldState(entry)
+      }
+    }
+    return release
+  }
+
+  searchWorldStateFurther(roomId: string): Promise<void> {
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined || !entry.world || entry.status !== 'joined') return Promise.resolve()
+    return this.seekWorldState(entry)
+  }
+
+  /**
+   * Pages back from the oldest message held until a valid world state from the admin is among
+   * them, the archive ends, or the page limit is reached (PLY-59). Once is enough per join: live
+   * messages then keep the timeline current.
+   */
+  private seekWorldState(entry: RoomEntry): Promise<void> {
+    if (entry.seeking !== undefined) return entry.seeking
+    const generation = entry.generation
+    const run = async () => {
+      for (let page = 0; page < this.worldStatePageLimit; page++) {
+        if (entry.generation !== generation || entry.status !== 'joined') return
+        if (this.acceptedWorldState(entry) !== undefined || !entry.hasOlder) return
+        const older = await this.loadOlder(entry.roomId)
+        if (!older.ok) {
+          this.logger.warn('Could not page back for the world state', {
+            room: entry.roomId,
+            error: older.error,
+          })
+          return
+        }
+      }
+      if (this.acceptedWorldState(entry) === undefined && entry.hasOlder) {
+        this.logger.warn('No world state within the page limit', {
+          room: entry.roomId,
+          pages: this.worldStatePageLimit,
+        })
+      }
+    }
+    const seeking = run().finally(() => {
+      if (entry.seeking === seeking) entry.seeking = undefined
+      if (entry.generation === generation) entry.sought = true
+      this.roomChanged(entry)
+    })
+    entry.seeking = seeking
+    this.roomChanged(entry)
+    return seeking
+  }
+
+  /** The newest timeline entry that is a valid world state from the admin's real JID. */
+  private acceptedWorldState(
+    entry: RoomEntry,
+  ): (ReadableEntry & { readonly body: { readonly type: 'world-state' } }) | undefined {
+    const entries = entry.timeline.entries()
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const candidate = entries[i]
+      if (candidate?.kind !== 'message') continue
+      // The body passed the message schema (refinements included) when it was merged.
+      if (candidate.body.type === 'world-state' && candidate.sender.isAdmin) {
+        return candidate as ReadableEntry & { readonly body: { readonly type: 'world-state' } }
+      }
+    }
+    return undefined
+  }
+
+  worldState(roomId: string): Snapshot<WorldStateView | undefined> {
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined) return LOADING
+    return this.memo(`world-state:${roomId}`, [entry, entry.version], () => {
+      const accepted = this.acceptedWorldState(entry)
+      const total = entry.timeline.size
+      const view: WorldStateView = Object.freeze({
+        roomId,
+        state: accepted?.body.type === 'world-state' ? accepted.body.content : undefined,
+        stanzaId: accepted?.id,
+        timestamp: accepted?.timestamp,
+        searching: entry.seeking !== undefined,
+        none: accepted === undefined && entry.sought && !entry.hasOlder,
+        unreached: accepted === undefined && entry.sought && entry.hasOlder,
+        ignored: total - this.acceptedCount(entry) + entry.droppedIgnored,
+      })
+      const settled = accepted !== undefined || entry.sought
+      const status: LoadStatus =
+        entry.status === 'joined'
+          ? settled
+            ? 'ready'
+            : 'loading'
+          : entry.status === 'joining'
+            ? 'loading'
+            : 'error'
+      const error =
+        entry.status === 'closed'
+          ? { code: 'not-joined' as const, message: `closed: ${entry.closeReason ?? 'removed'}` }
+          : entry.error
+      return Object.freeze({ data: view, status, error })
+    })
+  }
+
+  /** How many messages in the room are valid world states from the admin. */
+  private acceptedCount(entry: RoomEntry): number {
+    let n = 0
+    for (const e of entry.timeline.entries()) {
+      if (e.kind === 'message' && e.body.type === 'world-state' && e.sender.isAdmin) n++
+    }
+    return n
+  }
+
+  async sendWorldState(
+    roomId: string,
+    state: WorldState,
+  ): Promise<DomainResult<{ stanzaId: string }>> {
+    if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
+    // D25: clients accept world states only from the admin, so nobody else may post one.
+    if (!this.identity.isAdmin) {
+      return domainErr('not-permitted', 'only the admin publishes the world state (D25)')
+    }
+    const entry = this.roomEntries.get(roomId)
+    if (entry?.status !== 'joined' || entry.joined === undefined) {
+      return domainErr('not-joined', 'the room is not joined')
+    }
+    if (this.docOf('room', roomId)?.roomType !== MAP_ROOM_TYPE) {
+      return domainErr('invalid', 'world states go to the map room only')
+    }
+    const candidate = parseDocument('message', {
+      type: 'world-state',
+      schemaVersion: 1,
+      content: state,
+    })
+    if (!candidate.ok || candidate.value.type !== 'world-state') {
+      return domainErr(
+        'invalid',
+        candidate.ok ? 'not a world state' : `not a valid world state: ${candidate.error.message}`,
+      )
+    }
+    const json = JSON.stringify(candidate.value)
+    // PLY-53: the map-room cap, for world states only; the transport enforces it again.
+    const size = fitsWorldStateStanza(json)
+    if (!size.ok) {
+      return domainErr(
+        'too-large',
+        `the world state is ${size.bytes} bytes; the limit is ${size.limitBytes}`,
+      )
+    }
+    const sent = await this.session.muc.send(entry.jid, json, {
+      maxBytes: LIMITS.worldStateStanzaBytes,
+    })
+    if (!sent.ok) {
+      const error = fromTransport(sent.error, 'Publishing the world state')
+      return {
+        ok: false,
+        error: error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error,
+      }
+    }
+    return domainOk({ stanzaId: sent.value.stanzaId })
+  }
+
   // ---- Operations -------------------------------------------------------------------------
 
   async watchRoom(roomId: string): Promise<DomainResult<RoomWatch>> {
@@ -1554,8 +1875,9 @@ class Store implements SessionStore {
     if (entry.older !== undefined) return entry.older
     const generation = entry.generation
     const before = entry.olderCursor ?? entry.timeline.oldest()?.id
+    const max = this.pageSizeOf(entry)
     const run = async (): Promise<DomainResult<{ added: number; complete: boolean }>> => {
-      const query = before === undefined ? { max: this.pageSize } : { before, max: this.pageSize }
+      const query = before === undefined ? { max } : { before, max }
       const page = await this.session.mam.queryRoom(entry.jid, query)
       if (entry.generation !== generation || this.isEnded()) {
         return domainErr('not-joined', 'the room closed while loading')
@@ -1600,6 +1922,7 @@ class Store implements SessionStore {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
     if (text.trim() === '') return refuse({ code: 'invalid', message: 'the message is empty' })
+    if (this.postingPaused()) return refuse(PAUSED)
     // TD3: a room may take templates only. Advisory, like every template rule (T-R1).
     if (!this.roomTemplates(roomId).data.freeText) {
       return refuse({ code: 'not-permitted', message: 'this room takes templated messages only' })
@@ -1663,6 +1986,7 @@ class Store implements SessionStore {
     if (entry.joined.role === 'visitor' || entry.joined.role === 'none') {
       return refuse({ code: 'not-permitted', message: 'read-only in this room (PLY-12)' })
     }
+    if (this.postingPaused()) return refuse(PAUSED)
     const candidate = parseDocument('message', {
       type: 'template',
       schemaVersion: 1,
@@ -1718,8 +2042,12 @@ class Store implements SessionStore {
 
   async publishObjectives(forceId: string, markdown: string): Promise<DomainResult<void>> {
     if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
-    if (!this.me().data.canEditObjectives) {
-      return domainErr('not-permitted', 'only the admin, as umpire, edits objectives (PLY-35)')
+    const me = this.me().data
+    if (!me.canEditObjectives) {
+      return domainErr(
+        'not-permitted',
+        'only the admin and White Force roles that are not observers edit objectives (PLY-35)',
+      )
     }
     const node = safeNodeName('objectives', forceId)
     if (node === undefined) return domainErr('invalid', `"${forceId}" is not a force id`)
@@ -1730,8 +2058,57 @@ class Store implements SessionStore {
       updatedAt: this.now(),
     })
     if (!parsed.ok) return domainErr('invalid', parsed.error.message)
-    // The admin's single item, replaced on each edit (§3 rule 14).
-    return this.publish(node, OBJECTIVES_ITEM_ID, parsed.value, 'Publishing objectives')
+    // §3 rule 14: every save is a new item with a fresh id, never a re-published one, so the
+    // server's order (by first publish) is edit order; the node keeps one item per author.
+    const author = this.identity.isAdmin ? ADMIN_AUTHOR_ID : (me.identity.loginName ?? 'role')
+    const itemId = objectivesItemId(author, this.newId())
+    return this.publish(node, itemId, parsed.value, 'Publishing objectives')
+  }
+
+  /** PLY-56 for this store's own session: adjudication, and outside the White Force (R27). */
+  private postingPaused(): boolean {
+    return postingPaused(this.me().data, this.gameState().data)
+  }
+
+  async advancePhase(options: AdvancePhaseOptions): Promise<DomainResult<PhaseChange>> {
+    if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
+    if (!this.identity.isAdmin) {
+      return domainErr('not-permitted', 'only the admin advances the game (ADM-43)')
+    }
+    const current = this.gameState().data
+    if (current === undefined) return domainErr('not-found', 'no turn state is published yet')
+    if (!sameGameState(current, options.from)) {
+      return domainErr(
+        'stale',
+        `the game is at turn ${current.turn} ${current.phase}, not turn ${options.from.turn} ${options.from.phase}`,
+      )
+    }
+    const next = nextGameState(current)
+    if (next === undefined) return domainErr('invalid', 'the last turn has no next phase')
+    const parsed = parseDocument('game-state', next)
+    if (!parsed.ok) return domainErr('invalid', parsed.error.message)
+    // ADM-45: the world state first, so players never see the new phase with the old map. If it
+    // is refused (too large, not joined), the phase stays where it is.
+    if (options.worldState !== undefined) {
+      const sent = await this.sendWorldState(options.worldState.roomId, options.worldState.state)
+      if (!sent.ok) {
+        return {
+          ok: false,
+          error: {
+            ...sent.error,
+            message: `the world state was not published, so the phase did not change: ${sent.error.message}`,
+          },
+        }
+      }
+    }
+    const published = await this.publish(
+      SINGLETON_NODES.gameState,
+      DOCUMENT_ITEM_ID,
+      parsed.value,
+      'Advancing the game',
+    )
+    if (!published.ok) return published
+    return domainOk(Object.freeze({ from: current, to: parsed.value }))
   }
 
   async postAnnouncement(text: string): Promise<DomainResult<void>> {
@@ -1768,11 +2145,6 @@ class Store implements SessionStore {
       }
     }
     return domainOk(undefined)
-  }
-
-  /** This client's clock in ms, or NaN if the injected clock is not a time. */
-  private clockMs(): number {
-    return Date.parse(this.now())
   }
 
   logout(): Promise<DomainResult<void>> {
@@ -1819,7 +2191,6 @@ class Store implements SessionStore {
     this.roomEntries.clear()
     this.core.clear()
     this.memos.clear()
-    this.listed = new Set()
     this.docsVersion++
     this.setStatus(
       text === undefined ? { state: 'ended', reason } : { state: 'ended', reason, text },
@@ -1832,52 +2203,31 @@ function noop(): void {
 }
 
 const EMPTY_RETIRED: readonly Retired[] = Object.freeze([])
+
+/** PLY-56: the advisory refusal of a post during adjudication (R27). */
+const PAUSED: DomainError = Object.freeze({
+  code: 'paused',
+  message: 'posting is paused for roles outside the White Force during adjudication (PLY-56)',
+})
 const EMPTY_TEMPLATES: readonly Template[] = Object.freeze([])
 
 /**
- * Whether the store takes this item at all. An objectives node shows the admin's item only
- * (§3 rule 14): a server published before WP 3.5 can still hold White Force editors' items until
- * the next publish purges them, and those are not the force's objectives.
- */
-function shownItem(spec: NodeSpec, itemId: string): boolean {
-  return spec.kind !== 'objectives' || itemId === OBJECTIVES_ITEM_ID
-}
-
-/**
- * The document a node shows. Single-document nodes hold one item, and objectives nodes one too,
- * the admin's (§3 rule 14; `shownItem` drops any other), so the last one received is the newest.
- * The ordering below is kept for any node that still holds several items (review F11; ejabberd
- * returns items in the order they were first created and carries no publish time):
- * - an item that arrived live is newer than any item read by a fetch, and a later live event is
- *   newer than an earlier one: the server notifies in publish order (contract S06). A fetch that
- *   answers after a live event never replaces the item that event brought (`touched`), so a
- *   live notification beats the copy fetched at login, whatever its `updatedAt` says;
- * - among items of one fetch (or one event), the author's `updatedAt` decides, clamped to when
- *   this client received it, so a clock set ahead cannot pin an edit above later live ones.
+ * The document a node shows: the last item the store holds, the newest by the server's order
+ * (§3 rule 14, spike check S15, review F11). Items carry no server time, so nothing here reads
+ * a time, the author's `updatedAt` least of all:
+ * - a fetch lists items in the order each id was first published (contract S15), and every
+ *   objectives save is a new id, so the fetch's last item is the newest edit;
+ * - live events arrive in publish order (contract S06) and each is appended, so a later event
+ *   is newer than an earlier one and than anything fetched; a fetch that answers after a live
+ *   event keeps that event's item last (`touched`);
+ * - a retract (an author's trimmed item, or an owner's clean-up) removes the item, and the one
+ *   before it shows.
+ * Single-document nodes hold one item, so this is simply that item.
  */
 function latest(entry: NodeEntry): LiveDocument | undefined {
-  let best: NodeItem | undefined
-  for (const item of entry.items.values()) {
-    if (best === undefined || item.doc.kind !== 'objectives' || best.doc.kind !== 'objectives') {
-      best = item
-      continue
-    }
-    if (newerObjectives(item, best)) best = item
-  }
-  return best?.doc
-}
-
-/** F11: whether objectives item `a` is a newer edit than `b` (see `latest`). */
-function newerObjectives(a: NodeItem, b: NodeItem): boolean {
-  if (a.arrival !== b.arrival) return a.arrival > b.arrival
-  return effectiveTime(a) >= effectiveTime(b)
-}
-
-/** The author's time, never later than when this client received it; unreadable is oldest. */
-function effectiveTime(item: NodeItem): number {
-  const stamped = item.doc.kind === 'objectives' ? Date.parse(item.doc.value.updatedAt) : NaN
-  if (Number.isNaN(stamped)) return -Infinity
-  return Number.isNaN(item.receivedAt) ? stamped : Math.min(stamped, item.receivedAt)
+  let last: NodeItem | undefined
+  for (const item of entry.items.values()) last = item
+  return last?.doc
 }
 
 function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {
@@ -1915,10 +2265,14 @@ export function whiteForceOf(forces: readonly Force[]): Force | undefined {
 }
 
 /**
- * PLY-35, §3 rule 14, D21: only the admin edits objectives. White Force roles, observers or not,
- * read every force's objectives but never edit them; the server refuses them too (no publisher
- * affiliation).
+ * PLY-35, §3 rule 14, D21: the admin and White Force roles that are not observers edit every
+ * force's objectives; White Force observers and every other role only read (their own force's).
+ * The server enforces it (publisher affiliations, `targetState`); this only shapes the UI.
  */
-export function canEditObjectives(isAdmin: boolean): boolean {
-  return isAdmin
+export function canEditObjectives(who: {
+  readonly isAdmin: boolean
+  readonly isUmpire: boolean
+  readonly isObserver: boolean
+}): boolean {
+  return who.isAdmin || (who.isUmpire && !who.isObserver)
 }

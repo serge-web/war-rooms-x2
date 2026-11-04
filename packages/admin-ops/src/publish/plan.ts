@@ -9,18 +9,19 @@
 //   3 grants         room write access, read-only grants (membership and voice back to back,
 //                    R-B), voice restored, node access: every grant before any revoke (R-D, ADM-25)
 //   4 revokes        voice revoked (write to read), room and node access removed (R-A)
-//   5 documents      assets, forces, roles, rooms, objectives (the admin's item, §3 rule 14);
-//                    after access, so no client learns of a room it cannot yet use correctly,
-//                    and a read-only role is read-only before its room documents say so (ADM-37).
-//                    An objectives node holding any item but the admin's (a server published
-//                    before WP 3.5, when White Force editors wrote their own) is purged first,
-//                    after step 3 has taken their publisher affiliations, then the admin's item
-//                    is published again (D21)
-//   6 removals       deleted roles (R-E), destroyed rooms (R-F), deleted nodes. A deleted role's
-//                    or force's `retired` record (§3 rule 1) is a document of step 5, so it is
-//                    on the server before the role loses anything (ADM-39 order: record,
-//                    affiliations, subscriptions, account)
-//   7 game-setup     last, carrying the incremented `designVersion` (§3 rule 8)
+//   5 documents      assets, forces, roles, rooms, objectives (the admin's draft, as a new item
+//                    when it differs from the admin's own item, §3 rule 14); after access, so no
+//                    client learns of a room it cannot yet use correctly, and a read-only role
+//                    is read-only before its room documents say so (ADM-37)
+//   6 removals       deleted roles (R-E), then the objectives items of roles that left the White
+//                    Force or were deleted (§3 rule 14), after steps 3, 4 and the role deletions
+//                    have taken their publisher affiliations; destroyed rooms (R-F), deleted
+//                    nodes. A deleted role's or force's `retired` record (§3 rule 1) is a
+//                    document of step 5, so it is on the server before the role loses anything
+//                    (ADM-39 order: record, affiliations, subscriptions, account)
+//   7 game-setup     last: at the next `designVersion` when the design's structure changed,
+//                    else at the version it has, and only when the game setup itself changed
+//                    (§3 rule 8, PLY-5)
 //
 // Roles are named by login name throughout (the account's localpart, §3 rule 1): the server knows
 // accounts, not role GUIDs. Rooms and nodes carry GUIDs.
@@ -30,7 +31,13 @@
 // which members are read-only, since they are published only after access is applied. While the
 // publish marker is set (a publish did not finish) they may lag, and are not trusted: read-only
 // members are re-checked, and writers in the vault have their voice checked.
-import { DOCUMENT_ITEM_ID, effectiveAccess } from '@wrx/domain'
+import {
+  DOCUMENT_ITEM_ID,
+  effectiveAccess,
+  nodeSpec,
+  objectivesDraftItemId,
+  parseItem,
+} from '@wrx/domain'
 import {
   NODE_PREFIXES,
   SINGLETON_NODES,
@@ -43,7 +50,7 @@ import {
 import type { DesignFile, Force, GameSetup, Retired, Role, Room, Template } from '@wrx/schemas'
 import type { NodeConfig, RoomConfig } from '@wrx/transport'
 import type { NodeAccessChange, RoomAccessChange } from '../ops.ts'
-import { ROOM_SETTINGS, sameRoomConfig, targetState } from '../target.ts'
+import { ROOM_SETTINGS, designStructure, sameRoomConfig, targetState } from '../target.ts'
 import type { NodeAccess, TargetNode } from '../target.ts'
 import { roleIdOf } from './view.ts'
 import type { NodeView, ServerView } from './view.ts'
@@ -100,9 +107,11 @@ export type StepAction =
     }
   | { readonly type: 'destroy-room'; readonly roomId: string; readonly messageCount: number }
   | { readonly type: 'delete-node'; readonly node: string }
-  /** Every item goes; `stray` names the ones the design does not hold, for the admin. */
-  | { readonly type: 'purge-node'; readonly node: string; readonly stray: readonly string[] }
-  /** One item goes: a template the design no longer has, never a locked one (Annex A). */
+  /**
+   * One item goes: on `templates`, a template the design no longer has, never a locked one
+   * (Annex A); on an objectives node, an item whose publisher left the White Force or was
+   * deleted (§3 rule 14).
+   */
   | { readonly type: 'retract-item'; readonly node: string; readonly itemId: string }
 
 export interface StepRisk {
@@ -301,8 +310,10 @@ export function planConfirmations(plan: Pick<PublishPlan, 'warnings'>): Set<stri
  */
 export function stepConfirmation(action: StepAction): string | undefined {
   switch (action.type) {
+    // A template's removal is confirmed (TPL-6). An objectives item's is not: its author has no
+    // right to it any more, and the role's own deletion or move was the admin's decision.
     case 'retract-item':
-      return `template:${action.itemId}`
+      return action.node === SINGLETON_NODES.templates ? `template:${action.itemId}` : undefined
     case 'delete-role':
       return `role:${action.roleId}`
     case 'destroy-room':
@@ -339,6 +350,11 @@ export interface PublishPlan {
   readonly steps: readonly PlanStep[]
   /** The version `game-setup` gets, when the plan publishes it; else undefined. */
   readonly designVersion: number | undefined
+  /**
+   * Whether the design's structure changes (§3 rule 8: forces, roles, rooms, participants), so
+   * `designVersion` moves and online players' layouts reset (PLY-5). False for a reset.
+   */
+  readonly structural: boolean
   /** The version on the server now, if a game is published. */
   readonly publishedVersion: number | undefined
   readonly warnings: readonly PlanWarning[]
@@ -469,6 +485,13 @@ function sortKeys(value: unknown): unknown {
     return Object.fromEntries(entries.map(([k, v]) => [k, sortKeys(v)]))
   }
   return value
+}
+
+/** Whether a node holds an item that is a valid document of its kind (ARC-6). */
+function holdsValidDocument(node: NodeView | undefined): boolean {
+  const spec = node === undefined ? undefined : nodeSpec(node.node)
+  if (node === undefined || spec === undefined) return false
+  return node.items.some((item) => parseItem(spec, item.payload).ok)
 }
 
 function samePayload(a: string, b: string | undefined): boolean {
@@ -666,6 +689,7 @@ export function planPublish(
       errors,
       steps: [],
       designVersion: undefined,
+      structural: false,
       publishedVersion,
       warnings: [],
       affectedOnline: [],
@@ -680,9 +704,11 @@ export function planPublish(
   const design = withTemplateLocks(withRetiredRecords(given, published), published.templates)
   const target = targetState(design)
   const marker = view.marker
+  // A publish that did not finish. It may have kept the version (no structural change), so a
+  // marker at the published version is still pending; only a version since passed is not.
   const pending =
     marker !== undefined &&
-    (publishedVersion === undefined || marker.designVersion > publishedVersion)
+    (publishedVersion === undefined || marker.designVersion >= publishedVersion)
   const trustDocuments = !pending
 
   const roleName = (login: string) =>
@@ -973,10 +999,15 @@ export function planPublish(
   )) {
     if (node.node === SINGLETON_NODES.gameSetup) continue
     const current = serverNodes.get(node.node)
-    const purge = purgeStep(node, current, label(node.node))
-    if (purge !== undefined) documents.push(purge)
+    if (node.objectives !== undefined) {
+      const step = objectivesStep(node, current, view.domain, label(node.node))
+      if (step !== undefined) documents.push(step)
+      continue
+    }
     for (const doc of node.documents) {
-      if (purge === undefined && samePayload(doc.payload, documentOf(current, doc.itemId))) continue
+      if (samePayload(doc.payload, documentOf(current, doc.itemId))) continue
+      // The turn state is the admin's to advance (ADM-43): only a missing or invalid one is set.
+      if (doc.initial === true && holdsValidDocument(current)) continue
       documents.push(
         documentStep(node, doc.itemId, doc.payload, label(node.node), { design, published }),
       )
@@ -1006,6 +1037,25 @@ export function planPublish(
     if (view.vault.exists) vaultUsed = true
     removals.push(deleteRoleStep(view, roleId, roleName(roleId)))
     warnings.push({ kind: 'role-deleted', roleId, name: roleName(roleId) })
+  }
+  // §3 rule 14: the objectives items of a role that left the White Force or was deleted, after
+  // its publisher affiliation went (the access group, or its deletion just above).
+  for (const node of [...target.nodes].sort((a, b) => compareText(a.node, b.node))) {
+    if (node.objectives === undefined) continue
+    for (const item of serverNodes.get(node.node)?.items ?? []) {
+      const author =
+        item.publisher === undefined ? undefined : roleIdOf(item.publisher, view.domain)
+      if (author === undefined || node.objectives.authors.has(author)) continue
+      removals.push(
+        objectivesRetractStep(
+          node.node,
+          item.id,
+          roleName(author),
+          targetRoles.has(author),
+          label(node.node),
+        ),
+      )
+    }
   }
   for (const roomId of serverRoomIds(view)
     .filter((id) => !targetRoomIds.has(id))
@@ -1082,18 +1132,26 @@ export function planPublish(
     published.game === undefined ||
     canonicalJson({ ...published.game, designVersion: 0 }) !==
       canonicalJson({ ...design.game, designVersion: 0 })
+  // Rule 8: only a structural change moves the version, so saved layouts outlive theme and
+  // text edits (D6). Compared with the published documents, so a first publish is structural.
+  const structural = published.game === undefined || target.structure !== designStructure(published)
+  const owed = pending ? marker.designVersion : undefined
+  const next =
+    publishedVersion === undefined
+      ? Math.max(owed ?? 0, design.game.designVersion, 1)
+      : structural
+        ? Math.max(owed ?? 0, publishedVersion + 1)
+        : Math.max(owed ?? 0, publishedVersion)
   let designVersion: number | undefined
-  if (changes.length > 0 || gameChanged || pending) {
-    const next = pending
-      ? marker.designVersion
-      : publishedVersion === undefined
-        ? design.game.designVersion
-        : publishedVersion + 1
-    designVersion = Math.max(next, (publishedVersion ?? 0) + 1)
+  if (gameChanged || next !== publishedVersion || pending) {
+    designVersion = next
     if (gameNode !== undefined) {
       changes.push({
         ...documentStep(gameNode, DOCUMENT_ITEM_ID, gamePayload(designVersion), gameNode.node),
-        summary: `Publish the game setup, design version ${designVersion}`,
+        summary:
+          designVersion === publishedVersion
+            ? `Publish the game setup, keeping design version ${designVersion}`
+            : `Publish the game setup, design version ${designVersion}`,
       })
     }
   }
@@ -1104,6 +1162,7 @@ export function planPublish(
     errors: [],
     steps: changes,
     designVersion,
+    structural: designVersion !== undefined && designVersion !== publishedVersion,
     publishedVersion,
     warnings,
     affectedOnline: view.online.filter((id) => affected.has(id)),
@@ -1129,12 +1188,14 @@ function documentStep(
   const before = isTemplates ? context?.published.templates.find((t) => t.id === itemId) : undefined
   const what =
     ref?.kind === 'objectives'
-      ? `the admin's item on ${label}`
+      ? `the admin's objectives on ${label} as a new item`
       : ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.retired
         ? `the record of a deleted force or role on ${label}`
-        : template !== undefined
-          ? `the template ${template.name}`
-          : label
+        : ref?.kind === 'singleton' && ref.node === SINGLETON_NODES.gameState
+          ? 'the turn state: turn 1, planning'
+          : template !== undefined
+            ? `the template ${template.name}`
+            : label
   const details =
     template?.lockedAt !== undefined && before?.lockedAt === undefined
       ? ['A room offers it, so it locks: its fields are fixed from now on (TD6)']
@@ -1150,31 +1211,63 @@ function documentStep(
 }
 
 /**
- * §3 rule 14, D21: an objectives node holds the admin's item only. Items the design does not
- * hold (White Force editors' items from before WP 3.5, or text removed from the draft) are
- * purged: every item goes, and the planner publishes the design's again right after. Other
- * nodes keep their items: documents are replaced in place, announcements are history.
+ * §3 rule 14: the admin's draft objectives for a force, as a new item, unless the admin's own
+ * item on the node (by `publisher`, whatever its id) already holds them. Other authors' items,
+ * the White Force's edits during play, are theirs: they are neither compared nor replaced, and
+ * the newest by server order is what players see. With no draft objectives, nothing is planned.
  */
-function purgeStep(
+function objectivesStep(
   node: TargetNode,
   current: NodeView | undefined,
+  domain: string,
   label: string,
 ): PlanStep | undefined {
-  if (current === undefined || parseNodeName(node.node)?.kind !== 'objectives') return undefined
-  const wanted = new Set(node.documents.map((d) => d.itemId))
-  const stray = current.items.map((i) => i.id).filter((id) => !wanted.has(id))
-  if (stray.length === 0) return undefined
+  const draft = node.documents[0]
+  if (draft === undefined) return undefined
+  const own = (current?.items ?? []).filter((i) => isAdminJid(i.publisher, domain))
+  const mine = own[own.length - 1]
+  if (mine !== undefined && samePayload(draft.payload, mine.payload)) return undefined
+  const taken = (current?.items ?? []).map((i) => i.id)
+  const step = documentStep(node, objectivesDraftItemId(draft.payload, taken), draft.payload, label)
+  return mine === undefined
+    ? step
+    : {
+        ...step,
+        details: [
+          'The draft differs from the admin’s item on the server; it becomes the newest edit',
+        ],
+      }
+}
+
+/** Whether a publisher JID is the server's `admin` account (D3) on this domain. */
+function isAdminJid(jid: string | undefined, domain: string): boolean {
+  return jid?.split('/')[0] === `admin@${domain}`
+}
+
+function objectivesRetractStep(
+  node: string,
+  itemId: string,
+  name: string,
+  stillARole: boolean,
+  label: string,
+): PlanStep {
   return {
-    id: `purge:${node.node}`,
-    group: 'documents',
-    summary: `Remove every item from ${label} but the admin's objectives`,
+    id: `retract:${node}:${itemId}`,
+    group: 'removals',
+    summary: `Remove ${name}’s objectives edit from ${label}`,
     details: [
-      `${plural(stray.length, 'item')} the design does not hold: ${stray.join(', ')}`,
-      'Only the admin publishes objectives (D21); the admin’s item is published again next',
+      stillARole
+        ? `${name} is no longer in the White Force, so its edits go (§3 rule 14)`
+        : `${name} is deleted, so its edits go (§3 rule 14)`,
+      'The force then sees the newest remaining edit',
     ],
     risk: { destructive: true, roles: [] },
-    action: { type: 'purge-node', node: node.node, stray },
+    action: { type: 'retract-item', node, itemId },
   }
+}
+
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }
 
 function retractStep(node: string, itemId: string, name: string, locked: boolean): PlanStep {
@@ -1302,6 +1395,7 @@ export function planReset(view: ServerView, options: PlanOptions = {}): PublishP
     errors: [],
     steps,
     designVersion: undefined,
+    structural: false,
     publishedVersion: published.game?.designVersion,
     warnings,
     affectedOnline: view.online.filter((id) => affected.has(id)),

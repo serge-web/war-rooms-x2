@@ -7,8 +7,11 @@
 // fail them, and a real regression (a lost virtualisation, an O(n²) render) still does.
 import { expect, test } from '@playwright/test'
 import type { Page, TestInfo } from '@playwright/test'
+import { scaleDesign, scaleId, scaleWorldState } from '@wrx/mock-server'
 import type { ScaleOptions } from '@wrx/mock-server'
-import { logIn, roomTabs } from './mock.ts'
+import { LIMITS } from '@wrx/schemas'
+import { stubTiles } from './map.ts'
+import { DOMAIN, logIn, roomTabs } from './mock.ts'
 import { MARGIN, inputStats, record, scrollFrames, timeToFrame, watchInput } from './perf.ts'
 import { SCALE_BUSY_ROOM_NAME, busyRoomList, loadScale, storeScaleDraft } from './scale.ts'
 
@@ -19,7 +22,8 @@ const BUSY_LIST = `[role="region"][aria-label="Messages in ${SCALE_BUSY_ROOM_NAM
 
 async function asUmpire(page: Page): Promise<void> {
   await logIn(page, 'admin', 'demo-admin')
-  await expect(roomTabs(page)).toHaveCount(30, { timeout: 30_000 })
+  // The 30 rooms and the map room (§3 rule 18).
+  await expect(roomTabs(page)).toHaveCount(31, { timeout: 30_000 })
 }
 
 /**
@@ -183,9 +187,10 @@ test('NFR-11: the access matrix and the publish plan stay usable at 50 roles and
     page,
     'access-matrix',
     { click: 'nav[aria-label="Admin sections"] button', text: 'Access' },
-    { selector: 'table.wrx-admin-matrix tbody tr', count: 30 },
+    // The 30 rooms and the map room every draft has (§3 rule 18).
+    { selector: 'table.wrx-admin-matrix tbody tr', count: 31 },
   )
-  await expect(page.locator('table.wrx-admin-matrix tbody tr')).toHaveCount(30)
+  await expect(page.locator('table.wrx-admin-matrix tbody tr')).toHaveCount(31)
   await expect(page.locator('table.wrx-admin-matrix thead tr').nth(1).locator('th')).toHaveCount(50)
 
   // Typing in the editor at this size: each keystroke re-validates the draft and the matrix.
@@ -289,4 +294,140 @@ test('NFR-12: four panes; a message reaches all four within 1 s, and typing does
   ])
   expect(deliveries.at(-1)).toBeLessThan(1000 * MARGIN)
   expect(typing.max).toBeLessThan(100 * MARGIN)
+})
+
+// WP 5.5: a world state of 600 assets on the map (NFR-11), to the frame that shows all 600
+// symbols. Cold: the map tab's first render, which also loads the map's chunk and pages back
+// through MAM for the state. Live: a new 600-asset state from the admin, every asset a new one,
+// from the send to the frame that shows it. Recorded in plan/reviews/phase-5-security-notes.md.
+test('NFR-11: a world state of 600 assets renders on the map in under 1 s', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await loadScale(page, './', { messages: 200, worldAssets: 600 })
+  await asUmpire(page)
+  const MAP_TAB = '.flexlayout__layout_main [role="tab"][aria-label="Map"]'
+  const SYMBOLS = 'img.wrx-map__symbol'
+  const cold = await timeToFrame(
+    page,
+    'map-600-cold',
+    { click: MAP_TAB },
+    { selector: SYMBOLS, count: 600 },
+  )
+  await expect(page.locator(SYMBOLS)).toHaveCount(600)
+  await expect(page.getByText('World state for turn 1: 600 assets')).toBeVisible()
+
+  // The next state: the same 600 assets under new ids, so every symbol is replaced.
+  const next = scaleWorldState(scaleDesign(), 600)
+  const renamed = Object.fromEntries(
+    Object.values(next.assets).map((a) => {
+      const id = `6${a.id.slice(1)}`
+      return [id, { ...a, id, lat: a.lat + 0.01 }]
+    }),
+  )
+  const body = JSON.stringify({
+    type: 'world-state',
+    schemaVersion: 1,
+    content: { turn: 2, assets: renamed },
+  })
+  const live = await page.evaluate(
+    async ({ body, room, domain, maxBytes }) => {
+      const host = window.wrxMock
+      if (host === undefined) throw new Error('no mock host')
+      const login = await host.connect({
+        endpoint: { websocketUrl: '', domain },
+        credentials: { kind: 'password', username: 'admin', password: 'demo-admin' },
+        resource: 'perf-admin',
+      })
+      if (!login.ok) throw new Error(login.error.condition)
+      const jid = `${room}@${login.value.services.muc}`
+      const joined = await login.value.muc.join(jid, 'perf-admin')
+      if (!joined.ok) throw new Error(joined.error.condition)
+      const frame = () => new Promise((r) => requestAnimationFrame(r))
+      const done = () =>
+        document.querySelectorAll('img.wrx-map__symbol[data-asset^="6"]').length === 600 &&
+        document.querySelectorAll('img.wrx-map__symbol').length === 600
+      performance.mark('wrx:map-600-live:start')
+      const start = performance.now()
+      const sent = await login.value.muc.send(jid, body, { maxBytes })
+      if (!sent.ok) throw new Error(sent.error.condition)
+      for (;;) {
+        await frame()
+        if (done()) break
+        if (performance.now() - start > 20_000) throw new Error('map-600-live: timed out')
+      }
+      await frame()
+      const elapsed = performance.now() - start
+      performance.measure('wrx:map-600-live', 'wrx:map-600-live:start')
+      await login.value.disconnect()
+      return elapsed
+    },
+    { body, room: scaleId('map'), domain: DOMAIN, maxBytes: LIMITS.worldStateStanzaBytes },
+  )
+  await expect(page.getByText('World state for turn 2: 600 assets')).toBeVisible()
+
+  await record(testInfo, [
+    { name: 'map tab, cold render (600 assets)', value: cold, unit: 'ms', target: 1000 },
+    {
+      name: 'new 600-asset world state, live, to rendered',
+      value: live,
+      unit: 'ms',
+      target: 1000,
+    },
+    { name: 'world-state message, characters', value: body.length, unit: 'count' },
+  ])
+  expect(cold).toBeLessThan(1000 * MARGIN)
+  expect(live).toBeLessThan(1000 * MARGIN)
+})
+
+// WP 5.7: the admin's editor at NFR-11's 600 assets. An edit saved from the form to the frame
+// showing the draft's banner; "Publish world state…" to the change summary; and the publish, from
+// the confirmation to the frame showing the published state (the 170 KB message through the mock,
+// echoed back by the map room). Recorded in plan/reviews/phase-5-performance.md.
+test('the admin edits and publishes a 600-asset world state (NFR-11, ADM-44–46)', async ({
+  page,
+  context,
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await stubTiles(context)
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await loadScale(page, './', { messages: 200, worldAssets: 600 })
+  await asUmpire(page)
+  await page.locator('.flexlayout__layout_main [role="tab"][aria-label="Map"]').click()
+  await expect(page.locator('img.wrx-map__symbol')).toHaveCount(600, { timeout: 20_000 })
+  const panel = page.getByRole('group', { name: 'Map: world state', exact: true })
+  await panel.getByRole('button', { name: 'Table', exact: true }).click()
+  await panel.locator('.wrx-map__pick').first().click()
+  await panel.getByRole('button', { name: 'Edit…' }).click()
+  await panel.getByLabel('Health (%)', { exact: true }).fill('7')
+  const edit = await timeToFrame(
+    page,
+    'map-600-edit',
+    { click: '.wrx-asset-form button[type="submit"]' },
+    { selector: '.wrx-map__draft', text: 'Unpublished edits: 1 asset changed' },
+  )
+  const summary = await timeToFrame(
+    page,
+    'map-600-summary',
+    { click: '.wrx-map__editor button', text: 'Publish world state…' },
+    { selector: '.wrx-map__confirm', text: '1 asset: 0 added, 0 removed, 1 changed' },
+  )
+  const publish = await timeToFrame(
+    page,
+    'map-600-publish',
+    { click: '.wrx-map__confirm button', text: 'Publish world state' },
+    { selector: '.wrx-map__turn', text: 'World state for turn 1: 600 assets' },
+  )
+  await expect(panel.getByText(/Unpublished edits/)).toHaveCount(0)
+  await record(testInfo, [
+    { name: 'edit saved to the draft (600 assets)', value: edit, unit: 'ms', target: 100 },
+    { name: 'change summary shown', value: summary, unit: 'ms', target: 1000 },
+    { name: 'published and shown', value: publish, unit: 'ms', target: 1000 },
+  ])
+  expect(edit).toBeLessThan(100 * MARGIN * 2)
+  expect(summary).toBeLessThan(1000 * MARGIN)
+  expect(publish).toBeLessThan(1000 * MARGIN)
 })

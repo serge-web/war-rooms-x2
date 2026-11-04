@@ -3,6 +3,8 @@ import { DESIGN_FILE_VERSION } from './design.ts'
 import type { DesignFile } from './design.ts'
 import type { Asset, Room } from './documents.ts'
 import type { ChatRoomConfig, Template } from './template.ts'
+import { MAP_ROOM_TYPE, mapParticipants } from './world.ts'
+import type { WorldAsset, WorldState } from './world.ts'
 import type { DesignFileV1 } from './legacy.ts'
 
 /** A 1×1 transparent PNG, for tests and seeds. */
@@ -21,8 +23,8 @@ export function pixelAsset(id: string): Asset {
 }
 
 /**
- * A fixed GUID: `kind` names the collection (1 forces, 2 roles, 3 rooms, 4 assets, 5 templates),
- * `n` the item.
+ * A fixed GUID: `kind` names the collection (1 forces, 2 roles, 3 rooms, 4 assets, 5 templates,
+ * 6 world-state assets), `n` the item.
  */
 function fixed(kind: number, n: number): string {
   return `${kind}0000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`
@@ -47,6 +49,8 @@ export const ROOM = Object.freeze({
   negotiation: fixed(3, 3),
   /** The templated demo room (`templatedDesign`). */
   blueReports: fixed(3, 4),
+  /** The game's map room (§3 rule 18, `demoDesign`). */
+  map: fixed(3, 5),
 })
 export const TEMPLATE = Object.freeze({
   sitrep: fixed(5, 1),
@@ -54,6 +58,15 @@ export const TEMPLATE = Object.freeze({
   support: fixed(5, 3),
 })
 export const ASSET = Object.freeze({ gameLogo: fixed(4, 1) })
+/** The sample world state's assets (`sampleWorldState`). */
+export const WORLD_ASSET = Object.freeze({
+  blueInfantry: fixed(6, 1),
+  blueArmour: fixed(6, 2),
+  blueRecce: fixed(6, 3),
+  redInfantry: fixed(6, 4),
+  redArmour: fixed(6, 5),
+  redArtillery: fixed(6, 6),
+})
 
 /** Login names of the sample design's roles. */
 export const LOGIN = Object.freeze({
@@ -78,6 +91,7 @@ const KNOWN: Readonly<Record<string, string>> = Object.freeze({
   'red-hq': ROOM.redHq,
   negotiation: ROOM.negotiation,
   'blue-reports': ROOM.blueReports,
+  map: ROOM.map,
   sitrep: TEMPLATE.sitrep,
   contact: TEMPLATE.contact,
   support: TEMPLATE.support,
@@ -253,8 +267,7 @@ export function sampleDesign(): DesignFile {
 
 /**
  * The sample design plus a White Force role that is not an observer ("White Cell"), which
- * writes in every room and reads every force's objectives, but does not edit them (§3 rules 4
- * and 14, D21).
+ * writes in every room and reads and edits every force's objectives (§3 rules 4 and 14, D21).
  */
 export function sampleDesignWithWhiteCell(): DesignFile {
   const design = sampleDesign()
@@ -458,4 +471,119 @@ export function templatedDesign(): DesignFile {
     order: 3,
   }
   return { ...design, rooms: [...design.rooms, reports], templates: sampleTemplates() }
+}
+
+/** The map room for a design's forces (§3 rule 18): every force, with write access. */
+export function mapRoom(design: Pick<DesignFile, 'forces' | 'rooms'>, id: string = ROOM.map): Room {
+  return {
+    schemaVersion: 1,
+    id,
+    name: 'Map',
+    roomType: MAP_ROOM_TYPE,
+    participants: mapParticipants(design.forces),
+    config: {},
+    order: design.rooms.length,
+  }
+}
+
+/** A design with its map room added last (§3 rule 18). */
+export function withSampleMapRoom(design: DesignFile): DesignFile {
+  return { ...design, rooms: [...design.rooms, mapRoom(design)] }
+}
+
+/**
+ * The demo design: the templated sample design (`templatedDesign`), White Cell, a White Force
+ * role that is not an observer (`sampleDesignWithWhiteCell`, D21), and the game's map room, every
+ * force a write entry (§3 rule 18). The mock's demo seed posts `sampleWorldState()` to it as the
+ * admin.
+ */
+export function demoDesign(): DesignFile {
+  return withSampleMapRoom({ ...templatedDesign(), roles: sampleDesignWithWhiteCell().roles })
+}
+
+function worldAsset(
+  id: string,
+  forceId: string,
+  title: string,
+  category: string,
+  sidc: string,
+  lat: number,
+  lon: number,
+): WorldAsset {
+  return {
+    id,
+    forceId,
+    title,
+    category,
+    sidc,
+    lat,
+    lon,
+    state: 'operational',
+    health: 100,
+    fuel: 100,
+  }
+}
+
+/**
+ * The sample world state at turn 1 (§3 rules 16–17): three Blue and three Red assets either side
+ * of the river crossing, keyed by GUID, with letter-based MIL-STD-2525C symbol codes.
+ */
+export function sampleWorldState(): WorldState {
+  const assets = [
+    worldAsset(
+      WORLD_ASSET.blueInfantry,
+      FORCE.blue,
+      '1st Rifles',
+      'infantry',
+      'SFGPUCI----K---',
+      51.985,
+      5.87,
+    ),
+    worldAsset(
+      WORLD_ASSET.blueArmour,
+      FORCE.blue,
+      'A Squadron',
+      'armour',
+      'SFGPUCA----K---',
+      51.97,
+      5.85,
+    ),
+    worldAsset(
+      WORLD_ASSET.blueRecce,
+      FORCE.blue,
+      'Recce Troop',
+      'reconnaissance',
+      'SFGPUCR----K---',
+      51.978,
+      5.905,
+    ),
+    worldAsset(
+      WORLD_ASSET.redInfantry,
+      FORCE.red,
+      '3rd Motor Rifles',
+      'infantry',
+      'SHGPUCI----K---',
+      52.01,
+      5.93,
+    ),
+    worldAsset(
+      WORLD_ASSET.redArmour,
+      FORCE.red,
+      'Tank Company',
+      'armour',
+      'SHGPUCA----K---',
+      52.02,
+      5.9,
+    ),
+    worldAsset(
+      WORLD_ASSET.redArtillery,
+      FORCE.red,
+      'Artillery Battery',
+      'artillery',
+      'SHGPUCF----K---',
+      52.035,
+      5.95,
+    ),
+  ]
+  return { turn: 1, assets: Object.fromEntries(assets.map((a) => [a.id, a])) }
 }

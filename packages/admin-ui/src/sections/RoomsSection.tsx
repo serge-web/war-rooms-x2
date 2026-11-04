@@ -1,8 +1,10 @@
 // Rooms (ADM-6, ADM-7): name, room type from the registry, participants, and the type's own
 // settings through the registry's admin editor slot (ARC-5). Reordered by drag and drop (ADM-8).
+// The map room is the draft's own (§3 rule 18): it is never added, deleted or retyped here, and
+// its participants are fixed, so the form says so instead of offering them.
 import { roomConfig } from '@wrx/domain'
 import type { ReactRoomTypeRegistry } from '@wrx/hooks'
-import { LIMITS } from '@wrx/schemas'
+import { LIMITS, MAP_ROOM_TYPE } from '@wrx/schemas'
 import type { Room } from '@wrx/schemas'
 import { useState } from 'react'
 import {
@@ -22,6 +24,7 @@ import {
   addRoom,
   chatConfigOf,
   deleteRoom,
+  isMapRoom,
   moveRoom,
   removeParticipant,
   setFreeText,
@@ -42,7 +45,8 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
   const rooms = draft.design.rooms
   const [chosen, setChosen] = useState<string | undefined>(undefined)
   const selected = rooms.find((r) => r.id === chosen) ?? rooms[0]
-  const types = registry.list()
+  // The map room comes with the draft; no other is added (§3 rule 18).
+  const types = registry.list().filter((t) => t.type !== MAP_ROOM_TYPE)
   const [newType, setNewType] = useState<string | undefined>(undefined)
   const addType =
     types.find((t) => t.type === newType)?.type ??
@@ -51,7 +55,15 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
     DEFAULT_ROOM_TYPE
 
   return (
-    <SectionFrame title="Rooms" intro={<NodeNamesNotice kind="room" />}>
+    <SectionFrame
+      title="Rooms"
+      intro={
+        <>
+          <RoomNamesNotice />
+          <NodeNamesNotice kind="room" />
+        </>
+      }
+    >
       <ListAndForm
         listLabel="Room list"
         list={
@@ -102,6 +114,19 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
   )
 }
 
+/**
+ * R24: every role reads every room document, since the client finds its rooms by reading them
+ * (§3 rule 15, PLY-60), so a room's name is no secret from any role.
+ */
+function RoomNamesNotice() {
+  return (
+    <Notice tone="warning" title="Room names are visible to every role.">
+      Every player can read the name of every room, including rooms their role cannot use. Do not
+      put plans or anything else confidential in a room&rsquo;s name.
+    </Notice>
+  )
+}
+
 function RoomForm({
   room,
   draft,
@@ -115,29 +140,33 @@ function RoomForm({
   const config = roomConfig(registry, room, design.game)
   const Editor = definition?.adminEditor
   const chat = chatConfigOf(room)
+  const map = isMapRoom(room)
   return (
     <EditForm
       title={`Room: ${room.name.trim() === '' ? '(unnamed)' : room.name}`}
       actions={
-        <ConfirmDialog
-          triggerLabel={`Delete ${room.name}`}
-          title={`Delete ${room.name}?`}
-          confirmLabel="Delete room"
-          onConfirm={() => {
-            onChange(deleteRoom(draft, room.id))
-          }}
-        >
-          <p>
-            If this room has been published, publishing the deletion destroys the room and its
-            message history.
-          </p>
-          <p>Its id is never reused.</p>
-        </ConfirmDialog>
+        map ? undefined : (
+          <ConfirmDialog
+            triggerLabel={`Delete ${room.name}`}
+            title={`Delete ${room.name}?`}
+            confirmLabel="Delete room"
+            onConfirm={() => {
+              onChange(deleteRoom(draft, room.id))
+            }}
+          >
+            <p>
+              If this room has been published, publishing the deletion destroys the room and its
+              message history.
+            </p>
+            <p>Its id is never reused.</p>
+          </ConfirmDialog>
+        )
       }
     >
       <IdLine id={room.id} />
       <TextField
         label="Name"
+        hint="Every role can read it, even roles not in this room."
         value={room.name}
         maxLength={LIMITS.nameChars}
         issues={validation.at(`${at}.name`)}
@@ -145,33 +174,43 @@ function RoomForm({
           onChange(updateRoom(draft, room.id, { name }))
         }}
       />
-      <SelectField
-        label="Room type"
-        hint="Changing the type clears the type's settings."
-        value={room.roomType}
-        options={[
-          ...registry.list().map((t) => ({ value: t.type, label: t.label })),
-          ...(definition === undefined
-            ? [{ value: room.roomType, label: `${room.roomType} (not supported)` }]
-            : []),
-        ]}
-        issues={validation.at(`${at}.roomType`)}
-        onChange={(roomType) => {
-          onChange(updateRoom(draft, room.id, { roomType }))
-        }}
-      />
-      <ParticipantsEditor
-        design={design}
-        room={room}
-        path={`${at}.participants`}
-        issuesAt={validation.at}
-        onSet={(entry) => {
-          onChange(setParticipant(draft, room.id, entry))
-        }}
-        onRemove={(kind, id) => {
-          onChange(removeParticipant(draft, room.id, kind, id))
-        }}
-      />
+      {map ? (
+        <Notice tone="info">
+          This is the game’s map room. Every game has exactly one, and every role sees it. Its type
+          and participants are fixed; players see only the admin’s world states on it.
+        </Notice>
+      ) : (
+        <SelectField
+          label="Room type"
+          hint="Changing the type clears the type's settings."
+          value={room.roomType}
+          options={[
+            ...registry.list().map((t) => ({ value: t.type, label: t.label })),
+            ...(definition === undefined
+              ? [{ value: room.roomType, label: `${room.roomType} (not supported)` }]
+              : []),
+          ]}
+          issues={validation.at(`${at}.roomType`)}
+          onChange={(roomType) => {
+            onChange(updateRoom(draft, room.id, { roomType }))
+          }}
+        />
+      )}
+      {!map && (
+        <ParticipantsEditor
+          design={design}
+          room={room}
+          path={`${at}.participants`}
+          issuesAt={validation.at}
+          onSet={(entry) => {
+            onChange(setParticipant(draft, room.id, entry))
+          }}
+          onRemove={(kind, id) => {
+            onChange(removeParticipant(draft, room.id, kind, id))
+          }}
+        />
+      )}
+      {map && <IssueList issues={validation.at(`${at}.participants`)} />}
       {chat !== undefined && (
         <RoomTemplatesEditor
           design={design}

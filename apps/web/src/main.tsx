@@ -2,7 +2,7 @@
 import '@wrx/schemas/jitless'
 import { basePathOf, hostNames, mockNamespace } from '@wrx/mock-host'
 import type { MockHost } from '@wrx/mock-host'
-import { webLayoutStorage } from '@wrx/player-ui'
+import { webLayoutStorage, webWorldDraftStorage } from '@wrx/player-ui'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App.tsx'
@@ -12,6 +12,7 @@ import type { BackendsOptions } from './backends.ts'
 import { NO_CONFIG, loadConfig } from './config.ts'
 import type { ConfigResult } from './config.ts'
 import { demoLogins } from './demo-logins.ts'
+import { DEMO_TILES } from './tiles.ts'
 import './app.css'
 
 declare global {
@@ -60,6 +61,15 @@ function layoutStorage(): AppProps['layoutStorage'] {
   )
 }
 
+/** The admin's world-state drafts (ADM-45, R25), under the deployment's namespace too. */
+function worldDraftStorage(): AppProps['worldDrafts'] {
+  const names = deploymentNames()
+  return webWorldDraftStorage(
+    () => localStorage,
+    (key) => names.storageKey(key),
+  )
+}
+
 async function main(): Promise<void> {
   const root = document.getElementById('root')
   if (root === null) throw new Error('Missing #root element')
@@ -90,6 +100,10 @@ async function main(): Promise<void> {
         configProblem={loaded.ok ? undefined : loaded.error}
         backendPreference={backendPreference()}
         layoutStorage={layoutStorage()}
+        worldDrafts={worldDraftStorage()}
+        // The server build's tiles are config.json's, or none (NFR-9); the mock build reads no
+        // config.json and shows the demo default.
+        tiles={__WRX_REAL_SERVER__ ? (loaded.ok ? loaded.config.tiles : undefined) : DEMO_TILES}
       />
     </StrictMode>,
   )

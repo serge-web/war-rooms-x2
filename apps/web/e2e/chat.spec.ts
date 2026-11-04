@@ -3,6 +3,7 @@
 // size cap (PLY-53); paging back through MAM history (PLY-49); and hostile message text that
 // stays plain text in a real browser (PLY-14). Two pages of one context share one mock server.
 import { expect, test } from '@playwright/test'
+import { isTileNoise } from './map.ts'
 import type { Page } from '@playwright/test'
 import { ROOM } from '@wrx/schemas/fixtures'
 import { asMockAdmin, logIn } from './mock.ts'
@@ -20,7 +21,7 @@ const composer = (page: Page, room: string) =>
 function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)
@@ -44,6 +45,8 @@ test('two clients send and receive; a hidden tab counts unread (PLY-9, PLY-11, P
   const blueErrors = await open(blue, 'blue-co')
   const redErrors = await open(red, 'red-co')
 
+  // Four rooms in three columns: Blue's negotiation starts behind Blue HQ.
+  await tab(blue, ROOMS.talks).click()
   // History from the demo seed, with role names and local times (PLY-9).
   await expect(messages(blue, ROOMS.talks)).toContainText(
     'Blue proposes a ceasefire at the crossing until noon.',

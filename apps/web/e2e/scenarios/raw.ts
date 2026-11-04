@@ -8,6 +8,16 @@ import type { Transport } from '@wrx/transport'
 export type RawStep =
   /** Joins a room and posts each text as a chat message, in order. */
   | { readonly op: 'post'; readonly room: string; readonly texts: readonly string[] }
+  /**
+   * Joins a room and posts each body as it is (a world state, WP 5.5), with the map-room cap when
+   * `maxBytes` is given.
+   */
+  | {
+      readonly op: 'post-body'
+      readonly room: string
+      readonly bodies: readonly string[]
+      readonly maxBytes?: number
+    }
   | { readonly op: 'end-sessions'; readonly jid: string }
   | { readonly op: 'delete-user'; readonly jid: string }
   | { readonly op: 'delete-node'; readonly node: string }
@@ -38,6 +48,24 @@ export async function rawRun(run: RawRun, transport?: Transport): Promise<string
   const session = login.value
   const results: string[] = []
   for (const step of run.steps) {
+    if (step.op === 'post-body') {
+      const jid = `${step.room}@${session.services.muc}`
+      const joined = await session.muc.join(jid, `${run.username}-raw`)
+      if (!joined.ok) {
+        results.push(`join: ${joined.error.condition}`)
+        continue
+      }
+      for (const body of step.bodies) {
+        const sent = await session.muc.send(
+          jid,
+          body,
+          step.maxBytes === undefined ? undefined : { maxBytes: step.maxBytes },
+        )
+        results.push(sent.ok ? 'ok' : sent.error.condition)
+      }
+      await session.muc.leave(jid)
+      continue
+    }
     if (step.op === 'post') {
       const jid = `${step.room}@${session.services.muc}`
       const joined = await session.muc.join(jid, `${run.username}-raw`)

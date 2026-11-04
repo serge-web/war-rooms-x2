@@ -4,6 +4,7 @@
 // client's message that does not fit its template shows as plain text with a warning (TPL-6);
 // a template sent from the keyboard alone; and axe on the composer and the cards (NFR-14).
 import { expect, test } from '@playwright/test'
+import { isTileNoise } from './map.ts'
 import type { Locator, Page } from '@playwright/test'
 import { ROOM, TEMPLATE } from '@wrx/schemas/fixtures'
 import { expectNoViolations } from './a11y.ts'
@@ -29,7 +30,7 @@ async function watch(page: Page): Promise<string[]> {
     })
   })
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)

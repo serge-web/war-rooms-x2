@@ -15,6 +15,7 @@ import {
 import { chatMessageBodySchema } from './message.ts'
 import { chatRoomConfigSchema, templateMessageBodySchema, templateSchema } from './template.ts'
 import { themeSchema } from './theme.ts'
+import { mapRoomConfigSchema, worldAssetSchema, worldStateMessageBodySchema } from './world.ts'
 
 export interface CatalogueEntry {
   readonly title: string
@@ -95,8 +96,9 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
   },
   {
     title: 'Game state',
-    location: 'PubSub node `game-state` (reserved)',
-    access: 'Publish: admin.',
+    location: 'PubSub node `game-state`, one item `current`',
+    access:
+      'Read: every role. Publish: admin, who advances the turn. A first publish sets turn 1, planning; later publishes leave it alone.',
     schema: gameStateSchema,
   },
   {
@@ -124,6 +126,27 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     access:
       'Room participants with write access post; every receiving client checks it against the template and the room config.',
     schema: templateMessageBodySchema,
+  },
+  {
+    title: 'Map room config',
+    location: 'The `config` field of the `map` room document; `{}` means the defaults',
+    access: 'As the room document.',
+    schema: mapRoomConfigSchema,
+  },
+  {
+    title: 'World-state message body',
+    location:
+      'Body of a MUC groupchat message in the map room, up to 500,000 bytes as a stanza; every message carries the full state',
+    access:
+      'Every role reads the map room. Clients accept it only from the admin’s real JID and ignore any other sender.',
+    schema: worldStateMessageBodySchema,
+    maxDepth: 2,
+  },
+  {
+    title: 'World-state asset',
+    location: 'Each value of `content.assets` in a world-state message, keyed by its `id`',
+    access: 'As the world-state message.',
+    schema: worldAssetSchema,
   },
   {
     title: 'Design file',

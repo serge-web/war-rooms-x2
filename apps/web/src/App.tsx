@@ -9,11 +9,21 @@ import {
   BackendChoiceCore,
   ChatPanel,
   ChatUnreadBadge,
+  MapPanel,
+  MapPreload,
+  MapTilesProvider,
   PlayerClient,
   UnreadProvider,
+  WorldDraftProvider,
   Workspace,
 } from '@wrx/player-ui'
-import type { Connection, DemoLogin, LayoutStorage } from '@wrx/player-ui'
+import type {
+  Connection,
+  DemoLogin,
+  LayoutStorage,
+  MapTiles,
+  WorldDraftStorage,
+} from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
 import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
@@ -25,9 +35,13 @@ import { AdminRoute } from './AdminRoute.tsx'
 import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
 
-/** The room types with their player panels: chat (WP 2.6). Frozen, so shared safely (ARC-2). */
+/**
+ * The room types with their player panels: chat (WP 2.6) and the map room (WP 5.5). Frozen, so
+ * shared safely (ARC-2).
+ */
 const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
   chat: { playerComponent: ChatPanel },
+  map: { playerComponent: MapPanel },
 })
 
 export interface AppProps {
@@ -43,13 +57,24 @@ export interface AppProps {
   }
   /** Where the player's workspace layouts are saved (PLY-5), under this deployment (DOC-10). */
   readonly layoutStorage?: LayoutStorage
+  /** The map room's base tiles (NFR-9): config.json's, or the mock build's default. */
+  readonly tiles?: MapTiles | undefined
+  /**
+   * Where the admin's world-state drafts are kept (ADM-45, R25), under this deployment (DOC-10).
+   * Without it, the admin's map room has no editor.
+   */
+  readonly worldDrafts?: WorldDraftStorage | undefined
 }
 
 export function App(props: AppProps) {
   return (
     <ThemeScope root className="wrx-app">
       <ToastProvider>
-        <AppRoutes {...props} />
+        <MapTilesProvider tiles={props.tiles}>
+          <WorldDraftProvider storage={props.worldDrafts}>
+            <AppRoutes {...props} />
+          </WorldDraftProvider>
+        </MapTilesProvider>
       </ToastProvider>
     </ThemeScope>
   )
@@ -174,6 +199,8 @@ function AppRoutes({
   // own session, so unread counts per room (PLY-11) stay per pane.
   const workspace = (
     <UnreadProvider>
+      {/* Every role has the map room (§3 rule 18): its chunk loads while the browser is idle. */}
+      <MapPreload />
       <Workspace storage={layoutStorage} registry={ROOM_TYPES} tabBadge={ChatUnreadBadge} />
     </UnreadProvider>
   )

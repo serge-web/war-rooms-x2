@@ -1,12 +1,14 @@
 // The demo scenario (PLY-21, PLY-34): the sample design from @wrx/schemas, "Exercise Northern
 // Gate", with its message templates and the Blue Reports room that offers them, free text off
-// (Annex A, `templatedDesign`), a short morning of message history, provisioned and published as the admin tooling
+// (Annex A, `templatedDesign`), White Cell, a White Force role that is not an observer (D21),
+// its map room with the admin's turn-1 world state (`demoDesign`, D25), a short morning of
+// message history, provisioned and published as the admin tooling
 // would leave it, observer vault included. Every password is a DEMO PASSWORD (NFR-6):
 // `demo-<loginName>`, and `demo-admin` for the admin; the vault opens with the DEMO passphrase
 // DEMO_VAULT_PASSPHRASE.
 import type { DesignFile } from '@wrx/schemas'
 // The schemas package keeps its sample design with its tests and does not export it.
-import { ROOM, templatedDesign } from '../../schemas/src/fixtures.ts'
+import { ROOM, demoDesign, sampleWorldState } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
 import type { DesignSeed, SeedMessage } from './seed.ts'
 import type { MockState } from './state.ts'
@@ -76,10 +78,12 @@ const VAULT_KEY = 'wrx-observer-vault'
 
 /**
  * The demo vault as the admin tooling stores it in the admin's private storage: the demo design's
- * read-only roles (`blue-observer`, `white-observer`) with their demo passwords, AES-GCM under a PBKDF2 key from
- * DEMO_VAULT_PASSPHRASE (the vault's minimum 100,000 iterations, so it opens quickly). Fixed, so
- * the seed is the same on every start. Made by `node packages/admin-ops/scripts/demo-vault.ts`;
- * packages/admin-ops/src/demo-vault.test.ts checks it still matches the demo design.
+ * read-only roles (`blue-observer`, `white-observer`) with their demo passwords; the map room
+ * adds none, its entries being write (§3 rule 18). AES-GCM under a PBKDF2 key from
+ * DEMO_VAULT_PASSPHRASE (the vault's
+ * minimum 100,000 iterations, so it opens quickly). Fixed, so the seed is the same on every start.
+ * packages/admin-ops/src/demo-vault.test.ts checks it still matches the demo design, and prints a
+ * new one when it does not.
  */
 const DEMO_VAULT_ENVELOPE = JSON.stringify({
   format: 'wrx1-observer-vault',
@@ -95,13 +99,18 @@ const DEMO_VAULT_ENVELOPE = JSON.stringify({
     'xCp+3aHfzTLK1TIxqKWxk7Bl31vo6mwMt+IBvLPHVA2/0R/kLBUi5TQLmF9uEDkmdbgeOhbNhpT4BWm8jjz2pOpA9gOVK2z/tc3yz7g2wNR/a1lKvhR/xrbwzldoPDqe5Sh+kKKTR/EtGhg=',
 })
 
-/** The demo seed: the templated sample design, its history and its demo passwords. */
+/**
+ * The demo seed: the templated sample design with its map room (`demoDesign`), its history, the
+ * admin's turn-1 world state in the map room (D25), and its demo passwords.
+ */
 export function demoSeed(domain?: string): DesignSeed {
-  const design: DesignFile = templatedDesign()
+  const design: DesignFile = demoDesign()
   return {
     design,
     ...(domain === undefined ? {} : { domain }),
     history: DEMO_HISTORY,
+    worldState: sampleWorldState(),
+    worldStateAt: at('08:30:00'),
     adminPrivate: { [VAULT_KEY]: DEMO_VAULT_ENVELOPE },
   }
 }

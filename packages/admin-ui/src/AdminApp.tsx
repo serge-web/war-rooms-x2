@@ -20,6 +20,7 @@ import type { ThemesSlot } from './sections/ThemesSection.tsx'
 import type { PublishConnection } from './publish/controller.ts'
 import { PublishSection } from './publish/PublishSection.tsx'
 import { usePublish } from './publish/usePublish.ts'
+import type { WorldStateTransfer } from './publish/transfer.ts'
 import { AuditSection } from './audit/AuditSection.tsx'
 import { useAudit } from './audit/useAudit.ts'
 import { useDraft, useDraftValidation } from './useDraft.ts'
@@ -70,6 +71,8 @@ export interface AdminAppProps {
   readonly registry: ReactRoomTypeRegistry
   /** Shows the game view (ADM-28). Without it, the toggle is not shown. */
   readonly onSwitchToGame?: () => void
+  /** More in the header, before the view toggle: the host's turn control (ADM-43, WP 5.4). */
+  readonly headerItems?: ReactNode
   /** WP 2.8's themes editor; until then the section is an empty slot. */
   readonly themes?: ThemesSlot
   /** The template preview (WP 4.3); by default the player's own form (WP 4.2's `TemplateForm`). */
@@ -82,12 +85,25 @@ export interface AdminAppProps {
    * only import and export.
    */
   readonly publish?: PublishConnection
+  /**
+   * The world state in design export and import (ADM-16, WP 5.6): the admin's world-state draft
+   * or the published state. Without it, design files carry no world state.
+   */
+  readonly worldState?: WorldStateTransfer
   /** For tests: file downloads and printing. */
   readonly download?: (name: string, text: string) => void
   readonly print?: () => void
 }
 
-export function AdminApp({ store, registry, publish, download, print, ...rest }: AdminAppProps) {
+export function AdminApp({
+  store,
+  registry,
+  publish,
+  download,
+  print,
+  worldState,
+  ...rest
+}: AdminAppProps) {
   const snapshot = useDraft(store)
   const validation = useDraftValidation(snapshot.draft, registry)
   const matrix = useDesignAccess(snapshot.draft.design)
@@ -121,6 +137,7 @@ export function AdminApp({ store, registry, publish, download, print, ...rest }:
             validation={validation}
             {...(download === undefined ? {} : { download })}
             {...(print === undefined ? {} : { print })}
+            {...(worldState === undefined ? {} : { worldState })}
           />
         }
         auditPanel={
@@ -163,6 +180,7 @@ export function AdminAppCore({
   loadError,
   saveError,
   onSwitchToGame,
+  headerItems,
   themes,
   templatePreview,
   initialSection = 'game',
@@ -186,6 +204,7 @@ export function AdminAppCore({
             ? 'Draft saved in this browser.'
             : `The draft could not be saved: ${saveError}`}
         </p>
+        {headerItems}
         {onSwitchToGame !== undefined && (
           <div className="wrx-admin-toggle" role="group" aria-label="View">
             <Button aria-pressed="true" className="is-active">

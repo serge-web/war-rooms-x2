@@ -19,6 +19,7 @@ import {
 } from '@wrx/admin-ops'
 import type { PublishPlan } from '@wrx/admin-ops'
 import { demoPassword, demoSeed } from '@wrx/mock-server'
+import { LIMITS, MAP_ROOM_TYPE } from '@wrx/schemas'
 import type { DesignFile } from '@wrx/schemas'
 import type { Endpoint, Session } from '@wrx/transport'
 import { XmppTransport } from '@wrx/transport-xmpp'
@@ -147,7 +148,22 @@ export async function publishDemoGame(server: EjabberdServer): Promise<void> {
     if (!prepared.ok) throw new Error(`plan publish: ${prepared.error.message}`)
     await apply(ops, prepared.value.plan, 'publish', marker)
 
-    // The demo's history, in order, each message from its author.
+    // The admin's world state in the map room first, as the mock's seed posts it (D25), then
+    // the demo's history, in order, each message from its author.
+    const map = design.rooms.find((r) => r.roomType === MAP_ROOM_TYPE)
+    if (seed.worldState !== undefined && map !== undefined) {
+      const room = `${map.id}@${admin.services.muc}`
+      const join = await admin.muc.join(room, 'admin-seed')
+      if (!join.ok) throw new Error(`admin map join: ${join.error.condition}`)
+      const body = JSON.stringify({
+        type: 'world-state',
+        schemaVersion: 1,
+        content: seed.worldState,
+      })
+      const sent = await admin.muc.send(room, body, { maxBytes: LIMITS.worldStateStanzaBytes })
+      if (!sent.ok) throw new Error(`admin world state: ${sent.error.condition}`)
+      await admin.muc.leave(room)
+    }
     const sessions = new Map<string, Session>([['admin', admin]])
     const joined = new Set<string>()
     try {

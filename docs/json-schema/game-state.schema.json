@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:game-state.schema.json",
+  "title": "Turn state (`game-state`)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "turn": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "The turn number, from 1"
+    },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "planning",
+        "adjudication"
+      ],
+      "description": "Each turn has a planning phase, then an adjudication phase (D7)"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "turn",
+    "phase"
+  ],
+  "description": "The current turn and phase"
+}

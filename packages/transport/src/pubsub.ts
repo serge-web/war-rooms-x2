@@ -49,7 +49,11 @@ export interface SubscriptionEntry {
 }
 
 export interface PubsubApi {
-  /** Latest items first is not guaranteed; callers order by item id or payload. */
+  /**
+   * In the server's order: the order in which each item id was first published, oldest first; a
+   * re-published item keeps its place (contract S15). `max` gives the first `max` of that order,
+   * the oldest, not the newest. Items carry no time.
+   */
   getItems(node: string, options?: { readonly max?: number }): Outcome<readonly Item[]>
   /** Fails `too-large` before sending if over the item limit (PLY-53). */
   publish(node: string, itemId: string, payload: string): Outcome<void>

@@ -58,3 +58,31 @@ test('umpire editing objectives', { tag: '@screenshot' }, async ({ page }) => {
   await page.mouse.move(0, 0)
   await shoot(page, 'player-objectives-editor')
 })
+
+test('player column in adjudication', { tag: '@screenshot' }, async ({ page }) => {
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  // Turn 2's adjudication (WP 5.4): Blue CO's turn panel says so, and its composer is paused.
+  await publishAsMockAdmin(page, [
+    ...ANNOUNCEMENTS,
+    {
+      node: 'game-state',
+      id: 'current',
+      payload: { schemaVersion: 1, turn: 2, phase: 'adjudication' },
+    },
+  ])
+  await demoLogIn(page, 'blue-co')
+  const column = page.getByRole('complementary', { name: 'Out-of-game column' })
+  await expect(column.getByRole('region', { name: 'Turn' }).getByRole('status')).toHaveText(
+    'Turn 2, Adjudication',
+  )
+  await expect(column.getByRole('log').getByRole('listitem')).toHaveCount(2)
+  await expect(page.getByText(/posting is paused for your role/).first()).toBeVisible()
+  // Blue Reports' form loads lazily, and the logo after login: both settled, every run alike.
+  await expect(page.getByRole('combobox', { name: /Reporting force/ })).toBeVisible()
+  await expect(column.getByRole('img', { name: 'Blue logo' })).toBeVisible()
+  await page.mouse.move(0, 0)
+  await shoot(page, 'player-turn-adjudication')
+})

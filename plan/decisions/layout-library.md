@@ -55,6 +55,8 @@ What we give up by not choosing dockview: popouts that recover on their own and 
 
 ## API facts for WP 2.5 (FlexLayout)
 
+**Since WP 5.3 (Nov 2026):** PLY-6 and PLY-41 are retired. A layout that no longer holds exactly the role's rooms, or a new design version during the session, is replaced by the default (PLY-5); the fewest-tabs placement and the in-place reconciliation below are no longer built. The rest stands.
+
 - **Docked tabsets in left-to-right order:** `model.visitLayoutNodes(Model.MAIN_LAYOUT_ID, n => n instanceof TabSetNode && out.push(n))`. Floating panels and popouts are separate layouts, so they are excluded.
 - **PLY-41, add to the tabset with the fewest tabs:** pick the first tabset with the fewest `ts.getChildren().length`, then `model.doAction(Actions.addTab({type: 'tab', id, name, component: 'room'}, ts.getId(), DockLocation.CENTER, -1, false))`. Pass `select = false` so the visible tab is not disturbed.
 - **PLY-40 default and PLY-42 reset:** `{layout: {type: 'row', children: columns.map(c => ({type: 'tabset', weight: 1, children: c.map(tab)}))}}`. Columns hold contiguous runs of rooms; their sizes differ by at most one, larger first (`defaultColumns` in `src/shared/rooms.ts`). Reset is `Model.fromJson(defaultJson, currentModel)`.

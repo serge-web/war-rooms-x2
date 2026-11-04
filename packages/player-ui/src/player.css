@@ -278,12 +278,6 @@
   font-size: 1rem;
 }
 
-.wrx-column__reserved {
-  margin: 0;
-  color: var(--wrx-muted);
-  font-size: 0.875rem;
-}
-
 .wrx-empty {
   color: var(--wrx-muted);
 }

@@ -5,6 +5,7 @@
 // keyboard alone; axe passes collapsed and expanded; and the multi-client view's panes collapse
 // on their own.
 import { expect, test } from '@playwright/test'
+import { isTileNoise } from './map.ts'
 import type { Locator, Page } from '@playwright/test'
 import { expectNoViolations } from './a11y.ts'
 import { logIn, roomTabs } from './mock.ts'
@@ -28,7 +29,7 @@ const toggle = (scope: Page | Locator, room: string) =>
 function watchErrors(page: Page): string[] {
   const errors: string[] = []
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(m.text())
   })
   page.on('pageerror', (e) => {
     if (!isBrowserNotice(e.message)) errors.push(e.message)
@@ -43,6 +44,18 @@ async function open(page: Page, roleId: string): Promise<string[]> {
   await logIn(page, roleId, `demo-${roleId}`)
   await expect(roomTabs(page).first()).toBeVisible()
   return errors
+}
+
+/**
+ * Blue CO has four rooms, the map room included, in three columns, so the negotiation starts
+ * behind Blue HQ: moved to the next column with the keyboard and put on show, so both are open.
+ */
+async function talksBeside(page: Page, scope: Page | Locator = page): Promise<void> {
+  await scope.getByRole('tab', { name: TALKS, exact: true }).focus()
+  await page.keyboard.press('Alt+Shift+ArrowRight')
+  await expect(scope.getByRole('tab', { name: TALKS, exact: true })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(composer(scope, TALKS)).toBeVisible()
 }
 
 /** Let the page settle for axe: fonts, the first history page, the rows measured. */
@@ -61,6 +74,7 @@ test('a collapsed room stays collapsed after a reload; the list takes the space 
   page,
 }) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await expect(toggle(page, BLUE)).toHaveText('Hide message entry')
   await expect(toggle(page, BLUE)).toHaveAttribute('aria-expanded', 'true')
   const before = await height(messages(page, BLUE))
@@ -159,6 +173,7 @@ test('axe passes with the composer expanded and collapsed, and an observer start
   page,
 }, testInfo) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await settled(page)
   await composer(page, BLUE).fill('A draft')
   await expectNoViolations(page, testInfo, 'composer expanded')
@@ -192,6 +207,7 @@ test('each multi-client pane collapses its own rooms (PLY-54, PLY-17)', async ({
   const red = pane(page, 2)
   await quickLogIn(blue, 'Blue CO (Blue)')
   await quickLogIn(red, 'Red CO (Red)')
+  await talksBeside(page, blue)
   await expect(composer(blue, TALKS)).toBeVisible()
   await expect(composer(red, TALKS)).toBeVisible()
   await composer(blue, TALKS).fill('Pane draft')
@@ -207,6 +223,7 @@ test('a popped-out room collapses in its window, and keeps it after a reload doc
   page,
 }) => {
   const errors = await open(page, 'blue-co')
+  await talksBeside(page)
   await composer(page, TALKS).fill('Written before the popout')
   const popup = page.waitForEvent('popup')
   await page
@@ -215,7 +232,7 @@ test('a popped-out room collapses in its window, and keeps it after a reload doc
     .click()
   const popout = await popup
   popout.on('console', (m) => {
-    if (m.type() === 'error') errors.push(`popout: ${m.text()}`)
+    if (m.type() === 'error' && !isTileNoise(m)) errors.push(`popout: ${m.text()}`)
   })
   // The same panel, moved: its draft came with it.
   await expect(composer(popout, TALKS)).toHaveValue('Written before the popout')

@@ -11,8 +11,17 @@ export function utf8Bytes(text: string): number {
  * Whether a serialised message stanza is within the cap: 65,536 bytes of UTF-8 after XML
  * escaping, the whole `<message/>` element included (S13, PLY-53).
  */
-export function messageWithinCap(serialisedStanza: string): boolean {
-  return utf8Bytes(serialisedStanza) <= LIMITS.messageStanzaBytes
+export function messageWithinCap(serialisedStanza: string, maxBytes?: number): boolean {
+  return utf8Bytes(serialisedStanza) <= stanzaCap(maxBytes)
+}
+
+/**
+ * The cap for one message: 65,536 bytes unless the caller asks for more, and never more than
+ * the world-state cap, 500,000 bytes (PLY-53, D25), whatever it asks.
+ */
+export function stanzaCap(maxBytes?: number): number {
+  if (maxBytes === undefined || !Number.isFinite(maxBytes)) return LIMITS.messageStanzaBytes
+  return Math.max(0, Math.min(Math.trunc(maxBytes), LIMITS.worldStateStanzaBytes))
 }
 
 /**

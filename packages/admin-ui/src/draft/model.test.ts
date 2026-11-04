@@ -2,7 +2,12 @@ import { createRoomTypeRegistry, chatRoomType, defaultRoomTypes } from '@wrx/dom
 import { LIMITS, isId } from '@wrx/schemas'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { sampleDesign, sampleDesignV1, tid } from '../../../schemas/src/fixtures.ts'
+import {
+  sampleDesign,
+  sampleDesignV1,
+  sampleWorldState,
+  tid,
+} from '../../../schemas/src/fixtures.ts'
 import {
   addForce,
   addRoom,
@@ -168,7 +173,7 @@ describe('stored drafts', () => {
     const parsed = parseStoredDraft(text)
     if (!parsed.ok) throw new Error(parsed.error)
     const { design, meta } = parsed.value
-    expect(design.schemaVersion).toBe(2)
+    expect(design.schemaVersion).toBe(3)
     expect(design.roles.map((r) => r.loginName)).toEqual(v1.roles.map((r) => r.id))
     expect(design.roles.every((r) => isId(r.id))).toBe(true)
     expect(design.roles[1]?.name).toBe('')
@@ -182,6 +187,18 @@ describe('stored drafts', () => {
       byLogin('blue-co'),
       byLogin('red-co'),
     ])
+  })
+
+  it('reads a draft saved with a version 2 design, as version 3 (WP 5.6)', () => {
+    const draft = draftFromDesign(sampleDesign())
+    const old = JSON.parse(serialiseDraft(draft)) as { design: { schemaVersion: number } }
+    old.design.schemaVersion = 2
+    expect(parseStoredDraft(JSON.stringify(old))).toEqual({ ok: true, value: draft })
+  })
+
+  it('keeps no world state in the design draft (ADM-45)', () => {
+    const draft = draftFromDesign({ ...sampleDesign(), worldState: sampleWorldState() })
+    expect('worldState' in draft.design).toBe(false)
   })
 
   it('keeps drafts that would not yet publish', () => {

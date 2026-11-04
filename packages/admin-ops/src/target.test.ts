@@ -3,12 +3,14 @@
 import { stateFromDesign } from '@wrx/mock-server'
 import { describe, expect, it } from 'vitest'
 // @wrx/schemas does not export its fixtures; the mock server imports them the same way.
-import { nodeName, parseDocument } from '@wrx/schemas'
+import { objectivesDraftItemId } from '@wrx/domain'
+import { nodeName, parseDocument, parseNodeName } from '@wrx/schemas'
 import { TEMPLATE, sampleDesign, templatedDesign, tid } from '../../schemas/src/fixtures.ts'
 import {
   OBJECTIVES_MAX_ITEMS,
   RETIRED_MAX_ITEMS,
   TEMPLATES_MAX_ITEMS,
+  designStructure,
   targetState,
 } from './target.ts'
 
@@ -144,13 +146,116 @@ describe('targetState(sampleDesign())', () => {
     expect(targetState(design).nodes.some((n) => n.node.startsWith('templates:'))).toBe(false)
   })
 
+  it('every role reads every room document, the turn state and the directory, and none publishes them (§3 rule 15, PLY-60)', () => {
+    const design = withWhiteRoles()
+    const everyone = design.roles.map((r) => [r.loginName, 'read']).sort()
+    const nodes = targetState(design).nodes.filter(
+      (n) => n.node === 'game-state' || n.node === 'directory' || n.node.startsWith('rooms:'),
+    )
+    expect(nodes.map((n) => n.node).sort()).toEqual(
+      ['directory', 'game-state', ...design.rooms.map((r) => nodeName.room(r.id))].sort(),
+    )
+    for (const node of nodes) {
+      expect(node.config, node.node).toMatchObject({
+        accessModel: 'whitelist',
+        publishModel: 'publishers',
+      })
+      // A role a room does not name reads its document too: room names are visible (R24).
+      expect([...node.access.entries()].sort(), node.node).toEqual(everyone)
+    }
+  })
+
+  it('gives the design’s structure: its rooms and every role’s access, which only structural edits change (§3 rule 8)', () => {
+    const design = withWhiteRoles()
+    const structure = targetState(design).structure
+    const same = (d: typeof design) => targetState(d).structure === structure
+    expect(structure).toBe(designStructure(design))
+    // Text, themes, objectives and templates are not structure.
+    expect(
+      same({
+        ...design,
+        game: { ...design.game, name: 'Renamed', briefing: 'New' },
+        forces: design.forces.map((f) => ({ ...f, name: `${f.name}!`, colour: '#000000' })),
+        roles: design.roles.map((r) => ({ ...r, name: `${r.name}!` })),
+        rooms: design.rooms.map((r) => ({
+          ...r,
+          name: `${r.name}!`,
+          participants: [...r.participants].reverse(),
+        })),
+        objectives: [],
+        templates: [],
+      }),
+    ).toBe(true)
+    // Order is not structure (product owner, Nov 4, 2026): forces, roles and rooms re-ordered.
+    const reversedOrder = <T extends { readonly order: number }>(list: readonly T[]) =>
+      list.map((item) => ({ ...item, order: 100 - item.order }))
+    expect(
+      same({
+        ...design,
+        forces: reversedOrder(design.forces),
+        roles: reversedOrder(design.roles),
+        rooms: reversedOrder(design.rooms),
+      }),
+    ).toBe(true)
+    // A participant entry that gives a role the access it had already is not either.
+    const blueCo = design.roles.find((r) => r.loginName === 'blue-co')
+    const blueHq = design.rooms.find((r) =>
+      r.participants.some(
+        (p) => p.kind === 'force' && p.id === tid('blue') && p.access === 'write',
+      ),
+    )
+    if (blueCo === undefined || blueHq === undefined) throw new Error('fixture')
+    expect(
+      same({
+        ...design,
+        rooms: design.rooms.map((r) =>
+          r.id === blueHq.id
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: blueCo.id, access: 'write' as const },
+                ],
+              }
+            : r,
+        ),
+      }),
+    ).toBe(true)
+    // Rooms added or removed, and any role's access to a room changed, are.
+    expect(same({ ...design, rooms: design.rooms.slice(1) })).toBe(false)
+    expect(same({ ...design, roles: design.roles.slice(1) })).toBe(false)
+    expect(same({ ...design, forces: design.forces.slice(1) })).toBe(false)
+    expect(
+      same({
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'blue-co' ? { ...r, forceId: tid('red') } : r,
+        ),
+      }),
+    ).toBe(false)
+    expect(
+      same({
+        ...design,
+        roles: design.roles.map((r) =>
+          r.loginName === 'white-cell' ? { ...r, isObserver: true } : r,
+        ),
+      }),
+    ).toBe(false)
+    expect(
+      same({
+        ...design,
+        rooms: design.rooms.map((r, i) => (i === 0 ? { ...r, participants: [] } : r)),
+      }),
+    ).toBe(false)
+  })
+
   it('opens only game-setup and the game theme asset; everything is publishers', () => {
     const open = target.nodes.filter((n) => n.config.accessModel === 'open').map((n) => n.node)
     expect(open).toEqual(['game-setup', nodeName.asset(tid('game-logo'))])
     expect(target.nodes.every((n) => n.config.publishModel === 'publishers')).toBe(true)
   })
 
-  it('sizes objectives for the admin, with the force and the White observer reading (§3 rule 14)', () => {
+  it('sizes objectives at one item per publisher, with the force and the White observer reading (§3 rule 14)', () => {
     const blue = target.nodes.find((n) => n.node === nodeName.objectives(tid('blue')))
     expect(Object.fromEntries(blue?.access ?? [])).toEqual({
       'blue-co': 'read',
@@ -159,24 +264,46 @@ describe('targetState(sampleDesign())', () => {
     })
     expect(blue?.config.maxItems).toBe(OBJECTIVES_MAX_ITEMS)
     expect(OBJECTIVES_MAX_ITEMS).toBe(1)
-    expect(blue?.documents.map((d) => d.itemId)).toEqual(['admin'])
+    // The draft as the admin's save: an id from its payload, never the fixed `admin` of WP 3.5.
+    const draft = blue?.documents[0]
+    expect(blue?.documents).toHaveLength(1)
+    expect(draft?.itemId).toBe(objectivesDraftItemId(draft?.payload ?? ''))
+    expect(draft?.itemId).toMatch(/^admin-[0-9a-f]{16}$/)
+    expect(blue?.objectives?.authors).toEqual(new Set(['white-observer']))
   })
 
-  it('D21: every White Force role reads objectives and none publishes, observer or not', () => {
+  it('a new draft item id for every edit of the draft, and never one already on the node', () => {
+    const one = JSON.stringify({ markdown: 'a', updatedAt: '2026-11-04T10:00:00.000Z' })
+    const two = JSON.stringify({ markdown: 'a', updatedAt: '2026-11-04T10:00:01.000Z' })
+    expect(objectivesDraftItemId(one)).toBe(objectivesDraftItemId(one))
+    expect(objectivesDraftItemId(one)).not.toBe(objectivesDraftItemId(two))
+    const taken = objectivesDraftItemId(one)
+    expect(objectivesDraftItemId(one, [taken])).toBe(`${taken}-2`)
+    expect(objectivesDraftItemId(one, [taken, `${taken}-2`])).toBe(`${taken}-3`)
+  })
+
+  it('D21: White Force roles that are not observers publish every force’s objectives; observers read', () => {
     const white = targetState(withWhiteRoles())
     for (const forceId of ['blue', 'red', 'white']) {
       const node = white.nodes.find((n) => n.node === nodeName.objectives(tid(forceId)))
-      // Before WP 3.5 the White Force role that is not an observer published.
-      expect(node?.access.get('white-cell'), forceId).toBe('read')
+      // WP 3.5 made White Cell read only; the owner's Nov 3 revision gives it publish back.
+      expect(node?.access.get('white-cell'), forceId).toBe('publish')
+      // Observers never publish (review F5).
       expect(node?.access.get('white-observer'), forceId).toBe('read')
       expect(node?.access.get('mediator'), forceId).toBe('read')
       expect(node?.config.maxItems).toBe(1)
+      expect(node?.objectives?.authors, forceId).toEqual(
+        new Set(['white-observer', 'white-cell', 'mediator']),
+      )
     }
-    // No role publishes anywhere: the admin, as owner, is the only publisher of every node.
+    // Nowhere else does a role publish: the admin, as owner, is the only other publisher.
     const publishers = white.nodes.flatMap((n) =>
-      [...n.access].filter(([, a]) => a === 'publish').map(([id]) => `${n.node}:${id}`),
+      [...n.access]
+        .filter(([, a]) => a === 'publish')
+        .map(([id]) => `${parseNodeName(n.node)?.kind ?? n.node}:${id}`),
     )
-    expect(publishers).toEqual([])
+    expect(new Set(publishers)).toEqual(new Set(['objectives:white-cell']))
+    expect(publishers).toHaveLength(3)
   })
 
   it('F5: a White observer with an assigned room is a read-only member of that room only', () => {

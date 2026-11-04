@@ -27,7 +27,8 @@ export type {
 export { ApplyDialog, VaultDialog } from './publish/dialogs.tsx'
 export type { Acknowledgement, ApplyDialogProps, VaultDialogProps } from './publish/dialogs.tsx'
 export { usePublish } from './publish/usePublish.ts'
-export { IMPORT_LIMIT_BYTES, exportDesign, importDesign } from './publish/transfer.ts'
+export { IMPORT_LIMIT_BYTES, exportDesign, importDesign, mapRoomIdOf } from './publish/transfer.ts'
+export type { ImportedDesign, WorldStateForExport, WorldStateTransfer } from './publish/transfer.ts'
 // WP 2.10: audit and repair.
 export { AuditController, IDLE_AUDIT } from './audit/controller.ts'
 export type { AuditControllerOptions, AuditSnapshot, AuditVault } from './audit/controller.ts'

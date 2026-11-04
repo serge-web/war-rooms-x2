@@ -23,6 +23,7 @@ import {
   deleteRole,
   deleteRoom,
   draftFromDesign,
+  isMapRoom,
   isRolePublished,
   loginNameProblem,
   markPublished,
@@ -51,8 +52,9 @@ import { validateDraft } from './validate.ts'
 
 const NOW = new Date('2026-10-25T10:00:00.000Z')
 
+/** The sample design as a draft; the map room the draft adds has the fixture's id (§3 rule 18). */
 function sample(): Draft {
-  return draftFromDesign(sampleDesign())
+  return draftFromDesign(sampleDesign(), {}, () => ROOM.map)
 }
 
 /** Deep-freezes a draft, so any mutation by an operation throws. */
@@ -93,7 +95,7 @@ describe('createDraft', () => {
     const draft = createDraft({ name: 'Exercise', now: NOW, whiteForceId: tid('white') })
     expect(draft.design.game.name).toBe('Exercise')
     expect(draft.design.exportedAt).toBe(NOW.toISOString())
-    expect(draft.design.schemaVersion).toBe(2)
+    expect(draft.design.schemaVersion).toBe(3)
     expect(draft.design.forces).toEqual([
       {
         schemaVersion: 1,
@@ -106,6 +108,18 @@ describe('createDraft', () => {
     ])
     expect(draft.design.roles).toEqual([])
     expect(draft.design.retired).toEqual([])
+    // §3 rule 18: the game's one map room, with every force (here only White), read only.
+    expect(draft.design.rooms).toEqual([
+      {
+        schemaVersion: 1,
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+        name: 'Map',
+        roomType: 'map',
+        participants: [{ kind: 'force', id: tid('white'), access: 'write' }],
+        config: {},
+        order: 0,
+      },
+    ])
     expect(draft.meta).toEqual({ publishedRoleIds: [], publishedForceIds: [] })
     expect(validateDraft(draft.design).issues).toEqual([])
   })
@@ -559,7 +573,7 @@ describe('rooms', () => {
       roomType: 'chat',
       participants: [],
       config: {},
-      order: 3,
+      order: 4,
     })
   })
 
@@ -570,8 +584,8 @@ describe('rooms', () => {
     expect(draft.design.rooms[0]).toMatchObject({ name: 'Blue Ops', config: { a: 1 } })
     draft = updateRoom(draft, tid('blue-hq'), { roomType: 'chat' })
     expect(draft.design.rooms[0]?.config).toEqual({ a: 1 })
-    draft = updateRoom(draft, tid('blue-hq'), { roomType: 'map' })
-    expect(draft.design.rooms[0]).toMatchObject({ roomType: 'map', config: {} })
+    draft = updateRoom(draft, tid('blue-hq'), { roomType: 'poll' })
+    expect(draft.design.rooms[0]).toMatchObject({ roomType: 'poll', config: {} })
     draft = updateRoom(draft, tid('blue-hq'), { roomType: 'chat', config: { b: 2 } })
     expect(draft.design.rooms[0]).toMatchObject({ roomType: 'chat', config: { b: 2 } })
   })
@@ -599,12 +613,64 @@ describe('rooms', () => {
 
   it('reorders rooms', () => {
     const draft = moveRoom(sample(), tid('negotiation'), 0)
-    expect(orders(draft.design).rooms).toEqual(['negotiation:0', 'blue-hq:1', 'red-hq:2'])
+    expect(orders(draft.design).rooms).toEqual(['negotiation:0', 'blue-hq:1', 'red-hq:2', 'map:3'])
   })
 
   it('deletes a room', () => {
     const draft = deleteRoom(sample(), tid('red-hq'))
-    expect(orders(draft.design).rooms).toEqual(['blue-hq:0', 'negotiation:1'])
+    expect(orders(draft.design).rooms).toEqual(['blue-hq:0', 'negotiation:1', 'map:2'])
+  })
+})
+
+describe('the map room (§3 rule 18)', () => {
+  const map = (draft: Draft) => draft.design.rooms.find((r) => r.roomType === 'map')
+  const every = (draft: Draft) =>
+    draft.design.forces.map((f) => ({ kind: 'force', id: f.id, access: 'write' }))
+
+  it('is added to a design without one, once, and is valid', () => {
+    const draft = sample()
+    expect(map(draft)).toMatchObject({ id: ROOM.map, name: 'Map', participants: every(draft) })
+    expect(draftFromDesign(draft.design, {}, () => 'unused').design).toBe(draft.design)
+    expect(validateDraft(draft.design, { registry: defaultRoomTypes() }).issues).toEqual([])
+  })
+
+  it('cannot be deleted, retyped, duplicated or given other participants', () => {
+    const draft = sample()
+    expect(deleteRoom(draft, ROOM.map)).toBe(draft)
+    expect(
+      setParticipant(draft, ROOM.map, { kind: 'role', id: tid('blue-co'), access: 'write' }),
+    ).toBe(draft)
+    expect(removeParticipant(draft, ROOM.map, 'force', tid('blue'))).toBe(draft)
+    expect(addRoom(draft, 'Second map', 'map')).toEqual({ draft, id: '' })
+    expect(map(updateRoom(draft, ROOM.map, { roomType: 'chat' }))?.roomType).toBe('map')
+    expect(updateRoom(draft, tid('blue-hq'), { roomType: 'map' }).design.rooms[0]?.roomType).toBe(
+      'chat',
+    )
+    // Its name and order are the admin's.
+    expect(map(updateRoom(draft, ROOM.map, { name: 'Theatre' }))?.name).toBe('Theatre')
+    expect(isMapRoom({ roomType: 'map' })).toBe(true)
+  })
+
+  it('follows the forces as they are added and deleted', () => {
+    const added = addForce(sample(), 'Green', () => GREEN)
+    expect(map(added.draft)?.participants).toEqual(every(added.draft))
+    expect(map(added.draft)?.participants).toContainEqual({
+      kind: 'force',
+      id: GREEN,
+      access: 'write',
+    })
+    const deleted = deleteForce(added.draft, GREEN)
+    if (!deleted.ok) throw new Error(deleted.error)
+    expect(map(deleted.value)?.participants).toEqual(every(sample()))
+    // Reordering forces changes nothing: the entries are a set.
+    const moved = moveForce(sample(), tid('white'), 0)
+    expect(map(moved)?.participants).toEqual(map(sample())?.participants)
+  })
+
+  it('is not listed among the rooms a force’s deletion changes', () => {
+    expect(referencesTo(sample().design, 'forces', tid('blue')).map((r) => r.id)).not.toContain(
+      ROOM.map,
+    )
   })
 })
 

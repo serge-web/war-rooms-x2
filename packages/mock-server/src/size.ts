@@ -26,8 +26,14 @@ export function messageStanza(id: string, room: string, body: string): string {
   )
 }
 
-export function messageWithinCap(stanza: string): boolean {
-  return utf8Bytes(stanza) <= LIMITS.messageStanzaBytes
+export function messageWithinCap(stanza: string, maxBytes?: number): boolean {
+  return utf8Bytes(stanza) <= stanzaCap(maxBytes)
+}
+
+/** As the real transport: 65,536 bytes unless asked for more, never over 500,000 (PLY-53). */
+export function stanzaCap(maxBytes?: number): number {
+  if (maxBytes === undefined || !Number.isFinite(maxBytes)) return LIMITS.messageStanzaBytes
+  return Math.max(0, Math.min(Math.trunc(maxBytes), LIMITS.worldStateStanzaBytes))
 }
 
 /** The largest JSON payload one item may carry: the item limit less the XML around it. */
