@@ -22,8 +22,8 @@ The product owner decides on anything rated High or Critical.
 
 | Id | Finding | Rating | State |
 | --- | --- | --- | --- |
-| H1 | Any player can bury the admin's world state behind about 200 small map-room posts; after a reload every client said no world state was published, and the admin's editor then offered an empty map whose publish would wipe the state | High | Fixed in part (WP 5.7): never shown as none, the admin cannot publish against it, "Look further back"; the denial of the map after a reload remains (M1). For the owner |
-| M1 | What remains of H1: a flood makes each reloading player click "Look further back" once per 200 posts, until the admin publishes again | Medium | Recorded, with options; for the owner |
+| H1 | Any player can bury the admin's world state behind about 200 small map-room posts; after a reload every client said no world state was published, and the admin's editor then offered an empty map whose publish would wipe the state | High | Fixed in part (WP 5.7): never shown as none, the admin cannot publish against it, "Look further back"; the denial of the map after a reload remains (M1, accepted for v1) |
+| M1 | What remains of H1: a flood makes each reloading player click "Look further back" once per 200 posts, until the admin publishes again | Medium | Accepted for v1 by the owner (Nov 4, 2026) |
 | M2 | The world-state draft is plain `localStorage`: the umpire's unpublished adjudication, readable by anyone with the browser profile or a script on the origin, and not tied to the admin login | Medium | Accepted (R25); recommendations below |
 | M3 | A stale draft outlived its game under the same map-room GUID: a reset did not clear it, and nothing said it was from the game before | Medium | Fixed in part (WP 5.7): a warning on the draft; not cleared |
 | L1 | Last writer wins between two admin tabs editing the same draft | Low | Recorded |
@@ -61,7 +61,9 @@ Before WP 5.7 the store's own test asserted this outcome (`none: true` at the pa
 
 **Why only in part, and the rating.** The denial itself remains (M1). The rating is High as found: a player without special access could make every other player's map show nothing after a reload, and lead the admin to wipe the world state. With the fix the admin can no longer be led into the wipe, and players can recover by themselves. For the owner to confirm.
 
-### M1. The remaining map denial (Medium; recorded)
+### M1. The remaining map denial (Medium; accepted for v1)
+
+**Owner decision, Nov 4, 2026:** accepted for v1 as a known risk. The options below stay open for a later release.
 
 A player who keeps posting forces each reloading reader to click "Look further back" once per 200 posts; each click is 40 MAM round trips of small pages. Players already in the room are unaffected (live states replace the map; nothing else does), and the admin's next publish puts the state back on top. The posts are visible to nobody in the client (it ignores them), but the server archives them under the poster's real JID, so the umpire can find who did it from the server's archive.
 

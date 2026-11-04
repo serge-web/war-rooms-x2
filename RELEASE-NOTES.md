@@ -87,6 +87,7 @@ In the browser, the mock's stored demo game from an earlier build is replaced by
 - **The world-state draft** is held only in the admin's browser (in its local storage, readable by anyone with that browser profile until it is published or discarded) and is not tied to the admin login; two admin tabs editing it at once overwrite each other's edits. Server-side drafts are post-v1.
 - **The map's base tiles** come from a tile server the deployment names, which learns which area each player looks at; without one the map has no background. The demo uses OpenStreetMap's tiles.
 - **Adjudication is advisory:** a modified client can still post during it.
+- **Map-room flooding:** a modified player client can post enough messages to the map room to hide the latest world state from players who reload; they click "Look further back" to find it, and the next publish ends it. The admin cannot be led into wiping the map.
 - **A role added that sees any room** counts as a structural change, so every online player's layout resets.
 - **Not in v1** (the design keeps each cheap to add later): structured form rooms, image and asset pickers in templates, fog of war (per-force maps), world-state snapshots and deltas, a game clock, request-for-information workflows, admin-defined default layouts, layouts stored on the server, message export and replay, and an umpire's merged view of every room.
 - **Operating the server:** the umpire plays with the server's admin account, so play it on a machine only the umpire uses; `ops/README.md` says what else to look after.
