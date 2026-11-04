@@ -68,7 +68,7 @@ Twenty-six decisions frame v1; each has a consequence the requirements below dep
 
 **D24 — UI component kit chosen by the dev team.** Constraints: per-panel theming via CSS custom properties (PLY-26), fully offline bundling (NFR-7), WCAG 2.2 AA (NFR-14) and first-class TypeScript types (D18).
 
-**D25 — World state lives in one members-only map room; every message carries the full state; only the admin posts it.** Consequence: replay comes from MAM for free, and a joiner needs only the latest valid message. Because members of a members-only room always have voice (S13), "admin only" is enforced by clients, which accept world-state messages only from the admin's real JID (§3 rule 3) and ignore the rest. The admin edits a browser-only draft and publishes it only at phase changes. Map-room messages may be up to 500 KB (PLY-53). Snapshots plus deltas, compression and per-force views are post-v1.
+**D25 — World state lives in one members-only map room; every message carries the full state; only the admin posts it.** Consequence: replay comes from MAM for free, and a joiner needs only the latest valid message. Because members of a members-only room always have voice (S13), "admin only" is enforced by clients, which accept world-state messages only from the admin's real JID (§3 rule 3) and ignore the rest. The admin edits a browser-only draft and publishes it at a phase change or whenever the admin chooses, for example to set up the starting state or fix a mistake during play. Map-room messages may be up to 500 KB (PLY-53). Snapshots plus deltas, compression and per-force views are post-v1.
 
 **D26 — Automated reconciliation (post-v1) will run as external clients.** Game-specific reconcilers written in Python against a common SDK, running natively or in the browser via Pyodide, log in as ordinary XMPP accounts. They hold no special server rights, so they do not breach D1 or D2. v1 SHALL NOT preclude this: world-state, turn and room documents are schema-defined and exportable as JSON Schema (ARC-6).
 
@@ -201,8 +201,8 @@ The admin backend lets the `admin` account design the wargame as a draft, then p
 
 - ADM-43 Only the admin SHALL advance the game: from planning to adjudication within a turn, and from adjudication to the next turn's planning. Each change publishes `game-state`.
 - ADM-44 The admin SHALL edit the world state on the map: add, move, edit and delete assets, with all fixed fields (§3 rule 17) editable in a form.
-- ADM-45 World-state edits SHALL accumulate as a draft in the admin's browser storage and SHALL be published to the map room, as one full-state message, only at a phase change, and only if the draft differs from the last published state. The UI SHALL show that unpublished edits exist and that the draft is held only in this browser (R25).
-- ADM-46 Before a phase change publishes, the admin SHALL see a summary of the world-state changes (assets added, removed and changed).
+- ADM-45 World-state edits SHALL accumulate as a draft in the admin's browser storage and SHALL be published to the map room as one full-state message, either with a phase change or at any time from an explicit "Publish world state" action (to set up the starting state before play, or to fix a mistake during play), and only if the draft differs from the last published state. The UI SHALL show that unpublished edits exist and that the draft is held only in this browser (R25). (Publishing at any time: product owner, Nov 4, 2026.)
+- ADM-46 Before any world-state publish, with a phase change or on its own, the admin SHALL see a summary of the world-state changes (assets added, removed and changed) and confirm.
 
 ## 5. Functional requirements — player client and demo views
 
@@ -469,7 +469,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - R23 **World-state authority is client-enforced.** Map-room members can post; clients ignore non-admin senders (PLY-58), and sender identity comes from the server, so posts cannot be spoofed. Low.
 - R24 **Room names visible to every role,** because `rooms:*` must be readable for discovery (PLY-60). Low–Medium: names can reveal plans. Mitigation: the admin editor SHOULD warn that room names are visible to all roles.
 - R25 **Admin's world-state draft is browser-only.** Clearing storage or switching device loses unpublished edits. Medium during adjudication. Mitigation: ADM-45 indicator; server-side drafts post-v1.
-- R26 **Archive growth from full-state messages.** About 100 KB per phase change at 600 assets; small at v1 scale. Low. Mitigation: snapshots plus deltas post-v1.
+- R26 **Archive growth from full-state messages.** About 100 KB per publish at 600 assets; small at v1 scale. Low. Mitigation: snapshots plus deltas post-v1.
 - R27 **Phase rules are advisory.** A modified client can post during adjudication. Low in v1, since no orders exist.
 - R28 **Layout resets during play.** Any structural change resets every online player's layout. Low–Medium. Mitigation: notice to the user (PLY-5); admins batch structural changes.
 - R29 **No session eviction.** A leaked password stays usable by sessions already open; the only remedy is deleting and recreating the role, which loses attribution of its history (ADM-14). Medium. Accepted.
@@ -690,8 +690,9 @@ Nine end-to-end scenarios walk each actor through v1, SC-10 through message temp
 4. The admin advances to turn 2 planning, reviews the change summary, and confirms.
 5. Blue's and Red's maps update to the new world state; composers re-enable.
 6. A Red player reloads; the map room loads the latest world state from MAM.
+7. During turn 2 planning, the admin sees a Blue asset in the wrong place, moves it and uses "Publish world state"; after the change summary, the corrected state appears for every player without a phase change.
 
-**Outcome:** the world state advances only at phase changes and reaches every player. **Traces to:** ADM-43–46, PLY-55–59, D7, D25.
+**Outcome:** the world state is published with phase changes or whenever the admin chooses, and every player sees the latest one. **Traces to:** ADM-43–46, PLY-55–59, D7, D25.
 
 ### Gaps found and requirements added
 
@@ -815,7 +816,7 @@ Changes from the product owner's request of Nov 2, 2026:
 Changes from the product owner's interview of Nov 3, 2026 (turns and the map). These change decisions. The owner's draft was written on an earlier copy of this SRD, so it was merged in rather than copied: what Phases 3 and 4 built and the owner decided since (GUID ids and login names, the `directory` node, objectives edited by the admin only, the narrow-window tab FT-1, Annex A, PLY-54, NFR-13 per WP 0.4) is kept, and the draft's ids are renumbered where they clashed.
 
 - **Scope.** v1 now includes a map room, a world state edited by the admin, and a full turn model (D4, D7, intro, §8). Orders and automated reconciliation are post-v1; D26 records the intended external-client approach. Annex B's separate asset store is superseded by D25.
-- **World state (D25, §3 rules 16–18).** One members-only map room; every message is the full state; only the admin posts, enforced by clients ignoring other senders (PLY-58). Edits are a browser-only draft published at phase changes (ADM-45). Fixed asset fields with a `sidc`; milsymbol symbols. No fog of war, snapshots, deltas or compression in v1.
+- **World state (D25, §3 rules 16–18).** One members-only map room; every message is the full state; only the admin posts, enforced by clients ignoring other senders (PLY-58). Edits are a browser-only draft published at phase changes or, from Nov 4, whenever the admin chooses (ADM-45). Fixed asset fields with a `sidc`; milsymbol symbols. No fog of war, snapshots, deltas or compression in v1.
 - **Turns (D7, ADM-43–46, PLY-55–56).** Turn number and phase only; the admin advances; composers are disabled for roles outside the White Force during adjudication, advisory. The draft's PLY-54 to PLY-59 became PLY-55 to PLY-60, since PLY-54 is the collapsible composer, and its SC-10 became SC-11.
 - **Maps need internet in v1** (D12, NFR-7, NFR-9, R30).
 - **Size cap.** Map-room messages may reach 500 KB (PLY-53).
@@ -830,7 +831,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 **Assumptions to confirm**
 
 - Confirmed (Nov 4, 2026): White Force roles keep posting during adjudication (PLY-56).
-- The initial world state is published at the first phase change, like any other edit, rather than at game publish.
+- Decided (Nov 4, 2026): the admin publishes the world state whenever they choose, as well as with phase changes, so the starting state can be set up before play and mistakes fixed live (ADM-45, ADM-46).
 - The map room's participants follow rule 4 like any room; a typical game names every force.
 - World state is excluded from the design export (ADM-16).
 
