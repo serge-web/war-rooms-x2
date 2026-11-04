@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Security review F7: this page runs no script of its own (the opener renders into it);
+         styles and fonts are the opener's, copied in, and images come from the build or are
+         theme assets as data: URLs. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>War Rooms X1</title>
+  </head>
+  <!-- The host page of a popped-out workspace tab (PLY-4). The workspace copies the opener's
+       styles in and renders into this document from the opener's JavaScript, so it loads
+       nothing itself. -->
+  <body></body>
+</html>
