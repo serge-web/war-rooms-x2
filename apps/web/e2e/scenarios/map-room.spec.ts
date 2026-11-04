@@ -104,3 +104,41 @@ test('the map room shows the admin’s newest world state, live and after a relo
   )
   expect(errors).toEqual([])
 })
+
+// WP 5.7 review: members have voice, so a modified client can bury the admin's state behind
+// many posts. Past the search's page limit the map says the state is further back and looks
+// again on request, rather than saying none was published (which would let the admin's editor
+// start from an empty map).
+test('a world state behind many other map-room posts is found by looking further back, never shown as none (PLY-59, WP 5.7)', async ({
+  context,
+  backend,
+}) => {
+  test.setTimeout(180_000)
+  const page = await context.newPage()
+  await page.setViewportSize({ width: 1400, height: 900 })
+  const errors = watchErrors(page)
+  await openApp(page, backend)
+  await logInAs(page, backend, 'red-co')
+  await openMap(page, 6)
+  const noise = Array.from({ length: 230 }, (_, i) =>
+    JSON.stringify({ type: 'chat', schemaVersion: 1, content: `noise ${i}` }),
+  )
+  expect(
+    await backend.raw(page, 'red-co', [{ op: 'post-body', room: ROOM.map, bodies: noise }]),
+  ).toEqual(noise.map(() => 'ok'))
+  await page.reload()
+  await logInAs(page, backend, 'red-co')
+  await page
+    .locator('.flexlayout__layout_main')
+    .getByRole('tab', { name: 'Map', exact: true })
+    .click()
+  const panel = mapPanel(page)
+  await expect(panel.getByText(/was not among this room’s recent messages/)).toBeVisible({
+    timeout: 60_000,
+  })
+  await expect(panel.getByText(/has not published a world state yet/)).toHaveCount(0)
+  await panel.getByRole('button', { name: 'Look further back' }).click()
+  await expect(symbols(panel)).toHaveCount(6, { timeout: 60_000 })
+  await expect(turnText(page)).toHaveText('World state for turn 1: 6 assets')
+  expect(errors).toEqual([])
+})
