@@ -33,10 +33,15 @@ export interface AccessCell {
 
 /** The documents effective access depends on: a design file, or the live documents. */
 export interface AccessInput {
-  readonly forces: readonly Force[]
-  readonly roles: readonly Role[]
-  readonly rooms: readonly Room[]
+  readonly forces: readonly AccessForce[]
+  readonly roles: readonly AccessRole[]
+  readonly rooms: readonly AccessRoom[]
 }
+
+/** The fields of a force, a role and a room that effective access reads. */
+export type AccessForce = Pick<Force, 'id' | 'order' | 'isUmpire'>
+export type AccessRole = Pick<Role, 'id' | 'forceId' | 'order' | 'isObserver'>
+export type AccessRoom = Pick<Room, 'id' | 'order' | 'participants'>
 
 export interface AccessProblem {
   readonly roomId: string
@@ -91,7 +96,7 @@ export function effectiveAccess(input: AccessInput): AccessMatrix {
       if (entry.kind === 'role' && roleIds.has(entry.id)) namedInRoleEntry.add(entry.id)
     }
   }
-  const isWhite = (role: Role) => forces.get(role.forceId)?.isUmpire === true
+  const isWhite = (role: AccessRole) => forces.get(role.forceId)?.isUmpire === true
 
   for (const room of rooms) {
     const forceAccess = new Map<string, 'write' | 'read'>()
@@ -249,7 +254,11 @@ export function byOrderThenId(
   return a.order - b.order || compareIds(a.id, b.id)
 }
 
-function compareRoles(a: Role, b: Role, forces: ReadonlyMap<string, Force>): number {
+function compareRoles(
+  a: AccessRole,
+  b: AccessRole,
+  forces: ReadonlyMap<string, AccessForce>,
+): number {
   const fa = forces.get(a.forceId)
   const fb = forces.get(b.forceId)
   // Roles of unknown forces sort last.

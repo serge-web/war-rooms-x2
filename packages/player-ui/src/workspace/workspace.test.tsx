@@ -281,7 +281,7 @@ describe('Workspace', () => {
     expect(screen.getByText('Layout reset')).toBeTruthy()
     expect(
       screen.getByText(
-        'The admin changed the game’s forces, roles or rooms, so your workspace is back to the default layout.',
+        'The admin changed the game’s rooms or who may use them, so your workspace is back to the default layout.',
       ),
     ).toBeTruthy()
     expect(screen.getByText('The game changed: layout reset to the default.')).toBeTruthy()

@@ -6,7 +6,13 @@
 // The server knows a role by its account, so here, and in the planner, the audit and AdminOps,
 // a role is named by its login name (the account's localpart, §3 rule 1), never its GUID; rooms,
 // nodes and documents carry GUIDs.
-import { DOCUMENT_ITEM_ID, directoryOf, effectiveAccess, objectivesDraftItemId } from '@wrx/domain'
+import {
+  DOCUMENT_ITEM_ID,
+  accessOf,
+  directoryOf,
+  effectiveAccess,
+  objectivesDraftItemId,
+} from '@wrx/domain'
 import {
   INITIAL_GAME_STATE,
   SINGLETON_NODES,
@@ -173,24 +179,30 @@ export interface StructureInput {
 
 /**
  * §3 rule 8: the structure of a design, as canonical text. Two designs with the same text
- * differ only in what does not move `designVersion`: themes, names, descriptions, the
- * briefing, objectives, templates, room types and configs.
+ * differ only in what does not move `designVersion`, so players' layouts survive it (PLY-5, D6).
  *
- * Structural are adding and removing forces, roles and rooms; moving them, read as a role
- * changing force and any change of order (the default layout follows room order, PLY-40); and
- * changing room participants. A role's observer flag and a force's White Force flag count
- * too: they change rooms' effective participants (rule 4), and so which rooms a role sees.
- * Participant entries are compared as a set, so their order does not count.
+ * Structural are only (product owner, Nov 4, 2026): a room added or removed, and a change to any
+ * role's effective access to any room (none, read or write, as `effectiveAccess` computes it).
+ * Re-ordering forces, roles or rooms is not structural. Moving a role to another force, its
+ * observer flag and a force's White Force flag count only through the access they change; so do
+ * participant entries. Themes, names, descriptions, the briefing, objectives, templates, room
+ * types and configs never count. A role added or removed counts through its access: one that
+ * sees no room changes nothing, and one that sees a room moves the version, so every online
+ * player's layout resets although their own access is unchanged (layouts are saved per role, so
+ * the new role itself has none to lose).
  */
 export function designStructure(design: StructureInput): string {
-  const byId = <T extends { readonly id: string }>(list: readonly T[]) =>
-    [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  const entry = (p: Room['participants'][number]) => `${p.kind}:${p.id}:${p.access}`
-  return JSON.stringify({
-    forces: byId(design.forces).map((f) => [f.id, f.order, f.isUmpire]),
-    roles: byId(design.roles).map((r) => [r.id, r.forceId, r.order, r.isObserver]),
-    rooms: byId(design.rooms).map((r) => [r.id, r.order, r.participants.map(entry).sort()]),
-  })
+  const matrix = effectiveAccess(design)
+  const sorted = (ids: Iterable<string>) => [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+  const rooms = sorted(matrix.roomIds)
+  const access = sorted(matrix.roleIds).map((roleId) => [
+    roleId,
+    rooms.flatMap((roomId) => {
+      const cell = accessOf(matrix, roomId, roleId)
+      return cell === 'none' ? [] : [`${roomId}:${cell}`]
+    }),
+  ])
+  return JSON.stringify({ rooms, access })
 }
 
 /** The state publishing `design` should leave on the server. Assumes a design that passed `checkDesign`. */

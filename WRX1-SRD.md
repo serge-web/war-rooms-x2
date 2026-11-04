@@ -40,7 +40,7 @@ Twenty-six decisions frame v1; each has a consequence the requirements below dep
 | D3 | The server's `admin` account is the game admin | Admin rights come from server-side authorisation, not a UI username check |
 | D4 | v1 room types: chat and map; others anticipated | A room-type registry is mandatory from v1 (ARC-5) |
 | D5 | One XMPP account per role | Several people may log in to one role; they are indistinguishable to the server |
-| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device. It survives theme and text edits, but structural design changes (forces, roles, rooms, participants) reset it to the default (PLY-5) |
+| D6 | Dockable workspace, layout saved in browser only | Layout is lost on a new browser or device. It survives theme and text edits, but structural design changes (rooms added or removed, or a role's access to a room changing) reset it to the default (PLY-5) |
 | D7 | Full turn model in v1: numbered turns, each with planning then adjudication phases; only the admin advances them | State in the `game-state` node. Phase-dependent behaviour is advisory only (client-side), consistent with D2 |
 | D8 | White Force (all rooms) and observers (read-only) | The admin is the umpire, in the White Force; White Force roles that are not observers are MUC members of every room; an observer is a MUC `visitor` in moderated rooms, enforced by ejabberd's stored role (ADM-37) |
 | D9 | Participants per room by force or role, mixed | Force entries expand to roles at provisioning; re-sync on change |
@@ -100,7 +100,7 @@ Every domain entity maps to one native XMPP construct for enforcement plus, wher
 5. Observer status SHALL apply per role across all its rooms; a per-room read-only entry (`access: read`) SHOULD also be supported, since MUC `visitor` makes it free.
 6. Display data for message authors (role name, force colour) SHALL be resolved from `roles:*` and `forces:*` documents by the author's login name, kept live by subscription; a deleted role's or force's name comes from its `retired` record (rule 1).
 7. The admin-set order of forces, roles and rooms (ADM-4–6, ADM-8) SHALL be stored as an integer `order` field in each document; ties sort by id.
-8. `game-setup.designVersion` SHALL be a positive integer that publishing increments only on structural design changes: adding, removing or moving forces, roles or rooms, or changing room participants. Theme, text, briefing, objectives and template changes SHALL NOT increment it. It keys saved layouts (PLY-5).
+8. `game-setup.designVersion` SHALL be a positive integer that publishing increments only on structural design changes: a room added or removed, or any role's effective access to a room (none, read or write, under rules 4 and 5) changing. Re-ordering forces, roles or rooms SHALL NOT increment it; moving a role to another force, its observer flag, a force's White Force flag and participant entries count only through the access they change. Theme, text, briefing, objectives and template changes SHALL NOT increment it. It keys saved layouts (PLY-5).
 9. Role passwords SHALL NOT be stored in any PubSub document or design export (ADM-16, ADM-26, NFR-1).
 
 **Themes and assets**
@@ -471,7 +471,7 @@ The largest remaining risks are a mock that drifts from real server behaviour (R
 - R25 **Admin's world-state draft is browser-only.** Clearing storage or switching device loses unpublished edits. Medium during adjudication. Mitigation: ADM-45 indicator; server-side drafts post-v1.
 - R26 **Archive growth from full-state messages.** About 100 KB per publish at 600 assets; small at v1 scale. Low. Mitigation: snapshots plus deltas post-v1.
 - R27 **Phase rules are advisory.** A modified client can post during adjudication. Low in v1, since no orders exist.
-- R28 **Layout resets during play.** Any structural change resets every online player's layout. Low–Medium. Mitigation: notice to the user (PLY-5); admins batch structural changes.
+- R28 **Layout resets during play.** Any structural change (a room added or removed, or a role's access to a room changing, §3 rule 8) resets every online player's layout, including players whose own rooms did not change. Low–Medium. Mitigation: notice to the user (PLY-5); re-ordering and text edits never reset layouts; admins batch structural changes.
 - R29 **No session eviction.** A leaked password stays usable by sessions already open; the only remedy is deleting and recreating the role, which loses attribution of its history (ADM-14). Medium. Accepted.
 - R30 **Map needs internet in v1.** Air-gapped deployments have no base map. Medium for some customers. Accepted for v1 (D12).
 
@@ -827,7 +827,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - **Maps need internet in v1** (D12, NFR-7, NFR-9, R30).
 - **Size cap.** Map-room messages may reach 500 KB (PLY-53).
 - **Room discovery (PLY-60).** `rooms:*` readable by every role (§3 table, rule 15, R24). The draft's `rooms` collection is replaced by the existing `directory` index node, since collections do not exist on ejabberd 26.09 (S14); the draft's check S14 is therefore dropped and S15–S16 kept.
-- **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired.
+- **Layouts.** `designVersion` bumps only on structural changes, which reset the layout (§3 rule 8, PLY-5, D6); PLY-6 and PLY-41 retired. Narrowed on Nov 4, 2026 to rooms added or removed and changes of a role's room access (see below).
 - **Objectives (D21, §3 rule 14, PLY-35, R10).** The owner chose the draft's rule over WP 3.5's: White Force roles that are not observers edit objectives again, one item per author, newest by server timestamp (S15), with cleanup when a role leaves the White Force.
 - **Kept as built:** rule 4 consequences, now highlighted in ADM-9; PLY-31, with delete-and-recreate as the eviction route (ADM-26, R29).
 - **Accepted risks:** lost vault passphrase (R22), public repos (R18). New risks R23–R30.
@@ -841,6 +841,7 @@ Changes from the product owner's interview of Nov 3, 2026 (turns and the map). T
 - Decided (Nov 4, 2026): the map room's participants are fixed to every role, not edited like other rooms (§3 rule 18). Per-force map rooms for fog of war, hiding the main map room from roles that are not White Force or observers, are the planned post-v1 route (§8).
 - Corrected (Nov 4, 2026, WP 5.2): §3 rule 18 said "every force as a read entry"; the forces are write entries, as D25 assumed (members keep voice, clients ignore non-admin senders, PLY-58), so the map room adds no role to the observer vault.
 - Decided (Nov 4, 2026): the design export includes a world state, imported as the admin's draft (ADM-16).
+- Decided (Nov 4, 2026): structural change narrowed: rooms added/removed or a role's room access changes (§3 rule 8, D6, R28). Re-ordering forces, roles or rooms no longer resets layouts; moving a role between forces and the observer and White Force flags count only when they change a role's effective access.
 
 Changes from WP 5.1, the follow-up checks S15 and S16 (Nov 4, 2026):
 

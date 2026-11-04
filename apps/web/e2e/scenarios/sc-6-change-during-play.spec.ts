@@ -5,7 +5,9 @@
 // Blue's; Blue CO's client switches to Red in place: force panel, objectives and force colour,
 // Blue HQ and Blue Reports closed with a notice. The change is structural (§3 rule 8), so the
 // layout resets to the default with Red's rooms and the new one, with a notice (PLY-5, PLY-30);
-// a message being typed survives it. Then the admin deletes Red CO, who is told and logged out.
+// a message being typed survives it. Renaming the new room and moving it up the list is not
+// structural (Nov 4, 2026): the layout stays. Then the admin deletes Red CO, who is told and
+// logged out.
 // Both backends; on ejabberd the admin first imports the published design (admin.ts).
 import type { Page } from '@playwright/test'
 import { ROOM } from '@wrx/schemas/fixtures'
@@ -145,6 +147,31 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
       `a moment without either HQ: ${JSON.stringify(seen)}`,
     ).toBe(true)
   }
+
+  // 4b. Not structural (§3 rule 8, Nov 4, 2026): the admin renames the new room and moves it to
+  // the top of the list. No role's access changes, so the version stays and Blue CO keeps its
+  // layout; a reset would put the room first, as the default follows room order (PLY-40).
+  await openSection(admin, 'Rooms')
+  await admin.getByRole('button', { name: 'Red planning', exact: true }).click()
+  await admin.getByLabel('Name', { exact: true }).fill('Red plans')
+  const rooms = admin.getByRole('list', { name: 'Rooms' })
+  const handle = admin.getByRole('button', { name: 'Reorder Red plans' })
+  const labels = await rooms.locator('.wrx-admin-list-label').allTextContents()
+  const total = labels.length
+  await handle.focus()
+  await admin.keyboard.press('Space')
+  await expect(handle).toHaveAttribute('aria-pressed', 'true')
+  for (let at = labels.indexOf('Red plans'); at > 0; at--) {
+    await admin.keyboard.press('ArrowUp')
+    await expect(admin.getByText(`Red plans moved to position ${at} of ${total}.`)).toBeAttached()
+  }
+  await admin.keyboard.press('Space')
+  await expect(rooms.locator('.wrx-admin-list-label').first()).toHaveText('Red plans')
+  await plan(admin, backend)
+  await expect(region).toContainText('no structural change')
+  await publishPlan(admin)
+  await expect(tab(blue, 'Red plans')).toBeVisible({ timeout: 30_000 })
+  await expect.poll(() => columns(blue)).toEqual([['Red HQ', TALKS], ['Map'], ['Red plans']])
 
   // 5. The admin deletes Red CO, who is online: told why, and logged out (PLY-29).
   await openSection(admin, 'Roles')

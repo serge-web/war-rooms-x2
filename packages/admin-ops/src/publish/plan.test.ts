@@ -730,24 +730,7 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
   }
 
   it.each<[string, (d: DesignFile) => DesignFile]>([
-    [
-      'a force added',
-      (d) => ({
-        ...d,
-        forces: [
-          ...d.forces,
-          { ...d.forces[0]!, id: tid('green'), name: 'Green', order: 9, isUmpire: false },
-        ],
-      }),
-    ],
     ['a force removed', (d) => ({ ...d, forces: d.forces.filter((f) => f.id !== tid('red')) })],
-    [
-      'forces reordered',
-      (d) => ({
-        ...d,
-        forces: d.forces.map((f) => (f.id === tid('red') ? { ...f, order: 9 } : f)),
-      }),
-    ],
     [
       'a role added',
       (d) => ({
@@ -761,13 +744,6 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
       (d) => ({
         ...d,
         roles: d.roles.map((r) => (r.loginName === 'blue-co' ? { ...r, forceId: tid('red') } : r)),
-      }),
-    ],
-    [
-      'roles reordered',
-      (d) => ({
-        ...d,
-        roles: d.roles.map((r) => (r.loginName === 'red-co' ? { ...r, order: 9 } : r)),
       }),
     ],
     [
@@ -785,13 +761,6 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
       }),
     ],
     ['a room removed', (d) => ({ ...d, rooms: d.rooms.filter((r) => r.id !== tid('red-hq')) })],
-    [
-      'rooms reordered',
-      (d) => ({
-        ...d,
-        rooms: d.rooms.map((r) => (r.id === tid('blue-hq') ? { ...r, order: 9 } : r)),
-      }),
-    ],
     [
       'a room’s participants changed',
       (d) => ({
@@ -866,6 +835,61 @@ describe('the design version moves only on structural changes (§3 rule 8, PLY-5
           o.forceId === tid('red')
             ? { ...o, markdown: 'Hold.', updatedAt: '2026-11-04T10:00:00Z' }
             : o,
+        ),
+      }),
+      false,
+    ],
+    // Not structural since Nov 4, 2026: a force with no roles changes no role's access, and
+    // order never counts (§3 rule 8).
+    [
+      'a force added',
+      (d) => ({
+        ...d,
+        forces: [
+          ...d.forces,
+          { ...d.forces[0]!, id: tid('green'), name: 'Green', order: 9, isUmpire: false },
+        ],
+      }),
+      false,
+    ],
+    [
+      'forces reordered',
+      (d) => ({
+        ...d,
+        forces: d.forces.map((f) => (f.id === tid('red') ? { ...f, order: 9 } : f)),
+      }),
+      false,
+    ],
+    [
+      'roles reordered',
+      (d) => ({
+        ...d,
+        roles: d.roles.map((r) => (r.loginName === 'red-co' ? { ...r, order: 9 } : r)),
+      }),
+      false,
+    ],
+    [
+      'rooms reordered',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) => (r.id === tid('blue-hq') ? { ...r, order: 9 } : r)),
+      }),
+      false,
+    ],
+    [
+      'a participant entry that changes no role’s access',
+      (d) => ({
+        ...d,
+        rooms: d.rooms.map((r) =>
+          r.id === tid('red-hq')
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: tid('red-co'), access: 'write' as const },
+                ],
+              }
+            : r,
         ),
       }),
       false,

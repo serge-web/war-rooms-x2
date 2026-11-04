@@ -165,7 +165,7 @@ describe('targetState(sampleDesign())', () => {
     }
   })
 
-  it('gives the design’s structure, which only structural edits change (§3 rule 8)', () => {
+  it('gives the design’s structure: its rooms and every role’s access, which only structural edits change (§3 rule 8)', () => {
     const design = withWhiteRoles()
     const structure = targetState(design).structure
     const same = (d: typeof design) => targetState(d).structure === structure
@@ -186,13 +186,45 @@ describe('targetState(sampleDesign())', () => {
         templates: [],
       }),
     ).toBe(true)
-    // Forces, roles and rooms added, removed or moved, and participants changed, are.
-    expect(same({ ...design, forces: design.forces.slice(1) })).toBe(false)
-    expect(same({ ...design, roles: design.roles.slice(1) })).toBe(false)
-    expect(same({ ...design, rooms: design.rooms.slice(1) })).toBe(false)
+    // Order is not structure (product owner, Nov 4, 2026): forces, roles and rooms re-ordered.
+    const reversedOrder = <T extends { readonly order: number }>(list: readonly T[]) =>
+      list.map((item) => ({ ...item, order: 100 - item.order }))
     expect(
-      same({ ...design, rooms: design.rooms.map((r, i) => (i === 0 ? { ...r, order: 99 } : r)) }),
-    ).toBe(false)
+      same({
+        ...design,
+        forces: reversedOrder(design.forces),
+        roles: reversedOrder(design.roles),
+        rooms: reversedOrder(design.rooms),
+      }),
+    ).toBe(true)
+    // A participant entry that gives a role the access it had already is not either.
+    const blueCo = design.roles.find((r) => r.loginName === 'blue-co')
+    const blueHq = design.rooms.find((r) =>
+      r.participants.some(
+        (p) => p.kind === 'force' && p.id === tid('blue') && p.access === 'write',
+      ),
+    )
+    if (blueCo === undefined || blueHq === undefined) throw new Error('fixture')
+    expect(
+      same({
+        ...design,
+        rooms: design.rooms.map((r) =>
+          r.id === blueHq.id
+            ? {
+                ...r,
+                participants: [
+                  ...r.participants,
+                  { kind: 'role' as const, id: blueCo.id, access: 'write' as const },
+                ],
+              }
+            : r,
+        ),
+      }),
+    ).toBe(true)
+    // Rooms added or removed, and any role's access to a room changed, are.
+    expect(same({ ...design, rooms: design.rooms.slice(1) })).toBe(false)
+    expect(same({ ...design, roles: design.roles.slice(1) })).toBe(false)
+    expect(same({ ...design, forces: design.forces.slice(1) })).toBe(false)
     expect(
       same({
         ...design,

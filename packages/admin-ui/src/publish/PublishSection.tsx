@@ -44,7 +44,7 @@ function versionLine(plan: PublishPlan): string {
       : `; the game becomes design version ${plan.designVersion}`
   }
   if (plan.structural && plan.designVersion !== undefined) {
-    return `; the game becomes design version ${plan.designVersion} (now ${now}): forces, roles, rooms or participants change, so every online player’s layout resets to the default`
+    return `; the game becomes design version ${plan.designVersion} (now ${now}): rooms are added or removed, or a role’s access to a room changes, so every online player’s layout resets to the default`
   }
   return `; no structural change, so the game stays at design version ${now} and players keep their layouts`
 }

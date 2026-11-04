@@ -67,7 +67,7 @@ function useLayoutResetNotice(): () => void {
       tone: 'info',
       title: 'Layout reset',
       description:
-        'The admin changed the game’s forces, roles or rooms, so your workspace is back to the default layout.',
+        'The admin changed the game’s rooms or who may use them, so your workspace is back to the default layout.',
       durationMs: 12_000,
     })
   }, [toast])
