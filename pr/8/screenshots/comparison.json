@@ -1,11 +1,11 @@
 [
   {
     "name": "admin-design-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-preview-as-role",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-publish-plan",
@@ -13,7 +13,7 @@
   },
   {
     "name": "admin-room-templates",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-template-builder",
@@ -33,15 +33,15 @@
   },
   {
     "name": "multi-client-column-tab",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "multi-client-two-panes",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "multi-client-view",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-architecture",
@@ -57,7 +57,7 @@
   },
   {
     "name": "page-data-dictionary",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-home",
@@ -69,23 +69,27 @@
   },
   {
     "name": "player-chat",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-chat-collapsed",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-column",
-    "status": "unchanged"
+    "status": "changed"
+  },
+  {
+    "name": "player-map-placeholder",
+    "status": "new"
   },
   {
     "name": "player-objectives-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-shell",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-welcome",
@@ -93,14 +97,14 @@
   },
   {
     "name": "player-workspace",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "template-card",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "template-composer",
-    "status": "unchanged"
+    "status": "changed"
   }
 ]
