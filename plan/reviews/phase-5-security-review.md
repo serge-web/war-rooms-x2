@@ -25,14 +25,14 @@ The product owner decides on anything rated High or Critical.
 | H1 | Any player can bury the admin's world state behind about 200 small map-room posts; after a reload every client said no world state was published, and the admin's editor then offered an empty map whose publish would wipe the state | High | Fixed in part (WP 5.7): never shown as none, the admin cannot publish against it, "Look further back"; the denial of the map after a reload remains (M1, accepted for v1) |
 | M1 | What remains of H1: a flood makes each reloading player click "Look further back" once per 200 posts, until the admin publishes again | Medium | Accepted for v1 by the owner (Nov 4, 2026) |
 | M2 | The world-state draft is plain `localStorage`: the umpire's unpublished adjudication, readable by anyone with the browser profile or a script on the origin, and not tied to the admin login | Medium | Accepted (R25); recommendations below |
-| M3 | A stale draft outlived its game under the same map-room GUID: a reset did not clear it, and nothing said it was from the game before | Medium | Fixed in part (WP 5.7): a warning on the draft; not cleared |
+| M3 | A stale draft outlived its game under the same map-room GUID: a reset did not clear it, and nothing said it was from the game before | Medium | Fixed: a warning on the draft (WP 5.7); the reset's confirmation offers to discard it (WP 5.9) |
 | L1 | Last writer wins between two admin tabs editing the same draft | Low | Recorded |
 | L2 | The design export, after 20 s without an answer from the map room, silently left out the world state | Low | Fixed (WP 5.7): the export says so, and says when it carries the unpublished draft |
-| L3 | A world state published with a phase change whose `game-state` publish then fails: players see turn N+1's map at turn N, and the error text says the world state was not published | Low | Recorded |
+| L3 | A world state published with a phase change whose `game-state` publish then fails: players see turn N+1's map at turn N, and the error text says the world state was not published | Low | Fixed (WP 5.9): the error says the world state went out; the draft is cleared; a retry moves only the phase |
 | L4 | The admin backend joins the map room (while a draft is held, and for an export) | Low | Accepted |
 | L5 | Composers pause during adjudication in the client only; the White Force keeps posting | Low | Accepted by design (D7, R27; owner, Nov 4) |
 | L6 | Each reader parsed every map-room message before checking its sender | Low | Fixed (WP 5.7): set aside unread |
-| L7 | A role added that sees any room is a structural change, so every online player's layout resets | Low | Recorded (R28) |
+| L7 | A role added that sees any room is a structural change, so every online player's layout resets | Low | Fixed (WP 5.9): roles added or removed are not structural (§3 rule 8) |
 | I1 | The map room's entries are fixed (§3 rule 18) in the draft, the planner, import and audit | Info | Verified |
 | I2 | World-state authority: only the admin's real JID, never a nickname | Info | Verified |
 | I3 | `game-state`, `directory` and `rooms:*` read by every role, published by the admin | Info | Verified |
@@ -91,6 +91,7 @@ The key is per server and map-room GUID. A reset (ADM-15) followed by a publish 
 
 - **Fixed in part.** A draft remembers the stanza-id of the state it started from. When the room no longer holds any state and the draft started from one, the map now warns "This draft may belong to an earlier game" and asks the admin to check every asset or discard it (`orphaned`, `world-draft.tsx`; test in `editor.test.tsx`). When the room holds a newer state, the existing note says a newer one was published since the draft began.
 - **Not done:** clearing the draft on a reset. The reset runs in the admin backend, which knows the design's map room; clearing there would be small, but it would discard a draft the admin may want for the next game, and an import already makes a file's state the draft. Recommendation: offer to discard the world-state draft in the reset's confirmation.
+- **Fixed (WP 5.9).** The reset's confirmation (ADM-15) offers, unticked, "Also discard the world-state draft held in this browser for this game", with its asset count and when it was saved, whenever this browser holds a draft for the design's map room or any room the reset destroys. The admin chooses; a ticked draft is discarded once the reset is complete, and an unticked one is kept for the next game. The mock's "Reset to seed" makes the same offer for the seed's map room. Tests: `PublishSection.test.ts`, `multi.test.tsx`, `editor.test.tsx` (`heldWorldDraft`), and `world-editor.spec.ts` (the admin backend's reset on the mock, with axe on the confirmation). A draft in another browser profile is out of reach, as before.
 
 ### L1. Last writer wins between admin tabs (Low; recorded)
 
@@ -103,6 +104,8 @@ Each save writes the whole draft. Other tabs see it at once (the `storage` event
 ### L3. A phase change that fails after its world state went out (Low; recorded)
 
 `advancePhase` sends the world state first (so players never see the new phase with the old map), then publishes `game-state`. If that publish fails, the world state for turn N+1 is out while the turn stays at N, and the turn panel's error says "the world state was not published, so the phase did not move", which is then untrue. The draft is not cleared, but it now matches the published state, so a retry moves only the phase. Recommendation: word the error by which step failed, and clear the draft when the world state went out. Not changed: it needs a richer result from the store than the code and message it returns today.
+
+**Fixed (WP 5.9).** `advancePhase` returns `AdvancePhaseResult`; when the world state went out and only `game-state` failed, its error carries `worldStateSent` (the state and its stanza-id) and says "the world state was published, but the phase did not change". The turn panel says "The world state for turn N+1 was published and players see it, but the phase did not move: … Confirm again to move the phase; the world state is not sent again", clears the draft as a successful publish would (the map shows the published state, no unpublished edits), and keeps the confirmation open, which now says only the phase is left. Confirming again publishes `game-state` alone. Players still see turn N+1's map at turn N until then, as the design accepts. Tests: `world.store.test.ts`, `editor.test.tsx`.
 
 ### L4. The admin backend joins the map room (Low; accepted)
 
@@ -119,6 +122,8 @@ Every reader JSON-parsed and schema-checked each map-room message, then ignored 
 ### L7. A role added counts as structural (Low; recorded, R28)
 
 Since the owner's narrowing (Nov 4, §3 rule 8) only rooms added or removed and changes of a role's effective access move `designVersion`. `designStructure` is the room ids plus the full access matrix, so a new role that sees any room changes it, and every online player's layout resets though their own rooms did not change. Layouts are saved per role, so the new role loses nothing. Comparing only roles present in both designs would avoid the reset; it is left as the owner's rule reads. Recorded in the WP 5.7 brief.
+
+**Fixed (WP 5.9, decided Nov 4, 2026).** `designStructure` now gives the room ids and each role's access, and the planner compares the published and the new design with `structuralChange`: rooms added or removed, or a change in the room access of a role present in both, are structural; a role added or removed is not. SRD §3 rule 8, D6 and R28 say so. Tests: `target.test.ts`, `plan.test.ts`, the publish scenario (mock and ejabberd: new roles keep version 4), and SC-6 (deleting Red CO keeps Blue CO's layout, both backends). A deleted role is still logged out (PLY-29).
 
 ### I1. The map room's fixed entries (§3 rule 18)
 
@@ -148,3 +153,11 @@ Agrees with the notes: the server build's `img-src https:` relies on the operato
 | Map-room posts not from the admin set aside unread (L6) | `domain/src/store.ts` | `world.store.test.ts` |
 | A draft from an earlier game flagged (M3) | `player-ui/src/map/world-draft.tsx`, `map-editor.tsx` | `editor.test.tsx` |
 | The export says when it holds no world state, or the draft (L2) | `admin-ui/src/publish/PublishSection.tsx`, `transfer.ts`, `apps/web/src/seams/AdminApp.tsx`, `world-draft.tsx` | `PublishSection.test.ts`, `editor.test.tsx` |
+
+## What WP 5.9 changed
+
+| Change | Files | Tests |
+| --- | --- | --- |
+| A phase change that fails after its world state went out says so, clears the draft, and a retry moves only the phase (L3) | `domain/src/store.ts` (`AdvancePhaseResult`), `player-ui/src/column/turn-panel.tsx` | `world.store.test.ts`, `editor.test.tsx` |
+| The reset's confirmation, and the mock's "Reset to seed", offer to discard the world-state draft held for the game (M3) | `admin-ui/src/publish/PublishSection.tsx`, `dialogs.tsx`, `transfer.ts`, `apps/web/src/seams/AdminApp.tsx`, `MultiClientApp.tsx`, `player-ui/src/multi/mock-controls.tsx`, `map/draft-storage.ts` | `PublishSection.test.ts`, `multi.test.tsx`, `editor.test.tsx`, `world-editor.spec.ts` |
+| Roles added or removed are not structural (L7, R28) | `admin-ops/src/target.ts` (`structuralChange`), `publish/plan.ts` | `target.test.ts`, `plan.test.ts`, `publish-scenario.ts`, `sc-6-change-during-play.spec.ts` |

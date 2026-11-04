@@ -1,6 +1,6 @@
 # WP 5.9 — Phase 5 polish: review findings
 
-**SRD ids:** ADM-43, ADM-45, ADM-15, R25, R28, NFR-11, NFR-14 (also §3 rule 8, D6, PLY-5, PLY-57) · **Depends on:** 5.7 · **Status:** active
+**SRD ids:** ADM-43, ADM-45, ADM-15, R25, R28, NFR-11, NFR-14 (also §3 rule 8, D6, PLY-5, PLY-57) · **Depends on:** 5.7 · **Status:** done
 
 ## Goal
 
@@ -27,3 +27,12 @@ Everything Phase 5 built, as frozen except where named above.
 ## Notes
 
 - L3 changes the store interface: `advancePhase` returns `AdvancePhaseResult`, whose error may carry `worldStateSent`. No other caller exists.
+
+## Notes (done)
+
+- **L3:** `advancePhase` returns `AdvancePhaseResult`; its error carries `worldStateSent` when only `game-state` failed. The turn panel keeps the confirmation open with "The world state for turn N was published and players see it, but the phase did not move", clears the draft as published, and a second confirmation publishes `game-state` alone.
+- **M3:** the reset's confirmation offers, unticked, to discard the world-state draft held for the design's map room or any room the reset destroys; it goes once the reset completes. The mock's "Reset to seed" offers the same for the seed's map room. `WorldStateTransfer` gains `heldDraft` and `discardDraft`; `ApplyDialog` gains optional `choices`.
+- **L7:** `designStructure` returns rooms and per-role access; the planner uses `structuralChange`. SC-6 and SC-10 now check that deleting a role keeps other players' layouts; the publish scenario keeps version 4 for new roles.
+- **A2:** one Tab stop for the asset table, arrow keys, Page Up/Down, Home and End; at 600 assets "Edit…" is one Tab press from any row (before: up to 600).
+- **Map render:** the costs found were React's Suspense fallback throttle (~300 ms), the map chunk still loading, milsymbol's one-time set-up (~100 ms) and Leaflet's first run; the map view now loads its chunk without Suspense, the chunk starts loading with the login, a warm-up runs in idle periods, symbols are cached once for every map, and a map room is watched for its world state from its first join. Preloaded first render: 696 → 357 ms alone, about 400 ms in the full suite. Right after login: 900 → 671 ms alone, but still about 1.05–1.14 s in the loaded full suite, where the mock's per-request saves hold the map room's join back (recorded in `phase-5-performance.md`).
+- **Interface changes:** `SessionStore.advancePhase` returns `AdvancePhaseResult`; `TargetState.structure` is a `DesignStructure`, compared with `structuralChange`; `WorldStateTransfer.heldDraft` and `discardDraft`; `MockControlsCore.onReset` takes the discard choice and gains `heldWorldDraft`; `LazyMapView` is a component, not a `lazy` one.
