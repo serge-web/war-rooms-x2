@@ -343,7 +343,12 @@ function TurnPanelWithWorld({
       {confirmDetails}
       <section className="wrx-turn__world" aria-label="World state">
         <h3 className="wrx-world-summary__heading">World state</h3>
-        {searching ? (
+        {view?.unreached === true && view.state === undefined ? (
+          <p className="wrx-field__error" role="alert">
+            The published world state was not found among the map room’s recent messages, so your
+            draft cannot be compared with it. Open the map room and look further back first.
+          </p>
+        ) : searching ? (
           <Spinner label="Checking the world-state draft against the published one" />
         ) : dirty ? (
           <>

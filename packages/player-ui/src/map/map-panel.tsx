@@ -59,6 +59,11 @@ export interface MapPanelCoreProps {
   readonly tiles: MapTiles | undefined
   /** The admin's world-state editor (ADM-44); undefined for everyone else. */
   readonly editing?: MapEditing | undefined
+  /**
+   * The search stopped at its page limit with none found among the newest messages
+   * (`WorldStateView.unreached`): the panel says so and offers to look further back.
+   */
+  readonly onSearchFurther?: (() => void) | undefined
 }
 
 type View = 'map' | 'table'
@@ -89,6 +94,7 @@ export function MapPanelCore({
   config,
   tiles,
   editing,
+  onSearchFurther,
 }: MapPanelCoreProps) {
   const [view, setView] = useState<View>('map')
   const [picked, setPicked] = useState<string | undefined>(undefined)
@@ -144,6 +150,16 @@ export function MapPanelCore({
           <p className="wrx-empty">This map cannot be shown: {problem}</p>
         ) : loading ? (
           <Spinner label="Loading the world state" />
+        ) : onSearchFurther !== undefined ? (
+          <div className="wrx-empty">
+            <p>
+              The umpire’s latest world state was not among this room’s recent messages, which hold
+              many messages that are not world states from the umpire. It is further back.
+            </p>
+            <Button size="small" onClick={onSearchFurther}>
+              Look further back
+            </Button>
+          </div>
         ) : (
           <p className="wrx-empty">The umpire has not published a world state yet.</p>
         )}
@@ -578,12 +594,19 @@ export function MapPanel({ roomId, room, config }: PlayerPanelProps) {
     <MapPanelCore
       name={room.name}
       state={draft === undefined ? world.data?.state : draft.working}
-      loading={world.status === 'loading' || draft?.searching === true}
+      loading={
+        (world.status === 'loading' || draft?.searching === true) && world.data?.unreached !== true
+      }
       problem={world.status === 'error' ? (world.error?.message ?? 'unavailable') : undefined}
       forces={forces}
       config={view}
       tiles={tiles}
       editing={editing}
+      onSearchFurther={
+        world.data?.unreached === true && !world.data.searching
+          ? () => void store.searchWorldStateFurther(roomId)
+          : undefined
+      }
     />
   )
 }

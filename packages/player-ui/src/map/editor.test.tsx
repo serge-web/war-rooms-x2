@@ -43,6 +43,7 @@ async function mount(
   storage: WorldDraftStorage = memoryWorldDraftStorage(),
   turn = at(1, 'planning'),
   published: readonly WorldState[] = [sampleWorldState()],
+  options: { readonly noise?: number; readonly worldStatePageLimit?: number } = {},
 ): Promise<{ h: Harness; storage: WorldDraftStorage }> {
   const docs = sampleDocuments()
   const map = room(
@@ -56,8 +57,18 @@ async function mount(
   )
   docs.set(nodeName.room(map.id), [map])
   docs.set('game-state', [turn])
-  const h = harness({ roleId, docs })
-  h.archive.set(MAP_JID, published.map(worldMessage))
+  const h = harness({
+    roleId,
+    docs,
+    ...(options.worldStatePageLimit === undefined
+      ? {}
+      : { worldStatePageLimit: options.worldStatePageLimit }),
+  })
+  // Messages after the admin's that are not world states from the admin (a modified client's).
+  const noise = Array.from({ length: options.noise ?? 0 }, () =>
+    message('map', { body: JSON.stringify({ type: 'chat', schemaVersion: 1, content: 'x' }) }),
+  )
+  h.archive.set(MAP_JID, [...published.map(worldMessage), ...noise])
   render(
     <StrictMode>
       <WorldDraftProvider storage={storage}>
@@ -256,6 +267,24 @@ describe('the world-state editor (ADM-44, ADM-45)', () => {
     await mount('admin', mapPanel, storage, at(1, 'planning'), [])
     expect(screen.getByText(/^Unpublished edits: 6 assets changed/)).toBeTruthy()
     expect(screen.getByText('This draft may belong to an earlier game')).toBeTruthy()
+  })
+
+  it('never offers an empty map to edit when the published state is behind many other messages; looks further on request (WP 5.7 review)', async () => {
+    await mount('admin', mapPanel, memoryWorldDraftStorage(), at(1, 'planning'), undefined, {
+      noise: 40,
+      worldStatePageLimit: 2,
+    })
+    expect(
+      screen.getByText(/latest world state was not among this room’s recent messages/),
+    ).toBeTruthy()
+    expect(editor()).toBeNull()
+    expect(screen.queryByText(/has not published a world state yet/)).toBeNull()
+    for (let i = 0; i < 4 && screen.queryByText('World state for turn 1: 6 assets') === null; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Look further back' }))
+      await act(() => flush(30))
+    }
+    expect(screen.getByText('World state for turn 1: 6 assets')).toBeTruthy()
+    expect(editor()).toBeTruthy()
   })
 
   it('reports a draft the browser would not keep', async () => {

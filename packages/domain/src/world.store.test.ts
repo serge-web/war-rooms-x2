@@ -172,15 +172,32 @@ describe('world state (D25, PLY-58, PLY-59)', () => {
     release()
   })
 
-  it('gives up after the page limit, with a warning', async () => {
+  it('stops at the page limit, with a warning, as unreached rather than none, and looks further on request (WP 5.7 review)', async () => {
+    // A modified client's posts after the admin's state: the newest 40 messages are noise.
     const noise = Array.from({ length: 40 }, () => message('map', { body: chatBody('x') }))
     const h = await mapHarness([world(stateAt(1)), ...noise], { worldStatePageLimit: 3 })
     const release = h.store.acquireWorldState(tid('map'))
     await flush(30)
-    expect(h.store.worldState(tid('map')).data).toMatchObject({ state: undefined, none: true })
+    expect(h.store.worldState(tid('map')).data).toMatchObject({
+      state: undefined,
+      none: false,
+      unreached: true,
+    })
     // The newest page, then three older ones.
     expect(queries(h)).toHaveLength(4)
     expect(h.warnings).toContain('No world state within the page limit')
+    // Looking further goes on from where it stopped, until the admin's state is found.
+    await h.store.searchWorldStateFurther(tid('map'))
+    await flush(30)
+    expect(queries(h)).toHaveLength(7)
+    expect(h.store.worldState(tid('map')).data).toMatchObject({ unreached: true })
+    await h.store.searchWorldStateFurther(tid('map'))
+    await flush(30)
+    expect(h.store.worldState(tid('map')).data).toMatchObject({
+      state: stateAt(1),
+      none: false,
+      unreached: false,
+    })
     release()
   })
 

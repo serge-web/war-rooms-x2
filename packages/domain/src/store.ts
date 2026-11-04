@@ -256,10 +256,17 @@ export interface WorldStateView {
   /** Still paging back through the archive for one. */
   readonly searching: boolean
   /**
-   * The archive was searched to its start, or to the page limit, and held no valid world state
-   * from the admin: the admin has not published one yet (or it is older than the limit).
+   * The archive was searched to its start and held no valid world state from the admin: the
+   * admin has not published one yet.
    */
   readonly none: boolean
+  /**
+   * The search reached its page limit with older messages still in the archive and no valid
+   * world state from the admin among the newer ones: there may be one further back, behind many
+   * other messages (a modified client can post them, WP 5.7 review). Not `none`: nothing may be
+   * built on the room being empty. `searchWorldStateFurther` looks again.
+   */
+  readonly unreached: boolean
   /** Messages in the room that were not accepted: not from the admin, or not a valid state. */
   readonly ignored: number
 }
@@ -391,6 +398,11 @@ export interface SessionStore {
    * `acquireRoom`, with small MAM pages, paging back to the newest valid one from the admin.
    */
   acquireWorldState(roomId: string): Release
+  /**
+   * After a search that stopped at its page limit (`unreached`), pages back once more, up to the
+   * limit again, from where it stopped. Does nothing while a search runs or once one is found.
+   */
+  searchWorldStateFurther(roomId: string): Promise<void>
   /** The map room's accepted world state (PLY-58, PLY-59); see {@link WorldStateView}. */
   worldState(roomId: string): Snapshot<WorldStateView | undefined>
   /**
@@ -1661,6 +1673,12 @@ class Store implements SessionStore {
     return release
   }
 
+  searchWorldStateFurther(roomId: string): Promise<void> {
+    const entry = this.roomEntries.get(roomId)
+    if (entry === undefined || !entry.world || entry.status !== 'joined') return Promise.resolve()
+    return this.seekWorldState(entry)
+  }
+
   /**
    * Pages back from the oldest message held until a valid world state from the admin is among
    * them, the archive ends, or the page limit is reached (PLY-59). Once is enough per join: live
@@ -1727,7 +1745,8 @@ class Store implements SessionStore {
         stanzaId: accepted?.id,
         timestamp: accepted?.timestamp,
         searching: entry.seeking !== undefined,
-        none: accepted === undefined && entry.sought,
+        none: accepted === undefined && entry.sought && !entry.hasOlder,
+        unreached: accepted === undefined && entry.sought && entry.hasOlder,
         ignored: total - this.acceptedCount(entry) + entry.droppedIgnored,
       })
       const settled = accepted !== undefined || entry.sought

@@ -268,6 +268,13 @@ export function readPublishedWorldState(
       const view = snapshot.data
       if (view?.state !== undefined) finish({ status: 'found', state: view.state })
       else if (view?.none === true) finish({ status: 'none' })
+      else if (view?.unreached === true && !view.searching) {
+        finish({
+          status: 'unavailable',
+          reason:
+            'the latest world state is further back in the map room than the search looks, behind other messages',
+        })
+      }
     }
     const timer = setTimeout(() => {
       const state = store.worldState(roomId).data?.state
