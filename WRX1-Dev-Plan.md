@@ -91,8 +91,9 @@ There are 40 work packages, including the spike S14 and the Phase 5 spike checks
 | 5.8 | Objectives edited by the White Force: one item per author, newest by server timestamp, publisher affiliations for White Force non-observers, cleanup when a role leaves the White Force or is deleted, umpire editing in the player client for those roles | D21, §3 rule 14, PLY-35, R10 | 5.1 |
 | 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6, 5.8 |
 | 5.9 | Phase 5 polish: the reviews' L3 (a phase change failing after its world state went out), M3 (discarding the world-state draft at a reset), L7 (roles added or removed not structural), A2 (one Tab stop for the asset table) and the margin of the map's first render at 600 assets | ADM-15, ADM-43, ADM-45, R25, R28, NFR-11, NFR-14 | 5.7 |
-| **After v1 — Annexes A and B** |  |  |  |
+| **After v1 — Annexes A to C** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
+| S17 | Spike: Pyodide in a Web Worker in the admin view, bundled offline under the content security policy, with a minimal bridge that reads the world state and messages, fills the draft and posts a White Force proposal; records bundle size, start-up times and the policy needed (SRD Annex C) | Annex C | 5.6 |
 
 **Traceability.** Every live SRD requirement id is assigned to at least one WP above, except four that apply to every PR: ARC-15 (team's choice), DOC-4 and DOC-18 (working model item 5) and DOC-5 (blog posts). CI checks this on every PR (`pnpm check:trace`), so a requirement added to the SRD without a WP fails the build.
 
@@ -107,6 +108,7 @@ Raised during the build, not yet given a work package.
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 | FT-2 | **Message templates (SRD Annex A), after v1. A1 to A4 became Phase 4 (WPs 4.1 to 4.4); A5, the image and asset pickers, stays here.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
 | FT-3 | **Superseded (Nov 3, 2026).** Force assets in their own store (SRD Annex B) are replaced by the map room's world state (D25), built in Phase 5. Spike S14's result (no collection nodes on ejabberd 26.09) still stands and shapes room discovery (PLY-60). | Annex B | Oct 2026 |
+| FT-4 | **Python API (SRD Annex C), after v1.** Proposed WPs, numbered when spike S17 reports: P1 SDK models generated from the JSON Schemas, and the read layer; P2 the browser runner (worker, bridge, script panel, private storage); P3 act and adjudicate layers, White Force proposals and the admin's opt-in publishing; P4 acceptance (scenario, performance, accessibility, security review, docs); P5 the native runner on the same contract suite. Bot players are to be discussed separately | Annex C | Product owner, Nov 5, 2026 |
 
 ## The README plan chart
 
@@ -175,9 +177,10 @@ flowchart TB
         wp57["5.7 Acceptance and review"]
         wp59["5.9 Phase 5 polish"]
     end
-    subgraph PX["After v1 — Annexes A and B"]
+    subgraph PX["After v1 — Annexes A to C"]
         direction LR
         wps14["S14 Collection access spike"]
+        wps17["S17 Pyodide spike"]
     end
     G0{{"Gate G0"}}
     G1{{"Gate G1"}}
@@ -204,6 +207,7 @@ flowchart TB
     wp31 & wp32 & wp33 --> wp34
     wp35 --> wp34
     wp12 --> wps14
+    wp56 --> wps17
     P0 -.-> G0
     P1 -.-> G1
     P2 -.-> G2
@@ -226,7 +230,7 @@ flowchart TB
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58,wp59 todo
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58,wp59,wps17 todo
     class G0,G1,G2,G3,G4,G5 gate
 ```
 
@@ -318,3 +322,4 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | Future tasks FT-2 and FT-3 added for Annexes A and B | Planned in `plan/decisions/annex-a-b-implementation.md`; WPs are numbered once the owner answers its open questions |
 | NFR-13 narrowed to Chrome and Edge as the SHALL, Firefox and Safari as a SHOULD; the Firefox CI job becomes advisory, like WebKit's | WP 0.4: the customer's analysts use Chrome and Edge only (`plan/decisions/target-environment.md`). Firefox and WebKit failures are recorded in `plan/reviews/phase-3-browsers.md` |
 | 2.6 gains PLY-54, the collapsible composer: free text and templated, remembered per room in the saved layout, collapsed by default for read-only roles | Product-owner request of Nov 2, 2026: some users only read a room and want the space for messages |
+| Spike S17 and FT-4 added, after v1, with a node in the chart | SRD Annex C (Nov 5, 2026): the Python API's browser runner depends on Pyodide working offline under the client's security policy |

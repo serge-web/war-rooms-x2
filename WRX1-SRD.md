@@ -70,7 +70,7 @@ Twenty-six decisions frame v1; each has a consequence the requirements below dep
 
 **D25 — World state lives in one members-only map room; every message carries the full state; only the admin posts it.** Consequence: replay comes from MAM for free, and a joiner needs only the latest valid message. Because members of a members-only room always have voice (S13), "admin only" is enforced by clients, which accept world-state messages only from the admin's real JID (§3 rule 3) and ignore the rest. The admin edits a browser-only draft and publishes it at a phase change or whenever the admin chooses, for example to set up the starting state or fix a mistake during play. Map-room messages may be up to 500 KB (PLY-53). Snapshots plus deltas, compression and per-force views are post-v1.
 
-**D26 — Automated reconciliation (post-v1) will run as external clients.** Game-specific reconcilers written in Python against a common SDK, running natively or in the browser via Pyodide, log in as ordinary XMPP accounts. They hold no special server rights, so they do not breach D1 or D2. v1 SHALL NOT preclude this: world-state, turn and room documents are schema-defined and exportable as JSON Schema (ARC-6).
+**D26 — Automated reconciliation (post-v1) will run as external clients.** Game-specific reconcilers written in Python against a common SDK, running natively or in the browser via Pyodide, log in as ordinary XMPP accounts. They hold no special server rights, so they do not breach D1 or D2. v1 SHALL NOT preclude this: world-state, turn and room documents are schema-defined and exportable as JSON Schema (ARC-6). The Python API is specified in Annex C (Nov 5, 2026): the browser runner comes first, for the admin and White Force.
 
 ## 3. Domain model and XMPP mapping
 
@@ -414,7 +414,7 @@ These are deferred, but the v1 architecture SHALL accommodate each without restr
 | World-state snapshots plus JSON Patch deltas, and gzip compression | Assets keyed by id (§3 rule 16); message `type` discriminator |
 | Fog of war: per-force world-state views | One map room per force, each showing that force's view; the main map room then becomes visible only to the White Force and observers (§3 rule 18 fixes v1's main map room to every role); members-only, admin-sender check already in place (D25) |
 | Orders | Form rooms and templates (Annex A); `game-state` phases already exist |
-| Automated reconciliation: Python SDK, per-game reconcilers, automatic / review / interactive modes, plug-in umpire UI, Pyodide | External clients (D26); schemas exportable as JSON Schema; registry for umpire panels |
+| Automated reconciliation and a Python API: SDK, per-game reconcilers, analysis, automated players, Pyodide in the browser; specified in Annex C | External clients (D26); schemas exportable as JSON Schema; registry for umpire panels; browser-only world-state draft (ADM-45) that scripts can fill |
 | In-app reconciler editor with live preview | Fast follow-up after the SDK; reconciler code storable in PubSub |
 | Server-side world-state draft, several umpires editing | Draft format = world-state schema |
 | Admin-defined asset schema | Fixed fields in v1 (§3 rule 17) |
@@ -855,6 +855,10 @@ Changes from WP 5.8, White Force edits objectives (Nov 4, 2026):
 - SC-5: a fifth step, in which a White Force role that is not an observer amends Red's objectives too, and Red shows the newest edit; a second actor.
 - Glossary, White Force: its non-observer roles edit objectives (D21), as decided on Nov 3; the line still said only the admin.
 
+Changes from the Python API discussion (Nov 5, 2026):
+
+- Annex C added: a Python API, post-v1. One role-scoped SDK serves reconcilers, analysis and automated players equally; the browser runner (Pyodide) comes first, for the admin and White Force only; scripts are kept in each account's private storage; White Force scripts post proposals to the admin; admin scripts fill the world-state draft and may publish without review only when the admin opts in per script. Spike S17 comes first. D26 and §8 point to it. Bot players are to be discussed separately.
+
 ## Annex A. Message templates (built in Phase 4)
 
 Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
@@ -967,3 +971,44 @@ Checks:
 4. Can one subscription to a collection deliver live notifications from all its leaves, with 600+ leaves?
 
 Outcome decides: if leaves follow the collection's access, a node per asset becomes practical; if not, use two nodes per force, with AdminOps setting access by rule (R14). The spike also records whether enabling collections changes the behaviour of the existing nodes, which the v1 contract suite and the R1 tests check.
+
+## Annex C. Python API (post-v1)
+
+A Python API lets scripts take part in a game: umpire reconcilers that work out the next world state, analysis of messages, turns and world states, and automated players. It is specified so the work can be planned; it is not built in v1, and its ids (PD, PY) are not v1 requirements. It refines D26. Bot players are to be discussed separately, and may change PY-11.
+
+**Decisions (Nov 5, 2026)**
+
+| # | Decision |
+| --- | --- |
+| PD1 | One SDK, `wrx`, serves reconcilers, analysis and automated players equally |
+| PD2 | The SDK is role-scoped: a script acts as the role it runs as, with exactly that role's access. It gains no rights a person in that role lacks, so D1 and D2 hold |
+| PD3 | The browser runner comes first: Pyodide in a Web Worker, reusing the logged-in session through a message bridge. A native runner (a plain Python package with its own XMPP connection) follows on the same API |
+| PD4 | In the browser, only the admin and White Force roles may run scripts |
+| PD5 | Scripts are kept in each account's private storage, so they follow the account, not the game. A role's scripts are shared by everyone using that role's login (one account per role, §8) |
+| PD6 | A White Force script that proposes a world state posts it to the admin, who loads it into the world-state draft with one action and publishes it after the change summary (ADM-45, ADM-46) |
+| PD7 | An admin script fills the world-state draft. The admin may let a script publish without review, per script; this is off by default |
+
+**Requirements**
+
+- PY-1 The SDK SHALL expose typed models generated from the exported JSON Schemas (ARC-6), so the Python and TypeScript views of a document cannot drift.
+- PY-2 The SDK SHALL offer three layers: read (game, turn, forces, roles, rooms, message history, world state, objectives), act (send text and template messages, react to messages and phase changes), and adjudicate (propose a world state).
+- PY-3 The read layer SHALL offer tabular helpers (pandas DataFrames) for messages, turns and assets, loaded only when used.
+- PY-4 The browser runner SHALL run Python in a Web Worker with no direct access to the session, the DOM or storage. Every call SHALL pass through a bridge that offers only the SDK's operations, checked against the role's access in the client.
+- PY-5 Pyodide and every package the SDK needs SHALL be bundled with the build and loaded only when a script panel is first opened, never for other roles (NFR-7). The main bundle SHALL NOT grow.
+- PY-6 The admin view and White Force roles SHALL have a script panel: a list of the account's scripts, an editor, Run and Stop, and the script's output and errors. Other roles SHALL NOT be offered it.
+- PY-7 Scripts SHALL be stored in the account's private storage, with name, code and settings, and SHALL be exportable and importable as files.
+- PY-8 A White Force proposal SHALL be posted as a message of a dedicated type to a room that only the admin and the White Force share, never a player room. The admin client SHALL offer to load it into the draft and SHALL show the change summary first. It SHALL be validated against the world-state schema and the 500 KB cap (PLY-53) before posting and on receipt.
+- PY-9 An admin script's world state SHALL go to the draft. Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8, SHALL be recorded with its change summary where the admin can see it, and by default SHALL happen only at a phase change.
+- PY-10 A script SHALL be stoppable at any time, and a run SHALL have a time limit the admin can set. Stopping a script SHALL leave the draft as it was before the run, unless the script had finished writing it.
+- PY-11 In the browser runner, an automated player runs only while its tab is open. Long-running automated players wait for the native runner.
+- PY-12 The same contract-test suite SHALL run against the browser and native runners.
+
+**Risks**
+
+- PR1 **A script runs with the rights of its account.** For the admin that includes publishing the world state. The worker and bridge (PY-4) stop a script reaching the session directly, but a script the admin chooses to run can do anything the SDK lets the admin do. Mitigation: no script is loaded from a document players can publish to; scripts come only from the account's own storage or from a file the user imports.
+- PR2 **Unreviewed publishing (PD7).** A faulty script could change the live map. Mitigation: off by default, validated, recorded, at phase changes only by default (PY-9).
+- PR3 **Content security policy.** Pyodide needs WebAssembly compilation (`wasm-unsafe-eval`); spike S17 checks the policy that is needed.
+- PR4 **Size and start-up.** The Pyodide core is several megabytes and pandas adds tens; a cold start takes seconds. Acceptable for adjudication and analysis, not for interactive use. S17 measures both.
+- PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
+
+**Spike S17 (before any build).** Pyodide in a Web Worker in the admin view, bundled for an air-gapped install, under the client's content security policy. It reads the world state and a room's messages through a minimal bridge, writes a world-state draft that appears in the change summary, and posts a White Force proposal. It records the bundle size with and without pandas, cold-start and warm-start times, the content security policy needed, and whether the bridge can be kept to the SDK's operations.
