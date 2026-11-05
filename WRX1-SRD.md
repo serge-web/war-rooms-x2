@@ -857,6 +857,7 @@ Changes from WP 5.8, White Force edits objectives (Nov 4, 2026):
 
 Changes from the Python API discussion (Nov 5, 2026):
 
+- Annex C refined after review (Nov 5, 2026): shared White Force scripts accepted (PD5); opt-in publishing may happen at any time (PD7, PY-9, PR2); a built-in umpire room for White Force proposals (PD8, PY-8); a script's draft writes land only when it finishes (PD9, PY-10).
 - Annex C added: a Python API, post-v1. One role-scoped SDK serves reconcilers, analysis and automated players equally; the browser runner (Pyodide) comes first, for the admin and White Force only; scripts are kept in each account's private storage; White Force scripts post proposals to the admin; admin scripts fill the world-state draft and may publish without review only when the admin opts in per script. Spike S17 comes first. D26 and §8 point to it. Bot players are to be discussed separately.
 
 ## Annex A. Message templates (built in Phase 4)
@@ -984,9 +985,11 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 | PD2 | The SDK is role-scoped: a script acts as the role it runs as, with exactly that role's access. It gains no rights a person in that role lacks, so D1 and D2 hold |
 | PD3 | The browser runner comes first: Pyodide in a Web Worker, reusing the logged-in session through a message bridge. A native runner (a plain Python package with its own XMPP connection) follows on the same API |
 | PD4 | In the browser, only the admin and White Force roles may run scripts |
-| PD5 | Scripts are kept in each account's private storage, so they follow the account, not the game. A role's scripts are shared by everyone using that role's login (one account per role, §8) |
-| PD6 | A White Force script that proposes a world state posts it to the admin, who loads it into the world-state draft with one action and publishes it after the change summary (ADM-45, ADM-46) |
-| PD7 | An admin script fills the world-state draft. The admin may let a script publish without review, per script; this is off by default |
+| PD5 | Scripts are kept in each account's private storage, so they follow the account, not the game. A role's scripts are shared by everyone using that role's login (one account per role, §8); accepted, since umpire teams work together (Nov 5, 2026) |
+| PD6 | A White Force script that proposes a world state posts it to the admin in the game's umpire room (PD8), who loads it into the world-state draft with one action and publishes it after the change summary (ADM-45, ADM-46) |
+| PD7 | An admin script fills the world-state draft. The admin may let a script publish without review, per script, at any time; this is off by default |
+| PD8 | Every game has one built-in umpire room, fixed like the map room: the admin and every White Force role are its only members. White Force proposals are posted there |
+| PD9 | A script's writes to the draft land only when it finishes; a run that is stopped, times out or fails leaves the draft unchanged |
 
 **Requirements**
 
@@ -997,16 +1000,16 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PY-5 Pyodide and every package the SDK needs SHALL be bundled with the build and loaded only when a script panel is first opened, never for other roles (NFR-7). The main bundle SHALL NOT grow.
 - PY-6 The admin view and White Force roles SHALL have a script panel: a list of the account's scripts, an editor, Run and Stop, and the script's output and errors. Other roles SHALL NOT be offered it.
 - PY-7 Scripts SHALL be stored in the account's private storage, with name, code and settings, and SHALL be exportable and importable as files.
-- PY-8 A White Force proposal SHALL be posted as a message of a dedicated type to a room that only the admin and the White Force share, never a player room. The admin client SHALL offer to load it into the draft and SHALL show the change summary first. It SHALL be validated against the world-state schema and the 500 KB cap (PLY-53) before posting and on receipt.
-- PY-9 An admin script's world state SHALL go to the draft. Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8, SHALL be recorded with its change summary where the admin can see it, and by default SHALL happen only at a phase change.
-- PY-10 A script SHALL be stoppable at any time, and a run SHALL have a time limit the admin can set. Stopping a script SHALL leave the draft as it was before the run, unless the script had finished writing it.
+- PY-8 A White Force proposal SHALL be posted as a message of a dedicated type to the game's umpire room (PD8), never a player room. Publishing SHALL create that room with the map room and keep its members to the admin and the White Force roles, as §3 rule 18 fixes the map room's. The admin client SHALL offer to load it into the draft and SHALL show the change summary first. It SHALL be validated against the world-state schema and the 500 KB cap (PLY-53) before posting and on receipt.
+- PY-9 An admin script's world state SHALL go to the draft. Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8 and SHALL be recorded with its change summary where the admin can see it. It MAY happen at any time, not only at a phase change.
+- PY-10 A script SHALL be stoppable at any time, and a run SHALL have a time limit the admin can set. A script's draft writes SHALL be applied together when it finishes; a run that is stopped, times out or fails SHALL leave the draft as it was before the run (PD9).
 - PY-11 In the browser runner, an automated player runs only while its tab is open. Long-running automated players wait for the native runner.
 - PY-12 The same contract-test suite SHALL run against the browser and native runners.
 
 **Risks**
 
 - PR1 **A script runs with the rights of its account.** For the admin that includes publishing the world state. The worker and bridge (PY-4) stop a script reaching the session directly, but a script the admin chooses to run can do anything the SDK lets the admin do. Mitigation: no script is loaded from a document players can publish to; scripts come only from the account's own storage or from a file the user imports.
-- PR2 **Unreviewed publishing (PD7).** A faulty script could change the live map. Mitigation: off by default, validated, recorded, at phase changes only by default (PY-9).
+- PR2 **Unreviewed publishing (PD7).** A faulty script could change the live map. It may publish at any time, mid-phase included (PD7). Mitigation: off by default, per script, validated and recorded (PY-9); the admin can fix a bad state with a manual publish (ADM-46).
 - PR3 **Content security policy.** Pyodide needs WebAssembly compilation (`wasm-unsafe-eval`); spike S17 checks the policy that is needed.
 - PR4 **Size and start-up.** The Pyodide core is several megabytes and pandas adds tens; a cold start takes seconds. Acceptable for adjudication and analysis, not for interactive use. S17 measures both.
 - PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
