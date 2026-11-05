@@ -154,19 +154,17 @@ test('SC-6: the admin moves an online role to Red and adds a room, then deletes 
   await openSection(admin, 'Rooms')
   await admin.getByRole('button', { name: 'Red planning', exact: true }).click()
   await admin.getByLabel('Name', { exact: true }).fill('Red plans')
+  // The Move up button, not dnd-kit's keyboard sensor: that is covered by the admin editor and
+  // a11y specs, and under this scenario's live traffic its measured steps can drop a key press.
   const rooms = admin.getByRole('list', { name: 'Rooms' })
-  const handle = admin.getByRole('button', { name: 'Reorder Red plans' })
-  const labels = await rooms.locator('.wrx-admin-list-label').allTextContents()
-  const total = labels.length
-  await handle.focus()
-  await admin.keyboard.press('Space')
-  await expect(handle).toHaveAttribute('aria-pressed', 'true')
-  for (let at = labels.indexOf('Red plans'); at > 0; at--) {
-    await admin.keyboard.press('ArrowUp')
-    await expect(admin.getByText(`Red plans moved to position ${at} of ${total}.`)).toBeAttached()
+  const labels = rooms.locator('.wrx-admin-list-label')
+  await expect(labels.filter({ hasText: 'Red plans' })).toHaveCount(1)
+  const names = await labels.allTextContents()
+  for (let at = names.indexOf('Red plans'); at > 0; at--) {
+    await admin.getByRole('button', { name: 'Move Red plans up' }).click()
+    await expect(labels.nth(at - 1)).toHaveText('Red plans')
   }
-  await admin.keyboard.press('Space')
-  await expect(rooms.locator('.wrx-admin-list-label').first()).toHaveText('Red plans')
+  await expect(labels.first()).toHaveText('Red plans')
   await plan(admin, backend)
   await expect(region).toContainText('no structural change')
   await publishPlan(admin)
