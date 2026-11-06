@@ -25,7 +25,14 @@ export interface ReplyMessage {
   readonly result: string
 }
 
-export type ToWorker = InitMessage | RunMessage | ReplyMessage
+/** An event for a run's subscriptions (WP 6.4): the protocol's `bridgeEventSchema`, as JSON. */
+export interface EventMessage {
+  readonly kind: 'event'
+  readonly runId: number
+  readonly event: string
+}
+
+export type ToWorker = InitMessage | RunMessage | ReplyMessage | EventMessage
 
 /** The most a call's payload may be: the world state's cap (500 KB) with room for JSON. */
 export const MAX_PAYLOAD_CHARS = 1_000_000

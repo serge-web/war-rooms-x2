@@ -5,9 +5,11 @@ import {
   BRIDGE_LIMITS,
   BRIDGE_OPS,
   BRIDGE_PROTOCOL_VERSION,
+  BRIDGE_READ_OPS,
   BRIDGE_REQUESTS,
   BRIDGE_RESULTS,
   bridgeError,
+  bridgeEventSchema,
   bridgeOk,
   bridgeReplySchema,
   parseBridgeCall,
@@ -21,7 +23,9 @@ function reply(text: string) {
 
 describe('bridge protocol (WP 6.1)', () => {
   it('has a request and a result schema for every operation, and nothing else', () => {
-    expect(BRIDGE_PROTOCOL_VERSION).toBe(1)
+    expect(BRIDGE_PROTOCOL_VERSION).toBe(2)
+    // Version 1's read operations are kept, first and unchanged.
+    expect(BRIDGE_OPS.slice(0, BRIDGE_READ_OPS.length)).toEqual([...BRIDGE_READ_OPS])
     expect(Object.keys(BRIDGE_REQUESTS)).toEqual([...BRIDGE_OPS])
     expect(Object.keys(BRIDGE_RESULTS)).toEqual([...BRIDGE_OPS])
   })
@@ -43,7 +47,8 @@ describe('bridge protocol (WP 6.1)', () => {
       if (parsed.ok) throw new Error(`accepted ${op} ${payload}`)
       return reply(parsed.reply)
     }
-    expect(refused('writeDraft', '{}')).toMatchObject({ ok: false, code: 'unknown-op' })
+    expect(refused('publishWorldState', '{}')).toMatchObject({ ok: false, code: 'unknown-op' })
+    expect(refused('writeDraft', '{}')).toMatchObject({ ok: false, code: 'invalid-request' })
     expect(refused('constructor', '{}')).toMatchObject({ ok: false, code: 'unknown-op' })
     expect(refused('readForces', 'not json')).toMatchObject({ code: 'invalid-request' })
     expect(refused('readForces', '{"extra":1}')).toMatchObject({ code: 'invalid-request' })
@@ -73,7 +78,7 @@ describe('bridge protocol (WP 6.1)', () => {
     expect(
       reply(
         bridgeOk('readContext', {
-          protocolVersion: 1,
+          protocolVersion: 2,
           isAdmin: false,
           roleId: ROLE.blueCo,
           forceId: FORCE.blue,
@@ -108,6 +113,38 @@ describe('bridge protocol (WP 6.1)', () => {
       cursor: null,
     }
     expect(reply(bridgeOk('readRoomMessages', value))).toEqual({ ok: true, value })
+  })
+
+  it('parses the act operations of version 2 (WP 6.4)', () => {
+    expect(
+      parseBridgeCall('sendMessage', JSON.stringify({ roomId: ROOM.blueHq, text: 'Hello' })),
+    ).toMatchObject({ ok: true, op: 'sendMessage' })
+    expect(
+      parseBridgeCall('sendMessage', JSON.stringify({ roomId: ROOM.blueHq, text: '' })),
+    ).toMatchObject({ ok: false })
+    const state = sampleWorldState()
+    expect(parseBridgeCall('writeDraft', JSON.stringify({ state }))).toMatchObject({ ok: true })
+    expect(
+      parseBridgeCall('postProposal', JSON.stringify({ state, summary: 'Tanks resupplied.' })),
+    ).toMatchObject({ ok: true })
+    expect(
+      parseBridgeCall('postProposal', JSON.stringify({ state, summary: '   ' })),
+    ).toMatchObject({ ok: false })
+    // A world state may be long; every other request keeps the short limit.
+    const long = JSON.stringify({ state, summary: 'x'.repeat(1_000) + ' '.repeat(20_000) })
+    expect(parseBridgeCall('postProposal', long)).toMatchObject({ ok: true })
+    expect(
+      parseBridgeCall('sendMessage', ' '.repeat(BRIDGE_LIMITS.requestChars + 1)),
+    ).toMatchObject({ ok: false })
+    expect(parseBridgeCall('subscribePhase', '{}')).toMatchObject({ ok: true })
+    expect(reply(bridgeOk('readDraft', { state: null, held: false }))).toMatchObject({ ok: true })
+    expect(reply(bridgeOk('sendMessage', { stanzaId: 's1' }))).toMatchObject({ ok: true })
+    expect(
+      bridgeEventSchema.safeParse({
+        type: 'phase',
+        state: { schemaVersion: 1, turn: 2, phase: 'adjudication' },
+      }).success,
+    ).toBe(true)
   })
 
   it('caps an error reply', () => {

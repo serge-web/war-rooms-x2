@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:wrx1:json-schema:bridge-protocol.schema.json",
-  "title": "Python SDK bridge protocol, version 1",
+  "title": "Python SDK bridge protocol, version 2",
   "type": "object",
   "properties": {
     "protocolVersion": {
       "type": "number",
-      "const": 1
+      "const": 2
     },
     "op": {
       "$ref": "#/$defs/BridgeOp"
@@ -19,6 +19,9 @@
     },
     "reply": {
       "$ref": "#/$defs/BridgeReply"
+    },
+    "event": {
+      "$ref": "#/$defs/BridgeEvent"
     }
   },
   "required": [
@@ -26,9 +29,10 @@
     "op",
     "requests",
     "results",
-    "reply"
+    "reply",
+    "event"
   ],
-  "description": "The bridge protocol between the Python SDK and its runner, version 1: a catalogue of its parts, not a message",
+  "description": "The bridge protocol between the Python SDK and its runner, version 2: a catalogue of its parts, not a message",
   "$defs": {
     "BridgeOp": {
       "type": "string",
@@ -41,9 +45,16 @@
         "readRooms",
         "readRoomMessages",
         "readWorldState",
-        "readObjectives"
+        "readObjectives",
+        "sendMessage",
+        "sendTemplate",
+        "readDraft",
+        "writeDraft",
+        "postProposal",
+        "subscribeMessages",
+        "subscribePhase"
       ],
-      "description": "A bridge operation (protocol 1)"
+      "description": "A bridge operation (protocol 2)"
     },
     "BridgeRequests": {
       "type": "object",
@@ -74,6 +85,27 @@
         },
         "readObjectives": {
           "$ref": "#/$defs/ReadObjectivesRequest"
+        },
+        "sendMessage": {
+          "$ref": "#/$defs/SendMessageRequest"
+        },
+        "sendTemplate": {
+          "$ref": "#/$defs/SendTemplateRequest"
+        },
+        "readDraft": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "writeDraft": {
+          "$ref": "#/$defs/WriteDraftRequest"
+        },
+        "postProposal": {
+          "$ref": "#/$defs/PostProposalRequest"
+        },
+        "subscribeMessages": {
+          "$ref": "#/$defs/SubscribeMessagesRequest"
+        },
+        "subscribePhase": {
+          "$ref": "#/$defs/EmptyRequest"
         }
       },
       "required": [
@@ -85,7 +117,14 @@
         "readRooms",
         "readRoomMessages",
         "readWorldState",
-        "readObjectives"
+        "readObjectives",
+        "sendMessage",
+        "sendTemplate",
+        "readDraft",
+        "writeDraft",
+        "postProposal",
+        "subscribeMessages",
+        "subscribePhase"
       ],
       "description": "Each operation's request, by operation name"
     },
@@ -147,6 +186,228 @@
       "additionalProperties": false,
       "description": "A force's objectives, if the role may read them (§3 rule 14)"
     },
+    "SendMessageRequest": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "A room the role can write in"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Plain text (PLY-14)"
+        }
+      },
+      "required": [
+        "roomId",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "A chat message, sent as the role (PD2)"
+    },
+    "SendTemplateRequest": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "A room the role can write in that offers the template"
+        },
+        "templateId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The template used"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "description": "A template field name",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "description": "Field values by field name; pickers hold GUIDs, never names (TPL-8)",
+          "maxProperties": 100
+        }
+      },
+      "required": [
+        "roomId",
+        "templateId",
+        "values"
+      ],
+      "additionalProperties": false,
+      "description": "A templated message (TPL-3), checked as the composer checks it before it is sent (TPL-6)"
+    },
+    "WriteDraftRequest": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "description": "The world state the script wants in the draft: the draft it read (`readDraft`) or the published state, changed",
+          "$ref": "#/$defs/WorldState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false,
+      "description": "The admin's world-state draft (PD7): applied when the run finishes cleanly (PD9), as the change from what the script read, on top of the draft as it is then"
+    },
+    "WorldAsset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The asset GUID; also its key in `assets` (§3 rules 1, 16)"
+        },
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The force that owns the asset"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name, e.g. \"1st Armoured Squadron\""
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "What kind of asset it is, e.g. \"armour\" or \"frigate\""
+        },
+        "sidc": {
+          "type": "string",
+          "pattern": "^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$",
+          "description": "MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude, WGS 84 decimal degrees"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude, WGS 84 decimal degrees"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Its condition in words, e.g. \"operational\" or \"damaged\""
+        },
+        "health": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Health, 0 (destroyed) to 100 (full)"
+        },
+        "fuel": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Fuel, 0 (empty) to 100 (full)"
+        }
+      },
+      "required": [
+        "id",
+        "forceId",
+        "title",
+        "category",
+        "sidc",
+        "lat",
+        "lon",
+        "state",
+        "health",
+        "fuel"
+      ],
+      "description": "A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)"
+    },
+    "WorldState": {
+      "type": "object",
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "The turn this state belongs to"
+        },
+        "assets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/WorldAsset"
+          },
+          "description": "Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)",
+          "maxProperties": 5000
+        }
+      },
+      "required": [
+        "turn",
+        "assets"
+      ],
+      "description": "The full world state: every asset with its position and status (D25)"
+    },
+    "PostProposalRequest": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "description": "The proposed world state, in full (D25)",
+          "$ref": "#/$defs/WorldState"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "What the proposal changes, in words, for the admin; plain text"
+        }
+      },
+      "required": [
+        "state",
+        "summary"
+      ],
+      "additionalProperties": false,
+      "description": "A world state proposed to the admin in the umpire room (PD6, PY-8)"
+    },
+    "SubscribeMessagesRequest": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "A room the role is in"
+        }
+      },
+      "required": [
+        "roomId"
+      ],
+      "additionalProperties": false,
+      "description": "Events for each new message in the room, while the run lasts"
+    },
     "BridgeResults": {
       "type": "object",
       "properties": {
@@ -176,6 +437,27 @@
         },
         "readObjectives": {
           "$ref": "#/$defs/ReadObjectivesResult"
+        },
+        "sendMessage": {
+          "$ref": "#/$defs/SentResult"
+        },
+        "sendTemplate": {
+          "$ref": "#/$defs/SentResult"
+        },
+        "readDraft": {
+          "$ref": "#/$defs/ReadDraftResult"
+        },
+        "writeDraft": {
+          "$ref": "#/$defs/WriteDraftResult"
+        },
+        "postProposal": {
+          "$ref": "#/$defs/SentResult"
+        },
+        "subscribeMessages": {
+          "$ref": "#/$defs/SubscribedResult"
+        },
+        "subscribePhase": {
+          "$ref": "#/$defs/SubscribedResult"
         }
       },
       "required": [
@@ -187,7 +469,14 @@
         "readRooms",
         "readRoomMessages",
         "readWorldState",
-        "readObjectives"
+        "readObjectives",
+        "sendMessage",
+        "sendTemplate",
+        "readDraft",
+        "writeDraft",
+        "postProposal",
+        "subscribeMessages",
+        "subscribePhase"
       ],
       "description": "Each operation's result, the `value` of its reply, by operation name"
     },
@@ -196,7 +485,7 @@
       "properties": {
         "protocolVersion": {
           "type": "number",
-          "const": 1,
+          "const": 2,
           "description": "The protocol version the bridge speaks"
         },
         "isAdmin": {
@@ -732,6 +1021,9 @@
             },
             {
               "$ref": "#/$defs/WorldStateMessage"
+            },
+            {
+              "$ref": "#/$defs/WorldProposalMessage"
             }
           ],
           "description": "The body; messages whose body fails validation are left out, as clients do"
@@ -907,109 +1199,47 @@
       ],
       "description": "A world-state message in the map room, posted by the admin only"
     },
-    "WorldState": {
+    "WorldProposalMessage": {
       "type": "object",
       "properties": {
-        "turn": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10000,
-          "description": "The turn this state belongs to"
+        "type": {
+          "type": "string",
+          "const": "world-proposal"
         },
-        "assets": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-            "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
-          },
-          "additionalProperties": {
-            "$ref": "#/$defs/WorldAsset"
-          },
-          "description": "Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)",
-          "maxProperties": 5000
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "content": {
+          "$ref": "#/$defs/WorldProposalContent"
         }
       },
       "required": [
-        "turn",
-        "assets"
+        "type",
+        "schemaVersion",
+        "content"
       ],
-      "description": "The full world state: every asset with its position and status (D25)"
+      "description": "A White Force proposal in the umpire room (PY-8)"
     },
-    "WorldAsset": {
+    "WorldProposalContent": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-          "description": "The asset GUID; also its key in `assets` (§3 rules 1, 16)"
-        },
-        "forceId": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-          "description": "The force that owns the asset"
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 120,
-          "description": "Display name, e.g. \"1st Armoured Squadron\""
-        },
-        "category": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 60,
-          "description": "What kind of asset it is, e.g. \"armour\" or \"frigate\""
-        },
-        "sidc": {
-          "type": "string",
-          "pattern": "^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$",
-          "description": "MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)"
-        },
-        "lat": {
-          "type": "number",
-          "minimum": -90,
-          "maximum": 90,
-          "description": "Latitude, WGS 84 decimal degrees"
-        },
-        "lon": {
-          "type": "number",
-          "minimum": -180,
-          "maximum": 180,
-          "description": "Longitude, WGS 84 decimal degrees"
-        },
         "state": {
+          "description": "The proposed world state, in full (D25)",
+          "$ref": "#/$defs/WorldState"
+        },
+        "summary": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 60,
-          "description": "Its condition in words, e.g. \"operational\" or \"damaged\""
-        },
-        "health": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100,
-          "description": "Health, 0 (destroyed) to 100 (full)"
-        },
-        "fuel": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 100,
-          "description": "Fuel, 0 (empty) to 100 (full)"
+          "maxLength": 2000,
+          "description": "What the proposal changes, in words, for the admin; plain text"
         }
       },
       "required": [
-        "id",
-        "forceId",
-        "title",
-        "category",
-        "sidc",
-        "lat",
-        "lon",
         "state",
-        "health",
-        "fuel"
+        "summary"
       ],
-      "description": "A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)"
+      "description": "A proposed world state and its summary"
     },
     "ReadWorldStateResult": {
       "type": "object",
@@ -1112,6 +1342,66 @@
       ],
       "description": "A force's objectives; confidential to that force, the White Force and the admin"
     },
+    "SentResult": {
+      "type": "object",
+      "properties": {
+        "stanzaId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The server's stanza id of the message sent"
+        }
+      },
+      "required": [
+        "stanzaId"
+      ],
+      "description": "A message sent"
+    },
+    "ReadDraftResult": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The admin's world-state draft as it is now; with no draft held, the published state; null if neither"
+        },
+        "held": {
+          "type": "boolean",
+          "description": "A draft is held (unpublished edits); false: `state` is the published one"
+        }
+      },
+      "required": [
+        "state",
+        "held"
+      ],
+      "description": "The admin's world-state draft (ADM-45)"
+    },
+    "WriteDraftResult": {
+      "type": "object",
+      "properties": {
+        "assets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Assets in the state written"
+        }
+      },
+      "required": [
+        "assets"
+      ],
+      "description": "The draft write is held until the run finishes cleanly (PD9)"
+    },
+    "SubscribedResult": {
+      "type": "object",
+      "properties": {},
+      "description": "Subscribed until the run ends"
+    },
     "BridgeReply": {
       "oneOf": [
         {
@@ -1171,9 +1461,55 @@
         "forbidden",
         "not-found",
         "unavailable",
+        "paused",
         "failed"
       ],
-      "description": "`unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `failed`: anything else"
+      "description": "`unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `paused`: posting is paused for the role during adjudication (PLY-56); `failed`: anything else"
+    },
+    "BridgeEvent": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/MessageEvent"
+        },
+        {
+          "$ref": "#/$defs/PhaseEvent"
+        }
+      ],
+      "description": "An event for a subscribed script"
+    },
+    "MessageEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "message"
+        },
+        "message": {
+          "$ref": "#/$defs/RoomMessage"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "description": "A new message in a subscribed room"
+    },
+    "PhaseEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "phase"
+        },
+        "state": {
+          "$ref": "#/$defs/GameState"
+        }
+      },
+      "required": [
+        "type",
+        "state"
+      ],
+      "description": "The turn state, when its turn or phase changes"
     }
   }
 }

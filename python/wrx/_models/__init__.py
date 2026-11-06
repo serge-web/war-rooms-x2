@@ -15,6 +15,8 @@ __all__ = [
     "role",
     "room",
     "template_message",
+    "umpire_room_config",
     "world_asset",
+    "world_proposal_message",
     "world_state_message",
 ]

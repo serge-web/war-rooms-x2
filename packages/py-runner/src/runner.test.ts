@@ -30,7 +30,12 @@ class FakeWorker {
   }
 }
 
-const bridge = { discard: () => undefined, takeDraft: () => undefined } as unknown as ScriptBridge
+const bridge = {
+  discard: () => undefined,
+  takeDraft: () => undefined,
+  beginRun: () => undefined,
+  endRun: () => undefined,
+} as unknown as ScriptBridge
 const timings = { loadPyodide: 1, loadPackages: 0, wasmMemory: 0 }
 const START = { workerUrl: 'http://x/w.js', indexURL: 'http://x/', packages: [], timeoutMs: 5_000 }
 

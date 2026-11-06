@@ -49,6 +49,7 @@ def test_reads_the_game_as_the_admin() -> None:
             "Blue–Red negotiation",
             "Blue Reports",
             "Map",
+            "Umpires",
         ]
         state = await game.world_state()
         assert isinstance(state, WorldState) and len(state.assets) == 6
@@ -70,7 +71,7 @@ def test_the_context_is_read_once() -> None:
 
 
 def test_a_bridge_of_another_protocol_version_is_refused() -> None:
-    context = {"protocolVersion": 2, "isAdmin": True, "roleId": None, "forceId": None}
+    context = {"protocolVersion": 1, "isAdmin": True, "roleId": None, "forceId": None}
     with pytest.raises(ProtocolError):
         run(Game(FakeBridge(override={"readContext": ok(context)})).context())
 
@@ -134,7 +135,7 @@ def white_cell(**options: Any) -> FakeBridge:
     """The bridge as White Cell sees it: fewer rooms; the blue room refused."""
     data = copy.deepcopy(FakeBridge().data)
     data["readContext"] = {
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "isAdmin": False,
         "roleId": ROLE["white_cell"],
         "forceId": FORCE["white"],

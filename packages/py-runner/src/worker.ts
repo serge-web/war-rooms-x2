@@ -3,15 +3,15 @@
 // script runs, takes away every global a script could use to reach the network, storage or
 // other contexts, keeping a private `postMessage` for the bridge. Python reaches the page only
 // through `_wrx_bridge.call(op, payload)`, strings in and out, and the page decides what each
-// call may do. The SDK, `wrx` (python/wrx, WP 6.1), is written into Pyodide's file system with
-// the runner's `wrx_draft` (the draft write, until WP 6.4); `wrx.Game()` finds the bridge.
+// call may do; events for a run's subscriptions come back through `_wrx_bridge.next_event`
+// (WP 6.4). The SDK, `wrx` (python/wrx), is written into Pyodide's file system; `wrx.Game()`
+// finds the bridge.
 //
 // The lockdown cannot remove `eval`, `Function` or `import()`: the worker's policy does. The
 // runner creates this worker from a `blob:` bootstrap so that it runs under the page's policy,
 // header or `<meta>` (S17 item 5).
 import type { PyodideAPI } from 'pyodide'
 import type { InitMessage, RunMessage, ToWorker } from './protocol.ts'
-import wrxDraftSource from './wrx_draft.py?raw'
 
 /** The SDK's sources, bundled into this worker: `wrx/__init__.py` and the rest. */
 const SDK_SOURCES = import.meta.glob<string>('../../../python/wrx/**/*.py', {
@@ -25,7 +25,7 @@ const SDK_PACKAGES = Object.freeze(['pydantic'])
 /** Uses of the SDK's tabular helpers, which import pandas only when called (PY-3). */
 const USES_FRAMES = /\bto_frame\b|\bwrx\.frames\b|\bfrom\s+wrx\s+import\b[^\n]*\bframes\b/
 /** A script that names the SDK (`import wrx`, `import sys, wrx`, `from wrx import ...`). */
-const USES_SDK = /\bwrx(?:_draft)?\b/
+const USES_SDK = /\bwrx\b/
 
 interface PyodideFs {
   mkdirTree(path: string): void
@@ -43,7 +43,6 @@ function installSdk(api: PyodideAPI): void {
     fs.mkdirTree(SDK_HOME + path.slice(0, path.lastIndexOf('/')))
     fs.writeFile(SDK_HOME + path, source)
   }
-  fs.writeFile(`${SDK_HOME}wrx_draft.py`, wrxDraftSource)
 }
 
 const started = performance.now()
@@ -139,6 +138,9 @@ function scriptGlobals(): object {
   return Object.freeze(Object.assign(Object.create(null) as object, timers))
 }
 
+/** Events the worker keeps for a run until its script takes them; past it the oldest go. */
+export const MAX_QUEUED_EVENTS = 1_000
+
 /** The worker's state, and its message handler: one run at a time. */
 function serve(): void {
   let pyodide: PyodideAPI | undefined
@@ -146,6 +148,18 @@ function serve(): void {
   const pending = new Map<number, (result: string) => void>()
   let currentRun = 0
   let running = false
+  // Events for the current run (WP 6.4), and the script waiting for one, if it is.
+  const events: string[] = []
+  let dropped = 0
+  let waiting: { resolve: (event: string | null) => void; timer: number | undefined } | undefined
+
+  function deliver(event: string | null): void {
+    const w = waiting
+    if (w === undefined) return
+    waiting = undefined
+    if (w.timer !== undefined) clearTimeout(w.timer)
+    w.resolve(event)
+  }
 
   function output(stream: 'stdout' | 'stderr', text: string): void {
     if (running) post({ kind: 'output', runId: currentRun, stream, text: text.slice(0, MAX_TEXT) })
@@ -189,6 +203,27 @@ function serve(): void {
             payload: String(payload),
           })
         }),
+      // The next event of the run's subscriptions, as JSON text, or null when `timeoutMs` (if
+      // given, and not negative) passes first. One waiter at a time; a second takes its place.
+      next_event: (timeoutMs: unknown) =>
+        new Promise<string | null>((resolve) => {
+          deliver(null)
+          const queued = events.shift()
+          if (queued !== undefined) {
+            resolve(queued)
+            return
+          }
+          const ms = typeof timeoutMs === 'number' && timeoutMs >= 0 ? timeoutMs : undefined
+          const timer =
+            ms === undefined
+              ? undefined
+              : (setTimeout(() => {
+                  deliver(null)
+                }, ms) as unknown as number)
+          waiting = { resolve, timer }
+        }),
+      // How many events were dropped because the script did not take them in time.
+      dropped_events: () => dropped,
     })
     installSdk(api)
     lockdown(message.indexURL)
@@ -207,6 +242,9 @@ function serve(): void {
     if (api === undefined || running) return
     running = true
     currentRun = message.runId
+    events.length = 0
+    dropped = 0
+    deliver(null)
     const t0 = performance.now()
     const globals = api.toPy({ __name__: '__main__' }) as { destroy(): void }
     try {
@@ -252,6 +290,17 @@ function serve(): void {
       })
     } else if (message.kind === 'run') {
       void run(message)
+    } else if (message.kind === 'event') {
+      if (!running || message.runId !== currentRun) return
+      if (waiting !== undefined) {
+        deliver(message.event)
+      } else {
+        events.push(message.event)
+        if (events.length > MAX_QUEUED_EVENTS) {
+          events.shift()
+          dropped++
+        }
+      }
     } else {
       pending.get(message.callId)?.(message.result)
       pending.delete(message.callId)

@@ -1,5 +1,6 @@
 // The Python API's browser runner (SRD Annex C PD3, PY-4, PY-5; WP 6.2): `createRunner` gives
-// the admin or a White Force role a Pyodide worker behind the bridge. This module is the entry
+// the admin or a White Force role a Pyodide worker behind the bridge (protocol 2: reads, sends,
+// the admin's draft, the White Force's proposals and events, WP 6.4). This module is the entry
 // of its own build (`py/runner.js` in the app's output, beside its worker and `py/pyodide/`):
 // nothing in the app imports it, so the main bundle does not grow; a page loads it with
 // `loadRunner` (`@wrx/py-runner/load`) when a script panel first opens (6.3).
@@ -10,22 +11,28 @@ import { scriptRoleOf as domainScriptRole } from '@wrx/domain'
 import { LIMITS, MAP_ROOM_TYPE } from '@wrx/schemas'
 import type { WorldState } from '@wrx/schemas'
 import { ScriptBridge } from './bridge.ts'
-import type { CallRecord, RunnerStore } from './bridge.ts'
+import type { CallRecord, DraftWrite, RunnerStore } from './bridge.ts'
 import { ScriptRunner } from './runner.ts'
 import type { OutputLine, RunOutcome, StartResult } from './runner.ts'
 import { SCRIPT_ROLES } from './sdk-ops.ts'
 import type { ScriptRole } from './sdk-ops.ts'
 import workerPath from './worker.ts?worker&url'
 
-export type { CallRecord, RunnerStore } from './bridge.ts'
+export type { CallRecord, DraftWrite, RunnerStore } from './bridge.ts'
 export type { OutputLine, RunOutcome, RunStatus, StartResult } from './runner.ts'
 export type { Timings } from './protocol.ts'
 export { OPERATION_ROLES, SCRIPT_ROLES, SDK_OPERATIONS } from './sdk-ops.ts'
 export type { ScriptRole, SdkOperation } from './sdk-ops.ts'
 
-/** Where a run's draft goes when it finishes well (PD9): the admin's world-state draft. */
+/**
+ * The admin's world-state draft (ADM-45): `readDraft` reads it, and a run's write goes to it when
+ * the run finishes well (PD9), with what the script based it on, so the host applies only the
+ * script's change on top of the draft (WP 6.4).
+ */
 export interface RunnerDraft {
-  apply(state: WorldState): void
+  /** The draft held now; undefined when none is (the published state is then the draft). */
+  current(): WorldState | undefined
+  apply(write: DraftWrite): void
 }
 
 export interface RunnerOptions {
@@ -106,9 +113,14 @@ export function createRunner(options: RunnerOptions): Runner {
   const base = options.baseUrl ?? import.meta.url
   const workerUrl = new URL(workerPath, import.meta.url).href
   const indexURL = new URL(PYODIDE_FOLDER, base).href
-  const bridge = new ScriptBridge({ role, store, mapRoomId })
-  const runner = new ScriptRunner((state) => {
-    draft?.apply(state)
+  const bridge = new ScriptBridge({
+    role,
+    store,
+    mapRoomId,
+    ...(draft === undefined ? {} : { draft: { current: () => draft.current() } }),
+  })
+  const runner = new ScriptRunner((write) => {
+    draft?.apply(write)
   })
   let disposed = false
   const start = (): Promise<StartResult> => {

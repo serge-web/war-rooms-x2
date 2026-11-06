@@ -6,6 +6,9 @@ import { z } from 'zod'
 import {
   bridgeErrorCodeSchema,
   bridgeErrorReplySchema,
+  bridgeEventSchema,
+  messageEventSchema,
+  phaseEventSchema,
   bridgeOkReplySchema,
   bridgeOpSchema,
   bridgeProtocolSchema,
@@ -15,6 +18,8 @@ import {
   contextSchema,
   emptyRequestSchema,
   messageSenderSchema,
+  postProposalRequestSchema,
+  readDraftResultSchema,
   readForcesResultSchema,
   readGameSetupResultSchema,
   readObjectivesRequestSchema,
@@ -26,6 +31,13 @@ import {
   readTurnResultSchema,
   readWorldStateResultSchema,
   roomMessageSchema,
+  sendMessageRequestSchema,
+  sendTemplateRequestSchema,
+  sentResultSchema,
+  subscribeMessagesRequestSchema,
+  subscribedResultSchema,
+  writeDraftRequestSchema,
+  writeDraftResultSchema,
 } from './bridge.ts'
 import {
   forceSchema,
@@ -39,6 +51,11 @@ import {
 import { chatMessageBodySchema } from './message.ts'
 import { chatRoomConfigSchema, templateEntrySchema, templateMessageBodySchema } from './template.ts'
 import { themeSchema, themeTokensSchema } from './theme.ts'
+import {
+  umpireRoomConfigSchema,
+  worldProposalContentSchema,
+  worldProposalMessageBodySchema,
+} from './umpire.ts'
 import {
   latLonSchema,
   mapRoomConfigSchema,
@@ -67,7 +84,7 @@ export interface JsonSchemaExport {
 export const JSON_SCHEMA_EXPORTS: readonly JsonSchemaExport[] = Object.freeze([
   {
     file: 'bridge-protocol.schema.json',
-    title: 'Python SDK bridge protocol, version 1',
+    title: 'Python SDK bridge protocol, version 2',
     schema: bridgeProtocolSchema,
   },
   { file: 'chat-message.schema.json', title: 'Chat message body', schema: chatMessageBodySchema },
@@ -92,7 +109,17 @@ export const JSON_SCHEMA_EXPORTS: readonly JsonSchemaExport[] = Object.freeze([
     title: 'Template message body',
     schema: templateMessageBodySchema,
   },
+  {
+    file: 'umpire-room-config.schema.json',
+    title: 'Umpire room config',
+    schema: umpireRoomConfigSchema,
+  },
   { file: 'world-asset.schema.json', title: 'World-state asset', schema: worldAssetSchema },
+  {
+    file: 'world-proposal-message.schema.json',
+    title: 'White Force proposal message body',
+    schema: worldProposalMessageBodySchema,
+  },
   {
     file: 'world-state-message.schema.json',
     title: 'World-state message body',
@@ -146,6 +173,19 @@ function definitionNames(): Map<z.core.$ZodType, string> {
     [readRoomMessagesResultSchema, 'ReadRoomMessagesResult'],
     [readWorldStateResultSchema, 'ReadWorldStateResult'],
     [readObjectivesResultSchema, 'ReadObjectivesResult'],
+    [worldProposalContentSchema, 'WorldProposalContent'],
+    [bridgeEventSchema, 'BridgeEvent'],
+    [messageEventSchema, 'MessageEvent'],
+    [phaseEventSchema, 'PhaseEvent'],
+    [sendMessageRequestSchema, 'SendMessageRequest'],
+    [sendTemplateRequestSchema, 'SendTemplateRequest'],
+    [writeDraftRequestSchema, 'WriteDraftRequest'],
+    [postProposalRequestSchema, 'PostProposalRequest'],
+    [subscribeMessagesRequestSchema, 'SubscribeMessagesRequest'],
+    [sentResultSchema, 'SentResult'],
+    [readDraftResultSchema, 'ReadDraftResult'],
+    [writeDraftResultSchema, 'WriteDraftResult'],
+    [subscribedResultSchema, 'SubscribedResult'],
   ])
 }
 

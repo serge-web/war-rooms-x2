@@ -1,6 +1,6 @@
 {
   "readContext": {
-    "protocolVersion": 1,
+    "protocolVersion": 2,
     "isAdmin": true,
     "roleId": null,
     "forceId": null
@@ -217,6 +217,21 @@
         ],
         "config": {},
         "order": 4
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000006",
+        "name": "Umpires",
+        "roomType": "umpire",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000003",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 5
       }
     ]
   },
@@ -538,6 +553,7 @@
           }
         }
       }
-    ]
+    ],
+    "30000000-0000-4000-8000-000000000006": []
   }
 }

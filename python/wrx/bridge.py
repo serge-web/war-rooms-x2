@@ -15,11 +15,17 @@ from collections.abc import Awaitable, Callable
 
 
 class Bridge(abc.ABC):
-    """Where the SDK's operations go. Implement `call` to plug in a runner."""
+    """Where the SDK's operations go. Implement `call` to plug in a runner, and `next_event` if
+    it delivers events (protocol 2, WP 6.4)."""
 
     @abc.abstractmethod
     async def call(self, op: str, payload: str) -> str:
         """Sends one operation with its request as JSON text; returns the reply's JSON text."""
+
+    async def next_event(self, timeout_ms: int | None = None) -> str | None:
+        """The next event for the script's subscriptions, as JSON text; None if `timeout_ms`
+        passes first. A bridge that delivers no events raises `NotImplementedError`."""
+        raise NotImplementedError("this bridge delivers no events")
 
 
 class PyodideBridge(Bridge):
@@ -28,12 +34,18 @@ class PyodideBridge(Bridge):
     Only strings cross: the worker never hands Python a proxy of a page object.
     """
 
-    def __init__(self, call: Callable[[str, str], Awaitable[object]] | None = None) -> None:
+    def __init__(
+        self,
+        call: Callable[[str, str], Awaitable[object]] | None = None,
+        next_event: Callable[[int], Awaitable[object]] | None = None,
+    ) -> None:
         if call is None:
-            from _wrx_bridge import call as worker_call  # type: ignore[import-not-found]
+            import _wrx_bridge  # type: ignore[import-not-found]
 
-            call = worker_call
+            call = _wrx_bridge.call
+            next_event = getattr(_wrx_bridge, "next_event", None)
         self._call = call
+        self._next_event = next_event
 
     async def call(self, op: str, payload: str) -> str:
         reply = self._call(op, payload)
@@ -42,6 +54,14 @@ class PyodideBridge(Bridge):
         if not isinstance(reply, str):
             reply = str(reply)
         return reply
+
+    async def next_event(self, timeout_ms: int | None = None) -> str | None:
+        if self._next_event is None:
+            raise NotImplementedError("this runner delivers no events")
+        event = self._next_event(-1 if timeout_ms is None else timeout_ms)
+        if inspect.isawaitable(event):
+            event = await event
+        return None if event is None else str(event)
 
 
 def default_bridge() -> Bridge:

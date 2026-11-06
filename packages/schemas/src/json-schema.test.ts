@@ -56,7 +56,9 @@ describe('JSON Schema export (D26, ARC-6, P8)', () => {
       'role.schema.json',
       'room.schema.json',
       'template-message.schema.json',
+      'umpire-room-config.schema.json',
       'world-asset.schema.json',
+      'world-proposal-message.schema.json',
       'world-state-message.schema.json',
     ])
     for (const entry of JSON_SCHEMA_EXPORTS) {

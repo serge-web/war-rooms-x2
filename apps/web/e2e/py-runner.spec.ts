@@ -96,7 +96,11 @@ test('the app page loads the runner lazily under its own <meta> policy and runs 
       acquireRoom: nothing,
       subscribe: nothing,
     } as unknown as Parameters<typeof createRunner>[0]['store']
-    const runner = createRunner({ role: 'admin', store, draft: { apply: () => undefined } })
+    const runner = createRunner({
+      role: 'admin',
+      store,
+      draft: { current: () => undefined, apply: () => undefined },
+    })
     // The real SDK (python/wrx, WP 6.1) imports and reads its context through the bridge.
     const outcome = await runner.run(
       'import sys, wrx\nctx = await wrx.Game().context()\nprint(sys.version_info[:2], ctx.isAdmin, ctx.protocolVersion, wrx.__version__)',
@@ -105,7 +109,7 @@ test('the app page loads the runner lazily under its own <meta> policy and runs 
     return outcome
   })
   expect(result.status, result.error).toBe('finished')
-  expect(result.output.trim()).toMatch(/^\(3, 14\) True 1 \d+\.\d+\.\d+$/)
+  expect(result.output.trim()).toMatch(/^\(3, 14\) True 2 \d+\.\d+\.\d+$/)
   expect(requests.filter(foreign(origin(page)))).toEqual([])
   const violations = await page.evaluate(
     () => (window as unknown as { wrxCspViolations: string[] }).wrxCspViolations,
@@ -237,14 +241,15 @@ test('the control: with no policy at all, new Function reaches another origin (w
   expect(result.probes['global.indexedDB.open']).toMatch(/^blocked/)
 })
 
-// The admin moves an asset with the SDK (python/wrx, WP 6.1) and the runner's draft write.
+// The admin moves an asset with the SDK (python/wrx) and its draft write (protocol 2, WP 6.4).
 const MOVE = `
-import wrx, wrx_draft
-state = await wrx.Game().world_state()
+import wrx
+game = wrx.Game()
+state = await game.world_state()
 asset = sorted(state.assets.values(), key=lambda a: a.title)[0]
 asset.lat = round(asset.lat + 0.01, 6)
 asset.lon = round(asset.lon - 0.02, 6)
-await wrx_draft.write_draft(state)
+await game.write_draft(state)
 print("moved", asset.title)
 `
 
@@ -320,7 +325,7 @@ test('the bridge keeps each role to its operations and validates what it gets (P
     run(
       page,
       role,
-      `import json, wrx, wrx_draft
+      `import json, wrx
 from _wrx_bridge import call
 game = wrx.Game()
 state = await game.world_state()
@@ -343,12 +348,13 @@ async def sdk(coro):
         return "refused: " + e.code + ": " + e.message
 
 out = {
-    "write the draft": await sdk(wrx_draft.write_draft(state)),
+    "write the draft": await sdk(game.write_draft(state)),
+    "propose": await sdk(game.post_proposal(state, "Unchanged.")),
     "unknown op": await raw("publishWorldState", "{}"),
     "read Blue HQ": await sdk(game.room(${JSON.stringify(ids.blueHq)}).history()),
     "a room not the role's": await sdk(game.room("30000000-0000-4000-8000-0000000000ff").history()),
-    "invalid state": await sdk(wrx_draft.write_draft({"turn": 0, "assets": {}})),
-    "over 500 KB": await sdk(wrx_draft.write_draft(big)),
+    "invalid state": await raw("writeDraft", json.dumps({"state": {"turn": 0, "assets": {}}})),
+    "over 500 KB": await sdk(game.write_draft(big)),
     "not JSON": await raw("readWorldState", "{"),
     "wrong shape": await raw("readRoomMessages", json.dumps({"roomId": 3, "x": 1})),
     "too long": await raw("readTurn", json.dumps({"x": "y" * 10_001})),
@@ -361,6 +367,8 @@ print(json.dumps(out))`,
   expect(w['write the draft']).toBe(
     'refused: forbidden: writeDraft is not open to the white-force role',
   )
+  // The White Force proposes to the admin in the umpire room (PD6, PY-8).
+  expect(w.propose).toBe('allowed')
   expect(w['unknown op']).toMatch(/^refused: unknown-op: /)
   expect(w['read Blue HQ']).toBe('allowed') // the White Force reads every room
   expect(w["a room not the role's"]).toBe('refused: not-found: not a room of this role')
@@ -372,6 +380,7 @@ print(json.dumps(out))`,
   expect(admin.status, admin.error).toBe('finished')
   const a = lastJson(admin.output)
   expect(a['write the draft']).toBe('allowed')
+  expect(a.propose).toBe('refused: forbidden: postProposal is not open to the admin role')
   expect(a['invalid state']).toMatch(/^refused: invalid-request: invalid world state/)
   expect(a['over 500 KB']).toMatch(
     /^refused: invalid-request: the world state is \d+ bytes, over the 500000-byte cap/,

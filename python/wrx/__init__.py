@@ -2,8 +2,10 @@
 
 One SDK for umpire reconcilers, analysis and automated players. It is role-scoped (PD2): a
 script reads as the role it runs as, through its runner's bridge, and sees only what that role
-may see. This is the read layer (PY-2): `Game` and its rooms; typed models in `wrx.models`
-(PY-1); pandas helpers in `wrx.frames`, imported only when used (PY-3).
+may see. `Game` offers the three layers (PY-2): read (the game, its rooms, messages and world
+state), act (send messages, react to messages and phase changes) and adjudicate (the admin's
+world-state draft, White Force proposals); typed models in `wrx.models` (PY-1); pandas helpers
+in `wrx.frames`, imported only when used (PY-3).
 
     import wrx
 
@@ -12,6 +14,7 @@ may see. This is the read layer (PY-2): `Game` and its rooms; typed models in `w
     async for message in game.room(room_id).messages():
         ...
     frame = wrx.to_frame(await game.world_state())
+    await game.send_message(room_id, "Received.")
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from .errors import (
     ForbiddenError,
     InvalidRequestError,
     NotFoundError,
+    PausedError,
     ProtocolError,
     UnavailableError,
     UnknownOperationError,
@@ -32,7 +36,7 @@ from .errors import (
 from .game import Game, RoomReader
 from .protocol import PROTOCOL_VERSION
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "PROTOCOL_VERSION",
@@ -42,6 +46,7 @@ __all__ = [
     "Game",
     "InvalidRequestError",
     "NotFoundError",
+    "PausedError",
     "ProtocolError",
     "PyodideBridge",
     "RoomReader",

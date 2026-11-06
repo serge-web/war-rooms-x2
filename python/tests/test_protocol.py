@@ -13,6 +13,7 @@ from wrx import (
     ForbiddenError,
     InvalidRequestError,
     NotFoundError,
+    PausedError,
     ProtocolError,
     UnavailableError,
     UnknownOperationError,
@@ -66,7 +67,7 @@ def test_a_request_goes_as_compact_json_without_unset_fields() -> None:
 
 def test_the_sdk_refuses_to_send_what_is_not_an_operation() -> None:
     with pytest.raises(ValueError):
-        run(protocol.call(FakeBridge(), "writeDraft"))
+        run(protocol.call(FakeBridge(), "publishWorldState"))
     with pytest.raises(TypeError):
         run(protocol.call(FakeBridge(), "readObjectives"))
 
@@ -79,6 +80,7 @@ def test_the_sdk_refuses_to_send_what_is_not_an_operation() -> None:
         ("forbidden", ForbiddenError),
         ("not-found", NotFoundError),
         ("unavailable", UnavailableError),
+        ("paused", PausedError),
         ("failed", BridgeError),
     ],
 )

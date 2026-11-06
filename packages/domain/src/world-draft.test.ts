@@ -6,6 +6,7 @@ import type { WorldAsset, WorldState } from '@wrx/schemas'
 import { describe, expect, it } from 'vitest'
 import {
   addWorldAsset,
+  applyWorldChanges,
   diffSize,
   diffWorldStates,
   emptyWorldState,
@@ -149,5 +150,56 @@ describe('the stored draft (ADM-45, R25)', () => {
 
   it('is keyed by server and map room', () => {
     expect(worldDraftKey('wrx.test', 'm-1')).toBe('world-draft:v1:wrx.test:m-1')
+  })
+})
+
+describe('a script’s write on top of the draft (WP 6.4)', () => {
+  const base = sampleWorldState()
+  const ids = Object.keys(base.assets)
+  const [a, b, c] = [ids[0] ?? '', ids[1] ?? '', ids[2] ?? '']
+  const edit = (state: WorldState, id: string, patch: Partial<WorldAsset>): WorldState => {
+    const next = updateWorldAsset(state, id, patch)
+    if (!next.ok) throw new Error(next.error)
+    return next.value
+  }
+
+  it('applies only what the script changed, so hand edits survive', () => {
+    const hand = edit(base, b, { lat: 10 })
+    const removed = removeWorldAsset(edit(base, a, { fuel: 5 }), c)
+    if (!removed.ok) throw new Error(removed.error)
+    const applied = applyWorldChanges(base, removed.value, hand)
+    if (!applied.ok) throw new Error(applied.error)
+    expect(applied.value.state.assets[a]?.fuel).toBe(5)
+    expect(applied.value.state.assets[b]?.lat).toBe(10)
+    expect(applied.value.state.assets[c]).toBeUndefined()
+    expect(applied.value.overwritten).toEqual([])
+    expect(diffSize(applied.value.changes)).toBe(2)
+  })
+
+  it('reports an asset both sides changed; the script wins', () => {
+    const applied = applyWorldChanges(
+      base,
+      edit(base, a, { fuel: 2 }),
+      edit(base, a, { health: 1 }),
+    )
+    if (!applied.ok) throw new Error(applied.error)
+    expect(applied.value.state.assets[a]?.fuel).toBe(2)
+    expect(applied.value.state.assets[a]?.health).toBe(100)
+    expect(applied.value.overwritten.map((x) => x.id)).toEqual([a])
+  })
+
+  it('with no draft held, the base is the draft; with nothing at all, an empty state', () => {
+    const applied = applyWorldChanges(undefined, base, undefined)
+    if (!applied.ok) throw new Error(applied.error)
+    expect(applied.value.state).toEqual(base)
+    expect(applied.value.changes.added).toHaveLength(ids.length)
+  })
+
+  it('takes the script’s turn only when it changed it', () => {
+    const later = { ...base, turn: 3 }
+    const kept = applyWorldChanges(base, base, later)
+    const moved = applyWorldChanges(base, { ...base, turn: 4 }, later)
+    expect(kept.ok && kept.value.state.turn).toBe(3)
+    expect(moved.ok && moved.value.state.turn).toBe(4)
   })
 })

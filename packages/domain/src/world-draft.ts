@@ -149,6 +149,69 @@ export function isEmptyDiff(diff: WorldStateDiff): boolean {
   return diffSize(diff) === 0
 }
 
+/** What applying a script's world state on top of the draft did (WP 6.4). */
+export interface AppliedWorldChanges {
+  /** The draft afterwards. */
+  readonly state: WorldState
+  /** What the script changed, from what it was based on. */
+  readonly changes: WorldStateDiff
+  /**
+   * Assets the script changed or removed that were also edited in the draft since its base
+   * (by hand, or another write): the script's version won. By title.
+   */
+  readonly overwritten: readonly WorldAsset[]
+}
+
+/**
+ * A script's draft write, on top of the draft as it is now (WP 6.4, 6.3's weak point: a script
+ * no longer wipes hand edits). The script's change is `written` against `base`, the state it
+ * was based on (the draft it read, or the published state); only that change is applied to
+ * `current`, asset by asset: an asset it added or changed takes its value, one it removed goes,
+ * and every other asset, hand edits included, stays as it is in `current`. The turn follows the
+ * script when it changed it. An asset changed both by the script and in the draft since `base`
+ * takes the script's value and is reported in `overwritten`. Refused if the result would hold
+ * more than `LIMITS.worldStateAssets` assets.
+ */
+export function applyWorldChanges(
+  base: WorldState | undefined,
+  written: WorldState,
+  current: WorldState | undefined,
+): Result<AppliedWorldChanges, string> {
+  const from = base ?? emptyWorldState(written.turn)
+  const into = current ?? from
+  const changes = diffWorldStates(from, written)
+  const assets: Record<string, WorldAsset> = { ...into.assets }
+  const overwritten: WorldAsset[] = []
+  const edited = (id: string) => {
+    const was = from.assets[id]
+    const now = into.assets[id]
+    if (was === undefined || now === undefined) return was !== now
+    return WORLD_ASSET_FIELDS.some((field) => was[field] !== now[field])
+  }
+  for (const asset of changes.added) {
+    if (into.assets[asset.id] !== undefined && edited(asset.id)) overwritten.push(asset)
+    assets[asset.id] = asset
+  }
+  for (const change of changes.changed) {
+    if (edited(change.after.id)) overwritten.push(change.after)
+    assets[change.after.id] = change.after
+  }
+  const gone = new Set<string>()
+  for (const asset of changes.removed) {
+    if (edited(asset.id) && into.assets[asset.id] !== undefined) overwritten.push(asset)
+    gone.add(asset.id)
+  }
+  const kept = Object.fromEntries(Object.entries(assets).filter(([id]) => !gone.has(id)))
+  if (Object.keys(kept).length > LIMITS.worldStateAssets) {
+    return { ok: false, error: `a world state holds at most ${LIMITS.worldStateAssets} assets` }
+  }
+  const turn = written.turn !== from.turn ? written.turn : into.turn
+  return {
+    ok: true,
+    value: { state: { turn, assets: kept }, changes, overwritten: overwritten.sort(byTitle) },
+  }
+}
+
 /** The map-room message a world state is published as (D25), as `sendWorldState` sends it. */
 export function worldStateMessage(state: WorldState): string {
   return JSON.stringify({ type: 'world-state', schemaVersion: 1, content: state })

@@ -5,9 +5,9 @@
 // the imports are bounded by the start limit instead (WP 6.4). A run's draft writes are applied only when it finishes well (PD9); a
 // stopped, timed-out or failed run leaves the draft as it was.
 import type { WorldState } from '@wrx/schemas'
-import type { ScriptBridge } from './bridge.ts'
+import type { DraftWrite, ScriptBridge } from './bridge.ts'
 import { fromWorkerSchema } from './protocol.ts'
-import type { FromWorker, InitMessage, RunMessage, Timings } from './protocol.ts'
+import type { EventMessage, FromWorker, InitMessage, RunMessage, Timings } from './protocol.ts'
 
 export interface StartOptions {
   /** Absolute URL of the worker module. */
@@ -79,7 +79,7 @@ export class ScriptRunner {
   /** Messages from the worker that failed validation, newest last (bounded). */
   readonly rejected: unknown[] = []
 
-  constructor(private readonly applyDraft: (state: WorldState) => void) {}
+  constructor(private readonly applyDraft: (write: DraftWrite) => void) {}
 
   get running(): boolean {
     return this.active !== undefined
@@ -180,8 +180,9 @@ export class ScriptRunner {
       })
     } else {
       const draft = run.bridge.takeDraft(run.runId)
-      const applied = message.ok && draft !== undefined ? draft : undefined
-      if (applied !== undefined) this.applyDraft(applied)
+      const write = message.ok && draft !== undefined ? draft : undefined
+      if (write !== undefined) this.applyDraft(write)
+      const applied = write?.state
       run.finish({
         status: message.ok ? 'finished' : 'failed',
         ...(message.error === undefined ? {} : { error: message.error }),
@@ -232,11 +233,20 @@ export class ScriptRunner {
         onOutput,
         finish: (outcome) => {
           clearTimeout(timer)
+          // Its subscriptions stop and the rooms it held are let go (WP 6.4).
+          bridge.endRun(runId)
           if (this.active === run) this.active = undefined
           resolve(outcome)
         },
       }
       this.active = run
+      // Events for the run's subscriptions go to its worker while it is the active run.
+      bridge.beginRun(runId, (event) => {
+        const worker = this.worker
+        if (this.active !== run || worker === undefined) return
+        const message: EventMessage = { kind: 'event', runId, event }
+        worker.postMessage(message)
+      })
       ready.then(
         () => {
           const worker = this.worker

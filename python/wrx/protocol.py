@@ -1,4 +1,7 @@
-"""The bridge protocol, version 1 (WP 6.1): operation names and their request and result models.
+"""The bridge protocol, version 2 (WPs 6.1, 6.4): operation names and their request and result models.
+
+Version 1's read operations are unchanged; version 2 adds act and adjudicate (sending, the
+admin's draft, White Force proposals) and event subscriptions.
 
 The protocol is defined once, in zod (`packages/schemas/src/bridge.ts`, `@wrx/schemas/bridge`),
 and exported as `docs/json-schema/bridge-protocol.schema.json`; the models here are generated
@@ -19,6 +22,8 @@ from .models import (
     BridgeReply,
     Context,
     EmptyRequest,
+    PostProposalRequest,
+    ReadDraftResult,
     ReadForcesResult,
     ReadGameSetupResult,
     ReadObjectivesRequest,
@@ -29,9 +34,16 @@ from .models import (
     ReadRoomsResult,
     ReadTurnResult,
     ReadWorldStateResult,
+    SendMessageRequest,
+    SendTemplateRequest,
+    SentResult,
+    SubscribeMessagesRequest,
+    SubscribedResult,
+    WriteDraftRequest,
+    WriteDraftResult,
 )
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -50,6 +62,13 @@ OPERATIONS: dict[str, Operation] = {
     "readRoomMessages": Operation(ReadRoomMessagesRequest, ReadRoomMessagesResult),
     "readWorldState": Operation(EmptyRequest, ReadWorldStateResult),
     "readObjectives": Operation(ReadObjectivesRequest, ReadObjectivesResult),
+    "sendMessage": Operation(SendMessageRequest, SentResult),
+    "sendTemplate": Operation(SendTemplateRequest, SentResult),
+    "readDraft": Operation(EmptyRequest, ReadDraftResult),
+    "writeDraft": Operation(WriteDraftRequest, WriteDraftResult),
+    "postProposal": Operation(PostProposalRequest, SentResult),
+    "subscribeMessages": Operation(SubscribeMessagesRequest, SubscribedResult),
+    "subscribePhase": Operation(EmptyRequest, SubscribedResult),
 }
 
 

@@ -29,6 +29,13 @@ class BridgeOp(
             "readRoomMessages",
             "readWorldState",
             "readObjectives",
+            "sendMessage",
+            "sendTemplate",
+            "readDraft",
+            "writeDraft",
+            "postProposal",
+            "subscribeMessages",
+            "subscribePhase",
         ]
     ]
 ):
@@ -42,9 +49,16 @@ class BridgeOp(
         "readRoomMessages",
         "readWorldState",
         "readObjectives",
+        "sendMessage",
+        "sendTemplate",
+        "readDraft",
+        "writeDraft",
+        "postProposal",
+        "subscribeMessages",
+        "subscribePhase",
     ]
     """
-    A bridge operation (protocol 1)
+    A bridge operation (protocol 2)
     """
 
 
@@ -102,12 +116,168 @@ class ReadObjectivesRequest(BaseModel):
     """
 
 
+class SendMessageRequest(BaseModel):
+    """
+    A chat message, sent as the role (PD2)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role can write in
+    """
+    text: constr(min_length=1, max_length=8000)
+    """
+    Plain text (PLY-14)
+    """
+
+
+class SendTemplateRequest(BaseModel):
+    """
+    A templated message (TPL-3), checked as the composer checks it before it is sent (TPL-6)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role can write in that offers the template
+    """
+    templateId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The template used
+    """
+    values: dict[
+        constr(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$"),
+        constr(max_length=8000) | float | bool,
+    ] = Field(..., max_length=100)
+    """
+    Field values by field name; pickers hold GUIDs, never names (TPL-8)
+    """
+
+
+class WorldAsset(BaseModel):
+    """
+    A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)
+    """
+
+    id: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The asset GUID; also its key in `assets` (§3 rules 1, 16)
+    """
+    forceId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The force that owns the asset
+    """
+    title: constr(min_length=1, max_length=120)
+    """
+    Display name, e.g. "1st Armoured Squadron"
+    """
+    category: constr(min_length=1, max_length=60)
+    """
+    What kind of asset it is, e.g. "armour" or "frigate"
+    """
+    sidc: constr(
+        pattern=r"^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$"
+    )
+    """
+    MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)
+    """
+    lat: confloat(ge=-90.0, le=90.0)
+    """
+    Latitude, WGS 84 decimal degrees
+    """
+    lon: confloat(ge=-180.0, le=180.0)
+    """
+    Longitude, WGS 84 decimal degrees
+    """
+    state: constr(min_length=1, max_length=60)
+    """
+    Its condition in words, e.g. "operational" or "damaged"
+    """
+    health: confloat(ge=0.0, le=100.0)
+    """
+    Health, 0 (destroyed) to 100 (full)
+    """
+    fuel: confloat(ge=0.0, le=100.0)
+    """
+    Fuel, 0 (empty) to 100 (full)
+    """
+
+
+class WorldState(BaseModel):
+    """
+    The full world state: every asset with its position and status (D25)
+    """
+
+    turn: conint(ge=1, le=10000)
+    """
+    The turn this state belongs to
+    """
+    assets: dict[
+        constr(
+            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        ),
+        WorldAsset,
+    ] = Field(..., max_length=5000)
+    """
+    Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)
+    """
+
+
+class PostProposalRequest(BaseModel):
+    """
+    A world state proposed to the admin in the umpire room (PD6, PY-8)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    state: WorldState
+    """
+    The proposed world state, in full (D25)
+    """
+    summary: constr(min_length=1, max_length=2000)
+    """
+    What the proposal changes, in words, for the admin; plain text
+    """
+
+
+class SubscribeMessagesRequest(BaseModel):
+    """
+    Events for each new message in the room, while the run lasts
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role is in
+    """
+
+
 class Context(BaseModel):
     """
     Who the script runs as: data, not access; the bridge enforces access (PD2, PY-4)
     """
 
-    protocolVersion: Literal[1]
+    protocolVersion: Literal[2]
     """
     The protocol version the bridge speaks
     """
@@ -288,56 +458,47 @@ class TemplateContent(BaseModel):
     """
 
 
-class WorldAsset(BaseModel):
+class WorldStateMessage(BaseModel):
     """
-    A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)
+    A world-state message in the map room, posted by the admin only
     """
 
-    id: constr(
-        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    )
+    type: Literal["world-state"]
+    schemaVersion: Literal[1]
+    content: WorldState
+
+
+class WorldProposalContent(BaseModel):
     """
-    The asset GUID; also its key in `assets` (§3 rules 1, 16)
+    A proposed world state and its summary
     """
-    forceId: constr(
-        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    )
+
+    state: WorldState
     """
-    The force that owns the asset
+    The proposed world state, in full (D25)
     """
-    title: constr(min_length=1, max_length=120)
+    summary: constr(min_length=1, max_length=2000)
     """
-    Display name, e.g. "1st Armoured Squadron"
+    What the proposal changes, in words, for the admin; plain text
     """
-    category: constr(min_length=1, max_length=60)
+
+
+class ReadWorldStateResult(BaseModel):
     """
-    What kind of asset it is, e.g. "armour" or "frigate"
+    The latest published world state
     """
-    sidc: constr(
-        pattern=r"^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$"
-    )
+
+    state: WorldState | None
     """
-    MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)
+    The latest world state from the admin in the map room (D25); null if none
     """
-    lat: confloat(ge=-90.0, le=90.0)
+    messageId: constr(min_length=1, max_length=256) | None
     """
-    Latitude, WGS 84 decimal degrees
+    The stanza id of the message that carried it
     """
-    lon: confloat(ge=-180.0, le=180.0)
+    sentAt: AwareDatetime | None
     """
-    Longitude, WGS 84 decimal degrees
-    """
-    state: constr(min_length=1, max_length=60)
-    """
-    Its condition in words, e.g. "operational" or "damaged"
-    """
-    health: confloat(ge=0.0, le=100.0)
-    """
-    Health, 0 (destroyed) to 100 (full)
-    """
-    fuel: confloat(ge=0.0, le=100.0)
-    """
-    Fuel, 0 (empty) to 100 (full)
+    When the admin posted it, server time
     """
 
 
@@ -363,6 +524,49 @@ class Objectives(BaseModel):
     """
 
 
+class SentResult(BaseModel):
+    """
+    A message sent
+    """
+
+    stanzaId: constr(min_length=1, max_length=256)
+    """
+    The server's stanza id of the message sent
+    """
+
+
+class ReadDraftResult(BaseModel):
+    """
+    The admin's world-state draft (ADM-45)
+    """
+
+    state: WorldState | None
+    """
+    The admin's world-state draft as it is now; with no draft held, the published state; null if neither
+    """
+    held: bool
+    """
+    A draft is held (unpublished edits); false: `state` is the published one
+    """
+
+
+class WriteDraftResult(BaseModel):
+    """
+    The draft write is held until the run finishes cleanly (PD9)
+    """
+
+    assets: conint(ge=0, le=9007199254740991)
+    """
+    Assets in the state written
+    """
+
+
+class SubscribedResult(BaseModel):
+    """
+    Subscribed until the run ends
+    """
+
+
 class BridgeOkReply(BaseModel):
     """
     A successful reply
@@ -383,6 +587,7 @@ class BridgeErrorCode(
             "forbidden",
             "not-found",
             "unavailable",
+            "paused",
             "failed",
         ]
     ]
@@ -393,27 +598,35 @@ class BridgeErrorCode(
         "forbidden",
         "not-found",
         "unavailable",
+        "paused",
         "failed",
     ]
     """
-    `unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `failed`: anything else
+    `unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `paused`: posting is paused for the role during adjudication (PLY-56); `failed`: anything else
     """
 
 
-class BridgeRequests(BaseModel):
+class PhaseEvent(BaseModel):
     """
-    Each operation's request, by operation name
+    The turn state, when its turn or phase changes
     """
 
-    readContext: EmptyRequest
-    readGameSetup: EmptyRequest
-    readTurn: EmptyRequest
-    readForces: EmptyRequest
-    readRoles: EmptyRequest
-    readRooms: EmptyRequest
-    readRoomMessages: ReadRoomMessagesRequest
-    readWorldState: EmptyRequest
-    readObjectives: ReadObjectivesRequest
+    type: Literal["phase"]
+    state: GameState
+
+
+class WriteDraftRequest(BaseModel):
+    """
+    The admin's world-state draft (PD7): applied when the run finishes cleanly (PD9), as the change from what the script read, on top of the draft as it is then
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    state: WorldState
+    """
+    The world state the script wants in the draft: the draft it read (`readDraft`) or the published state, changed
+    """
 
 
 class Theme(BaseModel):
@@ -565,43 +778,14 @@ class TemplateMessage(BaseModel):
     content: TemplateContent
 
 
-class WorldState(BaseModel):
+class WorldProposalMessage(BaseModel):
     """
-    The full world state: every asset with its position and status (D25)
-    """
-
-    turn: conint(ge=1, le=10000)
-    """
-    The turn this state belongs to
-    """
-    assets: dict[
-        constr(
-            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        ),
-        WorldAsset,
-    ] = Field(..., max_length=5000)
-    """
-    Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)
+    A White Force proposal in the umpire room (PY-8)
     """
 
-
-class ReadWorldStateResult(BaseModel):
-    """
-    The latest published world state
-    """
-
-    state: WorldState | None
-    """
-    The latest world state from the admin in the map room (D25); null if none
-    """
-    messageId: constr(min_length=1, max_length=256) | None
-    """
-    The stanza id of the message that carried it
-    """
-    sentAt: AwareDatetime | None
-    """
-    When the admin posted it, server time
-    """
+    type: Literal["world-proposal"]
+    schemaVersion: Literal[1]
+    content: WorldProposalContent
 
 
 class ReadObjectivesResult(BaseModel):
@@ -626,6 +810,29 @@ class BridgeErrorReply(BaseModel):
     """
     What went wrong, for the script
     """
+
+
+class BridgeRequests(BaseModel):
+    """
+    Each operation's request, by operation name
+    """
+
+    readContext: EmptyRequest
+    readGameSetup: EmptyRequest
+    readTurn: EmptyRequest
+    readForces: EmptyRequest
+    readRoles: EmptyRequest
+    readRooms: EmptyRequest
+    readRoomMessages: ReadRoomMessagesRequest
+    readWorldState: EmptyRequest
+    readObjectives: ReadObjectivesRequest
+    sendMessage: SendMessageRequest
+    sendTemplate: SendTemplateRequest
+    readDraft: EmptyRequest
+    writeDraft: WriteDraftRequest
+    postProposal: PostProposalRequest
+    subscribeMessages: SubscribeMessagesRequest
+    subscribePhase: EmptyRequest
 
 
 class GameSetup(BaseModel):
@@ -682,31 +889,6 @@ class ReadRoomsResult(BaseModel):
     """
 
 
-class WorldStateMessage(BaseModel):
-    """
-    A world-state message in the map room, posted by the admin only
-    """
-
-    type: Literal["world-state"]
-    schemaVersion: Literal[1]
-    content: WorldState
-
-
-class BridgeReply(RootModel[BridgeOkReply | BridgeErrorReply]):
-    root: BridgeOkReply | BridgeErrorReply
-    """
-    Every reply, as JSON text
-    """
-
-
-class ReadGameSetupResult(BaseModel):
-    """
-    The game setup document
-    """
-
-    setup: GameSetup
-
-
 class RoomMessage(BaseModel):
     """
     A message in a room, with its sender and server time
@@ -727,10 +909,34 @@ class RoomMessage(BaseModel):
     Server time
     """
     sender: MessageSender
-    body: ChatMessage | TemplateMessage | WorldStateMessage
+    body: ChatMessage | TemplateMessage | WorldStateMessage | WorldProposalMessage
     """
     The body; messages whose body fails validation are left out, as clients do
     """
+
+
+class BridgeReply(RootModel[BridgeOkReply | BridgeErrorReply]):
+    root: BridgeOkReply | BridgeErrorReply
+    """
+    Every reply, as JSON text
+    """
+
+
+class MessageEvent(BaseModel):
+    """
+    A new message in a subscribed room
+    """
+
+    type: Literal["message"]
+    message: RoomMessage
+
+
+class ReadGameSetupResult(BaseModel):
+    """
+    The game setup document
+    """
+
+    setup: GameSetup
 
 
 class ReadRoomMessagesResult(BaseModel):
@@ -748,6 +954,13 @@ class ReadRoomMessagesResult(BaseModel):
     """
 
 
+class BridgeEvent(RootModel[MessageEvent | PhaseEvent]):
+    root: MessageEvent | PhaseEvent
+    """
+    An event for a subscribed script
+    """
+
+
 class BridgeResults(BaseModel):
     """
     Each operation's result, the `value` of its reply, by operation name
@@ -762,15 +975,23 @@ class BridgeResults(BaseModel):
     readRoomMessages: ReadRoomMessagesResult
     readWorldState: ReadWorldStateResult
     readObjectives: ReadObjectivesResult
+    sendMessage: SentResult
+    sendTemplate: SentResult
+    readDraft: ReadDraftResult
+    writeDraft: WriteDraftResult
+    postProposal: SentResult
+    subscribeMessages: SubscribedResult
+    subscribePhase: SubscribedResult
 
 
 class BridgeProtocol(BaseModel):
     """
-    The bridge protocol between the Python SDK and its runner, version 1: a catalogue of its parts, not a message
+    The bridge protocol between the Python SDK and its runner, version 2: a catalogue of its parts, not a message
     """
 
-    protocolVersion: Literal[1]
+    protocolVersion: Literal[2]
     op: BridgeOp
     requests: BridgeRequests
     results: BridgeResults
     reply: BridgeReply
+    event: BridgeEvent

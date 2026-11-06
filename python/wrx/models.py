@@ -8,8 +8,10 @@ model, and a test checks that they agree.
 
 Field names are the documents' own (`forceId`, `sentAt`), as in the data dictionary.
 
-Message bodies are named after their schema files: `ChatMessage`, `TemplateMessage` and
-`WorldStateMessage` are bodies; a `RoomMessage` carries one with its sender and server time.
+Message bodies are named after their schema files: `ChatMessage`, `TemplateMessage`,
+`WorldStateMessage` and `WorldProposalMessage` (a White Force proposal, WP 6.4) are bodies; a
+`RoomMessage` carries one with its sender and server time. A `BridgeEvent` (a `MessageEvent` or
+a `PhaseEvent`) is what a subscribed script receives.
 
 One rule JSON Schema cannot state, so the generated models do not check it: each asset in a
 world state is keyed by its own `id` (§3 rule 16). `check_world_state` checks it, and the read
@@ -23,6 +25,7 @@ from typing import Any
 
 from ._models.bridge_protocol import (
     BridgeErrorReply,
+    BridgeEvent,
     BridgeOkReply,
     BridgeProtocol,
     BridgeReply,
@@ -33,9 +36,13 @@ from ._models.bridge_protocol import (
     Force,
     GameSetup,
     GameState,
+    MessageEvent,
     MessageSender,
     Objectives,
     Participant,
+    PhaseEvent,
+    PostProposalRequest,
+    ReadDraftResult,
     ReadForcesResult,
     ReadGameSetupResult,
     ReadObjectivesRequest,
@@ -49,19 +56,30 @@ from ._models.bridge_protocol import (
     Role,
     Room,
     RoomMessage,
+    SendMessageRequest,
+    SendTemplateRequest,
+    SentResult,
+    SubscribeMessagesRequest,
+    SubscribedResult,
     TemplateContent,
     TemplateMessage,
     Theme,
     ThemeTokens,
     WorldAsset,
+    WorldProposalContent,
+    WorldProposalMessage,
     WorldState,
     WorldStateMessage,
+    WriteDraftRequest,
+    WriteDraftResult,
 )
 from ._models.chat_room_config import ChatRoomConfig, TemplateEntry
 from ._models.map_room_config import LatLon, MapRoomConfig
+from ._models.umpire_room_config import UmpireRoomConfig
 
 __all__ = [
     "BridgeErrorReply",
+    "BridgeEvent",
     "BridgeOkReply",
     "BridgeProtocol",
     "BridgeReply",
@@ -75,9 +93,13 @@ __all__ = [
     "GameState",
     "LatLon",
     "MapRoomConfig",
+    "MessageEvent",
     "MessageSender",
     "Objectives",
     "Participant",
+    "PhaseEvent",
+    "PostProposalRequest",
+    "ReadDraftResult",
     "ReadForcesResult",
     "ReadGameSetupResult",
     "ReadObjectivesRequest",
@@ -91,14 +113,24 @@ __all__ = [
     "Role",
     "Room",
     "RoomMessage",
+    "SendMessageRequest",
+    "SendTemplateRequest",
+    "SentResult",
+    "SubscribeMessagesRequest",
+    "SubscribedResult",
     "TemplateContent",
     "TemplateEntry",
     "TemplateMessage",
     "Theme",
     "ThemeTokens",
+    "UmpireRoomConfig",
     "WorldAsset",
+    "WorldProposalContent",
+    "WorldProposalMessage",
     "WorldState",
     "WorldStateMessage",
+    "WriteDraftRequest",
+    "WriteDraftResult",
     "check_world_state",
     "parse_world_state",
 ]

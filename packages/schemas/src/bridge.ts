@@ -4,15 +4,18 @@
 // role; the native runner (later) answers from its own XMPP connection. Only strings cross, so
 // the side that answers parses every request with these schemas as untrusted input.
 //
-// Version 1 holds the read operations (PY-2's read layer). Act and adjudicate (WP 6.4) add their
-// operations in a later version; `writeDraft` and `postProposal`, the spike's names, are kept for
-// them. The protocol is exported as JSON Schema (`docs/json-schema/bridge-protocol.schema.json`),
+// Version 1 held the read operations (PY-2's read layer). Version 2 (WP 6.4) keeps them as they
+// were and adds act and adjudicate: `sendMessage` and `sendTemplate` (only rooms the role can
+// write, the adjudication pause as in the composer, PLY-56), the admin's `readDraft` and
+// `writeDraft`, the White Force's `postProposal` (PD6, PY-8), and `subscribeMessages` and
+// `subscribePhase`, after which the runner sends the script events (`bridgeEventSchema`) while
+// its run lasts. The protocol is exported as JSON Schema (`docs/json-schema/bridge-protocol.schema.json`),
 // from which the SDK's Python models are generated, so the two sides cannot drift (PY-1).
 //
 // Imported as `@wrx/schemas/bridge`, not from the package index: the app's main bundle does not
 // carry it (PY-5).
 import { z } from 'zod'
-import { idSchema, isoDateTimeSchema, loginNameSchema } from './common.ts'
+import { LIMITS, idSchema, isoDateTimeSchema, loginNameSchema } from './common.ts'
 import {
   forceSchema,
   gameSetupSchema,
@@ -23,13 +26,14 @@ import {
 } from './documents.ts'
 import { chatMessageBodySchema } from './message.ts'
 import { templateMessageBodySchema } from './template.ts'
+import { worldProposalContentSchema, worldProposalMessageBodySchema } from './umpire.ts'
 import { worldStateMessageBodySchema, worldStateSchema } from './world.ts'
 
 /** The protocol's version; a change to an operation's shapes is a new version. */
-export const BRIDGE_PROTOCOL_VERSION = 1
+export const BRIDGE_PROTOCOL_VERSION = 2
 
-/** Every operation of version 1, the read layer (PY-2). */
-export const BRIDGE_OPS = Object.freeze([
+/** Version 1's operations, the read layer (PY-2); unchanged in version 2. */
+export const BRIDGE_READ_OPS = Object.freeze([
   'readContext',
   'readGameSetup',
   'readTurn',
@@ -40,6 +44,20 @@ export const BRIDGE_OPS = Object.freeze([
   'readWorldState',
   'readObjectives',
 ] as const)
+
+/** Version 2's operations: act and adjudicate (PY-2), and event subscriptions (WP 6.4). */
+export const BRIDGE_ACT_OPS = Object.freeze([
+  'sendMessage',
+  'sendTemplate',
+  'readDraft',
+  'writeDraft',
+  'postProposal',
+  'subscribeMessages',
+  'subscribePhase',
+] as const)
+
+/** Every operation of version 2. */
+export const BRIDGE_OPS = Object.freeze([...BRIDGE_READ_OPS, ...BRIDGE_ACT_OPS] as const)
 export type BridgeOp = (typeof BRIDGE_OPS)[number]
 
 /** Why an operation failed, so a script can tell a refusal from a fault. */
@@ -49,6 +67,7 @@ export const BRIDGE_ERROR_CODES = Object.freeze([
   'forbidden',
   'not-found',
   'unavailable',
+  'paused',
   'failed',
 ] as const)
 export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number]
@@ -56,6 +75,13 @@ export type BridgeErrorCode = (typeof BRIDGE_ERROR_CODES)[number]
 export const BRIDGE_LIMITS = Object.freeze({
   /** A request's JSON, in characters. Read requests are small. */
   requestChars: 10_000,
+  /**
+   * A request carrying a world state (`writeDraft`, `postProposal`), in characters: the 500 KB
+   * cap (PLY-53) with room for JSON escaping.
+   */
+  stateRequestChars: 1_000_000,
+  /** A stanza id in a send's result, in characters. */
+  stanzaIdChars: 256,
   /** Most messages in one page of `readRoomMessages`. */
   messagesPage: 500,
   /** Messages in a page when the request does not say. */
@@ -68,12 +94,12 @@ export const BRIDGE_LIMITS = Object.freeze({
   errorChars: 2_000,
 })
 
-export const bridgeOpSchema = z.enum(BRIDGE_OPS).describe('A bridge operation (protocol 1)')
+export const bridgeOpSchema = z.enum(BRIDGE_OPS).describe('A bridge operation (protocol 2)')
 
 export const bridgeErrorCodeSchema = z
   .enum(BRIDGE_ERROR_CODES)
   .describe(
-    '`unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `failed`: anything else',
+    '`unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `paused`: posting is paused for the role during adjudication (PLY-56); `failed`: anything else',
   )
 
 /** The request of an operation that takes none: `{}`. */
@@ -104,6 +130,43 @@ export const readRoomMessagesRequestSchema = z
 export const readObjectivesRequestSchema = z
   .strictObject({ forceId: idSchema.describe('The force whose objectives to read') })
   .describe("A force's objectives, if the role may read them (§3 rule 14)")
+
+export const sendMessageRequestSchema = z
+  .strictObject({
+    roomId: idSchema.describe('A room the role can write in'),
+    text: z.string().min(1).max(LIMITS.messageTextChars).describe('Plain text (PLY-14)'),
+  })
+  .describe('A chat message, sent as the role (PD2)')
+
+const templateContent = templateMessageBodySchema.shape.content.shape
+
+export const sendTemplateRequestSchema = z
+  .strictObject({
+    roomId: idSchema.describe('A room the role can write in that offers the template'),
+    templateId: templateContent.templateId,
+    values: templateContent.values,
+  })
+  .describe(
+    'A templated message (TPL-3), checked as the composer checks it before it is sent (TPL-6)',
+  )
+
+export const writeDraftRequestSchema = z
+  .strictObject({
+    state: worldStateSchema.describe(
+      'The world state the script wants in the draft: the draft it read (`readDraft`) or the published state, changed',
+    ),
+  })
+  .describe(
+    "The admin's world-state draft (PD7): applied when the run finishes cleanly (PD9), as the change from what the script read, on top of the draft as it is then",
+  )
+
+export const postProposalRequestSchema = z
+  .strictObject(worldProposalContentSchema.shape)
+  .describe('A world state proposed to the admin in the umpire room (PD6, PY-8)')
+
+export const subscribeMessagesRequestSchema = z
+  .strictObject({ roomId: idSchema.describe('A room the role is in') })
+  .describe('Events for each new message in the room, while the run lasts')
 
 export const contextSchema = z
   .object({
@@ -145,6 +208,7 @@ export const roomMessageSchema = z
         chatMessageBodySchema,
         templateMessageBodySchema,
         worldStateMessageBodySchema,
+        worldProposalMessageBodySchema,
       ])
       .describe('The body; messages whose body fails validation are left out, as clients do'),
   })
@@ -199,6 +263,35 @@ export const readWorldStateResultSchema = z
   })
   .describe('The latest published world state')
 
+export const sentResultSchema = z
+  .object({
+    stanzaId: z
+      .string()
+      .min(1)
+      .max(BRIDGE_LIMITS.stanzaIdChars)
+      .describe("The server's stanza id of the message sent"),
+  })
+  .describe('A message sent')
+
+export const readDraftResultSchema = z
+  .object({
+    state: worldStateSchema
+      .nullable()
+      .describe(
+        "The admin's world-state draft as it is now; with no draft held, the published state; null if neither",
+      ),
+    held: z
+      .boolean()
+      .describe('A draft is held (unpublished edits); false: `state` is the published one'),
+  })
+  .describe("The admin's world-state draft (ADM-45)")
+
+export const writeDraftResultSchema = z
+  .object({ assets: z.int().min(0).describe('Assets in the state written') })
+  .describe('The draft write is held until the run finishes cleanly (PD9)')
+
+export const subscribedResultSchema = z.object({}).describe('Subscribed until the run ends')
+
 export const readObjectivesResultSchema = z
   .object({
     objectives: objectivesSchema
@@ -218,6 +311,13 @@ export const BRIDGE_REQUESTS = Object.freeze({
   readRoomMessages: readRoomMessagesRequestSchema,
   readWorldState: emptyRequestSchema,
   readObjectives: readObjectivesRequestSchema,
+  sendMessage: sendMessageRequestSchema,
+  sendTemplate: sendTemplateRequestSchema,
+  readDraft: emptyRequestSchema,
+  writeDraft: writeDraftRequestSchema,
+  postProposal: postProposalRequestSchema,
+  subscribeMessages: subscribeMessagesRequestSchema,
+  subscribePhase: emptyRequestSchema,
 } satisfies Record<BridgeOp, z.ZodType>)
 
 /** Each operation's result: the `value` of its `ok` reply. */
@@ -231,6 +331,13 @@ export const BRIDGE_RESULTS = Object.freeze({
   readRoomMessages: readRoomMessagesResultSchema,
   readWorldState: readWorldStateResultSchema,
   readObjectives: readObjectivesResultSchema,
+  sendMessage: sentResultSchema,
+  sendTemplate: sentResultSchema,
+  readDraft: readDraftResultSchema,
+  writeDraft: writeDraftResultSchema,
+  postProposal: sentResultSchema,
+  subscribeMessages: subscribedResultSchema,
+  subscribePhase: subscribedResultSchema,
 } satisfies Record<BridgeOp, z.ZodType>)
 
 export type BridgeRequest<Op extends BridgeOp> = z.output<(typeof BRIDGE_REQUESTS)[Op]>
@@ -257,6 +364,26 @@ export const bridgeReplySchema = z
 
 export type BridgeReply = z.infer<typeof bridgeReplySchema>
 
+/**
+ * What the runner sends a script that subscribed (WP 6.4), as JSON text, while its run lasts: a
+ * new message in a room it subscribed to (`subscribeMessages`), or the turn state when it changes
+ * (`subscribePhase`). Messages are as `readRoomMessages` gives them, and only those that arrive
+ * after the subscription.
+ */
+export const messageEventSchema = z
+  .object({ type: z.literal('message'), message: roomMessageSchema })
+  .describe('A new message in a subscribed room')
+
+export const phaseEventSchema = z
+  .object({ type: z.literal('phase'), state: gameStateSchema })
+  .describe('The turn state, when its turn or phase changes')
+
+export const bridgeEventSchema = z
+  .discriminatedUnion('type', [messageEventSchema, phaseEventSchema])
+  .describe('An event for a subscribed script')
+
+export type BridgeEvent = z.infer<typeof bridgeEventSchema>
+
 export const bridgeRequestsSchema = z
   .object(BRIDGE_REQUESTS)
   .describe("Each operation's request, by operation name")
@@ -277,9 +404,10 @@ export const bridgeProtocolSchema = z
     requests: bridgeRequestsSchema,
     results: bridgeResultsSchema,
     reply: bridgeReplySchema,
+    event: bridgeEventSchema,
   })
   .describe(
-    'The bridge protocol between the Python SDK and its runner, version 1: a catalogue of its parts, not a message',
+    'The bridge protocol between the Python SDK and its runner, version 2: a catalogue of its parts, not a message',
   )
 
 export type ParsedBridgeCall =
@@ -296,7 +424,11 @@ function isOp(op: string): op is BridgeOp {
  */
 export function parseBridgeCall(op: string, payload: string): ParsedBridgeCall {
   if (!isOp(op)) return { ok: false, reply: bridgeError('unknown-op', 'not an operation') }
-  if (payload.length > BRIDGE_LIMITS.requestChars) {
+  const longest =
+    op === 'writeDraft' || op === 'postProposal'
+      ? BRIDGE_LIMITS.stateRequestChars
+      : BRIDGE_LIMITS.requestChars
+  if (payload.length > longest) {
     return { ok: false, reply: bridgeError('invalid-request', 'the request is too long') }
   }
   let json: unknown

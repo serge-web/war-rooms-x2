@@ -44,6 +44,16 @@ class UnavailableError(BridgeError):
     code = "unavailable"
 
 
+class PausedError(BridgeError):
+    """Posting is paused for the role during adjudication (`paused`, PLY-56).
+
+    Advisory, as in the composer: roles outside the White Force do not post while the game is in
+    adjudication. The White Force is exempt.
+    """
+
+    code = "paused"
+
+
 class ProtocolError(BridgeError):
     """The bridge's reply broke the protocol: not JSON, the wrong shape, or invalid data.
 
@@ -62,5 +72,6 @@ ERRORS: dict[str, type[BridgeError]] = {
         ForbiddenError,
         NotFoundError,
         UnavailableError,
+        PausedError,
     )
 }

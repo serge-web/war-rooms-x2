@@ -66,7 +66,9 @@ async function runnerFor(role: ScriptRole): Promise<Runner> {
     ...(role === 'admin'
       ? {
           draft: {
-            apply: (state: WorldState) => {
+            current: () => draft,
+            // The harness keeps the script's state as it wrote it (WP 6.4's merge is the panel's).
+            apply: ({ state }: { state: WorldState }) => {
               draft = state
               applied++
             },
@@ -108,7 +110,9 @@ const api = {
       createRunner({
         role,
         store,
-        ...(role === 'admin' ? { draft: { apply: () => undefined } } : {}),
+        ...(role === 'admin'
+          ? { draft: { current: () => undefined, apply: () => undefined } }
+          : {}),
       })
       return undefined
     } catch (error) {
