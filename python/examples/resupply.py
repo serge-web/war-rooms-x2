@@ -2,13 +2,12 @@
 # result in the world-state draft. Nothing is published: open the Map room and
 # use "Publish world state..." to review the change summary first.
 import wrx
-import wrx_draft
 
 game = wrx.Game()
 if not (await game.context()).isAdmin:
     raise SystemExit("Only the admin can write the world-state draft.")
 
-state = await game.world_state()
+state = await game.draft()  # the draft, with your edits; else the published state
 if state is None:
     raise SystemExit("No world state has been published yet.")
 
@@ -19,7 +18,7 @@ for asset_id, asset in list(state.assets.items()):
         refuelled.append(f"{asset.title} ({asset.fuel:.0f}% -> 100%)")
 
 if refuelled:
-    await wrx_draft.write_draft(state)
+    await game.write_draft(state)
     print(f"Refuelled {len(refuelled)} assets in the draft:")
     for line in refuelled:
         print(" -", line)

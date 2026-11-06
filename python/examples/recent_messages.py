@@ -14,6 +14,8 @@ for room in await game.rooms():
             text = body.content.text
         elif body.type == "template":
             text = f"[template card {body.content.templateId}]"
+        elif body.type == "world-proposal":
+            text = f"[proposal: {body.content.summary}]"
         else:
             text = f"[world state, turn {body.content.turn}]"
         print(f"{message.sentAt:%d %b %H:%M}  {who}: {text[:80]}")

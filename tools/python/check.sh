@@ -2,7 +2,8 @@
 # `pnpm check:python` (WP 6.1): the Python SDK's checks. Creates python/.venv on first use with
 # python3 (or $PYTHON), 3.12 or later, and installs python/requirements-dev.txt into it (again
 # whenever that file changes; this needs the package index once). Then: the JSON Schema export,
-# the SDK's test fixtures and its generated models are current, and pytest passes.
+# the SDK's test fixtures, its generated models and the sample-script bundle are current, and
+# pytest passes.
 #
 # Not part of `pnpm check`, so a machine without Python still runs that; CI runs both.
 set -eu
@@ -25,5 +26,6 @@ fi
 node "$root/packages/schemas/scripts/export-json-schema.ts" --check
 node "$root/packages/mock-server/scripts/python-fixtures.ts" --check
 "$venv/bin/python" "$root/tools/python/generate_models.py" --check
+"$venv/bin/python" "$root/python/examples/make_bundle.py" --check
 cd "$root/python"
 "$venv/bin/python" -m pytest
