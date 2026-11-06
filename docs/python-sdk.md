@@ -112,6 +112,16 @@ Error codes: `unknown-op`, `invalid-request`, `forbidden`, `not-found`, `unavail
 
 On the answering side, `parseBridgeCall(op, payload)` parses a call as untrusted input (or gives the error reply to send), `bridgeOk(op, value)` checks the result against its schema before replying, and `bridgeError(code, message)` builds an error reply.
 
+## In the browser (WP 6.2)
+
+The browser runner, `@wrx/py-runner` ([`packages/py-runner`](../packages/py-runner)), runs scripts for the admin and White Force roles only (PD4) in Pyodide 314.0.7 (CPython 3.14), in a Web Worker:
+
+- **The SDK** is this package: the build bundles `python/wrx/` into the worker, which writes it into Pyodide's file system, so `import wrx` and `wrx.Game()` work with no arguments. pydantic loads with the first script that names `wrx`; pandas when a script imports it or uses `to_frame`. Until WP 6.4 adds writes to the protocol, the admin's draft write is the runner's own module: `await wrx_draft.write_draft(state)`, applied only when the script finishes cleanly (PD9).
+- **The bridge** answers protocol 1 on the page from the logged-in session, through one adapter ([`sdk-ops.ts`](../packages/py-runner/src/sdk-ops.ts)) that re-exports `@wrx/schemas/bridge` and adds the role table and `writeDraft`.
+- **The sandbox.** Before any script runs, the worker removes the network, storage and messaging globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `indexedDB`, `caches`, `BroadcastChannel`, `importScripts`, `postMessage` and more); `js` holds timers only; and the worker runs under the page's Content-Security-Policy, which refuses `eval`, `new Function` and `import()` from another origin. `apps/web/e2e/py-runner.spec.ts` probes it on every e2e run.
+- **The files** are in the build at `py/` (`py/runner.js`, its worker, `py/pyodide/`): the core from the `pyodide` npm package and ten wheels from the Pyodide release, every one checked by sha256 against [`pyodide.lock.json`](../packages/py-runner/pyodide.lock.json). The build fetches the wheels once into `.cache/pyodide/` (CI caches it, keyed on the lock); an air-gapped build sets `WRX_PYODIDE_RELEASE` to an extracted release folder. No micropip: nothing else is installable. After a Pyodide upgrade or a change to the package sets, run `pnpm --filter @wrx/py-runner lock`.
+- **Hosting.** The client's policy has `'wasm-unsafe-eval'` in `script-src` and `blob:` in `worker-src` for every role (PR3), never `'unsafe-eval'`, and the server must send `.wasm` as `application/wasm` (`deploy/README.md`).
+
 ## Regenerating and checking
 
 | Command | Does |

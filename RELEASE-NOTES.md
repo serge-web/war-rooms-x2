@@ -63,6 +63,8 @@ The reference deployment is one container: the official ejabberd 26.09 image, pi
 3. On the host, `ops/offline-install.sh` checks the bundle, installs it, starts the server, creates the admin account and runs the deployment checks. Running it again with a newer bundle upgrades, after a backup.
 4. `ops/backup.sh` and `ops/restore.sh` save and restore everything on the server while it runs.
 
+**The Python runner in the build (after v1; SRD Annex C, WP 6.2).** Builds from Phase 6 on carry the browser runner for Python scripts in `py/` (about 23 MB: Pyodide and the packages the SDK uses), loaded only when a script runs; the script panel that uses it is not in this build yet. For it, the client's Content-Security-Policy, for every role, adds `'wasm-unsafe-eval'` to `script-src` and `blob:` to `worker-src` (`eval` stays refused), and a server must send `.wasm` as `application/wasm`. The reference configuration does both; another host updates its header and MIME types as `deploy/README.md` gives them.
+
 The full guide, with the checklist for the first install on real hardware, is `ops/README.md`. The real-hardware run is still to be done, and the certificate authority is chosen per install: the organisation's own CA or a small internal one, whichever suits each site's security model (product owner, Nov 4, 2026).
 
 ### Moving a game from an earlier build

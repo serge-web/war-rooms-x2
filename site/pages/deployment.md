@@ -22,6 +22,12 @@ The reference deployment is a single container: the official ejabberd 26.09 imag
 
 The same configuration file runs in CI, where every transport contract test, admin scenario and deployment check passes against it before a change is merged.
 
+## Python scripts in the browser
+
+After v1, the admin and White Force will be able to run Python scripts in the browser; the runner is built, and the script panel that uses it is next. The interpreter, Pyodide, and the Python packages it uses are part of the build, in its `py/` folder, about 23 MB, and load only when a script runs, never for other roles. Nothing is fetched from the internet at install or at run time.
+
+For this the client's Content-Security-Policy allows WebAssembly (`'wasm-unsafe-eval'` in `script-src`) and workers started from `blob:` URLs (`worker-src 'self' blob:`). It still refuses `eval`. A web server must send `.wasm` files as `application/wasm`; the reference configuration does.
+
 ## Offline install
 
 On a machine with network access, `make-bundle.sh` packs the image, the built client, the configuration and the scripts into one file, with a checksum for every file inside it. On the target host, `offline-install.sh` checks the bundle, loads the image and checks it is the pinned one, installs the files, starts the server, creates the admin account (asking for its password, which is never written down) and runs a set of checks from the outside. Running it again with a newer bundle is an upgrade: it backs up first and keeps all data.
