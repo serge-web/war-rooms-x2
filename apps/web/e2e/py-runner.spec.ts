@@ -451,21 +451,19 @@ test('Stop, the time limit and a failure leave the draft unchanged (PD9, PY-10)'
   expect(await page.evaluate(() => window.pyHarness.applied())).toBe(1)
 })
 
-// Phase 6 security review (WP 6.5), finding M1: runs share one interpreter until Stop, a time
-// limit or the panel closing ends the worker. Each run gets fresh globals, but modules, builtins
-// and anything else a script changes outlast it, so one script can alter what a later one does.
-// This records the behaviour the review rates; it changes if the owner chooses a fresh
-// interpreter per run.
-test('one run can change what a later run in the same worker does (review M1, recorded)', async ({
-  page,
-}) => {
+// Phase 6 security review (WP 6.5), finding M1, fixed by the owner's decision (Nov 6, 2026):
+// every run gets a fresh interpreter. The review's tamper probe, now a regression test: a first
+// run patches the SDK's `write_draft` and leaves a value in `builtins`; the next, ordinary run
+// sees neither, and its draft is its own change only.
+test('a run cannot see or patch what a previous run left (review M1, fixed)', async ({ page }) => {
   await open(page, 'header')
   const first = await run(
     page,
     'admin',
     [
-      'import builtins, wrx',
+      'import builtins, sys, wrx',
       'builtins.left_behind = "by the first run"',
+      'sys.modules["wrx_left_behind"] = wrx',
       'original = wrx.Game.write_draft',
       'async def tampered(self, state):',
       '    for asset in state.assets.values():',
@@ -476,14 +474,31 @@ test('one run can change what a later run in the same worker does (review M1, re
     ].join('\n'),
   )
   expect(first.status, first.error).toBe('finished')
-  const second = await run(page, 'admin', `${MOVE}\nprint(left_behind)`)
+  expect(first.output).toContain('patched')
+  const second = await run(
+    page,
+    'admin',
+    [
+      MOVE,
+      'import builtins, sys',
+      'print("left:", hasattr(builtins, "left_behind"), "wrx_left_behind" in sys.modules)',
+      'print("write_draft:", wrx.Game.write_draft.__name__)',
+    ].join('\n'),
+  )
   expect(second.status, second.error).toBe('finished')
-  expect(second.output).toContain('by the first run')
-  const draft = await page.evaluate(() => window.pyHarness.draft())
-  expect(Object.values(draft?.assets ?? {}).every((a) => a.health === 1)).toBe(true)
-  // A new worker (after Stop) starts clean.
-  await page.evaluate(() => window.pyHarness.stop())
-  const clean = await run(page, 'admin', 'import builtins\nprint(hasattr(builtins, "left_behind"))')
-  expect(clean.status, clean.error).toBe('finished')
-  expect(clean.output).toContain('False')
+  expect(second.output).toContain('left: False False')
+  expect(second.output).toContain('write_draft: write_draft')
+  const [draft, published] = await page.evaluate(async () => [
+    window.pyHarness.draft(),
+    await window.pyHarness.published(),
+  ])
+  // Only the moved asset changed; every asset keeps its published health.
+  const title = /moved (.+)/.exec(second.output)?.[1]?.trim()
+  expect(Object.keys(draft?.assets ?? {})).toHaveLength(Object.keys(published?.assets ?? {}).length)
+  for (const asset of Object.values(draft?.assets ?? {})) {
+    const before = published?.assets[asset.id]
+    expect(asset.health, asset.title).toBe(before?.health)
+    if (asset.title !== title) expect(asset.lat, asset.title).toBe(before?.lat)
+  }
+  expect(Object.values(draft?.assets ?? {}).every((a) => a.health === 1)).toBe(false)
 })

@@ -4,6 +4,12 @@
 // says the script has started (`started`, after its packages load), and the worker's start and
 // the imports are bounded by the start limit instead (WP 6.4). A run's draft writes are applied only when it finishes well (PD9); a
 // stopped, timed-out or failed run leaves the draft as it was.
+//
+// Every run gets a fresh interpreter (Phase 6 security review M1, the owner's decision of
+// Nov 6, 2026): a worker runs one script at most and is terminated when that run ends, however
+// it ends, so nothing a script leaves behind (a patched module, a value in `builtins`) reaches
+// the next run. With `prewarm` on (the default), the next worker starts in the background as
+// soon as a run ends, so a run asked for a few seconds later finds it ready.
 import type { WorldState } from '@wrx/schemas'
 import type { DraftWrite, ScriptBridge } from './bridge.ts'
 import { fromWorkerSchema } from './protocol.ts'
@@ -18,6 +24,8 @@ export interface StartOptions {
   readonly packages: readonly string[]
   /** Give up on a worker that is not ready by then. */
   readonly timeoutMs: number
+  /** Import the SDK (and so pydantic) in each new worker before it is ready; default false. */
+  readonly preimportSdk?: boolean
 }
 
 export type RunStatus = 'finished' | 'failed' | 'stopped' | 'timed-out'
@@ -34,6 +42,11 @@ export interface RunOutcome {
   /** What the script printed, stdout and stderr together (the last 200,000 characters). */
   readonly output: string
   readonly ms: number
+  /**
+   * ms on the page from asking for the run to its script starting: waiting for a fresh worker
+   * (when none was ready) and loading the packages the script imports. Absent if it never started.
+   */
+  readonly startMs?: number
   /** ms of the run spent loading the shipped packages the script imports (PY-3). */
   readonly importsMs?: number
   readonly wasmMemory?: number
@@ -63,6 +76,10 @@ interface ActiveRun {
   readonly t0: number
   /** Whether the script has started (`started` came), so its time limit runs. */
   started: boolean
+  /** ms from asking for the run to `started`, on the page's clock. */
+  startMs: number | undefined
+  /** The worker the run was sent to; it runs nothing else and ends with the run (M1). */
+  worker: Worker | undefined
   readonly onStarted: () => void
   readonly onOutput: ((line: OutputLine) => void) | undefined
   readonly finish: (outcome: RunOutcome) => void
@@ -76,10 +93,20 @@ export class ScriptRunner {
   private abortStart: (() => void) | undefined
   /** The start limit of the last `start`: also bounds a run's wait for its script to start. */
   private startTimeoutMs = 60_000
+  /** The options of the last `start`, for the worker started after a run ends. */
+  private startOptions: StartOptions | undefined
+  private closed = false
   /** Messages from the worker that failed validation, newest last (bounded). */
   readonly rejected: unknown[] = []
+  /** Start the next run's worker as soon as a run ends (M1); otherwise when the next run asks. */
+  readonly prewarm: boolean
 
-  constructor(private readonly applyDraft: (write: DraftWrite) => void) {}
+  constructor(
+    private readonly applyDraft: (write: DraftWrite) => void,
+    options: { readonly prewarm?: boolean } = {},
+  ) {
+    this.prewarm = options.prewarm ?? true
+  }
 
   get running(): boolean {
     return this.active !== undefined
@@ -91,7 +118,9 @@ export class ScriptRunner {
 
   /** Starts a worker, or returns the one starting or started. */
   start(options: StartOptions): Promise<StartResult> {
+    if (this.closed) return Promise.reject(new Error('the runner was disposed'))
     if (this.ready !== undefined) return this.ready
+    this.startOptions = options
     this.startTimeoutMs = options.timeoutMs
     const t0 = performance.now()
     const blobUrl = bootstrap(options.workerUrl)
@@ -132,6 +161,7 @@ export class ScriptRunner {
             kind: 'init',
             indexURL: options.indexURL,
             packages: options.packages,
+            preimportSdk: options.preimportSdk ?? false,
           }
           worker.postMessage(init)
         } else if (message.kind === 'ready') {
@@ -156,6 +186,7 @@ export class ScriptRunner {
     if (message.kind === 'started') {
       if (!run.started) {
         run.started = true
+        run.startMs = performance.now() - run.t0
         run.onStarted()
       }
     } else if (message.kind === 'output') {
@@ -188,6 +219,7 @@ export class ScriptRunner {
         ...(message.error === undefined ? {} : { error: message.error }),
         output: run.output.join('\n'),
         ms: message.ms,
+        ...(run.startMs === undefined ? {} : { startMs: run.startMs }),
         ...(message.importsMs === undefined ? {} : { importsMs: message.importsMs }),
         wasmMemory: message.wasmMemory,
         ...(applied === undefined ? {} : { applied }),
@@ -224,6 +256,8 @@ export class ScriptRunner {
         outputChars: 0,
         t0: performance.now(),
         started: false,
+        startMs: undefined,
+        worker: undefined,
         onStarted: () => {
           clearTimeout(timer)
           timer = setTimeout(() => {
@@ -236,6 +270,7 @@ export class ScriptRunner {
           // Its subscriptions stop and the rooms it held are let go (WP 6.4).
           bridge.endRun(runId)
           if (this.active === run) this.active = undefined
+          this.retire(run.worker)
           resolve(outcome)
         },
       }
@@ -251,6 +286,8 @@ export class ScriptRunner {
         () => {
           const worker = this.worker
           if (this.active !== run || worker === undefined) return // stopped meanwhile
+          // A worker that ran a script never runs another (M1): `retire` ends it with the run.
+          run.worker = worker
           const message: RunMessage = { kind: 'run', runId, code }
           worker.postMessage(message)
         },
@@ -274,7 +311,29 @@ export class ScriptRunner {
       ...(error === undefined ? {} : { error }),
       output: run.output.join('\n'),
       ms: performance.now() - run.t0,
+      ...(run.startMs === undefined ? {} : { startMs: run.startMs }),
     })
+  }
+
+  /**
+   * Ends the worker a run used, so the next run gets a fresh interpreter (M1), and starts that
+   * one now when `prewarm` is on. A run that never reached a worker (it failed or was stopped
+   * while the worker started) leaves the worker alone, since no script ran in it.
+   */
+  private retire(worker: Worker | undefined): void {
+    if (worker !== undefined && worker === this.worker) this.terminate()
+    if (worker === undefined || !this.prewarm || this.closed) return
+    const options = this.startOptions
+    if (options === undefined || this.ready !== undefined) return
+    // A failed background start is reported by the next run, which starts again.
+    this.start(options).catch(() => undefined)
+  }
+
+  /** Ends the worker for good: nothing starts again. */
+  dispose(): void {
+    this.closed = true
+    this.stop()
+    this.terminate()
   }
 
   /** Ends the worker; the next start begins a new one. */

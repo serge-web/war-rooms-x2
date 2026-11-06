@@ -227,11 +227,20 @@ function serve(): void {
     })
     installSdk(api)
     lockdown(message.indexURL)
+    // The worker's own step, after the lockdown and before any script: a fresh interpreter for
+    // each run (M1) then starts with the SDK imported, as the previous run's interpreter had it.
+    if (message.preimportSdk) {
+      await api.loadPackage([...SDK_PACKAGES], { messageCallback: () => undefined })
+      const sdk = api.pyimport('wrx') as { destroy?: () => void }
+      sdk.destroy?.()
+    }
+    const sdkDone = performance.now()
     post({
       kind: 'ready',
       timings: {
         loadPyodide: loaded - started,
         loadPackages: packagesDone - loaded,
+        importSdk: sdkDone - packagesDone,
         wasmMemory: wasmMemory(pyodide),
       },
     })

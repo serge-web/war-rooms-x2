@@ -465,6 +465,9 @@ describe('publishing without review (PD7, PY-9, PR2)', () => {
       name: 'Publish without review for Untitled script?',
     })
     expect(ask.textContent).toContain('It changes the live map without review')
+    // The owner, Nov 6, 2026 (review M4, accepted): it publishes the whole draft, hand edits too.
+    expect(ask.textContent).toContain('publish the whole draft')
+    expect(ask.textContent).toContain('hand edits')
     expect((box as HTMLInputElement).checked).toBe(false)
     fireEvent.click(within(ask).getByRole('button', { name: 'Turn on' }))
     await waitFor(() => {
