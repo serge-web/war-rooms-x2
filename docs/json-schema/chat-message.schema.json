@@ -13,6 +13,17 @@
       "const": 1
     },
     "content": {
+      "$ref": "#/$defs/ChatContent"
+    }
+  },
+  "required": [
+    "type",
+    "schemaVersion",
+    "content"
+  ],
+  "description": "A chat room message",
+  "$defs": {
+    "ChatContent": {
       "type": "object",
       "properties": {
         "text": {
@@ -26,11 +37,5 @@
         "text"
       ]
     }
-  },
-  "required": [
-    "type",
-    "schemaVersion",
-    "content"
-  ],
-  "description": "A chat room message"
+  }
 }

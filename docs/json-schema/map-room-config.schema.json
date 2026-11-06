@@ -10,6 +10,21 @@
     },
     "centre": {
       "description": "Where the map opens; unset, it fits the assets",
+      "$ref": "#/$defs/LatLon"
+    },
+    "zoom": {
+      "description": "The zoom it opens at; unset, it fits the assets",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 22
+    }
+  },
+  "required": [
+    "schemaVersion"
+  ],
+  "description": "Map room config: the opening view",
+  "$defs": {
+    "LatLon": {
       "type": "object",
       "properties": {
         "lat": {
@@ -26,17 +41,8 @@
       "required": [
         "lat",
         "lon"
-      ]
-    },
-    "zoom": {
-      "description": "The zoom it opens at; unset, it fits the assets",
-      "type": "integer",
-      "minimum": 0,
-      "maximum": 22
+      ],
+      "description": "A point, WGS 84 decimal degrees"
     }
-  },
-  "required": [
-    "schemaVersion"
-  ],
-  "description": "Map room config: the opening view"
+  }
 }

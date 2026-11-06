@@ -13,6 +13,17 @@
       "const": 1
     },
     "content": {
+      "$ref": "#/$defs/TemplateContent"
+    }
+  },
+  "required": [
+    "type",
+    "schemaVersion",
+    "content"
+  ],
+  "description": "A templated message",
+  "$defs": {
+    "TemplateContent": {
       "type": "object",
       "properties": {
         "templateId": {
@@ -50,11 +61,5 @@
         "values"
       ]
     }
-  },
-  "required": [
-    "type",
-    "schemaVersion",
-    "content"
-  ],
-  "description": "A templated message"
+  }
 }

@@ -801,18 +801,7 @@
           "const": 1
         },
         "content": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 8000,
-              "description": "Plain text; rendered without HTML (PLY-14)"
-            }
-          },
-          "required": [
-            "text"
-          ]
+          "$ref": "#/$defs/ChatContent"
         }
       },
       "required": [
@@ -821,6 +810,20 @@
         "content"
       ],
       "description": "A chat room message"
+    },
+    "ChatContent": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Plain text; rendered without HTML (PLY-14)"
+        }
+      },
+      "required": [
+        "text"
+      ]
     },
     "TemplateMessage": {
       "type": "object",
@@ -834,42 +837,7 @@
           "const": 1
         },
         "content": {
-          "type": "object",
-          "properties": {
-            "templateId": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-              "description": "The template used"
-            },
-            "values": {
-              "type": "object",
-              "propertyNames": {
-                "type": "string",
-                "description": "A template field name",
-                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
-              },
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "maxLength": 8000
-                  },
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "boolean"
-                  }
-                ]
-              },
-              "description": "Field values by field name; pickers hold GUIDs, never names (TPL-8)",
-              "maxProperties": 100
-            }
-          },
-          "required": [
-            "templateId",
-            "values"
-          ]
+          "$ref": "#/$defs/TemplateContent"
         }
       },
       "required": [
@@ -878,6 +846,44 @@
         "content"
       ],
       "description": "A templated message"
+    },
+    "TemplateContent": {
+      "type": "object",
+      "properties": {
+        "templateId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The template used"
+        },
+        "values": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "description": "A template field name",
+            "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8000
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "description": "Field values by field name; pickers hold GUIDs, never names (TPL-8)",
+          "maxProperties": 100
+        }
+      },
+      "required": [
+        "templateId",
+        "values"
+      ]
     },
     "WorldStateMessage": {
       "type": "object",

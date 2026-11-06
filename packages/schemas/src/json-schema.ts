@@ -37,9 +37,10 @@ import {
   roomSchema,
 } from './documents.ts'
 import { chatMessageBodySchema } from './message.ts'
-import { chatRoomConfigSchema, templateMessageBodySchema } from './template.ts'
+import { chatRoomConfigSchema, templateEntrySchema, templateMessageBodySchema } from './template.ts'
 import { themeSchema, themeTokensSchema } from './theme.ts'
 import {
+  latLonSchema,
   mapRoomConfigSchema,
   worldAssetSchema,
   worldStateMessageBodySchema,
@@ -120,6 +121,10 @@ function definitionNames(): Map<z.core.$ZodType, string> {
     [themeSchema, 'Theme'],
     [themeTokensSchema, 'ThemeTokens'],
     [participantSchema, 'Participant'],
+    [chatMessageBodySchema.shape.content, 'ChatContent'],
+    [templateMessageBodySchema.shape.content, 'TemplateContent'],
+    [templateEntrySchema, 'TemplateEntry'],
+    [latLonSchema, 'LatLon'],
     [bridgeOpSchema, 'BridgeOp'],
     [bridgeErrorCodeSchema, 'BridgeErrorCode'],
     [bridgeRequestsSchema, 'BridgeRequests'],

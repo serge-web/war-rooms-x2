@@ -15,36 +15,7 @@
     "templates": {
       "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "force",
-              "role"
-            ]
-          },
-          "id": {
-            "type": "string",
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-            "description": "Force or role GUID"
-          },
-          "templateIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-              "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
-            },
-            "description": "Templates this force or role may use here; a role entry adds to its force’s"
-          }
-        },
-        "required": [
-          "kind",
-          "id",
-          "templateIds"
-        ],
-        "description": "Templates a force or role may use in a room (TD4, TPL-2)"
+        "$ref": "#/$defs/TemplateEntry"
       },
       "description": "Template entries per force or role (TD4)"
     }
@@ -54,5 +25,39 @@
     "freeText",
     "templates"
   ],
-  "description": "Chat room config: free text and templates"
+  "description": "Chat room config: free text and templates",
+  "$defs": {
+    "TemplateEntry": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "force",
+            "role"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Force or role GUID"
+        },
+        "templateIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+          },
+          "description": "Templates this force or role may use here; a role entry adds to its force’s"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "templateIds"
+      ],
+      "description": "Templates a force or role may use in a room (TD4, TPL-2)"
+    }
+  }
 }
