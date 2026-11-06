@@ -93,8 +93,9 @@ export class ScriptRunner {
       }
       const fail = (error: Error) => {
         settle()
-        if (this.worker === worker) this.terminate()
+        // The real reason goes to the caller, not the abort's "stopped while starting".
         reject(error)
+        if (this.worker === worker) this.terminate()
       }
       this.abortStart = () => {
         settle()
