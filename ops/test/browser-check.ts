@@ -104,7 +104,7 @@ try {
     .first()
     .waitFor({ timeout: 20_000 })
   step(true, 'the welcome page answered (anonymous read over wss://)')
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in' }).click()
   await page.getByLabel(/^Logged in as Umpire/).waitFor({ timeout: 20_000 })
