@@ -60,14 +60,17 @@ describe(`deployment checks (${base.host})`, () => {
       const csp = response.headers.get('content-security-policy') ?? ''
       for (const directive of [
         "default-src 'self'",
-        "script-src 'self'",
+        // One policy for every role (SRD Annex C PR3): the Python runner's WebAssembly and its
+        // blob: worker, never eval.
+        "script-src 'self' 'wasm-unsafe-eval';",
+        "worker-src 'self' blob:;",
         "connect-src 'self'",
         "object-src 'none'",
         "frame-ancestors 'none'",
       ]) {
         expect(csp).toContain(directive)
       }
-      expect(csp).not.toContain('unsafe-eval')
+      expect(csp).not.toMatch(/(^|\s)'unsafe-eval'/)
       expect(response.headers.get('x-content-type-options')).toBe('nosniff')
       expect(response.headers.get('referrer-policy')).toBe('no-referrer')
     })
@@ -99,6 +102,27 @@ describe(`deployment checks (${base.host})`, () => {
       expect(js.status).toBe(200)
       expect(js.headers.get('content-type')).toBe('text/javascript')
     })
+
+    it.runIf(expectClient)(
+      'serves the Python runner and Pyodide, .wasm as application/wasm',
+      async () => {
+        // Pyodide compiles its interpreter with WebAssembly.instantiateStreaming, which refuses
+        // any other type (WP 6.2, Annex C PR3).
+        const types: Record<string, string> = {
+          'py/runner.js': 'text/javascript',
+          'py/pyodide/pyodide.mjs': 'text/javascript',
+          'py/pyodide/pyodide.asm.wasm': 'application/wasm',
+          'py/pyodide/python_stdlib.zip': 'application/zip',
+          'py/pyodide/pyodide-lock.json': 'application/json',
+        }
+        for (const [path, type] of Object.entries(types)) {
+          const response = await get(`/${path}`)
+          expect(response.status, path).toBe(200)
+          expect(response.headers.get('content-type'), path).toBe(type)
+          await response.arrayBuffer()
+        }
+      },
+    )
   })
 
   describe('TLS (NFR-2)', () => {

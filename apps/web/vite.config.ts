@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { pyRunnerPlugin } from '@wrx/py-runner/packaging'
 import { DEMO_TILE_ORIGIN } from './src/tiles.ts'
 
 /**
@@ -59,6 +60,15 @@ function rjsfPasswordFormat(): Plugin {
  * `'none'` is the policy with no tile host at all: the reference deployment's header, whose
  * install configures no tiles (plan/reviews/phase-5-security-notes.md).
  *
+ * The Python runner (SRD Annex C PR3, decided Nov 6, 2026; WP 6.2): one policy for every role.
+ * `script-src` adds `'wasm-unsafe-eval'`, which lets the page and its workers compile
+ * WebAssembly (Pyodide's interpreter) and nothing else: `eval` and `new Function` stay refused,
+ * and `'unsafe-eval'` must never appear. `worker-src` adds `blob:` for the runner's one-line
+ * bootstrap, which makes its worker take this policy even where it is only a `<meta>` tag (a
+ * worker loaded from its own URL takes the policy of its own response, which a static host
+ * sends without one). Only the build's own code creates `blob:` URLs: there is no inline
+ * script or eval to make one. Servers send `.wasm` as `application/wasm`.
+ *
  * Only in `vite build`: the dev server needs an inline React refresh preamble and its own
  * WebSocket.
  */
@@ -78,8 +88,8 @@ export function contentSecurityPolicy(
     : "'self'"
   return [
     "default-src 'self'",
-    "script-src 'self'",
-    "worker-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
+    "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline'",
     `img-src ${imageSources(tiles)}`,
     "font-src 'self'",
@@ -149,6 +159,8 @@ export default defineConfig(({ mode }) => {
       rjsfPasswordFormat(),
       cspMeta(server),
       popoutImageSources(server),
+      // The Python runner and Pyodide, into py/ beside the app; the app imports neither (PY-5).
+      pyRunnerPlugin(),
     ],
     // Relative asset URLs, so one build runs under any base path: PR previews, the demo and
     // snapshots on GitHub Pages, or a customer's static host (DOC-11, NFR-8).

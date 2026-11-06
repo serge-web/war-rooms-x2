@@ -91,6 +91,27 @@ describe('the reference ejabberd.yml (NFR-2, NFR-22)', () => {
     expect(live).toMatch(/Referrer-Policy: no-referrer/)
   })
 
+  it('lets the Python runner compile WebAssembly, never eval (Annex C PR3, WP 6.2)', () => {
+    const header = /Content-Security-Policy: "([^"]+)"/.exec(live)?.[1] ?? ''
+    const directives = new Map(
+      header.split(';').map((d) => {
+        const [name = '', ...values] = d.trim().split(/\s+/)
+        return [name, values] as const
+      }),
+    )
+    expect(directives.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'"])
+    expect(directives.get('worker-src')).toEqual(["'self'", 'blob:'])
+    for (const values of directives.values()) expect(values).not.toContain("'unsafe-eval'")
+  })
+
+  it('serves .wasm as application/wasm, which streaming compilation needs (PR3)', () => {
+    const types = /content_types:\n((?:\s{6,}\S.*\n)+)/.exec(live)?.[1] ?? ''
+    expect(types).toMatch(/^\s+\.wasm: application\/wasm$/m)
+    expect(types).toMatch(/^\s+\.whl: application\/zip$/m)
+    expect(types).toMatch(/^\s+\.zip: application\/zip$/m)
+    expect(types).toMatch(/^\s+\.mjs: text\/javascript$/m)
+  })
+
   it('lists rooms in pages the transport can page through (review F10)', () => {
     const limit = Number(/max_rooms_discoitems: (\d+)/.exec(live)?.[1])
     const page = Number(

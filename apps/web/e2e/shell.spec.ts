@@ -39,8 +39,10 @@ test('the build runs under its Content-Security-Policy, with no violation (F7)',
   const csp = await page
     .locator('meta[http-equiv="Content-Security-Policy"]')
     .getAttribute('content')
-  expect(csp).toContain("script-src 'self'")
-  expect(csp).not.toContain('unsafe-eval')
+  // One policy for every role (Annex C PR3): WebAssembly for the Python runner, never eval.
+  expect(csp).toContain("script-src 'self' 'wasm-unsafe-eval';")
+  expect(csp).toContain("worker-src 'self' blob:;")
+  expect(csp).not.toMatch(/(^|\s)'unsafe-eval'/)
   expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/)
   await expect(page.getByRole('heading', { name: 'Exercise Northern Gate' })).toBeVisible()
   await page.getByLabel('Login name').fill('blue-co')
