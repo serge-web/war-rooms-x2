@@ -33,7 +33,7 @@
   },
   {
     "name": "multi-client-column-tab",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "multi-client-two-panes",
@@ -41,7 +41,7 @@
   },
   {
     "name": "multi-client-view",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-architecture",
@@ -89,7 +89,7 @@
   },
   {
     "name": "player-objectives-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-shell",
@@ -105,7 +105,7 @@
   },
   {
     "name": "player-workspace",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "template-card",
@@ -116,11 +116,15 @@
     "status": "unchanged"
   },
   {
+    "name": "umpire-scripts",
+    "status": "new"
+  },
+  {
     "name": "umpire-world-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "umpire-world-summary",
-    "status": "unchanged"
+    "status": "changed"
   }
 ]
