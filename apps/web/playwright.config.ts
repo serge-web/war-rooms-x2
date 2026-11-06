@@ -14,7 +14,7 @@ const mockPort = Number(process.env.WRX_E2E_MOCK_PORT ?? 4173)
 const serverPort = Number(process.env.WRX_E2E_SERVER_PORT ?? 4175)
 /**
  * The Python runner's server (e2e/py-runner/serve.ts, WP 6.2): the mock build under its policy
- * as a header or a <meta> tag, and a canary origin on the next port. WRX_E2E_PY_PORT moves it.
+ * as a header or a <meta> tag, and a canary origin on a free port. WRX_E2E_PY_PORT moves it.
  */
 const pyPort = Number(process.env.WRX_E2E_PY_PORT ?? mockPort + 6)
 

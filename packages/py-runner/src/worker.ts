@@ -218,6 +218,8 @@ function serve(): void {
       ]
       if (needs.length > 0) await api.loadPackage(needs, { messageCallback: () => undefined })
       const imports = performance.now() - t0
+      // The time limit starts now, on the page (PY-10): start-up and imports are not the script's.
+      post({ kind: 'started', runId: message.runId })
       await api.runPythonAsync(message.code, { globals: globals as never })
       post({
         kind: 'done',
