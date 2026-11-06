@@ -5,11 +5,17 @@
 import '@wrx/schemas/jitless'
 import { createSessionStore } from '@wrx/domain'
 import type { SessionStore } from '@wrx/domain'
-import { MockServer, MockTransport, demoPassword, demoState } from '@wrx/mock-server'
+import {
+  MockServer,
+  MockTransport,
+  demoPassword,
+  demoState,
+  scaleWorldState,
+} from '@wrx/mock-server'
 import { loadRunner } from '@wrx/py-runner/load'
 import type { RunOutcome, Runner, ScriptRole, StartResult } from '@wrx/py-runner'
 import type { WorldState } from '@wrx/schemas'
-import { ROOM } from '@wrx/schemas/fixtures'
+import { ROOM, demoDesign } from '@wrx/schemas/fixtures'
 
 const silent = { debug: () => undefined, warn: () => undefined }
 const LOGINS = { admin: 'admin', 'white-force': 'white-cell', player: 'blue-co' } as const
@@ -102,6 +108,47 @@ const api = {
     draft = undefined
   },
   published: async () => (await game).admin.worldState(ROOM.map).data?.state,
+  /**
+   * The admin publishes a world state of `count` assets (the Phase 5 scale fixture's), and every
+   * session sees it: for the performance spec (WP 6.5). Returns its size as JSON, in characters.
+   */
+  publishScale: async (count: number): Promise<number> => {
+    const stores = await game
+    const state = scaleWorldState(demoDesign(), count)
+    const sent = await stores.admin.sendWorldState(ROOM.map, state)
+    if (!sent.ok) throw new Error(sent.error.message)
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        const seen = Object.values(stores).every(
+          (s) => Object.keys(s.worldState(ROOM.map).data?.state?.assets ?? {}).length === count,
+        )
+        if (seen) resolve()
+      }
+      for (const store of Object.values(stores)) store.subscribe(check)
+      check()
+    })
+    return JSON.stringify(state).length
+  },
+  /** Blue CO posts `count` messages to Blue HQ, one after another; resolves when all are sent. */
+  playerPosts: async (count: number, prefix: string): Promise<number> => {
+    const { player } = await game
+    const release = player.acquireRoom(ROOM.blueHq)
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (player.roomView(ROOM.blueHq).data?.status === 'joined') resolve()
+      }
+      player.subscribe(check)
+      check()
+    })
+    const t0 = performance.now()
+    for (let i = 0; i < count; i++) {
+      const sent = await player.sendMessage(ROOM.blueHq, `${prefix} ${i}`)
+      if (!sent.ok) throw new Error(sent.error.message)
+    }
+    const ms = performance.now() - t0
+    release()
+    return ms
+  },
   /** Whether a runner may be made for a session as a role: PD4 refuses everyone else. */
   refused: async (login: Login, role: ScriptRole): Promise<string | undefined> => {
     const { createRunner } = await runnerModule

@@ -76,7 +76,7 @@ function browserProjects(browser: BrowserName): Project[] {
   const projects: Project[] = [
     {
       name: `mock-build${suffix}`,
-      testIgnore: /(server|ejabberd|py-runner)\.spec\.ts/,
+      testIgnore: /(server|ejabberd|py-runner|py-runner-perf)\.spec\.ts/,
       use: { ...device, baseURL: `http://localhost:${mockPort}/`, launchOptions: { args } },
     },
     {
@@ -88,7 +88,7 @@ function browserProjects(browser: BrowserName): Project[] {
       // The Python runner against the mock build (WP 6.2): its sandbox probes need their own
       // server, which sends the policy as a header or not at all.
       name: `py-runner${suffix}`,
-      testMatch: /py-runner\.spec\.ts/,
+      testMatch: /py-runner(-perf)?\.spec\.ts/,
       use: { ...device, baseURL: `http://localhost:${pyPort}/`, launchOptions: { args } },
     },
   ]
