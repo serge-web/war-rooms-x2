@@ -1,0 +1,126 @@
+[
+  {
+    "name": "admin-design-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-preview-as-role",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-publish-plan",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-room-templates",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-template-builder",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-template-raw",
+    "status": "unchanged"
+  },
+  {
+    "name": "admin-theme-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "app-shell",
+    "status": "unchanged"
+  },
+  {
+    "name": "multi-client-column-tab",
+    "status": "unchanged"
+  },
+  {
+    "name": "multi-client-two-panes",
+    "status": "unchanged"
+  },
+  {
+    "name": "multi-client-view",
+    "status": "unchanged"
+  },
+  {
+    "name": "page-architecture",
+    "status": "unchanged"
+  },
+  {
+    "name": "page-background",
+    "status": "unchanged"
+  },
+  {
+    "name": "page-blog",
+    "status": "unchanged"
+  },
+  {
+    "name": "page-data-dictionary",
+    "status": "changed"
+  },
+  {
+    "name": "page-home",
+    "status": "unchanged"
+  },
+  {
+    "name": "page-technical",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-chat",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-chat-collapsed",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-column",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-map",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-map-table",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-objectives-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-shell",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-turn-adjudication",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-welcome",
+    "status": "unchanged"
+  },
+  {
+    "name": "player-workspace",
+    "status": "unchanged"
+  },
+  {
+    "name": "template-card",
+    "status": "unchanged"
+  },
+  {
+    "name": "template-composer",
+    "status": "unchanged"
+  },
+  {
+    "name": "umpire-world-editor",
+    "status": "unchanged"
+  },
+  {
+    "name": "umpire-world-summary",
+    "status": "unchanged"
+  }
+]
