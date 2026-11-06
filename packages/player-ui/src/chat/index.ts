@@ -13,7 +13,7 @@ export {
   refusalText,
   templateRefusal,
 } from './chat-panel.tsx'
-export type { ChatPanelCoreProps } from './chat-panel.tsx'
+export type { ChatPanelCoreProps, ProposalActions } from './chat-panel.tsx'
 export {
   ChatComposerCore,
   NO_TEMPLATES_REASON,
@@ -41,6 +41,7 @@ export type {
   ChatMessage,
   ChatRow,
   MessageSize,
+  ProposalView,
   TextPart,
   TimeFormat,
 } from './format.ts'

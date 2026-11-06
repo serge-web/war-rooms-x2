@@ -221,3 +221,32 @@
 .wrx-scripts__quiet {
   color: var(--wrx-muted);
 }
+
+/* Publish without review (PD7, PY-9; WP 6.4): the opt-in and the record. */
+.wrx-scripts__auto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+}
+
+.wrx-scripts__auto > .wrx-scripts__hint,
+.wrx-scripts__auto > .wrx-scripts__inline {
+  flex-basis: 100%;
+}
+
+.wrx-scripts__hint {
+  margin: 0;
+  color: var(--wrx-muted);
+  font-size: 0.875rem;
+}
+
+.wrx-scripts__record {
+  margin-top: 0.75rem;
+}
+
+.wrx-scripts__records {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}

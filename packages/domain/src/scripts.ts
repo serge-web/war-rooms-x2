@@ -42,8 +42,9 @@ export const scriptSettingsSchema = z
     /** The run's time limit (PY-10). */
     timeLimitSeconds: z.number().int().min(1).max(SCRIPT_LIMITS.maxSeconds),
     /**
-     * Reserved for WP 6.4 (PD7, PY-9): publish this script's world state without review. Kept
-     * as stored, never acted on yet, and off for every new or imported script (PR2).
+     * The admin's opt-in (PD7, PY-9, WP 6.4): a clean run that wrote the draft publishes it at
+     * once, without review. Off for every new, imported or duplicated script (PR2); turned on
+     * only after a confirmation that it changes the live map without review.
      */
     autoPublish: z.boolean(),
   })
@@ -257,6 +258,8 @@ export function duplicateScript(
     ...found.value,
     id: newId,
     name: uniqueScriptName(doc.scripts, `${found.value.name} (copy)`),
+    // A copy never publishes without review until the admin confirms it again (PR2).
+    settings: { ...found.value.settings, autoPublish: false },
     updatedAt: now,
   }
   const at = doc.scripts.indexOf(found.value) + 1
@@ -497,4 +500,104 @@ export async function saveScripts(
     }
   }
   return { status: 'saved', scripts: written }
+}
+
+// ---- The record of publishes without review (PD7, PY-9, PR2; WP 6.4) -------------------------
+
+/**
+ * The admin's record of each world state a script published without review: its own key in the
+ * admin account's private storage, so it follows the account, like the scripts. Newest last,
+ * the last `SCRIPT_PUBLISH_LIMITS.records` kept.
+ */
+export const SCRIPT_PUBLISHES_KEY = 'wrx-script-publishes'
+export const SCRIPT_PUBLISHES_FORMAT = 'wrx-script-publishes'
+
+export const SCRIPT_PUBLISH_LIMITS = Object.freeze({
+  records: 50,
+  /** Asset titles kept per kind of change; the counts are always whole. */
+  titles: 20,
+})
+
+const titlesSchema = z.object({
+  count: z.number().int().min(0),
+  titles: z.array(z.string().max(LIMITS.nameChars)).max(SCRIPT_PUBLISH_LIMITS.titles),
+})
+
+export const scriptPublishRecordSchema = z
+  .object({
+    at: isoDateTimeSchema,
+    scriptId: z.string().min(1).max(64),
+    scriptName: nameSchema,
+    stanzaId: z.string().min(1).max(256),
+    turn: z.number().int().min(1),
+    added: titlesSchema,
+    removed: titlesSchema,
+    changed: titlesSchema,
+  })
+  .strict()
+export type ScriptPublishRecord = z.infer<typeof scriptPublishRecordSchema>
+
+const scriptPublishesSchema = z
+  .object({
+    format: z.literal(SCRIPT_PUBLISHES_FORMAT),
+    version: z.literal(1),
+    records: z.array(scriptPublishRecordSchema).max(SCRIPT_PUBLISH_LIMITS.records),
+  })
+  .strict()
+
+/** A change summary's assets as a record keeps them: the count and the first titles. */
+export function publishTitles(assets: readonly { readonly title: string }[]): {
+  count: number
+  titles: string[]
+} {
+  return {
+    count: assets.length,
+    titles: assets.slice(0, SCRIPT_PUBLISH_LIMITS.titles).map((a) => a.title),
+  }
+}
+
+/** Reads the record; a missing key is none, an unreadable one is an error. */
+export async function loadScriptPublishes(
+  store: PrivateStore,
+): Promise<Result<readonly ScriptPublishRecord[], string>> {
+  const read = await store.getPrivate(SCRIPT_PUBLISHES_KEY)
+  if (!read.ok) {
+    return { ok: false, error: `the server did not give the record (${read.error.condition})` }
+  }
+  if (read.value === undefined || read.value === '') return { ok: true, value: [] }
+  let json: unknown
+  try {
+    json = JSON.parse(read.value)
+  } catch {
+    return { ok: false, error: 'the record is not readable' }
+  }
+  const parsed = scriptPublishesSchema.safeParse(json)
+  return parsed.success
+    ? { ok: true, value: parsed.data.records }
+    : { ok: false, error: 'the record is not readable' }
+}
+
+/**
+ * Adds a record, keeping the newest `SCRIPT_PUBLISH_LIMITS.records`. A read then a write: two
+ * sessions recording at the same moment keep the last writer's (as the scripts' version check
+ * cannot close, XEP-0049 has no conditional write). An unreadable record is started again.
+ */
+export async function recordScriptPublish(
+  store: PrivateStore,
+  record: ScriptPublishRecord,
+): Promise<Result<readonly ScriptPublishRecord[], string>> {
+  const checked = scriptPublishRecordSchema.safeParse(record)
+  if (!checked.success) return { ok: false, error: 'the record is not valid' }
+  const before = await loadScriptPublishes(store)
+  const records = [...(before.ok ? before.value : []), checked.data].slice(
+    -SCRIPT_PUBLISH_LIMITS.records,
+  )
+  const saved = await store.setPrivate(
+    SCRIPT_PUBLISHES_KEY,
+    JSON.stringify({ format: SCRIPT_PUBLISHES_FORMAT, version: 1, records }),
+  )
+  if (!saved.ok) {
+    return { ok: false, error: `the record was not saved (${saved.error.condition})` }
+  }
+  return { ok: true, value: records }
 }

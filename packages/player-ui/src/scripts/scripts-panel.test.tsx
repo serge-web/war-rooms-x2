@@ -4,18 +4,30 @@
 // Stop with live output and the outcome, the admin's draft notice, import and export; and the
 // editor's indentation and the draft write on their own.
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { diffWorldStates, parseWorldDraft, worldDraftKey } from '@wrx/domain'
+import {
+  diffWorldStates,
+  parseWorldDraft,
+  serialiseWorldDraft,
+  updateWorldAsset,
+  worldDraftKey,
+} from '@wrx/domain'
 import type { ScriptRole, SessionStore } from '@wrx/domain'
-import { SCRIPTS_STORAGE_KEY, parseStoredScripts } from '@wrx/domain/scripts'
+import { SCRIPTS_STORAGE_KEY, SCRIPT_PUBLISHES_KEY, parseStoredScripts } from '@wrx/domain/scripts'
 import type { PrivateStore } from '@wrx/domain/scripts'
-import type { RunOutcome, RunOptions } from '@wrx/py-runner'
+import type { DraftWrite as RunnerDraftWrite, RunOutcome, RunOptions } from '@wrx/py-runner'
 import { sampleWorldState } from '@wrx/schemas/fixtures'
 import type { WorldState } from '@wrx/schemas'
 import { afterEach, describe, expect, it } from 'vitest'
 import { memoryWorldDraftStorage } from '../map/draft-storage.ts'
 import { caretPosition, dedent, indent } from './code-editor.tsx'
 import { writeScriptDraft } from './runner-host.ts'
-import type { DraftWrite, PanelRunner, RunnerFactory, RunnerRequest } from './runner-host.ts'
+import type {
+  AutoPublishOutcome,
+  DraftWrite,
+  PanelRunner,
+  RunnerFactory,
+  RunnerRequest,
+} from './runner-host.ts'
 import { ScriptsPanelView, starterCode } from './scripts-panel.tsx'
 
 afterEach(cleanup)
@@ -73,7 +85,8 @@ function mount(
     readonly role?: ScriptRole
     readonly store?: PrivateStore
     readonly runner?: ReturnType<typeof fakeRunner>
-    readonly writeDraft?: (state: WorldState) => DraftWrite
+    readonly writeDraft?: (write: RunnerDraftWrite) => DraftWrite
+    readonly publishDraft?: () => Promise<AutoPublishOutcome>
     readonly label?: string
   } = {},
 ) {
@@ -86,6 +99,7 @@ function mount(
         privateStore={store}
         runnerFactory={runner.factory}
         writeDraft={options.writeDraft}
+        publishDraft={options.publishDraft}
         pollMs={0}
         runsAs="White Cell"
       />
@@ -269,7 +283,7 @@ describe('Run and Stop (PY-10, PD9)', () => {
     const written: WorldState[] = []
     const { runner } = mount({
       role: 'admin',
-      writeDraft: (state) => {
+      writeDraft: ({ state }) => {
         written.push(state)
         const [first] = Object.values(state.assets)
         const before: WorldState =
@@ -279,7 +293,8 @@ describe('Run and Stop (PY-10, PD9)', () => {
                 ...state,
                 assets: { ...state.assets, [first.id]: { ...first, lat: first.lat + 1 } },
               }
-        return { ok: true, diff: diffWorldStates(before, state) }
+        const diff = diffWorldStates(before, state)
+        return { ok: true, diff, changes: diff, overwritten: [] }
       },
     })
     await ready()
@@ -290,13 +305,15 @@ describe('Run and Stop (PY-10, PD9)', () => {
     })
     // The runner applies the draft (PD9) before the run's outcome arrives.
     act(() => {
-      runner.requests[0]?.draft?.apply(sampleWorldState())
+      runner.requests[0]?.draft?.apply({ state: sampleWorldState(), base: undefined })
       runner.runs[0]?.finish({ status: 'finished', output: '', ms: 10 })
     })
     await waitFor(() => {
       expect(screen.getByText('The world-state draft was updated')).toBeTruthy()
     })
-    expect(screen.getByText(/1 asset changed\. Nothing is published\./)).toBeTruthy()
+    expect(
+      screen.getByText(/Against the published state: 1 asset changed\. Nothing is published\./),
+    ).toBeTruthy()
     expect(written).toHaveLength(1)
   })
 })
@@ -362,12 +379,130 @@ describe('the admin draft write (ADM-45)', () => {
         Object.entries(published.assets).map(([id, a]) => [id, { ...a, lat: a.lat + 1 }]),
       ),
     }
-    const wrote = writeScriptDraft(store, storage, 'map-1', moved, '2026-11-06T10:00:00.000Z')
+    const write = { state: moved, base: published }
+    const wrote = writeScriptDraft(store, storage, 'map-1', write, '2026-11-06T10:00:00.000Z')
     expect(wrote.ok && wrote.diff.changed.length).toBe(Object.keys(published.assets).length)
     const text = storage.snapshot(worldDraftKey('wrx.test', 'map-1')).text ?? ''
     const held = parseWorldDraft(text)
     expect(held.ok && held.value.baseStanzaId).toBe('pub-1')
-    expect(writeScriptDraft(store, undefined, 'map-1', moved, '').ok).toBe(false)
-    expect(writeScriptDraft(store, storage, undefined, moved, '').ok).toBe(false)
+    expect(writeScriptDraft(store, undefined, 'map-1', write, '').ok).toBe(false)
+    expect(writeScriptDraft(store, storage, undefined, write, '').ok).toBe(false)
+  })
+
+  it('applies the script’s change on top of the draft, so hand edits survive (WP 6.4)', () => {
+    const storage = memoryWorldDraftStorage()
+    const published = sampleWorldState()
+    const [a, b] = Object.keys(published.assets)
+    if (a === undefined || b === undefined) throw new Error('assets')
+    const store = {
+      identity: { domain: 'wrx.test' },
+      worldState: () => ({ status: 'ready', data: { state: published, stanzaId: 'pub-1' } }),
+    } as unknown as SessionStore
+    const key = worldDraftKey('wrx.test', 'map-1')
+    // By hand: b damaged. Then a script, from the published state, refuels a.
+    const hand = updateWorldAsset(published, b, { state: 'damaged' })
+    const script = updateWorldAsset(published, a, { fuel: 12 })
+    if (!hand.ok || !script.ok) throw new Error('edit')
+    storage.save(
+      key,
+      serialiseWorldDraft({ state: hand.value, baseStanzaId: 'pub-1', savedAt: 'x' }),
+    )
+    const wrote = writeScriptDraft(
+      store,
+      storage,
+      'map-1',
+      { state: script.value, base: published },
+      '2026-11-06T10:00:00.000Z',
+    )
+    if (!wrote.ok) throw new Error(wrote.error)
+    const held = parseWorldDraft(storage.snapshot(key).text ?? '')
+    if (!held.ok) throw new Error(held.error)
+    expect(held.value.state.assets[a]?.fuel).toBe(12)
+    expect(held.value.state.assets[b]?.state).toBe('damaged')
+    // What the script changed in the draft, and how the draft differs from the published state.
+    expect(wrote.changes.changed.map((c) => c.after.id)).toEqual([a])
+    expect(wrote.diff.changed.map((c) => c.after.id).sort()).toEqual([a, b].sort())
+  })
+})
+
+describe('publishing without review (PD7, PY-9, PR2)', () => {
+  it('is off by default, asks before it is turned on, then publishes a clean run and records it', async () => {
+    const acct = account()
+    const published: AutoPublishOutcome[] = []
+    const diff = diffWorldStates(undefined, sampleWorldState())
+    const { runner } = mount({
+      role: 'admin',
+      store: acct.session(),
+      writeDraft: () => ({ ok: true, diff, changes: diff, overwritten: [] }),
+      publishDraft: () => {
+        const outcome: AutoPublishOutcome = { status: 'published', stanzaId: 'w-9', turn: 2, diff }
+        published.push(outcome)
+        return Promise.resolve(outcome)
+      },
+    })
+    await ready()
+    await newScript()
+    const box = screen.getByRole('checkbox', { name: 'Publish without review' })
+    expect((box as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByText('No script has published the world state without review.')).toBeTruthy()
+    // Off: a clean run fills the draft and publishes nothing.
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    await waitFor(() => {
+      expect(runner.runs).toHaveLength(1)
+    })
+    act(() => {
+      runner.requests[0]?.draft?.apply({ state: sampleWorldState(), base: undefined })
+      runner.runs[0]?.finish({ status: 'finished', output: '', ms: 10 })
+    })
+    await waitFor(() => {
+      expect(screen.getByText('The world-state draft was updated')).toBeTruthy()
+    })
+    expect(published).toHaveLength(0)
+
+    // Turning it on asks first, and says it changes the live map without review.
+    fireEvent.click(box)
+    const ask = screen.getByRole('alertdialog', {
+      name: 'Publish without review for Untitled script?',
+    })
+    expect(ask.textContent).toContain('It changes the live map without review')
+    expect((box as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(within(ask).getByRole('button', { name: 'Turn on' }))
+    await waitFor(() => {
+      expect(
+        screen.getByRole<HTMLInputElement>('checkbox', { name: 'Publish without review' }).checked,
+      ).toBe(true)
+    })
+    const stored = parseStoredScripts(acct.stored.get(SCRIPTS_STORAGE_KEY))
+    expect(stored.ok && stored.value.scripts[0]?.settings.autoPublish).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    await waitFor(() => {
+      expect(runner.runs).toHaveLength(2)
+    })
+    act(() => {
+      runner.requests[0]?.draft?.apply({ state: sampleWorldState(), base: undefined })
+      runner.runs[1]?.finish({ status: 'finished', output: '', ms: 10 })
+    })
+    await waitFor(() => {
+      expect(screen.getByText('The world state was published without review')).toBeTruthy()
+    })
+    expect(published).toHaveLength(1)
+    expect(acct.stored.get(SCRIPT_PUBLISHES_KEY)).toContain('"stanzaId":"w-9"')
+    const record = screen.getByRole('region', { name: 'Published without review' })
+    expect(record.textContent).toMatch(/Untitled script published turn 2 at/)
+    expect(record.textContent).toContain('added')
+
+    // A failed run publishes nothing, even with it on.
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    await waitFor(() => {
+      expect(runner.runs).toHaveLength(3)
+    })
+    act(() => {
+      runner.runs[2]?.finish({ status: 'failed', error: 'boom', output: '', ms: 10 })
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/failed after/)).toBeTruthy()
+    })
+    expect(published).toHaveLength(1)
   })
 })

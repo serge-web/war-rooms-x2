@@ -13,6 +13,7 @@ import {
   MapPreload,
   MapTilesProvider,
   PlayerClient,
+  UmpirePanel,
   UnreadProvider,
   WorldDraftProvider,
   Workspace,
@@ -36,12 +37,13 @@ import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
 
 /**
- * The room types with their player panels: chat (WP 2.6) and the map room (WP 5.5). Frozen, so
- * shared safely (ARC-2).
+ * The room types with their player panels: chat (WP 2.6), the map room (WP 5.5) and the umpire
+ * room (WP 6.4). Frozen, so shared safely (ARC-2).
  */
 const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
   chat: { playerComponent: ChatPanel },
   map: { playerComponent: MapPanel },
+  umpire: { playerComponent: UmpirePanel },
 })
 
 export interface AppProps {

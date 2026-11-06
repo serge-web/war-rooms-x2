@@ -1,8 +1,12 @@
 // The Scripts panel (SRD Annex C PD4, PD5, PD7, PD9, PY-6, PY-7, PY-10, PR1; WP 6.3), a lazy
 // chunk: the login's scripts from its private storage, an editor, Run and Stop with a time limit,
-// and the run's output and errors. The admin's scripts write the world-state draft, which the map
-// room's change summary shows before anything is published (ADM-45, ADM-46); the panel never
-// publishes. Every confirmation is inline, not a modal, so the panel works popped out (PLY-4).
+// and the run's output and errors. The admin's scripts write the world-state draft on top of it
+// (WP 6.4), which the map room's change summary shows before anything is published (ADM-45,
+// ADM-46); only a script whose "Publish without review" the admin turned on, after a
+// confirmation, publishes it at once (PD7, PY-9, PR2), and each such publish is recorded here.
+// Every confirmation is inline, not a modal, so the panel works popped out (PLY-4).
+import { SINGLETON_NODES } from '@wrx/schemas'
+import type { WorldState } from '@wrx/schemas'
 import { UMPIRE_NAME } from '@wrx/domain'
 import type { ScriptRole, WorldStateDiff } from '@wrx/domain'
 import {
@@ -13,20 +17,29 @@ import {
   duplicateScript,
   exportScripts,
   importScripts,
+  loadScriptPublishes,
   parseScriptFiles,
+  publishTitles,
+  recordScriptPublish,
   renameScript,
   updateScript,
 } from '@wrx/domain/scripts'
-import type { PrivateStore, StoredScript } from '@wrx/domain/scripts'
+import type { PrivateStore, ScriptPublishRecord, StoredScript } from '@wrx/domain/scripts'
 import { useMe, useSessionStore } from '@wrx/hooks'
-import type { RunOutcome } from '@wrx/py-runner'
+import type { DraftWrite as RunnerDraftWrite, RunOutcome } from '@wrx/py-runner'
 import { Banner, Button, TextField } from '@wrx/ui'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, SyntheticEvent, MouseEvent } from 'react'
 import { useMapRoomId, useWorldDraftStorage } from '../map/world-draft.tsx'
 import { CodeEditor } from './code-editor.tsx'
-import { loadPanelRunner, writeScriptDraft } from './runner-host.ts'
-import type { DraftWrite, PanelRunner, RunnerFactory } from './runner-host.ts'
+import {
+  RunnerUnavailable,
+  currentScriptDraft,
+  loadPanelRunner,
+  publishScriptDraft,
+  writeScriptDraft,
+} from './runner-host.ts'
+import type { AutoPublishOutcome, DraftWrite, PanelRunner, RunnerFactory } from './runner-host.ts'
 import { useScriptLibrary } from './use-script-library.ts'
 
 /** The code a new script starts with. */
@@ -43,10 +56,17 @@ export function starterCode(role: ScriptRole): string {
   if (role === 'admin') {
     lines.push(
       '',
-      '# To fill the world-state draft (shown in the map room before you publish):',
-      '# import wrx_draft',
+      '# To change the world-state draft (shown in the map room before you publish):',
+      '# state = await game.draft()',
+      '# ...change assets in state.assets...',
+      '# await game.write_draft(state)',
+    )
+  } else {
+    lines.push(
+      '',
+      '# To propose a world state to the admin, in the umpire room:',
       '# state = await game.world_state()',
-      '# await wrx_draft.write_draft(state)',
+      '# await game.post_proposal(state, "What it changes")',
     )
   }
   return `${lines.join('\n')}\n`
@@ -75,12 +95,16 @@ type RunState =
       readonly limit: number
       readonly outcome: RunOutcome
       readonly draft: DraftWrite | undefined
+      /** With the script's "Publish without review" on (PD7): what publishing did. */
+      readonly publish?: AutoPublishOutcome | undefined
     }
 
 type PythonState =
   | { readonly phase: 'loading' }
   | { readonly phase: 'ready'; readonly ms: number }
   | { readonly phase: 'failed'; readonly error: string }
+  /** This build has no runner (a PR preview without `py/`, owner Nov 6, 2026). */
+  | { readonly phase: 'unavailable'; readonly reason: string }
 
 /** Unsaved edits to one script. */
 interface Buffer {
@@ -92,6 +116,7 @@ interface Buffer {
 type Pending =
   | { readonly kind: 'rename'; readonly id: string }
   | { readonly kind: 'delete'; readonly id: string }
+  | { readonly kind: 'auto-publish'; readonly id: string }
   | undefined
 
 export interface ScriptsPanelViewProps {
@@ -99,8 +124,12 @@ export interface ScriptsPanelViewProps {
   /** This login's private storage: `session.admin` (any account may use its own). */
   readonly privateStore: PrivateStore
   readonly runnerFactory: RunnerFactory
-  /** The admin's: puts a clean run's world state in the draft. */
-  readonly writeDraft?: ((state: Parameters<typeof writeScriptDraft>[3]) => DraftWrite) | undefined
+  /** The admin's: puts a clean run's change in the draft, on top of it (WP 6.4). */
+  readonly writeDraft?: ((write: RunnerDraftWrite) => DraftWrite) | undefined
+  /** The admin's: the draft held now, for `readDraft`. */
+  readonly currentDraft?: (() => WorldState | undefined) | undefined
+  /** The admin's: publishes the draft without review (PD7, PY-9). */
+  readonly publishDraft?: (() => Promise<AutoPublishOutcome>) | undefined
   /** How often the stored scripts are re-read (ms); 0 turns it off. */
   readonly pollMs?: number
   /** Who the scripts run as, for the panel's lead. */
@@ -121,13 +150,22 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? '' : 's'}`
 }
 
-function diffWords(diff: WorldStateDiff): string {
+function diffWords(
+  diff: WorldStateDiff,
+  none = 'no assets differ from the published state',
+): string {
   const parts = [
     diff.added.length > 0 ? `${plural(diff.added.length, 'asset')} added` : undefined,
     diff.removed.length > 0 ? `${plural(diff.removed.length, 'asset')} removed` : undefined,
     diff.changed.length > 0 ? `${plural(diff.changed.length, 'asset')} changed` : undefined,
   ].filter((p): p is string => p !== undefined)
-  return parts.length === 0 ? 'no assets differ from the published state' : parts.join(', ')
+  return parts.length === 0 ? none : parts.join(', ')
+}
+
+/** "Tank Company, 1st Rifles and 2 more": the titles a record or summary names. */
+function titleList(titles: readonly string[], count: number): string {
+  const more = count - titles.length
+  return more > 0 ? `${titles.join(', ')} and ${more} more` : titles.join(', ')
 }
 
 /** Saves a file from the page (or a popped-out panel's window). */
@@ -150,6 +188,8 @@ export function ScriptsPanelView({
   privateStore,
   runnerFactory,
   writeDraft,
+  currentDraft,
+  publishDraft,
   pollMs,
   runsAs,
 }: ScriptsPanelViewProps) {
@@ -194,6 +234,8 @@ export function ScriptsPanelView({
     })
   }, [stored])
 
+  const now = () => new Date().toISOString()
+
   // ---- Python ----------------------------------------------------------------------------------
   const runner = useRef<Promise<PanelRunner> | undefined>(undefined)
   const [python, setPython] = useState<PythonState>({ phase: 'loading' })
@@ -202,6 +244,23 @@ export function ScriptsPanelView({
   const draftWrite = useRef<DraftWrite | undefined>(undefined)
   const writeDraftRef = useRef(writeDraft)
   writeDraftRef.current = writeDraft
+  const currentDraftRef = useRef(currentDraft)
+  currentDraftRef.current = currentDraft
+  // The record of publishes without review (PD7, PY-9), the admin's; newest last.
+  const [publishes, setPublishes] = useState<readonly ScriptPublishRecord[] | undefined>(undefined)
+  const [publishesError, setPublishesError] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (role !== 'admin') return undefined
+    let live = true
+    void loadScriptPublishes(privateStore).then((read) => {
+      if (!live) return
+      if (read.ok) setPublishes(read.value)
+      else setPublishesError(read.error)
+    })
+    return () => {
+      live = false
+    }
+  }, [role, privateStore])
 
   const startPython = useCallback(() => {
     setPython({ phase: 'loading' })
@@ -210,8 +269,9 @@ export function ScriptsPanelView({
       ...(role === 'admin'
         ? {
             draft: {
-              apply: (state) => {
-                draftWrite.current = writeDraftRef.current?.(state) ?? {
+              current: () => currentDraftRef.current?.(),
+              apply: (write) => {
+                draftWrite.current = writeDraftRef.current?.(write) ?? {
                   ok: false,
                   error: 'this view keeps no world-state draft',
                 }
@@ -232,7 +292,12 @@ export function ScriptsPanelView({
           },
         ),
       (error: unknown) => {
-        if (runner.current === made) setPython({ phase: 'failed', error: String(error) })
+        if (runner.current !== made) return
+        setPython(
+          error instanceof RunnerUnavailable
+            ? { phase: 'unavailable', reason: error.message }
+            : { phase: 'failed', error: String(error) },
+        )
       },
     )
   }, [role, runnerFactory])
@@ -252,7 +317,7 @@ export function ScriptsPanelView({
   const running = run.phase === 'running'
 
   const onRun = async () => {
-    if (current === undefined || running) return
+    if (current === undefined || running || python.phase === 'unavailable') return
     const buffer = buffers.get(current.id)
     const code = buffer?.code ?? current.code
     const limit = limitSeconds(buffer?.limit ?? String(current.settings.timeLimitSeconds))
@@ -280,14 +345,53 @@ export function ScriptsPanelView({
     } catch (error) {
       outcome = { status: 'failed', error: String(error), output: '', ms: 0 }
     }
+    // Set by the runner's `apply` during the run (TypeScript cannot see that).
+    const written = draftWrite.current as DraftWrite | undefined
+    const draft = outcome.status === 'finished' ? written : undefined
+    // PD7, PY-9: a clean run that wrote the draft publishes it, if the admin turned it on.
+    let publish: AutoPublishOutcome | undefined
+    if (role === 'admin' && draft?.ok === true && current.settings.autoPublish) {
+      publish = (await publishDraft?.()) ?? {
+        status: 'failed',
+        error: 'this view cannot publish the world state',
+      }
+      if (publish.status === 'published') {
+        const recorded = await recordScriptPublish(privateStore, {
+          at: now(),
+          scriptId: current.id,
+          scriptName: current.name,
+          stanzaId: publish.stanzaId,
+          turn: publish.turn,
+          added: publishTitles(publish.diff.added),
+          removed: publishTitles(publish.diff.removed),
+          changed: publishTitles(publish.diff.changed.map((c) => c.after)),
+        })
+        if (recorded.ok) {
+          setPublishes(recorded.value)
+          setPublishesError(undefined)
+        } else {
+          setPublishesError(recorded.error)
+        }
+      }
+    }
     setRun({
       phase: 'done',
       scriptId: current.id,
       name: current.name,
       limit,
       outcome,
-      draft: outcome.status === 'finished' ? draftWrite.current : undefined,
+      draft,
+      publish,
     })
+  }
+
+  const setAutoPublish = async (id: string, on: boolean) => {
+    const script = scripts.find((s) => s.id === id)
+    if (script === undefined) return
+    const saved = await library.commit((doc) =>
+      updateScript(doc, id, { settings: { ...script.settings, autoPublish: on } }, now()),
+    )
+    if (saved) setPending(undefined)
   }
 
   const onStop = () => {
@@ -297,7 +401,6 @@ export function ScriptsPanelView({
   }
 
   // ---- Edits -----------------------------------------------------------------------------------
-  const now = () => new Date().toISOString()
   const buffer = current === undefined ? undefined : buffers.get(current.id)
   const code = buffer?.code ?? current?.code ?? ''
   const limitText = buffer?.limit ?? String(current?.settings.timeLimitSeconds ?? '')
@@ -665,7 +768,7 @@ export function ScriptsPanelView({
                 <Button
                   size="small"
                   variant="primary"
-                  disabled={running || limitError !== undefined}
+                  disabled={running || limitError !== undefined || python.phase === 'unavailable'}
                   onClick={() => void onRun()}
                 >
                   Run
@@ -675,10 +778,124 @@ export function ScriptsPanelView({
                 </Button>
               </div>
             </div>
+            {role === 'admin' ? (
+              <AutoPublishSetting
+                script={current}
+                disabled={disabled}
+                confirming={pending?.kind === 'auto-publish' && pending.id === current.id}
+                onAsk={() => {
+                  setPending({ kind: 'auto-publish', id: current.id })
+                }}
+                onCancel={() => {
+                  setPending(undefined)
+                }}
+                onSet={(on) => void setAutoPublish(current.id, on)}
+              />
+            ) : null}
             <RunReport run={run} lines={lines} role={role} />
           </div>
         )}
       </div>
+      {role === 'admin' ? <PublishRecord records={publishes} error={publishesError} /> : null}
+    </section>
+  )
+}
+
+/**
+ * The per-script opt-in to publish without review (PD7, PY-9, PR2): off by default; turning it
+ * on asks first, saying it changes the live map without review; turning it off does not ask.
+ */
+function AutoPublishSetting({
+  script,
+  disabled,
+  confirming,
+  onAsk,
+  onCancel,
+  onSet,
+}: {
+  readonly script: StoredScript
+  readonly disabled: boolean
+  readonly confirming: boolean
+  readonly onAsk: () => void
+  readonly onCancel: () => void
+  readonly onSet: (on: boolean) => void
+}) {
+  const id = useId()
+  const on = script.settings.autoPublish
+  return (
+    <div className="wrx-scripts__auto">
+      <input
+        id={id}
+        type="checkbox"
+        checked={on}
+        disabled={disabled}
+        aria-describedby={`${id}-hint`}
+        onChange={(event) => {
+          if (event.target.checked) onAsk()
+          else onSet(false)
+        }}
+      />
+      <label htmlFor={id}>Publish without review</label>
+      <p id={`${id}-hint`} className="wrx-scripts__hint">
+        {on
+          ? 'On: when this script finishes cleanly and has changed the draft, the world state is published to every role at once, without the change summary.'
+          : 'Off: the script fills the draft, and you publish it from the Map room after the change summary.'}
+      </p>
+      {confirming ? (
+        <InlineConfirm
+          title={`Publish without review for ${script.name}?`}
+          text="Each clean run that changes the draft will then publish the world state to every role straight away, at any time, mid-phase included. It changes the live map without review: you will not see the change summary first. Each publish is checked and recorded below, and a manual publish can put a mistake right."
+          action="Turn on"
+          onConfirm={() => {
+            onSet(true)
+          }}
+          onClose={onCancel}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/** Each world state a script published without review, newest first (PY-9). */
+function PublishRecord({
+  records,
+  error,
+}: {
+  readonly records: readonly ScriptPublishRecord[] | undefined
+  readonly error: string | undefined
+}) {
+  const headingId = useId()
+  const newest = records === undefined ? [] : [...records].reverse()
+  return (
+    <section className="wrx-scripts__record" aria-labelledby={headingId}>
+      <h3 id={headingId} className="wrx-scripts__subheading">
+        Published without review
+      </h3>
+      {error === undefined ? null : <p className="wrx-scripts__hint">The record: {error}.</p>}
+      {records === undefined ? null : newest.length === 0 ? (
+        <p className="wrx-empty">No script has published the world state without review.</p>
+      ) : (
+        <ol className="wrx-scripts__records">
+          {newest.map((r) => (
+            <li key={`${r.at}-${r.stanzaId}`}>
+              <strong>{r.scriptName}</strong> published turn {r.turn} at{' '}
+              <time dateTime={r.at}>{r.at.slice(0, 16).replace('T', ' ')}</time> (UTC):{' '}
+              {[
+                r.added.count > 0 ? `added ${titleList(r.added.titles, r.added.count)}` : undefined,
+                r.removed.count > 0
+                  ? `removed ${titleList(r.removed.titles, r.removed.count)}`
+                  : undefined,
+                r.changed.count > 0
+                  ? `changed ${titleList(r.changed.titles, r.changed.count)}`
+                  : undefined,
+              ]
+                .filter((p) => p !== undefined)
+                .join('; ')}
+              .
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   )
 }
@@ -690,6 +907,13 @@ function PythonStatus({
   readonly python: PythonState
   readonly onRetry: () => void
 }) {
+  if (python.phase === 'unavailable') {
+    return (
+      <Banner tone="info" title="Python scripts are not available in this build">
+        {python.reason}
+      </Banner>
+    )
+  }
   if (python.phase === 'failed') {
     return (
       <Banner
@@ -768,9 +992,37 @@ function RunReport({
         {statusWords(run, role)}
       </p>
       {draft === undefined ? null : draft.ok ? (
-        <Banner tone="success" title="The world-state draft was updated">
-          The script’s world state is now your draft: {diffWords(draft.diff)}. Nothing is published.
-          Open the Map room and choose “Publish world state…” to review the change summary first.
+        <Banner
+          tone="success"
+          title={
+            run.phase === 'done' && run.publish?.status === 'published'
+              ? 'The world state was published without review'
+              : 'The world-state draft was updated'
+          }
+        >
+          The script changed your draft: {diffWords(draft.changes, 'no assets changed')}; the rest
+          of the draft, your own edits included, is as it was.
+          {draft.overwritten.length > 0
+            ? ` It also changed ${titleList(
+                draft.overwritten.slice(0, 5).map((a) => a.title),
+                draft.overwritten.length,
+              )}, which you had edited since it read the draft: its values were kept.`
+            : ''}{' '}
+          {run.phase !== 'done' || run.publish === undefined ? (
+            <>
+              Against the published state: {diffWords(draft.diff)}. Nothing is published. Open the
+              Map room and choose “Publish world state…” to review the change summary first.
+            </>
+          ) : run.publish.status === 'published' ? (
+            <>
+              Published to every role as turn {run.publish.turn}: {diffWords(run.publish.diff)}. It
+              is recorded below.
+            </>
+          ) : run.publish.status === 'unchanged' ? (
+            <>The draft is the published state, so nothing was published.</>
+          ) : (
+            <>Not published: {run.publish.error} The draft is kept.</>
+          )}
         </Banner>
       ) : (
         <Banner tone="danger" title="The draft was not written">
@@ -919,15 +1171,29 @@ export default function ScriptsPanel({ role }: { readonly role: ScriptRole }) {
   const me = useMe().data
   const storage = useWorldDraftStorage()
   const mapRoomId = useMapRoomId()
-  // The admin's draft starts from the published state: keep the map room's state read.
+  // The admin's draft starts from the published state, and a publish stamps the current turn:
+  // keep the map room's state and the turn read.
   useEffect(() => {
     if (role !== 'admin' || mapRoomId === undefined) return undefined
-    return store.acquireWorldState(mapRoomId)
+    const releaseWorld = store.acquireWorldState(mapRoomId)
+    const releaseTurn = store.acquire(SINGLETON_NODES.gameState)
+    return () => {
+      releaseWorld()
+      releaseTurn()
+    }
   }, [role, mapRoomId, store])
   const factory = useMemo<RunnerFactory>(() => loadPanelRunner(store), [store])
   const writeDraft = useCallback(
-    (state: Parameters<typeof writeScriptDraft>[3]) =>
-      writeScriptDraft(store, storage, mapRoomId, state, new Date().toISOString()),
+    (write: RunnerDraftWrite) =>
+      writeScriptDraft(store, storage, mapRoomId, write, new Date().toISOString()),
+    [store, storage, mapRoomId],
+  )
+  const currentDraft = useCallback(
+    () => currentScriptDraft(store, storage, mapRoomId),
+    [store, storage, mapRoomId],
+  )
+  const publishDraft = useCallback(
+    () => publishScriptDraft(store, storage, mapRoomId),
     [store, storage, mapRoomId],
   )
   const runsAs =
@@ -940,6 +1206,8 @@ export default function ScriptsPanel({ role }: { readonly role: ScriptRole }) {
       privateStore={store.session.admin}
       runnerFactory={factory}
       writeDraft={role === 'admin' ? writeDraft : undefined}
+      currentDraft={role === 'admin' ? currentDraft : undefined}
+      publishDraft={role === 'admin' ? publishDraft : undefined}
       runsAs={runsAs}
     />
   )

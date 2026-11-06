@@ -34,7 +34,7 @@ import { templatePlainText } from '@wrx/templates'
 import type { FormValues } from '@wrx/templates'
 import { Banner, Button } from '@wrx/ui'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 // The panels file, not the workspace module's index: that loads the layout library, which the
 // standalone `@wrx/player-ui/chat` entry must not.
 import { onlineRoles } from '../workspace/panels.tsx'
@@ -99,6 +99,10 @@ export interface ChatPanelCoreProps {
    */
   readonly composerCollapsed?: boolean | undefined
   readonly onComposerCollapsedChange?: ((collapsed: boolean) => void) | undefined
+  /** The admin's, in the umpire room: "Load into draft…" on proposals (PY-8, WP 6.4). */
+  readonly onLoadProposal?: ((message: ChatMessage) => void) | undefined
+  /** Shown above the message list: the proposal being loaded, with its summary (ADM-46). */
+  readonly aside?: ReactNode
 }
 
 /** The collapsed composer bar's note when something is waiting to be sent (PLY-54). */
@@ -139,6 +143,8 @@ export function ChatPanelCore({
   readOnly = false,
   composerCollapsed,
   onComposerCollapsedChange,
+  onLoadProposal,
+  aside,
 }: ChatPanelCoreProps) {
   const clock = useMemo(() => chatClock(timeFormat), [timeFormat?.locale, timeFormat?.timeZone])
   const rows = useMemo(() => chatRows(messages, clock), [messages, clock])
@@ -176,8 +182,10 @@ export function ChatPanelCore({
           {problem.text}
         </Banner>
       )}
+      {aside}
       <MessageListCore
         rows={rows}
+        onLoadProposal={onLoadProposal}
         label={`Messages in ${roomName}`}
         hasOlder={hasOlder}
         loadingOlder={loadingOlder}
@@ -459,7 +467,16 @@ function toChatMessage(
       ? { text: undefined }
       : entry.body.type === 'chat'
         ? { text: entry.body.content.text }
-        : templatedDisplay(entry, store, pickers)),
+        : entry.body.type === 'world-proposal'
+          ? {
+              // PY-8: a card; the store accepted it only in the umpire room, from the umpires.
+              text: `Proposed world state: ${entry.body.content.summary}`,
+              proposal: {
+                summary: entry.body.content.summary,
+                state: entry.body.content.state,
+              },
+            }
+          : templatedDisplay(entry, store, pickers)),
   }
 }
 
@@ -513,8 +530,20 @@ function useArrivalAnnouncement(messages: readonly ChatMessage[], loaded: boolea
   return text
 }
 
+/** What the umpire room's panel adds to the chat panel (PY-8, WP 6.4). */
+export interface ProposalActions {
+  readonly onLoad: (message: ChatMessage) => void
+  /** The load being confirmed, shown above the list. */
+  readonly aside?: ReactNode
+}
+
 /** The chat room panel over the pane's store. Register it with `withSlots` for `chat`. */
-export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
+export function ChatPanel({
+  roomId,
+  room,
+  access,
+  proposals,
+}: PlayerPanelProps & { readonly proposals?: ProposalActions | undefined }) {
   const store = useSessionStore()
   const snapshot = useRoomMessages(roomId)
   const view = snapshot.data
@@ -611,6 +640,8 @@ export function ChatPanel({ roomId, room, access }: PlayerPanelProps) {
       readOnly={observer || access === 'read' || view?.readOnlyReason !== undefined}
       composerCollapsed={composerCollapsed}
       onComposerCollapsedChange={setComposerCollapsed}
+      onLoadProposal={proposals?.onLoad}
+      aside={proposals?.aside}
     />
   )
 }
