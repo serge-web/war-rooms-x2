@@ -1,0 +1,47 @@
+{
+  "format": "wrx-script-bundle",
+  "version": 1,
+  "exportedAt": "2026-11-06T14:57:32.847Z",
+  "scripts": [
+    {
+      "name": "Game summary",
+      "code": "# Game summary: who you are, the turn, the forces, your rooms and the map.\n# Read-only; works for the admin and White Force roles.\nimport wrx\n\ngame = wrx.Game()\nme = await game.context()\nsetup = await game.setup()\nturn = await game.turn()\n\nprint(\"Game:\", setup.name)\nprint(\"Running as:\", \"admin\" if me.isAdmin else me.roleId)\nprint(\"Turn:\", f\"{turn.turn}, {turn.phase}\" if turn else \"not started\")\n\nprint(\"\\nForces:\")\nfor force in await game.forces():\n    print(\" -\", force.name)\n\nprint(\"\\nMy rooms:\")\nfor room in await game.rooms():\n    print(\" -\", room.name)\n\nstate = await game.world_state()\nprint(\"\\nAssets on the map:\", len(state.assets) if state else 0)\n",
+      "settings": {
+        "timeLimitSeconds": 30,
+        "autoPublish": false
+      }
+    },
+    {
+      "name": "Asset report (pandas)",
+      "code": "# Asset report: health and fuel by force, plus the assets that need attention.\n# Read-only. Uses pandas, which loads the first time (a few seconds).\nimport wrx\n\ngame = wrx.Game()\nstate = await game.world_state()\nif state is None:\n    raise SystemExit(\"No world state has been published yet.\")\n\nforces = {f.id: f.name for f in await game.forces()}\nframe = wrx.to_frame(state)\nframe[\"force\"] = frame[\"forceId\"].map(forces)\n\nprint(f\"Turn {state.turn}: {len(frame)} assets\\n\")\nsummary = frame.groupby(\"force\")[[\"health\", \"fuel\"]].agg([\"count\", \"mean\", \"min\"]).round(1)\nprint(summary.to_string())\n\nweak = frame[(frame[\"health\"] < 50) | (frame[\"fuel\"] < 25)]\nprint(\"\\nNeeds attention (health < 50 or fuel < 25):\")\nprint(weak[[\"force\", \"title\", \"state\", \"health\", \"fuel\"]].to_string(index=False) if len(weak) else \" none\")\n",
+      "settings": {
+        "timeLimitSeconds": 60,
+        "autoPublish": false
+      }
+    },
+    {
+      "name": "Recent messages",
+      "code": "# Recent messages: the last five messages in each of your rooms, newest first.\n# Read-only; works for the admin and White Force roles.\nimport wrx\n\ngame = wrx.Game()\nfor room in await game.rooms():\n    print(f\"== {room.name} ==\")\n    count = 0\n    async for message in game.room(room).messages(order=\"newest-first\", limit=5):\n        count += 1\n        who = \"admin\" if message.sender.isAdmin else (message.sender.loginName or \"?\")\n        body = message.body\n        if body.type == \"chat\":\n            text = body.content.text\n        elif body.type == \"template\":\n            text = f\"[template card {body.content.templateId}]\"\n        else:\n            text = f\"[world state, turn {body.content.turn}]\"\n        print(f\"{message.sentAt:%d %b %H:%M}  {who}: {text[:80]}\")\n    if count == 0:\n        print(\" (no messages)\")\n    print()\n",
+      "settings": {
+        "timeLimitSeconds": 30,
+        "autoPublish": false
+      }
+    },
+    {
+      "name": "Advance Blue (admin)",
+      "code": "# Advance Blue (admin only): move each Blue asset about 1 km north-east and burn\n# 15% fuel, then put the result in the world-state draft. Nothing is published:\n# open the Map room to see the moved symbols, then \"Publish world state...\" shows\n# the change summary first. Run \"resupply.py\" afterwards to top the fuel back up.\nimport wrx\nimport wrx_draft\n\ngame = wrx.Game()\nif not (await game.context()).isAdmin:\n    raise SystemExit(\"Only the admin can write the world-state draft.\")\n\nstate = await game.world_state()\nif state is None:\n    raise SystemExit(\"No world state has been published yet.\")\n\nblue = next((f for f in await game.forces() if f.name == \"Blue\"), None)\nif blue is None:\n    raise SystemExit(\"No force called Blue in this game.\")\n\nmoved = 0\nfor asset_id, asset in list(state.assets.items()):\n    if asset.forceId != blue.id:\n        continue\n    state.assets[asset_id] = asset.model_copy(\n        update={\n            \"lat\": round(asset.lat + 0.006, 6),\n            \"lon\": round(asset.lon + 0.009, 6),\n            \"fuel\": max(0, asset.fuel - 15),\n        }\n    )\n    moved += 1\n    print(f\"Moved {asset.title}; fuel {asset.fuel:.0f}% -> {max(0, asset.fuel - 15):.0f}%\")\n\nawait wrx_draft.write_draft(state)\nprint(f\"\\n{moved} Blue assets moved in the draft. Open the Map room to review.\")\n",
+      "settings": {
+        "timeLimitSeconds": 30,
+        "autoPublish": false
+      }
+    },
+    {
+      "name": "Resupply (admin)",
+      "code": "# Resupply (admin only): refuel every asset below 50% fuel to 100%, and put the\n# result in the world-state draft. Nothing is published: open the Map room and\n# use \"Publish world state...\" to review the change summary first.\nimport wrx\nimport wrx_draft\n\ngame = wrx.Game()\nif not (await game.context()).isAdmin:\n    raise SystemExit(\"Only the admin can write the world-state draft.\")\n\nstate = await game.world_state()\nif state is None:\n    raise SystemExit(\"No world state has been published yet.\")\n\nrefuelled = []\nfor asset_id, asset in list(state.assets.items()):\n    if asset.fuel < 50:\n        state.assets[asset_id] = asset.model_copy(update={\"fuel\": 100})\n        refuelled.append(f\"{asset.title} ({asset.fuel:.0f}% -> 100%)\")\n\nif refuelled:\n    await wrx_draft.write_draft(state)\n    print(f\"Refuelled {len(refuelled)} assets in the draft:\")\n    for line in refuelled:\n        print(\" -\", line)\nelse:\n    print(\"Every asset has at least 50% fuel; the draft is unchanged.\")\n",
+      "settings": {
+        "timeLimitSeconds": 30,
+        "autoPublish": false
+      }
+    }
+  ]
+}
