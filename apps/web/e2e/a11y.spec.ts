@@ -52,7 +52,8 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
 
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(5)
+    // Every room, the umpires room (PD8) too.
+    await expect(roomTabs(page)).toHaveCount(6)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the umpire')
 
@@ -66,7 +67,7 @@ test.describe('axe: no WCAG 2.2 A or AA violation', () => {
     // A read-only role: the composer is disabled with its reason.
     await page.getByRole('button', { name: 'Log out' }).click()
     await logIn(page, 'white-observer', 'demo-white-observer')
-    await expect(roomTabs(page)).toHaveCount(5)
+    await expect(roomTabs(page)).toHaveCount(6)
     await settled(page)
     await expectNoViolations(page, testInfo, 'workspace as the White observer')
   })
@@ -180,7 +181,7 @@ test.describe('keyboard only', () => {
     await page.setViewportSize({ width: 1400, height: 900 })
     await page.goto('./')
     await logIn(page, 'admin', 'demo-admin')
-    await expect(roomTabs(page)).toHaveCount(5)
+    await expect(roomTabs(page)).toHaveCount(6)
     await settled(page)
     // From the first control on the page, in the header.
     await page.getByRole('banner').first().locator('a, button, input, select').first().focus()

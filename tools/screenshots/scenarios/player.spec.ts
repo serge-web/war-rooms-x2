@@ -50,6 +50,7 @@ test('player workspace, umpire', { tag: '@screenshot' }, async ({ page }) => {
     'Blue–Red negotiation',
     'Blue Reports',
     'Map',
+    'Umpires',
   ])
   await expect(page.getByLabel('Logged in as Umpire, White')).toBeVisible()
   await page.getByRole('tab', { name: 'Game info', exact: true }).click()
@@ -224,7 +225,7 @@ test('umpire script panel', { tag: '@screenshot' }, async ({ page }) => {
   await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill('demo-admin')
   await page.getByRole('button', { name: 'Log in', exact: true }).click()
-  await expect(roomTabs(page)).toHaveCount(5)
+  await expect(roomTabs(page)).toHaveCount(6)
   // Dragged from the strip onto the first column of rooms, as a tab of its own there.
   const from = await page.getByRole('tab', { name: 'Scripts', exact: true }).boundingBox()
   const to = await page.getByRole('region', { name: 'Blue HQ', exact: true }).boundingBox()
@@ -247,21 +248,23 @@ test('umpire script panel', { tag: '@screenshot' }, async ({ page }) => {
     .fill(
       [
         'import wrx',
-        'import wrx_draft',
         '',
         'game = wrx.Game()',
-        'state = await game.world_state()',
+        'state = await game.draft()',
         'for asset in state.assets.values():',
         '    if asset.fuel < 50:',
         '        state.assets[asset.id] = asset.model_copy(update={"fuel": 100})',
         '        print("Resupplied", asset.title)',
-        'await wrx_draft.write_draft(state)',
+        'await game.write_draft(state)',
         '',
       ].join('\n'),
     )
   await panel.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(panel.getByText('(unsaved)')).toHaveCount(0)
-  await expect(panel.getByText('Python is ready.')).toBeVisible({ timeout: 60_000 })
+  // A PR preview built without Python (WP 6.4) shows the panel saying so instead.
+  await expect(
+    panel.getByText(/^Python is ready\.$|^Python scripts are not available in this build$/),
+  ).toBeVisible({ timeout: 60_000 })
   // Its tabset maximised, and scrolled to the top, so the list and the editor both show.
   await page
     .locator('.flexlayout__tabset_container, .flexlayout__tabset')

@@ -79,14 +79,13 @@ async function runScript(panel: Locator): Promise<void> {
 }
 
 const MOVE = `import wrx
-import wrx_draft
 
 game = wrx.Game()
-state = await game.world_state()
+state = await game.draft()
 asset = next(a for a in state.assets.values() if a.title == "Tank Company")
 state.assets[asset.id] = asset.model_copy(update={"lat": asset.lat + 0.25})
 print("Moved", asset.title)
-await wrx_draft.write_draft(state)
+await game.write_draft(state)
 `
 
 test('the admin’s script reads the world state and moves an asset; the change summary shows it, unpublished (PY-6, PD7, PD9, ADM-45, ADM-46)', async ({
@@ -106,7 +105,9 @@ test('the admin’s script reads the world state and moves an asset; the change 
   await expect(statusOf(panel)).toHaveText(/^Move the tanks finished in /, { timeout: PYTHON_MS })
   await expect(outputOf(panel)).toContainText('Moved Tank Company')
   await expect(panel.getByText('The world-state draft was updated')).toBeVisible()
-  await expect(panel.getByText(/1 asset changed\. Nothing is published\./)).toBeVisible()
+  await expect(
+    panel.getByText(/Against the published state: 1 asset changed\. Nothing is published\./),
+  ).toBeVisible()
   await expectNoViolations(page, testInfo, 'script panel after a run, with the editor and output', {
     include: '.wrx-scripts',
   })
@@ -167,7 +168,7 @@ test('Stop and the time limit end a run and leave the draft unchanged (PY-10, PD
   await createScript(
     panel,
     'Spin',
-    `import wrx, wrx_draft\nawait wrx_draft.write_draft(await wrx.Game().world_state())\nprint("wrote", flush=True)\nwhile True:\n    pass\n`,
+    `import wrx\ngame = wrx.Game()\nawait game.write_draft(await game.world_state())\nprint("wrote", flush=True)\nwhile True:\n    pass\n`,
   )
   await pythonReady(panel)
   await runScript(panel)

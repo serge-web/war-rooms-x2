@@ -44,6 +44,7 @@ test('SC-5: the admin, as umpire, sees every room, watches two side by side, pos
     TALKS,
     'Blue Reports',
     'Map',
+    'Umpires',
   ])
   await expect(forcePanel(umpire).getByRole('heading', { name: 'Umpire' })).toBeVisible()
 
@@ -53,7 +54,7 @@ test('SC-5: the admin, as umpire, sees every room, watches two side by side, pos
   await drag(umpire, tab(umpire, 'Blue HQ'), panel(umpire, TALKS))
   await expect
     .poll(() => columns(umpire))
-    .toEqual([[RED_HQ], [TALKS, 'Blue Reports', 'Blue HQ'], ['Map']])
+    .toEqual([[RED_HQ], [TALKS, 'Blue Reports', 'Blue HQ'], ['Map', 'Umpires']])
   await tab(umpire, TALKS).click()
   const left = await panel(umpire, RED_HQ).boundingBox()
   const right = await panel(umpire, TALKS).boundingBox()

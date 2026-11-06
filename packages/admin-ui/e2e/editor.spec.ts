@@ -145,6 +145,7 @@ test('reorders rooms by dragging', async ({ page }) => {
     'Red HQ',
     'Blue Reports',
     'Map',
+    'Umpires',
   ])
 })
 

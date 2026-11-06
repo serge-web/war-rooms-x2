@@ -124,6 +124,7 @@ test('the admin previews the game as a role, and back (ADM-30, ADM-31)', async (
     'Blue–Red negotiation',
     'Blue Reports',
     'Map',
+    'Umpires',
   ])
   await expect(page.getByRole('textbox', { name: 'New announcement' })).toBeVisible()
 
@@ -147,6 +148,7 @@ test('the admin previews the game as a role, and back (ADM-30, ADM-31)', async (
     'Blue–Red negotiation',
     'Blue Reports',
     'Map',
+    'Umpires',
   ])
   await expect(notice).toHaveCount(0)
 })

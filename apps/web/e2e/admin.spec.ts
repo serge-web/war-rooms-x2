@@ -59,6 +59,6 @@ test('the seeded game is published; the demo passphrase opens the vault; the aud
     timeout: 30_000,
   })
   // Blue’s observer in Blue HQ, Blue Reports and the map room, and the White observer in each of
-  // the five rooms.
-  await expect(page.getByText(/Voice checked through 8 role logins/)).toBeVisible()
+  // the six rooms, the umpires room (PD8) included.
+  await expect(page.getByText(/Voice checked through 9 role logins/)).toBeVisible()
 })

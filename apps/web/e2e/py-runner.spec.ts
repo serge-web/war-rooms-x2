@@ -381,7 +381,7 @@ print(json.dumps(out))`,
   const a = lastJson(admin.output)
   expect(a['write the draft']).toBe('allowed')
   expect(a.propose).toBe('refused: forbidden: postProposal is not open to the admin role')
-  expect(a['invalid state']).toMatch(/^refused: invalid-request: invalid world state/)
+  expect(a['invalid state']).toMatch(/^refused: invalid-request: state\.turn: /)
   expect(a['over 500 KB']).toMatch(
     /^refused: invalid-request: the world state is \d+ bytes, over the 500000-byte cap/,
   )
