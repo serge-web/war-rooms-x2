@@ -213,3 +213,68 @@ test('umpire world-state change summary', { tag: '@screenshot' }, async ({ page 
   })
   await shoot(page, 'umpire-world-summary')
 })
+
+test('umpire script panel', { tag: '@screenshot' }, async ({ page }) => {
+  // WP 6.3: the Scripts panel (PY-6, PY-7), docked beside the rooms, with a script in the editor
+  // and Python started. No run is shown: its times would differ between captures.
+  await freezeClock(page)
+  await hostMockInLeaderTab(page)
+  await page.goto('./app/')
+  await welcomeLoaded(page)
+  await page.getByLabel('Login name').fill('admin')
+  await page.getByLabel('Password', { exact: true }).fill('demo-admin')
+  await page.getByRole('button', { name: 'Log in', exact: true }).click()
+  await expect(roomTabs(page)).toHaveCount(5)
+  // Dragged from the strip onto the first column of rooms, as a tab of its own there.
+  const from = await page.getByRole('tab', { name: 'Scripts', exact: true }).boundingBox()
+  const to = await page.getByRole('region', { name: 'Blue HQ', exact: true }).boundingBox()
+  if (from === null || to === null) throw new Error('no tab or panel to drag between')
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 3, { steps: 12 })
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 6 })
+  await page.mouse.up()
+  const tab = page.getByRole('tab', { name: 'Scripts', exact: true })
+  if ((await tab.getAttribute('aria-selected')) !== 'true') await tab.click()
+  const panel = page.getByRole('region', { name: 'Scripts', exact: true })
+  await expect(panel).toBeVisible()
+  await panel.getByRole('button', { name: 'New script' }).click()
+  await panel.getByRole('button', { name: 'Rename…' }).click()
+  await panel.getByLabel('New name').fill('Resupply the tanks')
+  await panel.getByRole('button', { name: 'Rename', exact: true }).click()
+  await panel
+    .getByRole('textbox', { name: 'Code of Resupply the tanks' })
+    .fill(
+      [
+        'import wrx',
+        'import wrx_draft',
+        '',
+        'game = wrx.Game()',
+        'state = await game.world_state()',
+        'for asset in state.assets.values():',
+        '    if asset.fuel < 50:',
+        '        state.assets[asset.id] = asset.model_copy(update={"fuel": 100})',
+        '        print("Resupplied", asset.title)',
+        'await wrx_draft.write_draft(state)',
+        '',
+      ].join('\n'),
+    )
+  await panel.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(panel.getByText('(unsaved)')).toHaveCount(0)
+  await expect(panel.getByText('Python is ready.')).toBeVisible({ timeout: 60_000 })
+  // Its tabset maximised, and scrolled to the top, so the list and the editor both show.
+  await page
+    .locator('.flexlayout__tabset_container, .flexlayout__tabset')
+    .filter({ has: page.getByRole('tab', { name: 'Scripts', exact: true }) })
+    .getByTitle('Maximize tabset')
+    .first()
+    .click()
+  await panel.evaluate((element) => {
+    element.closest('.flexlayout__tab')?.scrollTo(0, 0)
+  })
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  })
+  await shoot(page, 'umpire-scripts')
+})

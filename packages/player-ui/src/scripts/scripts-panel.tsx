@@ -709,7 +709,7 @@ function PythonStatus({
     <p className="wrx-scripts__python" role="status">
       {python.phase === 'loading'
         ? 'Starting Python… (the first start takes a few seconds)'
-        : `Python is ready (started in ${seconds(python.ms)}).`}
+        : 'Python is ready.'}
     </p>
   )
 }

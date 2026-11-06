@@ -114,13 +114,56 @@ On the answering side, `parseBridgeCall(op, payload)` parses a call as untrusted
 
 ## In the browser (WP 6.2)
 
-The browser runner, `@wrx/py-runner` ([`packages/py-runner`](../packages/py-runner)), runs scripts for the admin and White Force roles only (PD4) in Pyodide 314.0.7 (CPython 3.14), in a Web Worker:
+The browser runner, `@wrx/py-runner` ([`packages/py-runner`](../packages/py-runner)), runs scripts for the admin and White Force roles that are not observers only (PD4) in Pyodide 314.0.7 (CPython 3.14), in a Web Worker:
 
 - **The SDK** is this package: the build bundles `python/wrx/` into the worker, which writes it into Pyodide's file system, so `import wrx` and `wrx.Game()` work with no arguments. pydantic loads with the first script that names `wrx`; pandas when a script imports it or uses `to_frame`. Until WP 6.4 adds writes to the protocol, the admin's draft write is the runner's own module: `await wrx_draft.write_draft(state)`, applied only when the script finishes cleanly (PD9).
 - **The bridge** answers protocol 1 on the page from the logged-in session, through one adapter ([`sdk-ops.ts`](../packages/py-runner/src/sdk-ops.ts)) that re-exports `@wrx/schemas/bridge` and adds the role table and `writeDraft`.
 - **The sandbox.** Before any script runs, the worker removes the network, storage and messaging globals (`fetch`, `XMLHttpRequest`, `WebSocket`, `indexedDB`, `caches`, `BroadcastChannel`, `importScripts`, `postMessage` and more); `js` holds timers only; and the worker runs under the page's Content-Security-Policy, which refuses `eval`, `new Function` and `import()` from another origin. `apps/web/e2e/py-runner.spec.ts` probes it on every e2e run.
 - **The files** are in the build at `py/` (`py/runner.js`, its worker, `py/pyodide/`): the core from the `pyodide` npm package and ten wheels from the Pyodide release, every one checked by sha256 against [`pyodide.lock.json`](../packages/py-runner/pyodide.lock.json). The build fetches the wheels once into `.cache/pyodide/` (CI caches it, keyed on the lock); an air-gapped build sets `WRX_PYODIDE_RELEASE` to an extracted release folder. No micropip: nothing else is installable. After a Pyodide upgrade or a change to the package sets, run `pnpm --filter @wrx/py-runner lock`.
 - **Hosting.** The client's policy has `'wasm-unsafe-eval'` in `script-src` and `blob:` in `worker-src` for every role (PR3), never `'unsafe-eval'`, and the server must send `.wasm` as `application/wasm` (`deploy/README.md`).
+
+## The Scripts panel (WP 6.3)
+
+The admin, in the umpire's game view, and every White Force role that is not an observer have a **Scripts** tab in the strip along the bottom of the workspace (PD4, PY-6). Players, observers and the admin's preview of a role have none. Like the other panels it can be dragged beside the rooms or popped out into its own window. Opening it the first time loads the runner and starts Pyodide, which takes a few seconds; nothing of either loads before (PY-5).
+
+- **Scripts** are listed on the left: **New script** starts one from a short example, and **Rename…**, **Duplicate** and **Delete…** (after a confirmation) act on the one open. Edits to the code and the time limit are kept until **Save** (or Ctrl+S); an unsaved script is marked in the list.
+- **The editor** is a plain text area: Tab indents and Shift+Tab dedents the line or the selected lines by four spaces; to leave it from the keyboard, press Escape, then Tab. The caret's line and column are shown, to match a traceback's line numbers.
+- **Run** runs what is in the editor, saved or not. Output appears as it is printed, with stderr told apart; then the status (finished, failed, stopped, or reached its time limit) and, for a failure, the Python traceback. **Stop** ends the run at once by terminating the worker, and so does the **time limit** (seconds, 30 by default, at most 600; PY-10). One script runs at a time.
+- **The admin's draft.** An admin script fills the world-state draft with `await wrx_draft.write_draft(state)`. It lands only when the script finishes cleanly; a run that is stopped, times out or fails leaves the draft as it was (PD9). After a clean run that wrote it, the panel says how many assets differ from the published state and points to the map room, where "Publish world state…" shows the change summary first. Nothing is published by a script (PD7; publishing without review is WP 6.4's, per script, off by default). The script's state replaces the whole draft, including edits made by hand since the last publish.
+
+```python
+import wrx
+import wrx_draft
+
+game = wrx.Game()
+state = await game.world_state()
+for asset in state.assets.values():
+    if asset.fuel < 50:
+        state.assets[asset.id] = asset.model_copy(update={"fuel": 100})
+await wrx_draft.write_draft(state)
+```
+
+### Where scripts are kept
+
+Scripts are kept in the login's own XEP-0049 private storage, under one key (`wrx-scripts`), so they follow the login from game to game and from browser to browser, and everyone who uses a role's login shares them (PD5). Each script has its name, code, settings (the time limit, and `autoPublish`, reserved for WP 6.4 and always off) and the time it was last saved.
+
+- **Size.** Everything a login keeps is at most 200,000 bytes as stored (XML-escaped UTF-8; `<`, `>` and `&` count four or five bytes). A save over it is refused with the sizes; export first, then shorten or delete scripts.
+- **Two sessions of one login.** Every save carries the revision it was based on. If another session saved since, nothing is written and the panel says **Changed in another session**: **Reload** takes what is stored and drops this session's unsaved edits; **Keep my change** applies this session's change to what the other saved. The panel re-reads the scripts every 5 seconds while it is open: with no unsaved edits it takes another session's save at once; with unsaved edits it says so and lets you reload or keep editing. The check is a read just before the write, since XEP-0049 has no conditional write, so two saves within one round trip of each other still end last-writer-wins.
+
+### Export and import
+
+**Export all** saves one JSON file, `scripts-<date>.json`:
+
+```json
+{
+  "format": "wrx-script-bundle",
+  "version": 1,
+  "exportedAt": "2026-11-06T10:00:00.000Z",
+  "scripts": [{ "name": "Resupply", "code": "import wrx\n…", "settings": { "timeLimitSeconds": 30, "autoPublish": false } }]
+}
+```
+
+A bundle keeps every script and its settings in one file, which `.py` files cannot. **Import…** reads bundles and `.py` files (a `.py` file is named after the file and gets the default time limit). Every file is validated first and a wrong one is refused with the reason; imported scripts are added as new scripts, with names made unique and `autoPublish` off whatever the file says. Importing never runs anything (PR1): check a script before you run it, since it runs with the login's rights.
 
 ## Regenerating and checking
 

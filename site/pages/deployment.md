@@ -24,7 +24,7 @@ The same configuration file runs in CI, where every transport contract test, adm
 
 ## Python scripts in the browser
 
-After v1, the admin and White Force will be able to run Python scripts in the browser; the runner is built, and the script panel that uses it is next. The interpreter, Pyodide, and the Python packages it uses are part of the build, in its `py/` folder, about 23 MB, and load only when a script runs, never for other roles. Nothing is fetched from the internet at install or at run time.
+After v1, the admin and the White Force run Python scripts in the browser, from a Scripts panel in their workspace (see [Turns and the map](turns-and-map.md#python-scripts-for-umpires)). The interpreter, Pyodide, and the Python packages it uses are part of the build, in its `py/` folder, about 23 MB, and load only when that panel is first opened, never for other roles. Nothing is fetched from the internet at install or at run time.
 
 For this the client's Content-Security-Policy allows WebAssembly (`'wasm-unsafe-eval'` in `script-src`) and workers started from `blob:` URLs (`worker-src 'self' blob:`). It still refuses `eval`. A web server must send `.wasm` files as `application/wasm`; the reference configuration does.
 
