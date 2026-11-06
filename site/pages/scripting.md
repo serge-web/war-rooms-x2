@@ -97,14 +97,14 @@ A script that reacts runs only while your tab is open and the run lasts. Give `r
 
 Each admin script has a **Publish without review** box, off by default. Turn it on only for a script you have run and checked several times with it off. With it on, each clean run that changes the draft publishes it to every role at once, with the checks of a manual publish but without the change summary, at any time, mid-phase included. The panel lists each such publish under **Published without review**.
 
-- It publishes **the whole draft**, including hand edits you have not reviewed. Publish or discard your hand edits first.
+- It publishes **the whole draft**: the script's change and every hand edit in the draft you have not published, finished or not. The confirmation you see when you turn it on says so. Publish or discard your hand edits first.
 - If the map room cannot find the latest world state (when it says to **Look further back**), nothing is published: find it first, then run again.
 - A mistake is put right with an ordinary **Publish world state…**.
 
 ## Good practice
 
 - **Read before you run.** A script runs with your login's rights. Run only scripts you wrote or have read, including imported ones: importing never runs anything and never turns on publishing without review.
-- **Start fresh.** Runs in one panel share a Python session until you choose Stop, a run reaches its time limit or the panel closes. A script can leave things behind for the next run, so choose Stop once before running an important script after one you are not sure of.
+- **Each run starts fresh.** Every run gets a new Python session, so nothing one script leaves behind reaches the next run, yours or a teammate's. Keep what must last in the game (the draft or a message), not in Python.
 - **Keep handlers short and bounded.** A handler that answers every message can fill a room; give it a time with `run_forever(seconds=...)` while you try it.
 - **Shared logins share scripts.** Everyone using a role's login sees and can change its scripts. If two people save at once, the second is told and chooses which to keep. Agree within the team who edits which script.
 - **Export your scripts** before a game, as a file you can import again: they are kept with the login on the server, but a file is a copy you control.
@@ -113,10 +113,11 @@ Each admin script has a **Publish without review** box, off by default. Turn it 
 
 | What | How much |
 | --- | --: |
-| Python ready, first time in a session | about 2 s |
-| First script that uses the SDK | about 1 s more |
-| First table with pandas | about 3 s more |
-| A script over 600 assets, once Python is warm | under 0.1 s |
+| Python ready, when the panel first opens | about 3 s |
+| A run a few seconds after the last | starts at once |
+| A run straight after the last | up to about 3 s, while its fresh Python starts |
+| A run that makes a table with pandas | about 3.5 s more, each run |
+| A script over 600 assets, once its imports are done | about 0.1 s |
 | Time limit per run | 30 s by default, up to 10 minutes |
 | Scripts kept per login | 200,000 bytes in all |
 
