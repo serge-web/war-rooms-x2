@@ -21,6 +21,8 @@ export const LIMITS = Object.freeze({
    * about 2,500 assets in plain JSON. Every other message keeps `messageStanzaBytes`.
    */
   worldStateStanzaBytes: 500_000,
+  /** A White Force proposal's summary, in characters (PY-8); the proposal keeps the 500 KB cap. */
+  proposalSummaryChars: 2_000,
   /** Most assets one world state may hold; the stanza cap is reached first in practice. */
   worldStateAssets: 5_000,
   /** An asset's category and state, in characters (§3 rule 17). */

@@ -328,6 +328,32 @@ A unit or platform on the map, with the fixed fields of v1 (§3 rule 17).
 | `health` | number | yes | ≥ 0; ≤ 100 | Health, 0 (destroyed) to 100 (full) |
 | `fuel` | number | yes | ≥ 0; ≤ 100 | Fuel, 0 (empty) to 100 (full) |
 
+## Umpire room config
+
+Umpire room config: nothing to set.
+
+- **Location:** The `config` field of the `umpire` room document; nothing to set, `{}` reads as version 1
+- **Access:** As the room document. The room’s participants are fixed: the White Force, plus a read entry for each White Force observer assigned rooms elsewhere (§3 rule 18).
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 1 |  |
+
+## White Force proposal message body
+
+A White Force proposal in the umpire room (PY-8).
+
+- **Location:** Body of a MUC groupchat message in the umpire room, up to 500,000 bytes as a stanza; carries a full world state and a summary
+- **Access:** The admin and the White Force read the umpire room; its roles that are not observers post. Clients accept it only in the umpire room and only from the admin or a White Force role; the admin may load it into the world-state draft (PY-8).
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `type` | constant | yes | = "world-proposal" |  |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `content` | object | yes |  | A proposed world state and its summary |
+| `content.state` | object | yes |  | The proposed world state, in full (D25) |
+| `content.summary` | string | yes | length ≥ 1; length ≤ 2000 | What the proposal changes, in words, for the admin; plain text |
+
 ## Design file
 
 A complete game design, as exported and imported by the admin.

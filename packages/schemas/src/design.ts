@@ -19,6 +19,13 @@ import {
 } from './template.ts'
 import type { Template } from './template.ts'
 import {
+  UMPIRE_ROOM_NAME,
+  UMPIRE_ROOM_TYPE,
+  hasUmpireParticipants,
+  umpireParticipants,
+  umpireRoomConfigReader,
+} from './umpire.ts'
+import {
   MAP_ROOM_TYPE,
   hasMapParticipants,
   mapParticipants,
@@ -186,6 +193,7 @@ export function checkDesign(design: DesignFile, options: DesignCheckOptions = {}
   })
 
   checkMapRoom(design, error)
+  checkUmpireRoom(design, error)
 
   const objectiveForces = new Set<string>()
   design.objectives.forEach((o, i) => {
@@ -323,6 +331,35 @@ function checkMapRoom(design: DesignFile, error: (path: string, message: string)
   })
 }
 
+/**
+ * §3 rule 18, PD8: at most one umpire room (the draft always has one; a design from before WP 6.4
+ * without one is still valid), its participants fixed (`umpireParticipants`: the White Force,
+ * and a read entry for each White Force observer assigned rooms elsewhere), its config empty.
+ */
+function checkUmpireRoom(design: DesignFile, error: (path: string, message: string) => void): void {
+  let seen = false
+  design.rooms.forEach((room, i) => {
+    if (room.roomType !== UMPIRE_ROOM_TYPE) return
+    if (seen) {
+      error(`rooms[${i}].roomType`, 'a game has one umpire room (§3 rule 18); this is a second')
+    }
+    seen = true
+    if (!hasUmpireParticipants(room, design)) {
+      error(
+        `rooms[${i}].participants`,
+        'the umpire room’s participants are fixed: the admin and the White Force only (§3 rule 18, PD8)',
+      )
+    }
+    const config = umpireRoomConfigReader.safeParse(room.config)
+    if (!config.success) {
+      error(
+        `rooms[${i}].config`,
+        `not a valid umpire room config: ${z.prettifyError(config.error)}`,
+      )
+    }
+  })
+}
+
 /** The name a new map room is given; the admin may rename it. */
 export const MAP_ROOM_NAME = 'Map'
 
@@ -404,4 +441,38 @@ export function withTemplateLocks(
   })
   const changed = templates.some((t, i) => t !== design.templates[i])
   return changed ? { ...design, templates } : design
+}
+
+/**
+ * The design with exactly one umpire room as far as it can tell (§3 rule 18, PD8): every umpire
+ * room's participants set to the fixed set (`umpireParticipants`), and a new one, named
+ * {@link UMPIRE_ROOM_NAME} with the id `newId()` gives, added last when there is none. The same
+ * design is returned when nothing changes. A second umpire room is left for `checkDesign`.
+ */
+export function withUmpireRoom(design: DesignFile, newId: () => string): DesignFile {
+  const participants = umpireParticipants(design)
+  let changed = false
+  const rooms = design.rooms.map((room) => {
+    if (room.roomType !== UMPIRE_ROOM_TYPE || hasUmpireParticipants(room, design)) return room
+    changed = true
+    return { ...room, participants }
+  })
+  if (!rooms.some((r) => r.roomType === UMPIRE_ROOM_TYPE)) {
+    changed = true
+    rooms.push({
+      schemaVersion: 1,
+      id: newId(),
+      name: UMPIRE_ROOM_NAME,
+      roomType: UMPIRE_ROOM_TYPE,
+      participants,
+      config: {},
+      order: rooms.reduce((max, r) => Math.max(max, r.order + 1), 0),
+    })
+  }
+  return changed ? { ...design, rooms } : design
+}
+
+/** Whether a room is one of the game's fixed rooms (§3 rule 18): the map or umpire room. */
+export function isFixedRoomType(roomType: string): boolean {
+  return roomType === MAP_ROOM_TYPE || roomType === UMPIRE_ROOM_TYPE
 }

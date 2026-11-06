@@ -25,6 +25,7 @@ import {
   draftFromDesign,
   isMapRoom,
   isRolePublished,
+  isUmpireRoom,
   loginNameProblem,
   markPublished,
   markRolesPublished,
@@ -54,7 +55,9 @@ const NOW = new Date('2026-10-25T10:00:00.000Z')
 
 /** The sample design as a draft; the map room the draft adds has the fixture's id (§3 rule 18). */
 function sample(): Draft {
-  return draftFromDesign(sampleDesign(), {}, () => ROOM.map)
+  // The map room, then the umpire room (§3 rule 18, PD8), which the draft adds.
+  const ids: string[] = [ROOM.map, ROOM.umpire]
+  return draftFromDesign(sampleDesign(), {}, () => ids.shift() ?? 'unused')
 }
 
 /** Deep-freezes a draft, so any mutation by an operation throws. */
@@ -118,6 +121,16 @@ describe('createDraft', () => {
         participants: [{ kind: 'force', id: tid('white'), access: 'write' }],
         config: {},
         order: 0,
+      },
+      // PD8: the umpire room, the White Force only.
+      {
+        schemaVersion: 1,
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+        name: 'Umpires',
+        roomType: 'umpire',
+        participants: [{ kind: 'force', id: tid('white'), access: 'write' }],
+        config: {},
+        order: 1,
       },
     ])
     expect(draft.meta).toEqual({ publishedRoleIds: [], publishedForceIds: [] })
@@ -573,7 +586,7 @@ describe('rooms', () => {
       roomType: 'chat',
       participants: [],
       config: {},
-      order: 4,
+      order: 5,
     })
   })
 
@@ -613,12 +626,18 @@ describe('rooms', () => {
 
   it('reorders rooms', () => {
     const draft = moveRoom(sample(), tid('negotiation'), 0)
-    expect(orders(draft.design).rooms).toEqual(['negotiation:0', 'blue-hq:1', 'red-hq:2', 'map:3'])
+    expect(orders(draft.design).rooms).toEqual([
+      'negotiation:0',
+      'blue-hq:1',
+      'red-hq:2',
+      'map:3',
+      'umpire:4',
+    ])
   })
 
   it('deletes a room', () => {
     const draft = deleteRoom(sample(), tid('red-hq'))
-    expect(orders(draft.design).rooms).toEqual(['blue-hq:0', 'negotiation:1', 'map:2'])
+    expect(orders(draft.design).rooms).toEqual(['blue-hq:0', 'negotiation:1', 'map:2', 'umpire:3'])
   })
 })
 
@@ -671,6 +690,59 @@ describe('the map room (§3 rule 18)', () => {
     expect(referencesTo(sample().design, 'forces', tid('blue')).map((r) => r.id)).not.toContain(
       ROOM.map,
     )
+  })
+})
+
+describe('the umpire room (§3 rule 18, PD8)', () => {
+  const umpire = (draft: Draft) => draft.design.rooms.find((r) => r.roomType === 'umpire')
+
+  it('is added with the map room, the White Force only, and is valid', () => {
+    const draft = sample()
+    expect(umpire(draft)).toMatchObject({
+      id: ROOM.umpire,
+      name: 'Umpires',
+      participants: [{ kind: 'force', id: tid('white'), access: 'write' }],
+    })
+    expect(isUmpireRoom({ roomType: 'umpire' })).toBe(true)
+    const matrix = effectiveAccess(draft.design)
+    // Players of other forces have no access; the White observer reads (rule 4).
+    expect(accessOf(matrix, ROOM.umpire, tid('blue-co'))).toBe('none')
+    expect(accessOf(matrix, ROOM.umpire, tid('red-co'))).toBe('none')
+    expect(accessOf(matrix, ROOM.umpire, tid('white-observer'))).toBe('read')
+  })
+
+  it('cannot be deleted, retyped, added twice or given other participants', () => {
+    const draft = sample()
+    expect(deleteRoom(draft, ROOM.umpire)).toBe(draft)
+    expect(
+      setParticipant(draft, ROOM.umpire, { kind: 'force', id: tid('blue'), access: 'write' }),
+    ).toBe(draft)
+    expect(removeParticipant(draft, ROOM.umpire, 'force', tid('white'))).toBe(draft)
+    expect(addRoom(draft, 'Second', 'umpire')).toEqual({ draft, id: '' })
+    expect(umpire(updateRoom(draft, ROOM.umpire, { roomType: 'chat' }))?.roomType).toBe('umpire')
+    expect(
+      updateRoom(draft, tid('blue-hq'), { roomType: 'umpire' }).design.rooms[0]?.roomType,
+    ).toBe('chat')
+    expect(umpire(updateRoom(draft, ROOM.umpire, { name: 'Control' }))?.name).toBe('Control')
+  })
+
+  it('keeps a White observer assigned elsewhere as a reader', () => {
+    const assigned = setParticipant(sample(), tid('blue-hq'), {
+      kind: 'role',
+      id: tid('white-observer'),
+      access: 'read',
+    })
+    expect(umpire(assigned)?.participants).toContainEqual({
+      kind: 'role',
+      id: tid('white-observer'),
+      access: 'read',
+    })
+    expect(accessOf(effectiveAccess(assigned.design), ROOM.umpire, tid('white-observer'))).toBe(
+      'read',
+    )
+    const unassigned = removeParticipant(assigned, tid('blue-hq'), 'role', tid('white-observer'))
+    expect(umpire(unassigned)?.participants).toEqual(umpire(sample())?.participants)
+    expect(validateDraft(assigned.design).issues).toEqual([])
   })
 })
 

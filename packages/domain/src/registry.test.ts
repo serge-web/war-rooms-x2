@@ -17,8 +17,22 @@ describe('room-type registry (ARC-5)', () => {
   it('registers chat, with its config version 2 and chat and templated messages', () => {
     const registry = defaultRoomTypes()
     const chat = registry.get('chat')
-    expect(registry.list().map((d) => d.type)).toEqual(['chat', 'map'])
-    expect(chat?.messageSchema).toBe(messageBodySchema)
+    expect(registry.list().map((d) => d.type)).toEqual(['chat', 'map', 'umpire'])
+    const proposal = {
+      type: 'world-proposal',
+      schemaVersion: 1,
+      content: { state: sampleWorldState(), summary: 'Moved.' },
+    }
+    const text = { type: 'chat', schemaVersion: 1, content: { text: 'hi' } }
+    expect(chat?.messageSchema.safeParse(text).success).toBe(true)
+    // PY-8: a proposal is never a chat room's message; the umpire room takes it.
+    expect(messageBodySchema.safeParse(proposal).success).toBe(true)
+    expect(chat?.messageSchema.safeParse(proposal).success).toBe(false)
+    const umpire = registry.get('umpire')
+    expect(umpire?.messageSchema.safeParse(proposal).success).toBe(true)
+    expect(umpire?.messageSchema.safeParse(text).success).toBe(true)
+    expect(umpire?.configSchema.safeParse({}).success).toBe(true)
+    expect(umpire?.configSchema.safeParse({ freeText: false }).success).toBe(false)
     expect(chat?.configSchema.safeParse({}).success).toBe(true)
     expect(chat?.configSchema.safeParse(blueReportsConfig()).success).toBe(true)
     expect(chat?.configSchema.safeParse({ schemaVersion: 2 }).success).toBe(false)

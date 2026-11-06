@@ -160,25 +160,25 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     }
     expect(within(plan).queryByRole('region', { name: 'Removals' })).toBeNull()
     expect(stepItems()).toEqual([])
-    expect(groupButton('Access').textContent).toBe('▸Access25 stepsTo do')
-    expect(groupButton('Nodes').textContent).toContain('Create nodes: 21 nodes')
+    expect(groupButton('Access').textContent).toBe('▸Access26 stepsTo do')
+    expect(groupButton('Nodes').textContent).toContain('Create nodes: 22 nodes')
     // Repeated access steps read as one line each kind, expandable to every step.
     await user.click(groupButton('Access'))
     expect(groupButton('Access').getAttribute('aria-expanded')).toBe('true')
     const access = within(plan).getByRole('region', { name: 'Access' })
     const nodeGrants = within(access).getByRole('button', {
-      name: /^Give node access: 19 nodes × roles \(70 grants\)/,
+      name: /^Give node access: 20 nodes × roles \(74 grants\)/,
     })
     expect(nodeGrants.getAttribute('aria-expanded')).toBe('false')
     // The two observers' read-only steps read as one line too.
     expect(stepItems()).toEqual([])
     await user.click(nodeGrants)
-    expect(stepItems()).toHaveLength(19)
+    expect(stepItems()).toHaveLength(20)
     expect(access.textContent).toContain('Blue CO: read')
     await user.click(groupButton('Access'))
     expect(stepItems()).toEqual([])
     await user.click(within(plan).getByRole('button', { name: 'Show every step' }))
-    expect(stepItems()).toHaveLength(71)
+    expect(stepItems()).toHaveLength(75)
     await user.click(within(plan).getByRole('button', { name: 'Collapse every group' }))
     expect(stepItems()).toEqual([])
     expect(screen.getByText(/the game becomes design version 1/)).toBeTruthy()
@@ -195,15 +195,15 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     const groups = within(planRegion()).getAllByRole('region')
     expect(groups.map((g) => g.dataset.state)).toEqual(groups.map(() => 'done'))
     expect(groupButton('Access').textContent).toContain('Done')
-    expect(within(planRegion()).getByText(/^All 71 steps done\.$/)).toBeTruthy()
+    expect(within(planRegion()).getByText(/^All 75 steps done\.$/)).toBeTruthy()
     await fresh.user.click(within(planRegion()).getByRole('button', { name: 'Show every step' }))
     const steps = stepItems()
-    expect(steps).toHaveLength(71)
+    expect(steps).toHaveLength(75)
     expect(steps.every((li) => li.dataset.state === 'done')).toBe(true)
     expect(screen.getByText(/Publish complete: \d+ steps applied, design version 1/)).toBeTruthy()
     expect(screen.getByText('Checked again: nothing is left to publish.')).toBeTruthy()
     // After the publish the room checks run and pass (NFR-4).
-    expect(screen.getByText(/All 4 rooms are members-only/)).toBeTruthy()
+    expect(screen.getByText(/All 5 rooms are members-only/)).toBeTruthy()
     expect(screen.getByText(/The archive of .* answers/)).toBeTruthy()
     // The draft records the publish: login names are fixed (ADM-5).
     expect(fresh.store.getSnapshot().draft.meta.publishedRoleIds).toContain(tid('blue-co'))
@@ -357,12 +357,12 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
     })
     // The group holding the failure opens by itself and says so; the others stay closed.
     expect(groupButton('Rooms').getAttribute('aria-expanded')).toBe('true')
-    expect(groupButton('Rooms').textContent).toContain('Failed: 1 of 4 done')
+    expect(groupButton('Rooms').textContent).toContain('Failed: 1 of 5 done')
     expect(groupButton('Accounts').getAttribute('aria-expanded')).toBe('false')
     expect(groupButton('Accounts').textContent).toContain('Done')
     expect(groupButton('Nodes').textContent).toContain('Not run')
     expect(
-      within(planRegion()).getByText(/^Stopped at a failure: 5 of 71 steps done\.$/),
+      within(planRegion()).getByText(/^Stopped at a failure: 5 of 75 steps done\.$/),
     ).toBeTruthy()
     const failed = stepItems().filter((li) => li.dataset.state === 'failed')
     expect(failed.map((li) => li.dataset.step)).toEqual([`room:${tid('red-hq')}`])
@@ -375,7 +375,7 @@ describe('the Publish section (ADM-10, ADM-11)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Plan the rest again' }))
     await waitFor(() => {
-      expect(groupButton('Rooms').textContent).toContain('Create rooms: 3 rooms')
+      expect(groupButton('Rooms').textContent).toContain('Create rooms: 4 rooms')
     })
     await user.click(groupButton('Rooms'))
     expect(within(planRegion()).queryByText('Create room Blue HQ')).toBeNull()
@@ -710,8 +710,8 @@ describe('a new design (SC-1)', () => {
     expect(after.design.game.name).toBe('New exercise')
     expect(after.design.forces.map((f) => f.name)).toEqual(['White'])
     expect(after.design.roles).toEqual([])
-    // Only the map room, which every design has (§3 rule 18).
-    expect(after.design.rooms.map((r) => r.roomType)).toEqual(['map'])
+    // Only the map and umpire rooms, which every design has (§3 rule 18, PD8).
+    expect(after.design.rooms.map((r) => r.roomType)).toEqual(['map', 'umpire'])
     expect(after.meta).toEqual(before.meta)
   })
 })

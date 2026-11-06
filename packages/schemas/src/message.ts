@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { LIMITS } from './common.ts'
 import { templateMessageBodySchema } from './template.ts'
+import { worldProposalMessageBodySchema } from './umpire.ts'
 import { worldStateMessageBodySchema } from './world.ts'
 
 /**
@@ -29,6 +30,7 @@ export const messageBodySchema = z.discriminatedUnion('type', [
   chatMessageBodySchema,
   templateMessageBodySchema,
   worldStateMessageBodySchema,
+  worldProposalMessageBodySchema,
 ])
 
 export type ChatMessageBody = z.infer<typeof chatMessageBodySchema>
