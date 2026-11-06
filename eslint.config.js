@@ -54,6 +54,8 @@ export default tseslint.config(
       // Throwaway Phase 0 prototypes; each has its own tooling.
       'spike/**',
       '.claude/**',
+      // The Python SDK's virtual environment (WP 6.1).
+      'python/.venv/**',
     ],
   },
   js.configs.recommended,

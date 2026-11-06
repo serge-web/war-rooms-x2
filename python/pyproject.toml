@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wrx"
+version = "0.1.0"
+description = "The Python SDK for War Rooms X: typed models and the read layer (SRD Annex C)"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+# Pure Python. Pyodide 314.0.7 ships pydantic 2.12.5 and pandas 3.0.2 (spike S17).
+dependencies = ["pydantic>=2.12,<2.13"]
+
+[project.optional-dependencies]
+pandas = ["pandas>=2.2"]
+
+[tool.setuptools.packages.find]
+include = ["wrx", "wrx.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
