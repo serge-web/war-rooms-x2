@@ -4,8 +4,8 @@
 // up when the browser is idle (`MapPreload`): opening the map tab then costs the render alone
 // (NFR-11). Their styles load
 // with the panel (map/index.ts), so a popped-out map has them (PLY-4).
-import { Spinner } from '@wrx/ui'
-import { lazy, useEffect, useState } from 'react'
+import { Spinner, lazyChunk, retryingImport } from '@wrx/ui'
+import { useEffect, useState } from 'react'
 import type { ComponentType } from 'react'
 import type { MapViewProps } from './leaflet-map.tsx'
 
@@ -17,7 +17,7 @@ function mapChunk() {
   let view: ComponentType<MapViewProps> | undefined
   return {
     load: () =>
-      import('./leaflet-map.tsx').then((module) => {
+      retryingImport(() => import('./leaflet-map.tsx')).then((module) => {
         view = module.default
         return module
       }),
@@ -98,4 +98,4 @@ export function MapPreload(): null {
 }
 
 /** The asset form's symbol preview (WP 5.6), in a chunk with milsymbol. */
-export const LazySymbolPreview = lazy(() => import('./symbol-preview.tsx'))
+export const LazySymbolPreview = lazyChunk(() => import('./symbol-preview.tsx'))

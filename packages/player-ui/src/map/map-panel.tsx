@@ -19,7 +19,7 @@ import { useForces, useGameState, useMe, useSessionStore, useWorldState } from '
 import type { PlayerPanelProps } from '@wrx/hooks'
 import { mapRoomConfigReader } from '@wrx/schemas'
 import type { Force, MapRoomConfig, WorldAsset, WorldState } from '@wrx/schemas'
-import { Banner, Button, Spinner } from '@wrx/ui'
+import { Banner, Button, ChunkBoundary, Spinner } from '@wrx/ui'
 import { Suspense, useCallback, useId, useMemo, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { AssetForm } from './asset-form.tsx'
@@ -443,22 +443,24 @@ export function MapPanelCore({
       <div className="wrx-map__body">
         {/* The map stays mounted behind the table, so switching back keeps its view. */}
         <div className="wrx-map__stage" hidden={view !== 'map'}>
-          <Suspense fallback={<Spinner label="Loading the map" />}>
-            <LazyMapView
-              assets={state.assets}
-              tiles={tiles}
-              config={config}
-              selected={selected}
-              onSelect={select}
-              label={`${name}: map of ${assets}. Arrow keys pan, plus and minus zoom. The table shows the same assets.`}
-              fitRequest={fitRequest}
-              showRequest={showRequest}
-              editable={editing !== undefined}
-              onMove={onMove}
-              placing={placing}
-              onPlace={onPlace}
-            />
-          </Suspense>
+          <ChunkBoundary what="the map">
+            <Suspense fallback={<Spinner label="Loading the map" />}>
+              <LazyMapView
+                assets={state.assets}
+                tiles={tiles}
+                config={config}
+                selected={selected}
+                onSelect={select}
+                label={`${name}: map of ${assets}. Arrow keys pan, plus and minus zoom. The table shows the same assets.`}
+                fitRequest={fitRequest}
+                showRequest={showRequest}
+                editable={editing !== undefined}
+                onMove={onMove}
+                placing={placing}
+                onPlace={onPlace}
+              />
+            </Suspense>
+          </ChunkBoundary>
           {tiles === undefined ? (
             <p className="wrx-map__notice">
               No base map is configured for this deployment: the assets are shown on a plain

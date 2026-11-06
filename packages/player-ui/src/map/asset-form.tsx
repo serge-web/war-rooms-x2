@@ -6,7 +6,7 @@ import { WORLD_ASSET_FIELDS } from '@wrx/domain'
 import type { WorldAssetField } from '@wrx/domain'
 import { LIMITS, sidcSchema, worldAssetSchema } from '@wrx/schemas'
 import type { Force, WorldAsset } from '@wrx/schemas'
-import { Button, Spinner, TextField } from '@wrx/ui'
+import { Button, ChunkBoundary, Spinner, TextField } from '@wrx/ui'
 import { Suspense, useEffect, useId, useRef, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import { LazySymbolPreview } from './lazy.tsx'
@@ -215,12 +215,14 @@ export function AssetForm({ asset, mode, forces, onSave, onCancel }: AssetFormPr
       {text('category', { maxLength: LIMITS.worldLabelChars })}
       {text('sidc', { spellCheck: 'false', autoCapitalize: 'characters' })}
       <div className="wrx-asset-form__preview" aria-live="polite">
-        <Suspense fallback={<Spinner label="Loading the symbol" />}>
-          <LazySymbolPreview
-            sidc={sidc.success ? sidc.data : undefined}
-            label={`Symbol preview for ${sidc.success ? sidc.data : 'the code'}`}
-          />
-        </Suspense>
+        <ChunkBoundary what="the symbol preview" onRetry={LazySymbolPreview.reset}>
+          <Suspense fallback={<Spinner label="Loading the symbol" />}>
+            <LazySymbolPreview
+              sidc={sidc.success ? sidc.data : undefined}
+              label={`Symbol preview for ${sidc.success ? sidc.data : 'the code'}`}
+            />
+          </Suspense>
+        </ChunkBoundary>
       </div>
       <div className="wrx-asset-form__pair">
         {text('lat')}

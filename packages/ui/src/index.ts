@@ -13,6 +13,8 @@
 //   ThemeScope      sets --wrx-* on its own root element (PLY-26) through @wrx/theme, with
 //                   partial tokens inherited from the enclosing scope; `root` for the outermost
 //   Spinner         loading indicator in a live region
+//   ChunkBoundary   contains a part that fails to load or render, with Try again and Reload;
+//                   lazyChunk and retryingImport retry code loaded on first use
 //
 // Storybook (`pnpm storybook:build`) has a story for each.
 import './ui.css'
@@ -27,6 +29,8 @@ export { PasswordField, TextField } from './fields.tsx'
 export type { PasswordFieldProps, TextFieldProps } from './fields.tsx'
 export { MarkdownView, renderMarkdown } from './markdown.tsx'
 export type { MarkdownViewProps } from './markdown.tsx'
+export { ChunkBoundary, lazyChunk, retryingImport } from './chunk.tsx'
+export type { ChunkBoundaryProps, LazyChunk } from './chunk.tsx'
 export { Spinner } from './spinner.tsx'
 export type { SpinnerProps } from './spinner.tsx'
 export { DEFAULT_THEME, FONT_STACKS, ThemeScope, themeStyle } from './theme.tsx'
