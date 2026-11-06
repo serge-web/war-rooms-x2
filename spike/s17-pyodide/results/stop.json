@@ -1,0 +1,15 @@
+{
+  "timedOut": {
+    "status": "timed-out",
+    "ms": 1501
+  },
+  "restartAfterStopMs": 2008,
+  "stopped": {
+    "status": "stopped",
+    "ms": 1008
+  },
+  "failed": {
+    "status": "failed",
+    "error": "RuntimeError: late failure"
+  }
+}

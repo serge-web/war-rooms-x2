@@ -860,6 +860,10 @@ Changes from the Python API discussion (Nov 5, 2026):
 - Annex C refined after review (Nov 5, 2026): shared White Force scripts accepted (PD5); opt-in publishing may happen at any time (PD7, PY-9, PR2); a built-in umpire room for White Force proposals (PD8, PY-8); a script's draft writes land only when it finishes (PD9, PY-10).
 - Annex C added: a Python API, post-v1. One role-scoped SDK serves reconcilers, analysis and automated players equally; the browser runner (Pyodide) comes first, for the admin and White Force only; scripts are kept in each account's private storage; White Force scripts post proposals to the admin; admin scripts fill the world-state draft and may publish without review only when the admin opts in per script. Spike S17 comes first. D26 and §8 point to it. Bot players are to be discussed separately.
 
+Changes from spike S17 (Nov 6, 2026):
+
+- Annex C: S17's outcome added under the spike's paragraph (pass with conditions; `plan/decisions/S17.md`). PR3, PR4 and PY-8 are not yet changed; the record proposes changes for the owner.
+
 ## Annex A. Message templates (built in Phase 4)
 
 Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
@@ -1015,3 +1019,13 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
 
 **Spike S17 (before any build).** Pyodide in a Web Worker in the admin view, bundled for an air-gapped install, under the client's content security policy. It reads the world state and a room's messages through a minimal bridge, writes a world-state draft that appears in the change summary, and posts a White Force proposal. It records the bundle size with and without pandas, cold-start and warm-start times, the content security policy needed, and whether the bridge can be kept to the SDK's operations.
+
+**S17 outcome (Nov 6, 2026): pass with conditions** (`plan/decisions/S17.md`).
+
+- **Offline:** everything is served from the build. The core is 13.4 MB (6.4 MB gzip), and pandas with numpy adds 7.9 MB.
+- **Policy:** the client's policy plus `'wasm-unsafe-eval'` is enough; `'unsafe-eval'` is not needed. A static host also needs `blob:` in `worker-src`, and the server must send `.wasm` as `application/wasm`. Which roles get the wider policy needs a decision (PR3).
+- **Start-up:** the worker is ready in about 1.8 s, cold or warm. The first pandas run takes 3.2 s.
+- **Round trip:** the bridge round trip and PD9 hold on the mock.
+- **Conditions for PY-4:** the worker must run under the policy itself (a header, or a `blob:` worker under a `<meta>` policy), and its network, storage and messaging globals must be removed before a script runs.
+- **PY-8:** a proposal needs its own message type with the 500 KB cap.
+- **PY-1:** generated pydantic models run in Pyodide.

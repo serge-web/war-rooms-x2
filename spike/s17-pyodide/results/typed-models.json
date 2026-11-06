@@ -1,0 +1,10 @@
+{
+  "pydantic": "2.12.5",
+  "pydantic valid": 6,
+  "pydantic invalid": "refused: ('content', 'assets', '60000000-0000-4000-8000-000000000001', 'lat')",
+  "dataclasses valid": 6,
+  "dataclasses invalid": "accepted (no validation): lat=200",
+  "pydantic round trip equal": true,
+  "runMs": 859,
+  "importLoadMs": 318
+}

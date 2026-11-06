@@ -1,0 +1,162 @@
+{
+  "python": "3.14.2",
+  "files": {
+    "annotated_types-0.7.0-py3-none-any.whl": {
+      "raw": 11963,
+      "gzip": 11444,
+      "brotli": 11356
+    },
+    "numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "raw": 2960568,
+      "gzip": 2925379,
+      "brotli": 2913946
+    },
+    "pandas-3.0.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "raw": 4177749,
+      "gzip": 4143956,
+      "brotli": 4136251
+    },
+    "pydantic-2.12.5-py3-none-any.whl": {
+      "raw": 463578,
+      "gzip": 455877,
+      "brotli": 452476
+    },
+    "pydantic_core-2.41.5-cp314-cp314-pyemscripten_2026_0_wasm32.whl": {
+      "raw": 1310164,
+      "gzip": 1301565,
+      "brotli": 1295333
+    },
+    "pyodide-lock.json": {
+      "raw": 3336,
+      "gzip": 1013,
+      "brotli": 903
+    },
+    "pyodide.asm.mjs": {
+      "raw": 1250344,
+      "gzip": 261220,
+      "brotli": 207390
+    },
+    "pyodide.asm.wasm": {
+      "raw": 9598218,
+      "gzip": 3593065,
+      "brotli": 2741061
+    },
+    "pyodide.mjs": {
+      "raw": 17931,
+      "gzip": 7193,
+      "brotli": 6453
+    },
+    "python_dateutil-2.9.0.post0-py2.py3-none-any.whl": {
+      "raw": 229892,
+      "gzip": 228231,
+      "brotli": 227544
+    },
+    "python_stdlib.zip": {
+      "raw": 2545637,
+      "gzip": 2503763,
+      "brotli": 2487479
+    },
+    "pytz-2026.1.post1-py2.py3-none-any.whl": {
+      "raw": 510489,
+      "gzip": 377484,
+      "brotli": 287397
+    },
+    "six-1.17.0-py2.py3-none-any.whl": {
+      "raw": 11050,
+      "gzip": 10638,
+      "brotli": 10559
+    },
+    "typing_extensions-4.15.0-py3-none-any.whl": {
+      "raw": 44613,
+      "gzip": 44219,
+      "brotli": 44090
+    },
+    "typing_inspection-0.4.2-py3-none-any.whl": {
+      "raw": 14610,
+      "gzip": 13746,
+      "brotli": 13623
+    }
+  },
+  "core": {
+    "raw": 13415466,
+    "gzip": 6366254,
+    "brotli": 5443286
+  },
+  "sets": {
+    "numpy": {
+      "packages": [
+        "numpy"
+      ],
+      "wheels": {
+        "raw": 2960568,
+        "gzip": 2925379,
+        "brotli": 2913946
+      },
+      "withCore": {
+        "raw": 16376034,
+        "gzip": 9291633,
+        "brotli": 8357232
+      }
+    },
+    "pandas": {
+      "packages": [
+        "numpy",
+        "pandas",
+        "python-dateutil",
+        "pytz",
+        "six"
+      ],
+      "wheels": {
+        "raw": 7889748,
+        "gzip": 7685688,
+        "brotli": 7575697
+      },
+      "withCore": {
+        "raw": 21305214,
+        "gzip": 14051942,
+        "brotli": 13018983
+      }
+    },
+    "pydantic": {
+      "packages": [
+        "annotated-types",
+        "pydantic",
+        "pydantic-core",
+        "typing-extensions",
+        "typing-inspection"
+      ],
+      "wheels": {
+        "raw": 1844928,
+        "gzip": 1826851,
+        "brotli": 1816878
+      },
+      "withCore": {
+        "raw": 15260394,
+        "gzip": 8193105,
+        "brotli": 7260164
+      }
+    }
+  },
+  "lockFile": {
+    "full": 111328,
+    "shipped": 3336
+  },
+  "spikeScripts": {
+    "index-jObDkC9Y.js": {
+      "raw": 351033,
+      "gzip": 99831,
+      "brotli": 69037
+    },
+    "worker-CCckwKdr.js": {
+      "raw": 4384,
+      "gzip": 2139,
+      "brotli": 1861
+    }
+  },
+  "fullDistribution": {
+    "files": 421,
+    "packages": 357,
+    "rawBytes": 380567007,
+    "note": "pyodide-<version>.tar.bz2 from the GitHub release, extracted"
+  }
+}
