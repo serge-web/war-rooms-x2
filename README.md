@@ -141,7 +141,7 @@ flowchart TB
     class wp33,wp34 active
     class wps17 done
     class wp61,wp62,wp63,wp64 done
-    class wp65 active
+    class wp65 done
     class G0,G1,G2,G3,G4,G5,G6 gate
 ```
 
