@@ -3,6 +3,7 @@
 // size caps and JSON checks before sending, node options on every node it creates, occupant
 // tracking from presence, reconnection and XEP-0198-style resumption (PLY-2), and forced logout
 // (PLY-50). Nothing here is shared between sessions (D15).
+import { LIMITS } from '@wrx/schemas'
 import type { Result } from '@wrx/schemas'
 import { err, ok } from '@wrx/transport'
 import type {
@@ -41,6 +42,7 @@ import type {
 } from './protocol.ts'
 import {
   PRIVATE_KEY_PATTERN,
+  privateValueWithinCap,
   PUBSUB_PAYLOAD_CAP_BYTES,
   messageStanza,
   messageWithinCap,
@@ -441,6 +443,12 @@ class MockAdmin implements AdminApi {
   setPrivate: AdminApi['setPrivate'] = async (key, value) => {
     if (!PRIVATE_KEY_PATTERN.test(key))
       return err('bad-request', `private key ${key} is not allowed`)
+    if (!privateValueWithinCap(value)) {
+      return err(
+        'too-large',
+        `the value is over the ${LIMITS.privateValueBytes}-byte private-storage cap`,
+      )
+    }
     const r = await this.caller.call({ op: 'admin.setPrivate', args: [key, value] })
     return r.op === 'admin.setPrivate' || r.op === 'failed' ? r.result : mismatch()
   }

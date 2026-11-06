@@ -2311,3 +2311,21 @@ export function canEditObjectives(who: {
 }): boolean {
   return who.isAdmin || (who.isUmpire && !who.isObserver)
 }
+
+// WP 6.3 (SRD Annex C PD4, PY-6): one rule for the script panel and the runner's bridge.
+/** The roles a browser script runs as (PD4). */
+export type ScriptRole = 'admin' | 'white-force'
+
+/**
+ * The role this session's scripts run as, if any (PD4, PY-6): the admin, or a White Force role
+ * that is not an observer. Observer roles are read-only and their logins are handed out more
+ * widely (§3, ADM-37), so they get no scripts; nor does an anonymous session. A preview as a
+ * role reports the role but reads through the admin's session: the host leaves it out.
+ */
+export function scriptRoleOf(
+  me: Pick<Me, 'identity' | 'isUmpire' | 'isObserver' | 'role'>,
+): ScriptRole | undefined {
+  if (me.identity.anonymous) return undefined
+  if (me.identity.isAdmin) return 'admin'
+  return me.isUmpire && me.role !== undefined && !me.isObserver ? 'white-force' : undefined
+}

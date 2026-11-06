@@ -35,3 +35,13 @@ export const PUBSUB_PAYLOAD_CAP_BYTES = LIMITS.pubsubItemBytes - LIMITS.pubsubIt
 export function payloadWithinCap(json: string): boolean {
   return utf8Bytes(json) <= PUBSUB_PAYLOAD_CAP_BYTES
 }
+
+/** UTF-8 length of `text` as XML character data: `&`, `<` and `>` escaped, as StanzaJS does. */
+export function escapedTextBytes(text: string): number {
+  return utf8Bytes(text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+}
+
+/** Whether a private-storage value is within its cap (WP 6.3), counted as it is sent. */
+export function privateValueWithinCap(value: string): boolean {
+  return escapedTextBytes(value) <= LIMITS.privateValueBytes
+}

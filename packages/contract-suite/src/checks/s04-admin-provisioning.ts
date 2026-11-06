@@ -281,6 +281,54 @@ export function s04(ctx: Ctx, raw: RawAccess | undefined): void {
       expect(must(await one.admin.getPrivate(kept), 'kept')).toBe(`${kept}-2`)
     })
 
+    // WP 6.3 (PD5, PY-7): any account keeps its own scripts in its private storage, not only the
+    // admin. A White Force role's sessions share one store (one login per role, D22); another
+    // account, the admin included, reads nothing of it.
+    it('private storage is per account for a White Force role, shared by its sessions', async () => {
+      const fx = ctx.fx()
+      const key = `contract-scripts-${fx.tag}`
+      const one = await ctx.login(fx.users.umpire)
+      const two = await ctx.login(fx.users.umpire)
+      try {
+        const first = json({ format: 'wrx-scripts', revision: 1, scripts: [{ code: 'a < b' }] })
+        must(await one.admin.setPrivate(key, first), 'session one writes')
+        expect(must(await two.admin.getPrivate(key), 'session two reads')).toBe(first)
+        const second = json({ format: 'wrx-scripts', revision: 2, scripts: [] })
+        must(await two.admin.setPrivate(key, second), 'session two writes')
+        expect(must(await one.admin.getPrivate(key), 'session one reads it')).toBe(second)
+        const player = await ctx.login(fx.users.blueCo)
+        expect(must(await player.admin.getPrivate(key), 'a player reads')).toBeUndefined()
+        expect(must(await ctx.admin().admin.getPrivate(key), 'the admin reads')).toBeUndefined()
+      } finally {
+        await one.admin.setPrivate(key, '')
+      }
+    })
+
+    // The reference server ends a stream whose stanza is over `max_stanza_size` (262,144 bytes),
+    // so both backends refuse a value over LIMITS.privateValueBytes (200,000 bytes escaped) with
+    // `too-large` before sending; a value just under it is kept, and the session lives on.
+    it('private storage refuses a value over the cap and keeps one just under it', async () => {
+      const fx = ctx.fx()
+      const key = `contract-cap-${fx.tag}`
+      const session = await ctx.login(fx.users.umpire)
+      try {
+        // `<` is four bytes escaped: 50,001 of them are over the cap although 50,001 characters.
+        const escapedOver = '<'.repeat(50_001)
+        expect(errorOf(await session.admin.setPrivate(key, escapedOver))?.condition).toBe(
+          'too-large',
+        )
+        expect(errorOf(await session.admin.setPrivate(key, 'x'.repeat(200_001)))?.condition).toBe(
+          'too-large',
+        )
+        const under = `${'x'.repeat(199_000)}<&>`
+        must(await session.admin.setPrivate(key, under), 'just under the cap')
+        expect(must(await session.admin.getPrivate(key), 'read back')).toBe(under)
+        expect(session.status().state).toBe('online')
+      } finally {
+        await session.admin.setPrivate(key, '')
+      }
+    })
+
     if (raw === undefined) return
 
     // A value written before each key had its own element (one JSON object in

@@ -20,8 +20,10 @@ export interface AdminApi {
   /** §4.6. Ends every session of the account; they see `session-ended` (PLY-50). */
   endUserSessions(jid: string): Outcome<void>
   /**
-   * XEP-0049 private XML storage for this account, holding one JSON string per key. The
-   * observer-password vault keeps only ciphertext here (ADM-37).
+   * XEP-0049 private XML storage for this account, holding one JSON string per key. Any
+   * account may use its own, not only the admin: the observer-password vault keeps only
+   * ciphertext here (ADM-37), and the admin's and White Force roles' scripts live here (PY-7).
+   * `setPrivate` refuses a value over `LIMITS.privateValueBytes` (escaped) with `too-large`.
    */
   getPrivate(key: string): Outcome<string | undefined>
   setPrivate(key: string, value: string): Outcome<void>
