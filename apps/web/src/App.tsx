@@ -26,7 +26,7 @@ import type {
   WorldDraftStorage,
 } from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
-import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
+import { Banner, ChunkBoundary, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -74,7 +74,9 @@ export function App(props: AppProps) {
       <ToastProvider>
         <MapTilesProvider tiles={props.tiles}>
           <WorldDraftProvider storage={props.worldDrafts}>
-            <AppRoutes {...props} />
+            <ChunkBoundary what="this page">
+              <AppRoutes {...props} />
+            </ChunkBoundary>
           </WorldDraftProvider>
         </MapTilesProvider>
       </ToastProvider>

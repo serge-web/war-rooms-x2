@@ -3,16 +3,18 @@
 // then loads the runner (`py/runner.js`) and starts Pyodide. Nothing of either is in the chunks
 // the page loads at start-up (`check:bundle`).
 import type { ScriptRole } from '@wrx/domain'
-import { Spinner } from '@wrx/ui'
-import { Suspense, lazy } from 'react'
+import { ChunkBoundary, Spinner, lazyChunk } from '@wrx/ui'
+import { Suspense } from 'react'
 
-const Panel = lazy(() => import('./scripts-panel.tsx'))
+const Panel = lazyChunk(() => import('./scripts-panel.tsx'))
 
 /** The Scripts panel of the workspace, for a role that runs scripts. */
 export function LazyScriptsPanel({ role }: { readonly role: ScriptRole }) {
   return (
-    <Suspense fallback={<Spinner label="Loading the script panel" />}>
-      <Panel role={role} />
-    </Suspense>
+    <ChunkBoundary what="the script panel" onRetry={Panel.reset}>
+      <Suspense fallback={<Spinner label="Loading the script panel" />}>
+        <Panel role={role} />
+      </Suspense>
+    </ChunkBoundary>
   )
 }

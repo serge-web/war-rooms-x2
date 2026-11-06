@@ -7,7 +7,7 @@
 import type { Template, TemplateValue } from '@wrx/schemas'
 import { templateFields } from '@wrx/schemas'
 import type { FormValues } from '@wrx/templates'
-import { Button, Spinner } from '@wrx/ui'
+import { Button, ChunkBoundary, Spinner } from '@wrx/ui'
 import { Suspense, useId, useMemo, useState } from 'react'
 import { LazyTemplateForm } from '../templates/lazy.tsx'
 import { NO_PICKER_SOURCE } from '../templates/pickers.ts'
@@ -269,65 +269,67 @@ function TemplateComposer({
         </p>
       )}
       <div className="wrx-composer__form">
-        <Suspense fallback={<Spinner label="Loading the form" />}>
-          <LazyTemplateForm
-            template={template}
-            values={values}
-            onChange={(next) => {
-              setValues(next)
-              if (fieldErrors !== undefined) setFieldErrors(undefined)
-            }}
-            onSubmit={(submitted) => {
-              void submit(submitted)
-            }}
-            onInvalid={setProblems}
-            pickers={pickers}
-            disabled={disabled}
-            extraErrors={fieldErrors}
-            idPrefix={idPrefix}
-          >
-            <div className="wrx-composer__actions">
-              {note === undefined ? null : (
-                <p
-                  id={noteId}
-                  className={
-                    size.over === undefined
-                      ? 'wrx-composer__note'
-                      : 'wrx-composer__note wrx-composer__error'
+        <ChunkBoundary what="the template form" onRetry={LazyTemplateForm.reset}>
+          <Suspense fallback={<Spinner label="Loading the form" />}>
+            <LazyTemplateForm
+              template={template}
+              values={values}
+              onChange={(next) => {
+                setValues(next)
+                if (fieldErrors !== undefined) setFieldErrors(undefined)
+              }}
+              onSubmit={(submitted) => {
+                void submit(submitted)
+              }}
+              onInvalid={setProblems}
+              pickers={pickers}
+              disabled={disabled}
+              extraErrors={fieldErrors}
+              idPrefix={idPrefix}
+            >
+              <div className="wrx-composer__actions">
+                {note === undefined ? null : (
+                  <p
+                    id={noteId}
+                    className={
+                      size.over === undefined
+                        ? 'wrx-composer__note'
+                        : 'wrx-composer__note wrx-composer__error'
+                    }
+                  >
+                    {note}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={disabled || sending}
+                  onClick={() => {
+                    setValues(initialValues(template))
+                    setError(undefined)
+                    setFieldErrors(undefined)
+                    setProblems(undefined)
+                  }}
+                >
+                  Clear
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={!canSend}
+                  busy={sending}
+                  aria-describedby={
+                    [disabled ? reasonId : '', note === undefined ? '' : noteId]
+                      .filter(Boolean)
+                      .join(' ') || undefined
                   }
                 >
-                  {note}
-                </p>
-              )}
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={disabled || sending}
-                onClick={() => {
-                  setValues(initialValues(template))
-                  setError(undefined)
-                  setFieldErrors(undefined)
-                  setProblems(undefined)
-                }}
-              >
-                Clear
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={!canSend}
-                busy={sending}
-                aria-describedby={
-                  [disabled ? reasonId : '', note === undefined ? '' : noteId]
-                    .filter(Boolean)
-                    .join(' ') || undefined
-                }
-              >
-                Send
-              </Button>
-            </div>
-          </LazyTemplateForm>
-        </Suspense>
+                  Send
+                </Button>
+              </div>
+            </LazyTemplateForm>
+          </Suspense>
+        </ChunkBoundary>
       </div>
     </div>
   )
