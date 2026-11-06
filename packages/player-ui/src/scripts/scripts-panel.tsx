@@ -838,13 +838,13 @@ function AutoPublishSetting({
       <label htmlFor={id}>Publish without review</label>
       <p id={`${id}-hint`} className="wrx-scripts__hint">
         {on
-          ? 'On: when this script finishes cleanly and has changed the draft, the world state is published to every role at once, without the change summary.'
+          ? 'On: when this script finishes cleanly and has changed the draft, the whole draft, your hand edits included, is published to every role at once, without the change summary.'
           : 'Off: the script fills the draft, and you publish it from the Map room after the change summary.'}
       </p>
       {confirming ? (
         <InlineConfirm
           title={`Publish without review for ${script.name}?`}
-          text="Each clean run that changes the draft will then publish the world state to every role straight away, at any time, mid-phase included. It changes the live map without review: you will not see the change summary first. Each publish is checked and recorded below, and a manual publish can put a mistake right."
+          text="Each clean run that changes the draft will then publish the whole draft to every role straight away, at any time, mid-phase included: the script's change and any hand edits in the draft that you have not published, finished or not. It changes the live map without review: you will not see the change summary first. Publish or discard your hand edits before a run. Each publish is checked and recorded below, and a manual publish can put a mistake right."
           action="Turn on"
           onConfirm={() => {
             onSet(true)
@@ -933,7 +933,7 @@ function PythonStatus({
     <p className="wrx-scripts__python" role="status">
       {python.phase === 'loading'
         ? 'Starting Python… (the first start takes a few seconds)'
-        : 'Python is ready.'}
+        : 'Python is ready. Each run starts in a fresh Python: nothing a script leaves behind reaches the next run.'}
     </p>
   )
 }

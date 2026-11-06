@@ -74,6 +74,14 @@ describe('parsePost', () => {
       `${file}: snapshotBranch and snapshotCommit go together (DOC-24)`,
     ])
   })
+  it('reads `python`, off unless a post says true (its snapshot then carries py/)', () => {
+    expect(parsePost(file, post(valid)).post?.python).toBe(false)
+    expect(parsePost(file, post(`${valid}\npython: true`)).post?.python).toBe(true)
+    expect(parsePost(file, post(`${valid}\npython: false`)).post?.python).toBe(false)
+    expect(parsePost(file, post(`${valid}\npython: yes`)).problems).toEqual([
+      `${file}: python is true or false (a Python post's snapshot carries py/)`,
+    ])
+  })
 })
 
 describe('postSlug and isPhaseBranch', () => {
@@ -98,6 +106,7 @@ describe('checkPosts (DOC-26)', () => {
     date: '2026-11-01',
     phase,
     status,
+    python: false,
     body,
   })
   it('requires a gate post to link every work-in-progress post of its phase', () => {
@@ -139,7 +148,9 @@ describe('classifyPr and reviewBlogPr (DOC-23 to DOC-25)', () => {
     expect(decision).toEqual({
       eligible: true,
       reasons: [],
-      snapshots: [{ slug: 'layout-library', branch: 'phase-0', commit: SHA, replace: true }],
+      snapshots: [
+        { slug: 'layout-library', branch: 'phase-0', commit: SHA, replace: true, python: false },
+      ],
     })
   })
   it('refuses a PR that changes anything outside the blog folder (DOC-23)', () => {
@@ -167,11 +178,24 @@ describe('classifyPr and reviewBlogPr (DOC-23 to DOC-25)', () => {
   it('turns snapshots into deploy ops', () => {
     expect(
       snapshotOps([
-        { slug: 'a', branch: 'phase-0', commit: SHA, replace: true },
-        { slug: 'b', branch: 'phase-0', commit: SHA, replace: false },
+        { slug: 'a', branch: 'phase-0', commit: SHA, replace: true, python: false },
+        { slug: 'b', branch: 'phase-0', commit: SHA, replace: false, python: true },
       ]),
     ).toBe('snapshot-replace:a=snapshot-a snapshot:b=snapshot-b')
     expect(snapshotOps([])).toBe('')
+  })
+  it('builds a Python post’s snapshot with py/, and others without it', () => {
+    const python = parsePost(
+      file,
+      post(`${valid}\npython: true\nsnapshotBranch: phase-0\nsnapshotCommit: ${SHA}`),
+    )
+    const decision = reviewBlogPr({
+      classification: classifyPr({ files: [file], ...blogFacts }),
+      posts: [python],
+      flagged: [],
+      published: new Set(),
+    })
+    expect(decision.snapshots[0]?.python).toBe(true)
   })
   it('freezes the snapshot of a post already published (DOC-24)', () => {
     const decision = reviewBlogPr({

@@ -39,14 +39,18 @@ Everything Phase 6 built, as frozen: the SDK and protocol 2 (6.1, 6.4), the runn
 
 ## For the owner
 
-1. **M1:** a fresh Python interpreter for every run (recommended), only before runs that publish without review, or keep as documented.
-2. **M2:** a per-run budget on sends, proposals and calls in flight (suggested 100, 10, 16).
-3. **M4:** refuse publishing without review when the draft held unreviewed hand edits (recommended), or publish only the script's change.
-4. **Blog snapshots** carry `py/` (about 34 MB each); build them without Python unless the post is about it.
+Decided by the owner on Nov 6, 2026, after the gate's reviews, and applied on the phase branch:
+
+1. **M1, one interpreter per panel: fixed.** Every run gets a fresh Python interpreter; nothing carries over between runs. The runner ends each run's worker with the run and starts the next one in the background at once; each worker imports the SDK before it is ready. A run asked for a few seconds after the last starts in about 2 ms, as before; one asked for straight after waits about 2.8 s; every pandas run pays pandas' import (about 3.4 s). M1's probe is now a regression test that passes.
+2. **M2, a per-run budget: accepted.** No per-run budget on sends, proposals or calls; the run's time limit and the server's per-player shaper bound a run. Recorded in the security review, SRD Annex C's risks and `docs/python-sdk.md`.
+3. **M4, publishing without review and hand edits: accepted.** It publishes the whole draft, hand edits included; the setting's hint, its confirmation and the docs say so plainly.
+4. **Blog snapshots and `py/`: only for posts about Python.** A post declares it with `python: true` in its front matter (default off; `check:blog` refuses other values); its snapshot then carries `py/`. Every other snapshot builds with `WRX_PY_RUNNER=off` and the stub runner, as a PR preview that does not touch Python does. The Phase 6 post has `python: true`. Documented in `site/README.md`.
+
+Gates after applying them (Nov 6, 2026): `pnpm check` (1,786 unit tests); `check:python` (84 passed, 3 skipped); build and `check:bundle` (start-up chunk unchanged, 1,022,221 bytes); `CI=1 pnpm e2e` with ports 5103/5105, twice (125 passed, 18 skipped each: the ejabberd project without a stack); the site build with `check:site` (62 files, no deny-list match; 33.8 MB) and `check:blog` (8 posts); screenshots `--repeat` (31, identical; the umpire panel's scenario now matches the longer status line); on ejabberd 26.09 (compose project `wrx-m1-a7173`, port 35531, stopped and removed) the Playwright `ejabberd` project with `--workers=1` (18 passed, 1 skipped; SC-12 passed).
 
 ## Weak points
 
-- **Three Medium findings stay open** (M1, M2, M4), with the owner.
+- **Two Medium findings are accepted, not fixed** (M2, M4, the owner's decision of Nov 6, 2026). M1 is fixed, at the cost of a fresh worker per run: a run straight after another waits about 2.8 s, and every pandas run pays pandas' import.
 - **The sandbox is still a deny-list plus the policy.** The new walks found no path to the global scope, but they are a sample, not a proof.
 - **Numbers are the mock's, on loopback, in Chromium.** No network time, no WebKit, no Python throughput on ejabberd.
 - **Scripts outlive a server reset** on ejabberd, since the admin account is kept; by design (PD5), but the next game's admin sees the last game's scripts, publish-without-review settings included.

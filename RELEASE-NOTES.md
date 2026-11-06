@@ -49,19 +49,20 @@ Gate G6, Nov 6, 2026 (SRD Annex C). The umpire team, the admin and the White For
 - **The Scripts panel**, a workspace tab: scripts kept with the login on the server, an editor, Run and Stop, a time limit, the output and errors, export and import as files.
 - **The umpires room**, one per game, fixed like the map room, for the admin and the White Force: White Force proposals arrive there as cards the admin loads into the draft after a change summary.
 - **The admin's scripts** change the draft on top of hand edits; nothing reaches players until the admin publishes, unless the admin turns on **Publish without review** for a script, after a confirmation.
-- **In the build:** Python runs in a locked-down worker from files in the build (`py/`, about 23 MB, checked by sha256), loaded only when the Scripts panel first opens; the page's start-up code does not carry it. Python is ready about 2 s after the panel opens, a first script that uses the SDK takes about 1 s more, and a first pandas table about 3 s more.
+- **In the build:** Python runs in a locked-down worker from files in the build (`py/`, about 23 MB, checked by sha256), loaded only when the Scripts panel first opens; the page's start-up code does not carry it. Python is ready, with the SDK loaded, about 3 s after the panel opens.
+- **A fresh Python for every run** (the owner's decision of Nov 6, 2026, on the security review's M1): nothing one run leaves in the interpreter reaches the next. The next run's Python starts in the background as soon as a run ends, so a run a few seconds after the last starts at once; one straight after waits about 3 s; a run that makes a pandas table pays pandas' import, about 3.5 s, every time.
 - **Accessibility (WP 6.5):** every inline form and confirmation of the panel and the umpires room now gives focus back when it closes.
 - **Security review fixes (WP 6.5):** a script can no longer take a hidden world state ("Look further back") for an empty map, and publishing without review refuses to publish against one; proposals count only from White Force roles that are not observers.
 
 **Known limits of the Python API**
 
 - A script runs only while its tab is open (PY-11); long-running automated players wait for a native runner.
-- Runs in one panel share a Python session until Stop, a time limit or the panel closing: a script can leave changes behind that affect the next run. Choose Stop before running an important script after one you are not sure of.
-- Nothing limits how many messages a run sends; a handler that answers every message can fill a room.
-- Publishing without review publishes the whole draft, including unreviewed hand edits.
+- Nothing limits how many messages, proposals or calls a run makes, beyond its time limit and the server's per-login shaping; a handler that answers every message can fill a room (accepted by the owner, Nov 6, 2026).
+- Publishing without review publishes the whole draft, including unreviewed hand edits (accepted by the owner, Nov 6, 2026; its confirmation says so).
 - Everyone sharing a role's login shares its scripts; another session's save replaces the open script within 5 s when it has no unsaved edits.
 - Events a script does not take in time are dropped after 1,000, without a warning.
 - Chromium only was tested here; WebKit runs in CI.
+- Blog snapshots carry Python only for posts about it (`python: true` in the post); others say Python is not in that build.
 
 ### Supported browsers
 

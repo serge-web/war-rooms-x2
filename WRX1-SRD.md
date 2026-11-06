@@ -886,6 +886,7 @@ Changes from WP 6.4, act and adjudicate (Nov 6, 2026):
 Changes from WP 6.5, the Python API's acceptance (Nov 6, 2026):
 
 - §12: SC-12 added, the umpires adjudicating with Python on both backends: a White Force proposal loaded into the draft, a hand edit, an admin script on top of it, and a reviewed publish.
+- Nov 6, 2026, the owner's decisions on the Phase 6 security review: PY-4 now requires a fresh interpreter for every run (M1, fixed; about 3 s before a run's first output when it follows another at once); PR6 (no per-run send budget, M2) and PR7 (publishing without review publishes the whole draft, M4) added as accepted risks.
 
 ## Annex A. Message templates (built in Phase 4)
 
@@ -1023,7 +1024,7 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PY-1 The SDK SHALL expose typed models generated from the exported JSON Schemas (ARC-6), so the Python and TypeScript views of a document cannot drift.
 - PY-2 The SDK SHALL offer three layers: read (game, turn, forces, roles, rooms, message history, world state, objectives), act (send text and template messages, react to messages and phase changes), and adjudicate (propose a world state).
 - PY-3 The read layer SHALL offer tabular helpers (pandas DataFrames) for messages, turns and assets, loaded only when used.
-- PY-4 The browser runner SHALL run Python in a Web Worker with no direct access to the session, the DOM or storage. Every call SHALL pass through a bridge that offers only the SDK's operations, checked against the role's access in the client.
+- PY-4 The browser runner SHALL run Python in a Web Worker with no direct access to the session, the DOM or storage. Every call SHALL pass through a bridge that offers only the SDK's operations, checked against the role's access in the client. Each run SHALL start in a fresh interpreter, so that nothing one run leaves in the interpreter reaches a later run (decided Nov 6, 2026).
 - PY-5 Pyodide and every package the SDK needs SHALL be bundled with the build and loaded only when a script panel is first opened, never for other roles (NFR-7). The main bundle SHALL NOT grow.
 - PY-6 The admin view and White Force roles SHALL have a script panel: a list of the account's scripts, an editor, Run and Stop, and the script's output and errors. Other roles SHALL NOT be offered it.
 - PY-7 Scripts SHALL be stored in the account's private storage, with name, code and settings, and SHALL be exportable and importable as files.
@@ -1040,6 +1041,8 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PR3 **Content security policy.** Pyodide needs WebAssembly compilation. Decided (Nov 6, 2026, after S17): one policy for every role's client, adding `'wasm-unsafe-eval'` to `script-src` and, on static hosts, `blob:` to `worker-src`; `'unsafe-eval'` stays forbidden. Every player's page may then compile WebAssembly although only the admin and White Force run scripts; accepted for one simple policy. Servers SHALL send `.wasm` as `application/wasm`.
 - PR4 **Size and start-up.** Measured by S17: the Pyodide core is 13.4 MB (5.4 MB brotli) and pandas with numpy adds 7.9 MB (7.6 MB brotli); the worker is ready in about 1.8 s, a small script runs in about 10 ms, and the first pandas run takes about 3.2 s (CI-like container, loopback, so real networks are slower). Acceptable for adjudication and analysis, not for interactive use.
 - PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
+- PR6 **No per-run budget on what a script sends** (accepted by the owner, Nov 6, 2026). A loop, or a handler answering every message, can post as many messages, proposals and calls as it asks for, as its role; a player's posts can drive such a handler. Bounded only by the run's time limit (PY-10) and the server's per-player shaper.
+- PR7 **Publishing without review publishes the whole draft** (accepted by the owner, Nov 6, 2026), the admin's unpublished hand edits included, not only the script's change. The opt-in's confirmation says so (PD7, PY-9).
 
 **Spike S17 (before any build).** Pyodide in a Web Worker in the admin view, bundled for an air-gapped install, under the client's content security policy. It reads the world state and a room's messages through a minimal bridge, writes a world-state draft that appears in the change summary, and posts a White Force proposal. It records the bundle size with and without pandas, cold-start and warm-start times, the content security policy needed, and whether the bridge can be kept to the SDK's operations.
 

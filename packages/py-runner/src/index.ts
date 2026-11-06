@@ -3,7 +3,8 @@
 // the admin's draft, the White Force's proposals and events, WP 6.4). This module is the entry
 // of its own build (`py/runner.js` in the app's output, beside its worker and `py/pyodide/`):
 // nothing in the app imports it, so the main bundle does not grow; a page loads it with
-// `loadRunner` (`@wrx/py-runner/load`) when a script panel first opens (6.3).
+// `loadRunner` (`@wrx/py-runner/load`) when a script panel first opens (6.3). Each run gets a
+// fresh interpreter (the Phase 6 security review's M1, decided Nov 6, 2026): see runner.ts.
 //
 // zod must not compile parsers with `new Function` under the policy (F7): first, as in main.tsx.
 import '@wrx/schemas/jitless'
@@ -52,6 +53,13 @@ export interface RunnerOptions {
   readonly startTimeoutMs?: number
   /** A run's time limit when `run` names none (PY-10); default `LIMITS.scriptRunDefaultSeconds`. */
   readonly defaultTimeoutMs?: number
+  /**
+   * Every run gets a fresh interpreter (review M1). With this on (the default), the next run's
+   * worker starts in the background as soon as a run ends; off, it starts when the run asks.
+   */
+  readonly prewarm?: boolean
+  /** Each new worker imports the SDK (pydantic) before it is ready; default true. */
+  readonly preimportSdk?: boolean
 }
 
 export interface RunOptions {
@@ -66,13 +74,16 @@ export interface Runner {
   /** A script is running. */
   readonly running: boolean
   /**
-   * Starts the worker (Pyodide loads in about 2 s, S17): call it when the panel opens (PY-5).
-   * Resolves with its timings; a second call returns the same start.
+   * Starts the worker (Pyodide loads in about 2 s, S17, and the SDK about 1 s more): call it when
+   * the panel opens (PY-5). Resolves with its timings; a second call returns the same start.
    */
   start(): Promise<StartResult>
-  /** Runs a script, starting the worker first if it is not running. One run at a time. */
+  /**
+   * Runs a script in a fresh interpreter (review M1), starting a worker first if none is ready.
+   * One run at a time; the worker ends with the run, whatever its outcome.
+   */
   run(code: string, options?: RunOptions): Promise<RunOutcome>
-  /** Stops the running script: the worker is terminated and the next run starts a new one. */
+  /** Stops the running script: the worker is terminated; the next run gets a new one. */
   stop(): void
   /** The calls the bridge has handled, for diagnostics. */
   calls(): readonly CallRecord[]
@@ -119,9 +130,12 @@ export function createRunner(options: RunnerOptions): Runner {
     mapRoomId,
     ...(draft === undefined ? {} : { draft: { current: () => draft.current() } }),
   })
-  const runner = new ScriptRunner((write) => {
-    draft?.apply(write)
-  })
+  const runner = new ScriptRunner(
+    (write) => {
+      draft?.apply(write)
+    },
+    { prewarm: options.prewarm ?? true },
+  )
   let disposed = false
   const start = (): Promise<StartResult> => {
     if (disposed) return Promise.reject(new Error('the runner was disposed'))
@@ -130,6 +144,7 @@ export function createRunner(options: RunnerOptions): Runner {
       indexURL,
       packages: options.packages ?? [],
       timeoutMs: options.startTimeoutMs ?? 60_000,
+      preimportSdk: options.preimportSdk ?? true,
     })
   }
   return {
@@ -152,8 +167,7 @@ export function createRunner(options: RunnerOptions): Runner {
     rejected: () => runner.rejected,
     dispose: () => {
       disposed = true
-      runner.stop()
-      runner.terminate()
+      runner.dispose()
     },
   }
 }

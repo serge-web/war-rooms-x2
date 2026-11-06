@@ -16,14 +16,14 @@ Draft of the Phase 6 gate summary, for the phase PR's description (working model
 ## Acceptance results (WP 6.5)
 
 - **SC-12** (new, SRD §12; `apps/web/e2e/scenarios/sc-12-umpire-runs-python.spec.ts`) passes on the mock and on ejabberd 26.09: a White Force script proposes; the admin loads the proposal after its summary, edits by hand, runs an admin script on top of the hand edit, reviews all three changes and publishes; Blue's open map updates; Blue has no Scripts tab and no umpire room.
-- **Performance** (`plan/reviews/phase-6-performance.md`, `apps/web/e2e/py-runner-perf.spec.ts`): worker ready 2.0 s cold, 2.1 s warm; first SDK run 0.9 s (pydantic), first pandas run 3.0 s; a 600-asset read, change and draft write 79 ms; 2,500 events a second, 100 sends in 88 ms, 1,000 calls at once in 200 ms; interpreter memory 30 MB, 36 MB with the SDK, 90 MB with pandas. `py/` is 23.4 MB (the core 6.4 MB gzip, the wheels barely compress). The start-up chunk grew 10,607 bytes over the phase (1.05%), 9,255 of them in WP 6.4 (the umpire room, the proposal schema and card, the draft merge); moving the admin's umpire panel (2.2 kB) to a lazy chunk split the start-up chunk in three for a 1.6 kB saving, so it was not kept; the owner then accepted the growth (Nov 6).
+- **Performance** (`plan/reviews/phase-6-performance.md`, `apps/web/e2e/py-runner-perf.spec.ts`): worker ready 2.0 s cold, 2.1 s warm; first SDK run 0.9 s (pydantic), first pandas run 3.0 s (before M1's fix; since, every run has a fresh interpreter: ready 3.0 s cold with the SDK imported, a run a few seconds after the last starts in about 2 ms, one straight after waits about 2.8 s, every pandas run 3.4 s); a 600-asset read, change and draft write 79 ms; 2,500 events a second, 100 sends in 88 ms, 1,000 calls at once in 200 ms; interpreter memory 30 MB, 36 MB with the SDK, 90 MB with pandas. `py/` is 23.4 MB (the core 6.4 MB gzip, the wheels barely compress). The start-up chunk grew 10,607 bytes over the phase (1.05%), 9,255 of them in WP 6.4 (the umpire room, the proposal schema and card, the draft merge); moving the admin's umpire panel (2.2 kB) to a lazy chunk split the start-up chunk in three for a 1.6 kB saving, so it was not kept; the owner then accepted the growth (Nov 6).
 - **Accessibility** (`plan/reviews/phase-6-accessibility.md`, `apps/web/e2e/scripts-a11y.spec.ts`): axe clean on the panel, the editor, the output, the confirmations, the umpire room and its proposal cards for both roles, and the load summary. The keyboard-only test found **A1**: the panel's inline forms and confirmations, and the proposal's, lost focus to the page when they closed. Fixed: focus returns to the opener, else to "New script".
 - **Security** (`plan/reviews/phase-6-security-review.md`): no Critical or High.
   - **M3** (Medium, fixed): a world state behind many map-room posts (Phase 5 H1) read as "none" through the bridge, and publishing without review did not check, so a player plus an auto-publishing script could wipe the map. Now `unavailable`, and publishing without review refuses.
   - **L1** (Low, fixed): proposals counted on receipt from White Force observers; now only from the admin and White Force roles that are not observers.
-  - **M1** (Medium, for the owner): runs in one panel share an interpreter, so one script can tamper with a later one, an auto-publishing run included (probed by a test).
-  - **M2** (Medium, for the owner): no per-run budget on sends; a handler answering each message lets a player drive the umpire's script to flood a room.
-  - **M4** (Medium, for the owner): publishing without review publishes the whole draft, unreviewed hand edits included.
+  - **M1** (Medium): runs in one panel shared an interpreter, so one script could tamper with a later one, an auto-publishing run included (probed by a test). **Fixed** after the owner's decision (Nov 6, 2026): every run gets a fresh interpreter; the probe is now a regression test that passes.
+  - **M2** (Medium): no per-run budget on sends; a handler answering each message lets a player drive the umpire's script to flood a room. **Accepted by the owner** (Nov 6, 2026): no budget; the time limit and the server's per-player shaper bound a run.
+  - **M4** (Medium): publishing without review publishes the whole draft, unreviewed hand edits included. **Accepted by the owner** (Nov 6, 2026); the panel's confirmation and the docs say so plainly.
   - **L2–L7**: per-call, not per-run, bounds; private storage (shared logins, the 5 s re-read, the publish record read then written); silent dropped events; the lock is trust-on-first-use; imported scripts not marked; the policy for every role (accepted, PR3).
   - **I1–I4**: the sandbox (new probes: a deep walk into Pyodide's Emscripten module, the AsyncFunction constructor, a string timer; a Node walk of 28,815 objects), the bridge's validation, PD2 against D2, the umpire room and the vault: verified.
 
@@ -47,17 +47,20 @@ Draft of the Phase 6 gate summary, for the phase PR's description (working model
 - PR previews carry `py/` only when the PR touches Python; the main site always does.
 - Phase 6 itself: WPs 6.1–6.5 after S17, with gate G6.
 - The main bundle's growth from Phase 6 is accepted: new features are expected to grow it; `check:bundle` keeps asserting that no start-up chunk holds the runner or Pyodide (during WP 6.5).
+- After the gate's reviews: M1 fixed (a fresh interpreter for every run), M2 and M4 accepted, and blog snapshots carry `py/` only for posts about Python (see For the owner).
 
 ## For the owner
 
-1. **M1, one interpreter per panel.** Recommended: a fresh interpreter for every run (about 3 s more before each run's first output; a first pandas run 3 s each time). Alternatives: only before runs that may publish without review, plus a "Restart Python" button; or keep it as documented.
-2. **M2, a per-run budget.** Recommended: refuse past 100 sends, 10 proposals and 16 calls in flight per run, with a clear error; the numbers are yours.
-3. **M4, publishing without review and hand edits.** Recommended: refuse to publish without review when the draft held unreviewed hand edits at the run's start (the change stays in the draft); later, if asked, publish only the script's change.
-4. **Blog snapshots and `py/`.** Each gate snapshot built from now on carries `py/` (about 34 MB). Not urgent at 3.4% of the Pages limit; building snapshots without Python unless the post is about it would keep them at about 10 MB.
+Decided by the owner on Nov 6, 2026, after the gate's reviews, and applied on the phase branch:
+
+1. **M1, one interpreter per panel: fixed.** Every run gets a fresh Python interpreter; nothing carries over between runs. The runner ends each run's worker with the run and starts the next one in the background at once; each worker imports the SDK before it is ready. A run asked for a few seconds after the last starts in about 2 ms, as before; one asked for straight after waits about 2.8 s; every pandas run pays pandas' import (about 3.4 s). M1's probe is now a regression test that passes.
+2. **M2, a per-run budget: accepted.** No per-run budget on sends, proposals or calls; the run's time limit and the server's per-player shaper bound a run. Recorded in the security review, SRD Annex C's risks and `docs/python-sdk.md`.
+3. **M4, publishing without review and hand edits: accepted.** It publishes the whole draft, hand edits included; the setting's hint, its confirmation and the docs say so plainly.
+4. **Blog snapshots and `py/`: only for posts about Python.** A post declares it with `python: true` in its front matter (default off; `check:blog` refuses other values); its snapshot then carries `py/`. Every other snapshot builds with `WRX_PY_RUNNER=off` and the stub runner, as a PR preview that does not touch Python does. The Phase 6 post has `python: true`. Documented in `site/README.md`.
 
 ## Open risks
 
-- M1, M2 and M4, above.
+- M2 and M4, accepted by the owner (above). M1 is fixed.
 - The sandbox is a deny-list plus the policy; the probes are a sample, not a proof. A new browser global is out of reach only because no path to the global scope exists.
 - R29 (no session eviction) and Phase 5's M1 (the map denial's remainder) are unchanged.
 - WebKit's Pyodide start-up, real screen readers, and Python throughput on ejabberd were not measured in this WP.

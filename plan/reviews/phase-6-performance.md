@@ -23,6 +23,33 @@ So the umpire waits about 3 s from first opening the panel to the first script's
 
 Two runs of the spec in this WP gave 1.95 and 2.00 s cold, 1.79 and 2.06 s warm, 0.87 and 0.90 s for the first SDK run, 3.31 and 3.03 s for the first pandas run.
 
+The table above is the runner as WP 6.5 shipped it, with one interpreter for a panel's runs ("before"). The owner's decision on the security review's M1 changed that; the next section is the runner since.
+
+## A fresh interpreter for every run (security review M1, Nov 6, 2026)
+
+Every run now gets a new worker, so a new interpreter: the runner terminates a run's worker when the run ends, however it ends. Two measures keep the cost down, both on by default and both measured on and off: **prewarm** starts the next worker in the background as soon as a run ends, and **preimport** has each worker import the SDK (pydantic) after its lockdown and before it says it is ready. A run's **start** below is the page's time from asking for the run to its script starting (`RunOutcome.startMs`): waiting for a ready worker, plus loading the shipped packages the script imports; the **run** is the worker's time for the run (`ms`), which includes Python's imports. The first output comes at about start + run for these one-line scripts (`import wrx; print(...)`).
+
+| Measure | Before (one interpreter) | After: prewarm and preimport (the default) | After: neither |
+| --- | --: | --: | --: |
+| Worker ready, cold | 2.0 s | 3.0 s (`loadPyodide` 2.1 s, the SDK's import 0.95 s) | 2.3 s |
+| First SDK run after ready: start, run | about 0, 0.90 s | 10 ms, 12 ms | 0.42 s, 0.95 s |
+| The next SDK run, asked for at once: start, run | about 0, 2.5 ms | 2.8 s, 5 ms | as below: nothing starts before the run asks |
+| The next SDK run, a few seconds later: start, run | about 0, 2.5 ms | 1.6 ms, 5 ms | 2.5 s, 1.07 s |
+| A pandas run (not the first): start, run | about 0, about 10 ms | 0.73 s, 3.4 s | not measured (the worker's 2.3 s more) |
+| Memory between runs | grows (90 MB once pandas ran) | 36 MB, a fresh worker | none until a run asks |
+
+The first numbers (`after`) are from the spec's run on Nov 6, 2026 (`py-runner-perf.spec.ts`, "start-up"; measured again in both full e2e runs of this change, below). The two full e2e runs of this change (`CI=1 pnpm e2e`, the spec beside the suite's other workers, so a busier machine) gave: cold ready 3.5 and 4.0 s; a run a few seconds after the last started in 2.5 and 3.4 ms; one asked for at once waited 3.39 and 3.46 s; a pandas run took 3.8 and 3.7 s; with neither measure, the next run waited 2.95 and 3.91 s and ran in 1.2 s. With prewarm alone (no preimport), a run a few seconds after the last started in 0.27 s and ran in 0.97 s: the worker was ready, but the run imported pydantic itself, so preimport is what makes paused runs as fast as before.
+
+What it means for the umpire:
+
+- **Runs a few seconds apart** (the usual case in adjudication: read the output, edit, run again) start as fast as before, about 2 ms, because the next worker is ready by then.
+- **A run asked for straight after another** waits for its fresh worker, about 2.8 s (cold Pyodide start, then the SDK's import). That is the cost M1's fix accepts: about 3 s before such a run's first output.
+- **Every run that makes a pandas table** pays pandas' import, about 3.4 s, each time, not only the first: preimport stops at the SDK, since pandas would add 3 s and about 55 MB to every worker, used or not. The 600-asset script below now imports pandas before its clock starts, so its numbers are still the script's.
+- **Memory** no longer accumulates: each worker starts at about 36 MB (30 MB plus the SDK), and a pandas run's 90 MB goes when that run ends. There is never more than one worker: the old one is terminated before the next starts, so the peak is unchanged.
+- **The cold start is 1 s later** because the first worker imports the SDK before it is ready, but the first script then starts at once, so the panel's first output comes no later than before (3.0 s against 2.0 + 0.9 s).
+
+Safety of the two measures: prewarm only starts a worker the same way as the first one (the lockdown applies before `ready`, before any script); preimport runs the runner's own `import wrx` after the lockdown, with no script code, and its output is not sent to any run. The background start's failure is not shown until the next run, which then starts again and reports the error itself. A worker started in the background but not used holds about 36 MB until the panel closes.
+
 ## A script over 600 assets (PR4, NFR-11)
 
 The Phase 5 scale fixture's 600-asset world state (`scaleWorldState(demoDesign(), 600)`, 166,773 characters as JSON), published by the admin on the test page. The admin's script, with Python warm (the SDK and pandas already imported):
@@ -36,7 +63,7 @@ The Phase 5 scale fixture's 600-asset world state (`scaleWorldState(demoDesign()
 | **The script, end to end** | **79 ms** |
 | The run, as the runner times it | 85 ms |
 
-The first run of such a script in a session adds the start-up above (pydantic 0.9 s, pandas 3 s if it makes a table). Not measured: applying the write to the admin's draft and the change summary in the panel (the panel's `applyWorldChanges` and `diffWorldStates`, which Phase 5 measured at 0.5 ms for the diff at 600 assets).
+Since every run has a fresh interpreter (M1, above), each such run adds pandas' import (about 3.4 s of run time, if it makes a table); the SDK is already imported by its worker. The test now imports pandas before `t0`, so the steps above are still the script's own; the run as the runner times it is then about 3.5 s, of which 0.75 s loading the packages and the rest Python importing pandas. Not measured: applying the write to the admin's draft and the change summary in the panel (the panel's `applyWorldChanges` and `diffWorldStates`, which Phase 5 measured at 0.5 ms for the diff at 600 assets).
 
 ## Events, sends and calls (PY-2)
 
@@ -61,7 +88,7 @@ The interpreter's WebAssembly memory, as the worker reports it:
 | After pandas | 90 MB |
 | After the 600-asset script with pandas | 90 MB |
 
-WebAssembly memory only grows, so a session that once used pandas keeps 90 MB until Stop or the panel closing ends the worker. The page's own heap is not changed by the runner beyond its 150 kB chunk and the bridge's per-run state. One worker per open Scripts panel: two popped-out panels in two windows would hold two.
+WebAssembly memory only grows, so before M1's fix a session that once used pandas kept 90 MB until Stop or the panel closing ended the worker. Since every run has a fresh worker (Nov 6, 2026), memory goes back to about 36 MB (with the SDK imported) after each run. The page's own heap is not changed by the runner beyond its 150 kB chunk and the bridge's per-run state. One worker per open Scripts panel: two popped-out panels in two windows would hold two.
 
 ## What the browser downloads (NFR-7, PY-5)
 
@@ -84,9 +111,10 @@ Wheels are already compressed, so a server's gzip or brotli saves little on them
 | `apps/web/dist` (the app, with `py/`) | 26.8 MB | `py/` is 23.4 MB of it |
 | The site (`site:build`, with the app at `app/`) | 33.6 MB, 3.4% of the 1 GB Pages limit | `size-report.ts`, no previews or snapshots locally |
 | A PR preview that touches no Python (`WRX_PY_RUNNER=off`, WP 6.4) | about 10.2 MB | the stub `py/runner.js` only |
-| A PR preview that touches Python, and every blog snapshot | about 33.6 MB | carries `py/` |
+| A PR preview that touches Python, and a blog snapshot of a post about Python (`python: true`) | about 33.6 MB | carries `py/` |
+| Any other blog snapshot (owner decision, Nov 6, 2026) | about 10.2 MB | `WRX_PY_RUNNER=off`, the stub runner, as a preview |
 
-The site's checks warn at 70% of the limit. Before WP 6.4's rule every preview carried `py/`, so twenty open previews and snapshots would have been about 670 MB (65%). Now a preview costs 10 MB unless it changes Python. Blog snapshots are the remaining growth: each gate's snapshot built after Phase 6 carries `py/`, about 34 MB each, so the snapshots of G6 and of the next few gates are what will approach the warning. Recommendation (for later, not needed now): build snapshots with `WRX_PY_RUNNER=off` unless the post is about Python, as previews are.
+The site's checks warn at 70% of the limit. Before WP 6.4's rule every preview carried `py/`, so twenty open previews and snapshots would have been about 670 MB (65%). Now a preview costs 10 MB unless it changes Python. Blog snapshots are the remaining growth: each gate's snapshot built after Phase 6 carries `py/`, about 34 MB each, so the snapshots of G6 and of the next few gates are what will approach the warning. Recommendation (for later, not needed now): build snapshots with `WRX_PY_RUNNER=off` unless the post is about Python, as previews are. **Decided by the owner (Nov 6, 2026) and built:** a post declares it with `python: true` in its front matter (default off); `tools/site/snapshot.ts` builds every other snapshot with `WRX_PY_RUNNER=off`. A snapshot of a commit from before WP 6.4, which does not know the variable, still carries `py/` if it has one.
 
 ## The main bundle across Phase 6 (PY-5: "the main bundle SHALL NOT grow")
 
@@ -119,7 +147,8 @@ The start-up chunk (`assets/index-*.js`), the one chunk the page loads at start,
 
 ## Weak points
 
-- **Loopback only.** No network time is in these numbers; a first start over a real link adds the downloads above.
+- **Loopback only.** No network time is in these numbers; a first start over a real link adds the downloads above. A fresh worker per run fetches nothing again (the browser's cache serves the files), but a browser that evicts its cache would refetch 13 MB per run.
+- **The fresh-worker cost is one machine's.** A slower machine pays more for each run that follows another at once (the cold Pyodide start is CPU-bound), and every pandas run pays pandas' import.
 - **The mock only.** Throughput on ejabberd is not measured; SC-12 runs there as a correctness test and passes; its Python start-up is not timed on its own.
 - **One machine, Chromium only.** WebKit's Pyodide start-up is not measured; Safari is a SHOULD (NFR-13).
 - **Not measured:** a script in a very long room (`readRoomMessages` oldest-first pages the whole archive in, WP 6.2's weak point), and the panel's own costs after a run (the change summary at 600 changed assets).

@@ -60,6 +60,12 @@ const runnerModule = loadRunner(new URL('../', document.baseURI).href)
 let draft: WorldState | undefined
 let applied = 0
 const runners = new Map<ScriptRole, Runner>()
+/** How the runners are made (review M1's measures): the defaults unless `configure` says. */
+interface Configured {
+  readonly prewarm?: boolean
+  readonly preimportSdk?: boolean
+}
+const configured = new Map<ScriptRole, Configured>()
 
 async function runnerFor(role: ScriptRole): Promise<Runner> {
   const existing = runners.get(role)
@@ -69,6 +75,7 @@ async function runnerFor(role: ScriptRole): Promise<Runner> {
   const runner = createRunner({
     role,
     store: stores[role],
+    ...configured.get(role),
     ...(role === 'admin'
       ? {
           draft: {
@@ -99,6 +106,12 @@ const api = {
     (await runnerFor(role)).run(code, timeoutMs === undefined ? {} : { timeoutMs }),
   stop: async (role: ScriptRole = 'admin') => {
     ;(await runnerFor(role)).stop()
+  },
+  /** Ends the role's runner and makes the next one with these options (the performance spec). */
+  configure: (role: ScriptRole, options: Configured) => {
+    runners.get(role)?.dispose()
+    runners.delete(role)
+    configured.set(role, options)
   },
   calls: async (role: ScriptRole = 'admin') => (await runnerFor(role)).calls(),
   rejected: async (role: ScriptRole = 'admin') => (await runnerFor(role)).rejected().length,

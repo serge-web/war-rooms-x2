@@ -10,6 +10,11 @@ export interface InitMessage {
   readonly indexURL: string
   /** Packages to load before the first run (lock-file names). */
   readonly packages: readonly string[]
+  /**
+   * Import the SDK (and so pydantic) before `ready`, after the lockdown: the worker's own step,
+   * no script's, so the run it serves starts with the SDK loaded and nothing else (M1).
+   */
+  readonly preimportSdk: boolean
 }
 
 export interface RunMessage {
@@ -45,6 +50,8 @@ const timingsSchema = z
     loadPyodide: z.number(),
     /** ms to load the packages named in `init`. */
     loadPackages: z.number(),
+    /** ms to import the SDK before `ready` (`preimportSdk`); 0 when not asked. */
+    importSdk: z.number(),
     /** Bytes of the interpreter's WebAssembly memory. */
     wasmMemory: z.number(),
   })

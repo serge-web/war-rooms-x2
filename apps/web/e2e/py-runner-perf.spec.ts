@@ -1,6 +1,7 @@
 // The Python runner's performance (WP 6.5; SRD Annex C PR4, PY-3, PY-5; NFR-7), against the
 // app's build on the mock, in the runner's test page (e2e/py-runner/harness): the worker's cold
-// and warm start, the first run that imports the SDK (pydantic), the first pandas run, a script
+// and warm start, the first SDK run, a run's wait for its fresh interpreter (review M1) with and
+// without the next worker started in the background, the first pandas run, a script
 // over 600 assets that reads the world state, changes every asset and writes the draft, event
 // and send throughput, many calls at once, and the interpreter's memory. Each test prints its
 // numbers and attaches them; plan/reviews/phase-6-performance.md records a run. The budgets are
@@ -43,19 +44,28 @@ async function report(testInfo: TestInfo, name: string, values: Record<string, n
   })
 }
 
-test('start-up: the worker cold and warm, the first SDK run (pydantic), the first pandas run (PR4, PY-3)', async ({
+const SDK = 'import wrx\nprint(wrx.__version__)'
+const PAUSE_MS = 6_000
+
+test('start-up: the worker cold and warm, the first SDK run, a fresh interpreter per run, the first pandas run (PR4, PY-3, review M1)', async ({
   page,
 }, testInfo) => {
   await open(page)
   // Cold: a fresh page's first worker, Pyodide fetched from the build (an HTTP cache that is
-  // empty for this context).
+  // empty for this context). Each worker imports the SDK (pydantic) before it is ready.
   const cold = await page.evaluate(() => window.pyHarness.start('admin'))
-  // The first run naming the SDK loads pydantic; the second loads nothing.
-  const first = await run(page, 'admin', 'import wrx\nprint(wrx.__version__)')
+  const first = await run(page, 'admin', SDK)
   expect(first.status, first.error).toBe('finished')
-  const second = await run(page, 'admin', 'import wrx\nprint(wrx.__version__)')
-  expect(second.status, second.error).toBe('finished')
-  // The first pandas run: the assets as a DataFrame.
+  // Every run gets a fresh interpreter (M1). The next run, asked for at once, waits for the
+  // worker that started in the background when the first ended (prewarm).
+  const backToBack = await run(page, 'admin', SDK)
+  expect(backToBack.status, backToBack.error).toBe('finished')
+  // A run asked for a few seconds after the last finds its worker ready.
+  await page.waitForTimeout(PAUSE_MS)
+  const afterPause = await run(page, 'admin', SDK)
+  expect(afterPause.status, afterPause.error).toBe('finished')
+  // The first pandas run: the assets as a DataFrame; pandas loads in each run that uses it.
+  await page.waitForTimeout(PAUSE_MS)
   const pandas = await run(
     page,
     'admin',
@@ -68,28 +78,64 @@ test('start-up: the worker cold and warm, the first SDK run (pydantic), the firs
   )
   expect(pandas.status, pandas.error).toBe('finished')
   expect(lastJson(pandas.output).rows).toBe(6)
-  // Warm: Stop ends the worker; a new one starts from the browser's cache.
+  // Warm: Stop ends the worker (none is running, so none starts); a new one starts from the
+  // browser's cache.
+  await page.waitForTimeout(PAUSE_MS)
   await page.evaluate(() => window.pyHarness.stop())
   const warm = await page.evaluate(() => window.pyHarness.start('admin'))
-  const warmFirst = await run(page, 'admin', 'import wrx\nprint(wrx.__version__)')
-  expect(warmFirst.status, warmFirst.error).toBe('finished')
+
+  // Without prewarm or the SDK's import at start: each run waits for a whole new worker.
+  await page.evaluate(() => {
+    window.pyHarness.configure('admin', { prewarm: false, preimportSdk: false })
+  })
+  const plainReady = await page.evaluate(() => window.pyHarness.start('admin'))
+  const plainFirst = await run(page, 'admin', SDK)
+  expect(plainFirst.status, plainFirst.error).toBe('finished')
+  await page.waitForTimeout(PAUSE_MS)
+  const plainNext = await run(page, 'admin', SDK)
+  expect(plainNext.status, plainNext.error).toBe('finished')
+  // Prewarm alone, without the SDK's import at start: the run imports pydantic itself.
+  await page.evaluate(() => {
+    window.pyHarness.configure('admin', { prewarm: true, preimportSdk: false })
+  })
+  await page.evaluate(() => window.pyHarness.start('admin'))
+  await run(page, 'admin', 'pass')
+  await page.waitForTimeout(PAUSE_MS)
+  const prewarmOnly = await run(page, 'admin', SDK)
+  expect(prewarmOnly.status, prewarmOnly.error).toBe('finished')
+  await page.evaluate(() => {
+    window.pyHarness.configure('admin', {})
+  })
+
   await report(testInfo, 'start-up', {
     coldReadyMs: cold.totalMs,
     coldLoadPyodideMs: cold.timings.loadPyodide,
+    coldImportSdkMs: cold.timings.importSdk,
     coldWasmMemoryMB: cold.timings.wasmMemory / MB,
+    firstSdkStartMs: first.startMs ?? 0,
     firstSdkRunMs: first.ms,
-    firstSdkImportsMs: first.importsMs ?? 0,
-    secondSdkRunMs: second.ms,
-    secondSdkImportsMs: second.importsMs ?? 0,
-    firstPandasRunMs: pandas.ms,
-    firstPandasImportsMs: pandas.importsMs ?? 0,
+    backToBackStartMs: backToBack.startMs ?? 0,
+    afterPauseStartMs: afterPause.startMs ?? 0,
+    afterPauseRunMs: afterPause.ms,
+    pandasStartMs: pandas.startMs ?? 0,
+    pandasRunMs: pandas.ms,
+    pandasImportsMs: pandas.importsMs ?? 0,
     afterPandasWasmMemoryMB: (pandas.wasmMemory ?? 0) / MB,
     warmReadyMs: warm.totalMs,
-    warmFirstSdkRunMs: warmFirst.ms,
+    plainReadyMs: plainReady.totalMs,
+    plainFirstStartMs: plainFirst.startMs ?? 0,
+    plainFirstRunMs: plainFirst.ms,
+    plainNextStartMs: plainNext.startMs ?? 0,
+    plainNextRunMs: plainNext.ms,
+    prewarmOnlyStartMs: prewarmOnly.startMs ?? 0,
+    prewarmOnlyRunMs: prewarmOnly.ms,
   })
   expect(cold.totalMs).toBeLessThan(30_000)
   expect(warm.totalMs).toBeLessThan(30_000)
-  expect(second.importsMs ?? 0).toBeLessThan(first.importsMs ?? 0)
+  // Prewarmed and paused: the worker was ready, so the run starts at once.
+  expect(afterPause.startMs ?? Infinity).toBeLessThan(1_000)
+  // Without prewarm, the run waits for a new worker.
+  expect(plainNext.startMs ?? 0).toBeGreaterThan(afterPause.startMs ?? 0)
 })
 
 const SCALE = 600
@@ -100,17 +146,14 @@ test('a script over 600 assets reads the world state, changes every asset and wr
   await open(page)
   const chars = await page.evaluate((n) => window.pyHarness.publishScale(n), SCALE)
   await page.evaluate(() => window.pyHarness.start('admin'))
-  // Warm the SDK and pandas, so the run below measures the script, not their first load.
-  await run(
-    page,
-    'admin',
-    'import wrx\nimport pandas\nwrx.to_frame(await wrx.Game().world_state())',
-  )
+  // Every run has a fresh interpreter (M1): pandas imports before the clock starts, so the
+  // numbers are the script's, not the import's.
   const outcome = await run(
     page,
     'admin',
     [
       'import json, time, wrx',
+      'import pandas',
       't0 = time.perf_counter()',
       'game = wrx.Game()',
       'state = await game.world_state()',
@@ -149,7 +192,6 @@ const BLUE_HQ = '30000000-0000-4000-8000-000000000001'
 test('event and send throughput, and many calls at once (PY-2)', async ({ page }, testInfo) => {
   await open(page)
   await page.evaluate(() => window.pyHarness.start('white-force'))
-  await run(page, 'white-force', 'import wrx')
   // A handler for every message a player posts in Blue HQ, until it has seen them all.
   const listening = page.evaluate(([code]) => window.pyHarness.run('white-force', code, 120_000), [
     [

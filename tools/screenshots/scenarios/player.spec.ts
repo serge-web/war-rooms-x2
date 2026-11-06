@@ -263,7 +263,7 @@ test('umpire script panel', { tag: '@screenshot' }, async ({ page }) => {
   await expect(panel.getByText('(unsaved)')).toHaveCount(0)
   // A PR preview built without Python (WP 6.4) shows the panel saying so instead.
   await expect(
-    panel.getByText(/^Python is ready\.$|^Python scripts are not available in this build$/),
+    panel.getByText(/^Python is ready\. |^Python scripts are not available in this build$/),
   ).toBeVisible({ timeout: 60_000 })
   // Its tabset maximised, and scrolled to the top, so the list and the editor both show.
   await page
