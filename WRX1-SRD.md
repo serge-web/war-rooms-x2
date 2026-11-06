@@ -569,7 +569,7 @@ Every interaction the mock supports SHALL be specified from the XMPP standards, 
 
 ## 12. User scenarios
 
-Nine end-to-end scenarios walk each actor through v1, SC-10 through message templates (Annex A) and SC-11 through turns and the map; each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
+Nine end-to-end scenarios walk each actor through v1, SC-10 through message templates (Annex A), SC-11 through turns and the map, and SC-12 through the Python API (Annex C, after v1); each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
 
 ### SC-1 Admin designs and publishes a game
 
@@ -700,6 +700,19 @@ Nine end-to-end scenarios walk each actor through v1, SC-10 through message temp
 7. During turn 2 planning, the admin sees a Blue asset in the wrong place, moves it and uses "Publish world state"; after the change summary, the corrected state appears for every player without a phase change.
 
 **Outcome:** the world state is published with phase changes or whenever the admin chooses, and every player sees the latest one. **Traces to:** ADM-43–46, PLY-55–59, D7, D25.
+
+### SC-12 The umpires adjudicate with Python (Annex C)
+
+**Actors:** admin, White Cell (a White Force role), Blue CO. **Start:** the demo game, published, in turn 1 planning.
+
+1. White Cell opens the Scripts panel and runs a script that reads the world state, marks the Tank Company damaged at 40% health and posts it to the umpire room as a proposal with a summary.
+2. The admin sees the proposal as a card in the umpire room, chooses "Load into draft…", reviews its change summary and loads it. Nothing is published.
+3. The admin moves 1st Rifles by hand in the map room's asset form; the map counts two changed assets.
+4. The admin runs a script that reads the draft and sets the Tank Company's fuel. The panel says what the script changed in the draft and that the rest of the draft, the hand edit included, is kept.
+5. The admin uses "Publish world state…"; the change summary lists the proposal's change, the hand edit and the script's change, and the admin publishes.
+6. Blue CO's map shows the new world state without a reload. Blue CO has no Scripts tab and no umpire room.
+
+**Outcome:** the White Force and the admin adjudicate with scripts through the umpire room and the draft, and nothing reaches players until the admin publishes. **Traces to:** PD4, PD6, PD7, PD8, PD9, PY-2, PY-6, PY-8, PY-9, ADM-45, ADM-46.
 
 ### Gaps found and requirements added
 
@@ -869,6 +882,10 @@ Changes from WP 6.4, act and adjudicate (Nov 6, 2026):
 
 - §3 rule 19 added: the umpire room (PD8, PY-8), fixed like the map room. Its participants are the White Force as a write entry plus a read entry for each White Force observer assigned rooms elsewhere, because a role entry for a White Force observer assigns it (rule 4) and would take away its other rooms, while without one an assigned observer would not see the umpire room. Its observers are read-only through the vault, as for any read-only entry; unlike the map room, it does add roles to the vault (the White Force's observers, who are there already).
 - Decided (Nov 6, 2026, WP 6.4): an admin script's draft write is applied as its change from the state it read (the draft, or the published state), on top of the draft as it is when the script finishes (PY-9). Before, the script's state replaced the whole draft and could silently drop the admin's hand edits.
+
+Changes from WP 6.5, the Python API's acceptance (Nov 6, 2026):
+
+- §12: SC-12 added, the umpires adjudicating with Python on both backends: a White Force proposal loaded into the draft, a hand edit, an admin script on top of it, and a reviewed publish.
 
 ## Annex A. Message templates (built in Phase 4)
 
