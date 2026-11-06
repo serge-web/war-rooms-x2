@@ -9,8 +9,10 @@
 //   The app's index.html carries its own from the build; the test page gets the same one.
 // - `none`: no policy at all, the control that shows the probes do find a way out.
 //
-// Also a canary server on PORT+1 (another origin) that counts every request, so the spec can
-// prove a script reached nothing outside the origin; `/__hits` and `/__csp` (violation reports).
+// Also a canary server on a free port the system picks (another origin; `/__canary` gives its
+// URL) that counts every request, so the spec can prove a script reached nothing outside the
+// origin; `/__hits` and `/__csp` (violation reports). The canary used to be PORT+1, which another
+// suite's server could hold on a busy machine (WP 6.4).
 //
 //   node e2e/py-runner/serve.ts <port>
 import { createHash } from 'node:crypto'
@@ -84,6 +86,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     res.writeHead(204).end()
     return
   }
+  if (url.pathname === '/__canary') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+    res.end(JSON.stringify({ url: canaryUrl }))
+    return
+  }
   if (url.pathname === '/__hits') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
     res.end(JSON.stringify({ hits, reports }))
@@ -134,17 +141,24 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   res.end(content)
 }
 
-createServer((req, res) => {
-  handle(req, res).catch((error: unknown) => {
-    res.writeHead(500).end(String(error))
-  })
-}).listen(port, () => {
-  console.log(`Python runner e2e server on http://localhost:${port}/p/header/__harness/`)
-})
-
-// The canary: another origin. Any request here is a leak.
-createServer((req, res) => {
+// The canary: another origin. Any request here is a leak. It listens first, on a free port, so
+// its URL is known before the main server answers (Playwright waits for that one).
+let canaryUrl = ''
+const canary = createServer((req, res) => {
   hits.push({ origin: 'canary', path: req.url ?? '' })
   res.writeHead(200, { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/javascript' })
   res.end('export const leaked = true\n')
-}).listen(port + 1)
+})
+canary.listen(0, 'localhost', () => {
+  const address = canary.address()
+  if (address === null || typeof address === 'string') throw new Error('the canary has no port')
+  canaryUrl = `http://localhost:${address.port}/`
+  createServer((req, res) => {
+    handle(req, res).catch((error: unknown) => {
+      res.writeHead(500).end(String(error))
+    })
+  }).listen(port, () => {
+    console.log(`Python runner e2e server on http://localhost:${port}/p/header/__harness/`)
+    console.log(`Canary on ${canaryUrl}`)
+  })
+})

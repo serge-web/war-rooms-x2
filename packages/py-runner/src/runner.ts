@@ -1,6 +1,8 @@
 // The runner on the page, from S17: starts the script worker from a `blob:` bootstrap, runs one
 // script at a time through a bridge, and stops it on request or at its time limit (PY-10) by
-// terminating the worker. A run's draft writes are applied only when it finishes well (PD9); a
+// terminating the worker. The time limit counts the script's own time: it starts when the worker
+// says the script has started (`started`, after its packages load), and the worker's start and
+// the imports are bounded by the start limit instead (WP 6.4). A run's draft writes are applied only when it finishes well (PD9); a
 // stopped, timed-out or failed run leaves the draft as it was.
 import type { WorldState } from '@wrx/schemas'
 import type { ScriptBridge } from './bridge.ts'
@@ -59,6 +61,9 @@ interface ActiveRun {
   readonly output: string[]
   outputChars: number
   readonly t0: number
+  /** Whether the script has started (`started` came), so its time limit runs. */
+  started: boolean
+  readonly onStarted: () => void
   readonly onOutput: ((line: OutputLine) => void) | undefined
   readonly finish: (outcome: RunOutcome) => void
 }
@@ -69,6 +74,8 @@ export class ScriptRunner {
   private nextRun = 1
   private active: ActiveRun | undefined
   private abortStart: (() => void) | undefined
+  /** The start limit of the last `start`: also bounds a run's wait for its script to start. */
+  private startTimeoutMs = 60_000
   /** Messages from the worker that failed validation, newest last (bounded). */
   readonly rejected: unknown[] = []
 
@@ -85,6 +92,7 @@ export class ScriptRunner {
   /** Starts a worker, or returns the one starting or started. */
   start(options: StartOptions): Promise<StartResult> {
     if (this.ready !== undefined) return this.ready
+    this.startTimeoutMs = options.timeoutMs
     const t0 = performance.now()
     const blobUrl = bootstrap(options.workerUrl)
     const worker = new Worker(blobUrl, { type: 'module' })
@@ -145,7 +153,12 @@ export class ScriptRunner {
     const run = this.active
     if (worker !== this.worker || run === undefined) return
     if (!('runId' in message) || message.runId !== run.runId) return
-    if (message.kind === 'output') {
+    if (message.kind === 'started') {
+      if (!run.started) {
+        run.started = true
+        run.onStarted()
+      }
+    } else if (message.kind === 'output') {
       run.output.push(message.text)
       try {
         run.onOutput?.({ stream: message.stream ?? 'stdout', text: message.text })
@@ -181,7 +194,11 @@ export class ScriptRunner {
     }
   }
 
-  /** Runs a script through `bridge`, in a started worker; `timeoutMs` is its limit (PY-10). */
+  /**
+   * Runs a script through `bridge`, in a started worker; `timeoutMs` is its limit (PY-10),
+   * counted from the moment the script starts. Until then (the worker starting, the packages the
+   * script imports loading) the start limit applies; a run that does not start within it fails.
+   */
   run(
     bridge: ScriptBridge,
     code: string,
@@ -192,10 +209,12 @@ export class ScriptRunner {
     if (ready === undefined) return Promise.reject(new Error('the script worker is not started'))
     if (this.active !== undefined) return Promise.reject(new Error('a script is already running'))
     const runId = this.nextRun++
+    const startLimit = this.startTimeoutMs
     return new Promise<RunOutcome>((resolve) => {
-      const timer = setTimeout(() => {
-        this.stop('timed-out')
-      }, timeoutMs)
+      let timer = setTimeout(() => {
+        if (this.active !== run) return
+        this.stop('failed', `the script did not start within ${startLimit} ms`)
+      }, startLimit)
       // The slot is held while the worker finishes starting, so a second run is refused at once.
       const run: ActiveRun = {
         runId,
@@ -203,6 +222,13 @@ export class ScriptRunner {
         output: [],
         outputChars: 0,
         t0: performance.now(),
+        started: false,
+        onStarted: () => {
+          clearTimeout(timer)
+          timer = setTimeout(() => {
+            if (this.active === run) this.stop('timed-out')
+          }, timeoutMs)
+        },
         onOutput,
         finish: (outcome) => {
           clearTimeout(timer)
@@ -228,12 +254,17 @@ export class ScriptRunner {
   }
 
   /** Stops the running script by terminating the worker; its draft writes are dropped (PD9). */
-  stop(status: 'stopped' | 'timed-out' = 'stopped'): void {
+  stop(status: 'stopped' | 'timed-out' | 'failed' = 'stopped', error?: string): void {
     const run = this.active
     this.terminate()
     if (run === undefined) return
     run.bridge.discard(run.runId)
-    run.finish({ status, output: run.output.join('\n'), ms: performance.now() - run.t0 })
+    run.finish({
+      status,
+      ...(error === undefined ? {} : { error }),
+      output: run.output.join('\n'),
+      ms: performance.now() - run.t0,
+    })
   }
 
   /** Ends the worker; the next start begins a new one. */

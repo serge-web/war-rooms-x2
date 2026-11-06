@@ -58,6 +58,9 @@ export const fromWorkerSchema = z.discriminatedUnion('kind', [
       payload: z.string().max(MAX_PAYLOAD_CHARS),
     })
     .strict(),
+  // The script itself starts: its packages are loaded, its code runs next. The run's time limit
+  // (PY-10) counts from here, not from the worker's start (WP 6.4).
+  z.object({ kind: z.literal('started'), runId: z.number().int() }).strict(),
   z
     .object({
       kind: z.literal('output'),

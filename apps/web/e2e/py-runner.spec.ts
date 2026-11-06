@@ -155,7 +155,8 @@ async function probe(page: Page, delivery: Delivery) {
   await page.evaluate(() => window.pyHarness.start('admin'))
   await hits(page, true)
   const base = origin(page)
-  const canary = `http://localhost:${Number(new URL(base).port) + 1}/`
+  // The canary's port is the system's choice (serve.ts), not the page's + 1.
+  const { url: canary } = (await (await page.request.get('/__canary')).json()) as { url: string }
   const code = `CANARY = ${JSON.stringify(canary)}\nSAME = ${JSON.stringify(`${base}/outside-pyodide`)}\n${PROBES}`
   const out = await run(page, 'admin', code, 90_000)
   expect(out.status, out.error).toBe('finished')
@@ -395,7 +396,8 @@ test('Stop, the time limit and a failure leave the draft unchanged (PD9, PY-10)'
   const draft = () => page.evaluate(() => window.pyHarness.draft())
   expect(await draft()).toBeUndefined()
 
-  // The time limit, while the script awaits.
+  // The time limit, while the script awaits: 3 s of the script's own time, counted from its
+  // start, so the worker's start and pydantic's load under a loaded machine do not eat it.
   const asleep = await run(
     page,
     'admin',
