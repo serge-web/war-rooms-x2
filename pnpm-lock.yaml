@@ -414,6 +414,9 @@ importers:
       '@wrx/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@wrx/py-runner':
+        specifier: workspace:*
+        version: link:../py-runner
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas

@@ -1,0 +1,223 @@
+/* The Scripts panel (WP 6.3). Loaded with the page, so a popped-out panel has it (PLY-4). */
+.wrx-scripts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.wrx-scripts__python,
+.wrx-scripts__note {
+  margin: 0;
+  color: var(--wrx-muted);
+  font-size: 0.875rem;
+}
+
+.wrx-scripts__layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.wrx-scripts__list {
+  flex: 0 1 14rem;
+  min-width: 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wrx-scripts__toolbar,
+.wrx-scripts__actions,
+.wrx-scripts__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.wrx-scripts__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.wrx-scripts__item {
+  width: 100%;
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wrx-scripts__item:hover {
+  background: var(--wrx-surface);
+}
+
+.wrx-scripts__item[aria-current='true'] {
+  border-color: var(--wrx-primary);
+  background: var(--wrx-surface);
+  font-weight: 600;
+}
+
+.wrx-scripts__item:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 1px;
+}
+
+.wrx-scripts__unsaved,
+.wrx-scripts__running {
+  color: var(--wrx-muted);
+  font-weight: 400;
+}
+
+.wrx-scripts__main {
+  flex: 1 1 24rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.wrx-scripts__title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wrx-scripts__name {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.wrx-scripts__subheading {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.wrx-scripts__subheading:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 2px;
+}
+
+.wrx-scripts__inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 6px;
+  background: var(--wrx-surface);
+}
+
+.wrx-scripts__inline p {
+  margin: 0;
+}
+
+.wrx-scripts__code,
+.wrx-scripts__output,
+.wrx-scripts__error {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  tab-size: 4;
+}
+
+.wrx-scripts__code {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 12rem;
+  padding: 0.5rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 6px;
+  background: var(--wrx-background);
+  color: var(--wrx-text);
+  resize: vertical;
+  white-space: pre;
+  overflow: auto;
+}
+
+.wrx-scripts__code:focus-visible {
+  outline: 3px solid var(--wrx-focus);
+  outline-offset: 2px;
+}
+
+.wrx-scripts__editor-hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.wrx-scripts__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.wrx-scripts__limit {
+  max-width: 14rem;
+}
+
+.wrx-scripts__report {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.wrx-scripts__status {
+  margin: 0;
+  font-weight: 600;
+}
+
+.wrx-scripts__status--failed,
+.wrx-scripts__status--timed-out {
+  color: var(--wrx-danger);
+}
+
+.wrx-scripts__output,
+.wrx-scripts__error {
+  margin: 0;
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 6px;
+  background: var(--wrx-surface);
+  color: var(--wrx-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wrx-scripts__output:focus-visible,
+.wrx-scripts__error:focus-visible {
+  outline: 2px solid var(--wrx-focus);
+  outline-offset: 2px;
+}
+
+.wrx-scripts__error,
+.wrx-scripts__stderr {
+  color: var(--wrx-danger);
+}
+
+.wrx-scripts__error {
+  border-color: var(--wrx-danger);
+}
+
+.wrx-scripts__quiet {
+  color: var(--wrx-muted);
+}

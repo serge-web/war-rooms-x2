@@ -1,6 +1,7 @@
 // The workspace slot of the player shell (WP 2.5): WorkspaceCore over the pane's store. One tab
 // per room the role can see (PLY-4), each the room type's player component in the room's theme,
-// plus the game info and online panels (PLY-8). The layout is saved per server, role and design
+// plus the game info and online panels (PLY-8), and the Scripts panel for the roles that run
+// scripts (PY-6, WP 6.3). The layout is saved per server, role and design
 // version (PLY-5) in the storage the host passes in; a new design version during the session (a
 // structural change, §3 rule 8) resets it to the default, with a notice (PLY-5, R28).
 import { defaultRoomTypes, withSlots } from '@wrx/domain'
@@ -8,6 +9,7 @@ import { useGameSetup, useMe } from '@wrx/hooks'
 import type { AdminEditor, PlayerPanel, ReactRoomTypeRegistry } from '@wrx/hooks'
 import { Spinner, useOptionalToast } from '@wrx/ui'
 import { useCallback, useEffect, useRef } from 'react'
+import { LazyScriptsPanel, useScriptRole } from '../scripts/index.ts'
 import { GameInfoPanel, OnlinePanel, RoomPanel } from './panels.tsx'
 import { layoutKey } from './storage.ts'
 import type { LayoutStorage } from './storage.ts'
@@ -78,6 +80,8 @@ export function Workspace({ storage, registry = EMPTY_REGISTRY, tabBadge }: Work
   const me = useMe()
   const setup = useGameSetup()
   const onReset = useLayoutResetNotice()
+  // PD4, PY-6: the admin's own view and White Force roles that are not observers (WP 6.3).
+  const scriptRole = useScriptRole()
   // Not while the role itself is gone (PLY-29): that logout says why.
   const known = me.status === 'ready' && (me.data.role !== undefined || me.data.identity.isAdmin)
   useClosedRoomNotice(known ? me.data.rooms : undefined)
@@ -104,6 +108,9 @@ export function Workspace({ storage, registry = EMPTY_REGISTRY, tabBadge }: Work
       panels={[
         { id: 'game-info', name: 'Game info', content: <GameInfoPanel /> },
         { id: 'online', name: 'Online', content: <OnlinePanel roomIds={roomIds} /> },
+        ...(scriptRole === undefined
+          ? []
+          : [{ id: 'scripts', name: 'Scripts', content: <LazyScriptsPanel role={scriptRole} /> }]),
       ]}
       storage={storage}
       layoutKey={key}
