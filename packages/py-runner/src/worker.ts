@@ -3,14 +3,48 @@
 // script runs, takes away every global a script could use to reach the network, storage or
 // other contexts, keeping a private `postMessage` for the bridge. Python reaches the page only
 // through `_wrx_bridge.call(op, payload)`, strings in and out, and the page decides what each
-// call may do.
+// call may do. The SDK, `wrx` (python/wrx, WP 6.1), is written into Pyodide's file system with
+// the runner's `wrx_draft` (the draft write, until WP 6.4); `wrx.Game()` finds the bridge.
 //
 // The lockdown cannot remove `eval`, `Function` or `import()`: the worker's policy does. The
 // runner creates this worker from a `blob:` bootstrap so that it runs under the page's policy,
 // header or `<meta>` (S17 item 5).
 import type { PyodideAPI } from 'pyodide'
 import type { InitMessage, RunMessage, ToWorker } from './protocol.ts'
-import wrxSource from './wrx.py?raw'
+import wrxDraftSource from './wrx_draft.py?raw'
+
+/** The SDK's sources, bundled into this worker: `wrx/__init__.py` and the rest. */
+const SDK_SOURCES = import.meta.glob<string>('../../../python/wrx/**/*.py', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+})
+const SDK_HOME = '/home/pyodide/'
+/** What `import wrx` needs; pydantic is in the build (PY-1), loaded at the first run using it. */
+const SDK_PACKAGES = Object.freeze(['pydantic'])
+/** Uses of the SDK's tabular helpers, which import pandas only when called (PY-3). */
+const USES_FRAMES = /\bto_frame\b|\bwrx\.frames\b|\bfrom\s+wrx\s+import\b[^\n]*\bframes\b/
+/** A script that names the SDK (`import wrx`, `import sys, wrx`, `from wrx import ...`). */
+const USES_SDK = /\bwrx(?:_draft)?\b/
+
+interface PyodideFs {
+  mkdirTree(path: string): void
+  writeFile(path: string, data: string): void
+}
+
+/** Writes the SDK and the runner's module into the interpreter's home folder, on `sys.path`. */
+function installSdk(api: PyodideAPI): void {
+  const fs = api.FS as PyodideFs
+  const files = Object.entries(SDK_SOURCES).map(
+    ([path, source]) => [path.slice(path.indexOf('/python/') + '/python/'.length), source] as const,
+  )
+  if (!files.some(([path]) => path === 'wrx/__init__.py')) throw new Error('the SDK is missing')
+  for (const [path, source] of files) {
+    fs.mkdirTree(SDK_HOME + path.slice(0, path.lastIndexOf('/')))
+    fs.writeFile(SDK_HOME + path, source)
+  }
+  fs.writeFile(`${SDK_HOME}wrx_draft.py`, wrxDraftSource)
+}
 
 const started = performance.now()
 // Captured before the lockdown removes them from the global scope.
@@ -152,10 +186,7 @@ function serve(): void {
           })
         }),
     })
-    ;(api.FS as { writeFile(path: string, data: string): void }).writeFile(
-      '/home/pyodide/wrx.py',
-      wrxSource,
-    )
+    installSdk(api)
     lockdown(message.indexURL)
     post({
       kind: 'ready',
@@ -173,13 +204,15 @@ function serve(): void {
     running = true
     currentRun = message.runId
     const t0 = performance.now()
-    const wrx = api.pyimport('wrx') as unknown as { _CONTEXT: string; destroy(): void }
-    wrx._CONTEXT = message.context
-    wrx.destroy()
     const globals = api.toPy({ __name__: '__main__' }) as { destroy(): void }
     try {
       // Shipped packages the script imports load now, only when used (PY-3), from the build.
       await api.loadPackagesFromImports(message.code, { messageCallback: () => undefined })
+      const needs = [
+        ...(USES_SDK.test(message.code) ? SDK_PACKAGES : []),
+        ...(USES_FRAMES.test(message.code) ? ['pandas'] : []),
+      ]
+      if (needs.length > 0) await api.loadPackage(needs, { messageCallback: () => undefined })
       const imports = performance.now() - t0
       await api.runPythonAsync(message.code, { globals: globals as never })
       post({

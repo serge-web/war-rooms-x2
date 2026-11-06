@@ -16,14 +16,12 @@ export interface RunMessage {
   readonly kind: 'run'
   readonly runId: number
   readonly code: string
-  /** JSON: what the script may know about where it runs (role, room ids); data, not access. */
-  readonly context: string
 }
 
 export interface ReplyMessage {
   readonly kind: 'reply'
   readonly callId: number
-  /** JSON of a `CallResult`. */
+  /** The bridge protocol's reply, as JSON text. */
   readonly result: string
 }
 

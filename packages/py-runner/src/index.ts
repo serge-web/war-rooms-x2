@@ -126,18 +126,7 @@ export function createRunner(options: RunnerOptions): Runner {
       if (disposed) return Promise.reject(new Error('the runner was disposed'))
       // A failed start is reported by the run itself, as a failed outcome.
       start().catch(() => undefined)
-      const me = store.me().data
-      const context = {
-        role,
-        mapRoomId,
-        rooms: me.rooms.map((r) => ({ id: r.room.id, name: r.room.name, access: r.access })),
-      }
-      return runner.run(
-        bridge,
-        code,
-        context,
-        runOptions?.timeoutMs ?? options.defaultTimeoutMs ?? 30_000,
-      )
+      return runner.run(bridge, code, runOptions?.timeoutMs ?? options.defaultTimeoutMs ?? 30_000)
     },
     stop: () => {
       runner.stop()

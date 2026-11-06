@@ -97,14 +97,15 @@ test('the app page loads the runner lazily under its own <meta> policy and runs 
       subscribe: nothing,
     } as unknown as Parameters<typeof createRunner>[0]['store']
     const runner = createRunner({ role: 'admin', store, draft: { apply: () => undefined } })
+    // The real SDK (python/wrx, WP 6.1) imports and reads its context through the bridge.
     const outcome = await runner.run(
-      'import sys, wrx\nprint(sys.version_info[:2], wrx.context()["role"])',
+      'import sys, wrx\nctx = await wrx.Game().context()\nprint(sys.version_info[:2], ctx.isAdmin, ctx.protocolVersion, wrx.__version__)',
     )
     runner.dispose()
     return outcome
   })
   expect(result.status, result.error).toBe('finished')
-  expect(result.output.trim()).toBe('(3, 14) admin')
+  expect(result.output.trim()).toMatch(/^\(3, 14\) True 1 \d+\.\d+\.\d+$/)
   expect(requests.filter(foreign(origin(page)))).toEqual([])
   const violations = await page.evaluate(
     () => (window as unknown as { wrxCspViolations: string[] }).wrxCspViolations,
@@ -124,9 +125,9 @@ for (const delivery of ['header', 'meta'] as const) {
       page,
       'admin',
       [
-        'import numpy as np, pandas as pd, pydantic, wrx',
-        'state = await wrx.world_state()',
-        'df = pd.DataFrame(list(state["assets"].values()))',
+        'import numpy as np, pydantic, wrx',
+        'state = await wrx.Game().world_state()',
+        'df = wrx.to_frame(state)  # pandas, loaded on use (PY-3)',
         'print(int(np.arange(10).sum()), len(df), pydantic.VERSION)',
       ].join('\n'),
     )
@@ -235,29 +236,63 @@ test('the control: with no policy at all, new Function reaches another origin (w
   expect(result.probes['global.indexedDB.open']).toMatch(/^blocked/)
 })
 
+// The admin moves an asset with the SDK (python/wrx, WP 6.1) and the runner's draft write.
 const MOVE = `
-import wrx
-state = await wrx.world_state()
-asset = sorted(state["assets"].values(), key=lambda a: a["title"])[0]
-asset["lat"] = round(asset["lat"] + 0.01, 6)
-asset["lon"] = round(asset["lon"] - 0.02, 6)
-await wrx.write_draft(state)
-print("moved", asset["title"])
+import wrx, wrx_draft
+state = await wrx.Game().world_state()
+asset = sorted(state.assets.values(), key=lambda a: a.title)[0]
+asset.lat = round(asset.lat + 0.01, 6)
+asset.lon = round(asset.lon - 0.02, 6)
+await wrx_draft.write_draft(state)
+print("moved", asset.title)
 `
 
-test('round trip on the mock: a script reads the world state and fills the draft (PD7, PD9)', async ({
+test('round trip on the mock: the SDK reads the game and fills the draft (PD7, PD9, PY-2)', async ({
   page,
 }) => {
   await open(page, 'header')
   const ids = await page.evaluate(() => window.pyHarness.ids)
 
+  // The read layer through the bridge: context, setup, turn, forces, rooms, a room's messages
+  // a page at a time (the cursor), and the world state as typed models (PY-1).
   const read = await run(
     page,
     'admin',
-    `import wrx\nm = await wrx.room_messages(${JSON.stringify(ids.blueHq)})\nprint(len(m), m[0]["sender"], m[0]["body"]["content"]["text"])`,
+    `import json, wrx
+game = wrx.Game()
+ctx = await game.context()
+setup = await game.setup()
+turn = await game.turn()
+forces = await game.forces()
+rooms = await game.rooms()
+one_by_one = [m async for m in game.room(${JSON.stringify(ids.blueHq)}).messages(page_size=1)]
+history = await game.room(${JSON.stringify(ids.blueHq)}).history()
+newest = [m async for m in game.room(${JSON.stringify(ids.blueHq)}).messages(order="newest-first", limit=1)]
+state = await game.world_state()
+objectives = await game.objectives(forces[0])
+print(json.dumps({
+    "admin": ctx.isAdmin,
+    "game": setup.name,
+    "turn": None if turn is None else turn.turn,
+    "forces": len(forces),
+    "rooms": len(rooms),
+    "paged": [m.id for m in one_by_one] == [m.id for m in history],
+    "first": history[0].sender.loginName + " " + history[0].body.content.text,
+    "newest": newest[0].id == history[-1].id,
+    "assets": len(state.assets),
+    "objectives": objectives is not None,
+}))`,
   )
   expect(read.status, read.error).toBe('finished')
-  expect(read.output).toContain('blue-co Morning all.')
+  const r = lastJson(read.output) as unknown as Record<string, unknown>
+  expect(r).toMatchObject({ admin: true, paged: true, newest: true, assets: 6 })
+  expect(r.first).toMatch(/^blue-co Morning all\./)
+  expect(r.forces).toBeGreaterThan(1)
+  expect(r.rooms).toBeGreaterThan(1)
+  const pages = (await page.evaluate(() => window.pyHarness.calls())).filter(
+    (c) => c.op === 'readRoomMessages',
+  )
+  expect(pages.length).toBeGreaterThan(3)
   expect(await page.evaluate(() => window.pyHarness.draft())).toBeUndefined()
 
   const moved = await run(page, 'admin', MOVE)
@@ -275,7 +310,7 @@ test('round trip on the mock: a script reads the world state and fills the draft
   expect(await page.evaluate(() => window.pyHarness.applied())).toBe(1)
 })
 
-test('the bridge keeps each role to its operations and validates what it gets (PD4, PY-4)', async ({
+test('the bridge keeps each role to its operations and validates what it gets (PD2, PD4, PY-4)', async ({
   page,
 }) => {
   await open(page, 'header')
@@ -284,56 +319,61 @@ test('the bridge keeps each role to its operations and validates what it gets (P
     run(
       page,
       role,
-      `import wrx, json
+      `import json, wrx, wrx_draft
 from _wrx_bridge import call
-out = {}
-state = await wrx.world_state()
+game = wrx.Game()
+state = await game.world_state()
 # 3,000 assets: under the 5,000-asset limit, over the 500 KB cap (PLY-53).
-template = next(iter(state["assets"].values()))
-big = {"turn": state["turn"], "assets": {}}
+template = next(iter(state.model_dump(mode="json")["assets"].values()))
+big = {"turn": state.turn, "assets": {}}
 for i in range(3000):
     asset_id = f"30000000-0000-4000-8000-{i:012x}"
     big["assets"][asset_id] = dict(template, id=asset_id)
-for name, coro in [
-    ("write the draft", wrx.write_draft(state)),
-    ("unknown op", wrx._op("publishWorldState", {})),
-    ("read Blue HQ", wrx.room_messages(${JSON.stringify(ids.blueHq)})),
-    ("a room not the role's", wrx.room_messages("30000000-0000-4000-8000-0000000000ff")),
-    ("invalid state", wrx.write_draft({"turn": 0, "assets": {"a": {"lat": 200}}})),
-    ("over 500 KB", wrx.write_draft(big)),
-    ("not JSON", call("readWorldState", "{")),
-    ("wrong shape", call("readRoomMessages", json.dumps({"roomId": 3, "x": 1}))),
-]:
+
+async def raw(op, payload):
+    reply = json.loads(await call(op, payload))
+    return "allowed" if reply["ok"] else "refused: " + reply["code"] + ": " + reply["error"]
+
+async def sdk(coro):
     try:
-        r = await coro
-        if isinstance(r, str):  # a raw call: the reply's JSON
-            reply = json.loads(r)
-            out[name] = "allowed" if reply["ok"] else "refused: " + reply["error"]
-        else:
-            out[name] = "allowed"
+        await coro
+        return "allowed"
     except wrx.BridgeError as e:
-        out[name] = "refused: " + str(e)
-    except Exception as e:
-        out[name] = "error: " + str(e)
+        return "refused: " + e.code + ": " + e.message
+
+out = {
+    "write the draft": await sdk(wrx_draft.write_draft(state)),
+    "unknown op": await raw("publishWorldState", "{}"),
+    "read Blue HQ": await sdk(game.room(${JSON.stringify(ids.blueHq)}).history()),
+    "a room not the role's": await sdk(game.room("30000000-0000-4000-8000-0000000000ff").history()),
+    "invalid state": await sdk(wrx_draft.write_draft({"turn": 0, "assets": {}})),
+    "over 500 KB": await sdk(wrx_draft.write_draft(big)),
+    "not JSON": await raw("readWorldState", "{"),
+    "wrong shape": await raw("readRoomMessages", json.dumps({"roomId": 3, "x": 1})),
+    "too long": await raw("readTurn", json.dumps({"x": "y" * 10_001})),
+}
 print(json.dumps(out))`,
     )
   const white = await probes('white-force')
   expect(white.status, white.error).toBe('finished')
   const w = lastJson(white.output)
-  expect(w['write the draft']).toMatch(/^refused: writeDraft is not open to the white-force role/)
-  expect(w['unknown op']).toMatch(/^refused: no operation publishWorldState/)
+  expect(w['write the draft']).toBe(
+    'refused: forbidden: writeDraft is not open to the white-force role',
+  )
+  expect(w['unknown op']).toMatch(/^refused: unknown-op: /)
   expect(w['read Blue HQ']).toBe('allowed') // the White Force reads every room
-  expect(w["a room not the role's"]).toMatch(/^refused: not a room of this role/)
-  expect(w['not JSON']).toMatch(/^refused: the payload is not JSON/)
-  expect(w['wrong shape']).toMatch(/^refused: readRoomMessages: the request has the wrong shape/)
+  expect(w["a room not the role's"]).toBe('refused: not-found: not a room of this role')
+  expect(w['not JSON']).toBe('refused: invalid-request: the request is not JSON')
+  expect(w['wrong shape']).toMatch(/^refused: invalid-request: /)
+  expect(w['too long']).toBe('refused: invalid-request: the request is too long')
 
   const admin = await probes('admin')
   expect(admin.status, admin.error).toBe('finished')
   const a = lastJson(admin.output)
   expect(a['write the draft']).toBe('allowed')
-  expect(a['invalid state']).toMatch(/^refused: invalid world state/)
+  expect(a['invalid state']).toMatch(/^refused: invalid-request: invalid world state/)
   expect(a['over 500 KB']).toMatch(
-    /^refused: the world state is \d+ bytes, over the 500000-byte cap/,
+    /^refused: invalid-request: the world state is \d+ bytes, over the 500000-byte cap/,
   )
   // The run finished, so its last valid write is the draft (PD9).
   expect(await page.evaluate(() => window.pyHarness.applied())).toBe(1)

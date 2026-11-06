@@ -149,7 +149,7 @@ export class ScriptRunner {
         worker.postMessage({
           kind: 'reply',
           callId: message.callId,
-          result: JSON.stringify(result),
+          result,
         })
       })
     } else {
@@ -169,7 +169,7 @@ export class ScriptRunner {
   }
 
   /** Runs a script through `bridge`, in a started worker; `timeoutMs` is its limit (PY-10). */
-  run(bridge: ScriptBridge, code: string, context: object, timeoutMs: number): Promise<RunOutcome> {
+  run(bridge: ScriptBridge, code: string, timeoutMs: number): Promise<RunOutcome> {
     const ready = this.ready
     if (ready === undefined) return Promise.reject(new Error('the script worker is not started'))
     if (this.active !== undefined) return Promise.reject(new Error('a script is already running'))
@@ -196,7 +196,7 @@ export class ScriptRunner {
         () => {
           const worker = this.worker
           if (this.active !== run || worker === undefined) return // stopped meanwhile
-          const message: RunMessage = { kind: 'run', runId, code, context: JSON.stringify(context) }
+          const message: RunMessage = { kind: 'run', runId, code }
           worker.postMessage(message)
         },
         (error: unknown) => {
