@@ -265,7 +265,7 @@ export async function buildRunner(folder: string): Promise<void> {
 
 /** What the Scripts panel says in a build made without the runner (`WRX_PY_RUNNER=off`). */
 export const RUNNER_LEFT_OUT =
-  'This build of the app was made without Python, to keep it small: a pull request preview includes it only when the pull request changes the Python runner or the SDK. The demo on the main site has it.'
+  "This build of the app was made without Python, to keep it small: a pull request preview includes it only when the pull request changes the Python runner or the SDK, and a blog post's snapshot only when the post is about Python. The demo on the main site has it."
 
 /**
  * The stand-in `py/runner.js` of a build without the runner (owner decision, Nov 6, 2026: PR
