@@ -3,10 +3,17 @@
 import { Validator } from '@cfworker/json-schema'
 import { describe, expect, it } from 'vitest'
 import { INITIAL_GAME_STATE } from './documents.ts'
-import { blueReportsConfig, demoDesign, sampleWorldState, WORLD_ASSET } from './fixtures.ts'
+import {
+  TEMPLATE,
+  blueReportsConfig,
+  demoDesign,
+  sampleWorldState,
+  WORLD_ASSET,
+} from './fixtures.ts'
 import {
   JSON_SCHEMA_EXPORTS,
   JSON_SCHEMA_ID_BASE,
+  exportName,
   renderJsonSchemas,
   toJsonSchema,
 } from './json-schema.ts'
@@ -38,10 +45,17 @@ const map = demoDesign().rooms.find((r) => r.roomType === 'map')
 describe('JSON Schema export (D26, ARC-6, P8)', () => {
   it('covers the world-state, turn and room documents, each with its $id and title', () => {
     expect(JSON_SCHEMA_EXPORTS.map((e) => e.file)).toEqual([
+      'bridge-protocol.schema.json',
+      'chat-message.schema.json',
       'chat-room-config.schema.json',
+      'force.schema.json',
+      'game-setup.schema.json',
       'game-state.schema.json',
       'map-room-config.schema.json',
+      'objectives.schema.json',
+      'role.schema.json',
       'room.schema.json',
+      'template-message.schema.json',
       'world-asset.schema.json',
       'world-state-message.schema.json',
     ])
@@ -97,5 +111,71 @@ describe('JSON Schema export (D26, ARC-6, P8)', () => {
     agree('map-room-config.schema.json', { schemaVersion: 1, zoom: 30 }, false)
     agree('chat-room-config.schema.json', blueReportsConfig(), true)
     agree('chat-room-config.schema.json', { schemaVersion: 2, freeText: 'yes' }, false)
+  })
+
+  it('names its definitions for generated models (WP 6.1): no model is named after a field', () => {
+    expect(exportName('world-state-message.schema.json')).toBe('WorldStateMessage')
+    const world = toJsonSchema(exported('world-state-message.schema.json').entry)
+    expect(Object.keys(world.$defs as object).sort()).toEqual(['WorldAsset', 'WorldState'])
+    const asset = toJsonSchema(exported('world-asset.schema.json').entry)
+    expect(asset.$ref).toBeUndefined()
+    expect(asset.properties).toBeDefined()
+    const protocol = toJsonSchema(exported('bridge-protocol.schema.json').entry)
+    expect(Object.keys(protocol.$defs as object)).toEqual(
+      expect.arrayContaining(['Force', 'Role', 'Room', 'GameSetup', 'RoomMessage', 'WorldState']),
+    )
+  })
+
+  it('caps the assets at 5,000 (maxProperties) and agrees with zod at the cap', () => {
+    const state = sampleWorldState()
+    const template = state.assets[WORLD_ASSET.redArmour]
+    if (template === undefined) throw new Error('no sample asset')
+    const many = (n: number) => {
+      const assets: Record<string, unknown> = {}
+      for (let i = 0; i < n; i += 1) {
+        const id = `00000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`
+        assets[id] = { ...template, id }
+      }
+      return { type: 'world-state', schemaVersion: 1, content: { turn: 1, assets } }
+    }
+    agree('world-state-message.schema.json', many(5_000), true)
+    agree('world-state-message.schema.json', many(5_001), false)
+  })
+
+  it('the message bodies and the other documents: agree on valid and invalid ones', () => {
+    agree(
+      'chat-message.schema.json',
+      { type: 'chat', schemaVersion: 1, content: { text: 'Hi' } },
+      true,
+    )
+    agree(
+      'chat-message.schema.json',
+      { type: 'chat', schemaVersion: 1, content: { text: '' } },
+      false,
+    )
+    const values = { summary: 'Recce at the bridge', count: 3, urgent: true }
+    const templated = {
+      type: 'template',
+      schemaVersion: 1,
+      content: { templateId: TEMPLATE.sitrep, values },
+    }
+    agree('template-message.schema.json', templated, true)
+    agree(
+      'template-message.schema.json',
+      { ...templated, content: { templateId: TEMPLATE.sitrep, values: { '1bad': 'x' } } },
+      false,
+    )
+    const design = demoDesign()
+    const [force] = design.forces
+    const [role] = design.roles
+    const [objectives] = design.objectives
+    agree('force.schema.json', force, true)
+    agree('force.schema.json', { ...force, colour: 'blue' }, false)
+    agree('role.schema.json', role, true)
+    agree('role.schema.json', { ...role, loginName: 'Not A Slug' }, false)
+    agree('objectives.schema.json', objectives, true)
+    agree('objectives.schema.json', { ...objectives, forceId: 'blue' }, false)
+    agree('game-setup.schema.json', design.game, true)
+    agree('game-setup.schema.json', { ...design.game, designVersion: 0 }, false)
   })
 })

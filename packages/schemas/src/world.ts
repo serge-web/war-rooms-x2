@@ -76,7 +76,11 @@ export const worldStateSchema = z
         (assets) => Object.entries(assets).every(([key, asset]) => key === asset.id),
         'each asset is keyed by its own id',
       )
-      .describe('Every asset, keyed by its GUID; each key is its asset’s `id`'),
+      .describe(
+        'Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)',
+      )
+      // The cap as JSON Schema too (D26, WP 6.1); "keyed by its own id" has no JSON Schema form.
+      .meta({ maxProperties: LIMITS.worldStateAssets }),
   })
   .describe('The full world state: every asset with its position and status (D25)')
 
