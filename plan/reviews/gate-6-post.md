@@ -16,7 +16,7 @@ Draft of the Phase 6 gate summary, for the phase PR's description (working model
 ## Acceptance results (WP 6.5)
 
 - **SC-12** (new, SRD §12; `apps/web/e2e/scenarios/sc-12-umpire-runs-python.spec.ts`) passes on the mock and on ejabberd 26.09: a White Force script proposes; the admin loads the proposal after its summary, edits by hand, runs an admin script on top of the hand edit, reviews all three changes and publishes; Blue's open map updates; Blue has no Scripts tab and no umpire room.
-- **Performance** (`plan/reviews/phase-6-performance.md`, `apps/web/e2e/py-runner-perf.spec.ts`): worker ready 2.0 s cold, 2.1 s warm; first SDK run 0.9 s (pydantic), first pandas run 3.0 s; a 600-asset read, change and draft write 79 ms; 2,500 events a second, 100 sends in 88 ms, 1,000 calls at once in 200 ms; interpreter memory 30 MB, 36 MB with the SDK, 90 MB with pandas. `py/` is 23.4 MB (the core 6.4 MB gzip, the wheels barely compress). The start-up chunk grew 10,607 bytes over the phase (1.05%), 9,255 of them in WP 6.4 (the umpire room, the proposal schema and card, the draft merge); moving the admin's umpire panel (2.2 kB) to a lazy chunk split the start-up chunk in three for a 1.6 kB saving, so it was not kept.
+- **Performance** (`plan/reviews/phase-6-performance.md`, `apps/web/e2e/py-runner-perf.spec.ts`): worker ready 2.0 s cold, 2.1 s warm; first SDK run 0.9 s (pydantic), first pandas run 3.0 s; a 600-asset read, change and draft write 79 ms; 2,500 events a second, 100 sends in 88 ms, 1,000 calls at once in 200 ms; interpreter memory 30 MB, 36 MB with the SDK, 90 MB with pandas. `py/` is 23.4 MB (the core 6.4 MB gzip, the wheels barely compress). The start-up chunk grew 10,607 bytes over the phase (1.05%), 9,255 of them in WP 6.4 (the umpire room, the proposal schema and card, the draft merge); moving the admin's umpire panel (2.2 kB) to a lazy chunk split the start-up chunk in three for a 1.6 kB saving, so it was not kept; the owner then accepted the growth (Nov 6).
 - **Accessibility** (`plan/reviews/phase-6-accessibility.md`, `apps/web/e2e/scripts-a11y.spec.ts`): axe clean on the panel, the editor, the output, the confirmations, the umpire room and its proposal cards for both roles, and the load summary. The keyboard-only test found **A1**: the panel's inline forms and confirmations, and the proposal's, lost focus to the page when they closed. Fixed: focus returns to the opener, else to "New script".
 - **Security** (`plan/reviews/phase-6-security-review.md`): no Critical or High.
   - **M3** (Medium, fixed): a world state behind many map-room posts (Phase 5 H1) read as "none" through the bridge, and publishing without review did not check, so a player plus an auto-publishing script could wipe the map. Now `unavailable`, and publishing without review refuses.
@@ -46,14 +46,14 @@ Draft of the Phase 6 gate summary, for the phase PR's description (working model
 - S17 stays public (not deny-listed).
 - PR previews carry `py/` only when the PR touches Python; the main site always does.
 - Phase 6 itself: WPs 6.1–6.5 after S17, with gate G6.
+- The main bundle's growth from Phase 6 is accepted: new features are expected to grow it; `check:bundle` keeps asserting that no start-up chunk holds the runner or Pyodide (during WP 6.5).
 
 ## For the owner
 
 1. **M1, one interpreter per panel.** Recommended: a fresh interpreter for every run (about 3 s more before each run's first output; a first pandas run 3 s each time). Alternatives: only before runs that may publish without review, plus a "Restart Python" button; or keep it as documented.
 2. **M2, a per-run budget.** Recommended: refuse past 100 sends, 10 proposals and 16 calls in flight per run, with a clear error; the numbers are yours.
 3. **M4, publishing without review and hand edits.** Recommended: refuse to publish without review when the draft held unreviewed hand edits at the run's start (the change stays in the draft); later, if asked, publish only the script's change.
-4. **PY-5's wording.** The start-up chunk grew 1.05% over the phase, for the umpire room and proposals, which every umpire's client reads; the runner and Pyodide add nothing. Confirm that PY-5 means "the runner and Pyodide SHALL NOT be in the main bundle", or ask for a chunk-layout WP to move the umpire room's code out.
-5. **Blog snapshots and `py/`.** Each gate snapshot built from now on carries `py/` (about 34 MB). Not urgent at 3.4% of the Pages limit; building snapshots without Python unless the post is about it would keep them at about 10 MB.
+4. **Blog snapshots and `py/`.** Each gate snapshot built from now on carries `py/` (about 34 MB). Not urgent at 3.4% of the Pages limit; building snapshots without Python unless the post is about it would keep them at about 10 MB.
 
 ## Open risks
 

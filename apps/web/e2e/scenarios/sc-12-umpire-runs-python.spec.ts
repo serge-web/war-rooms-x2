@@ -110,6 +110,11 @@ test('SC-12: the White Force proposes from a script, the admin loads it, adjusts
   backend,
 }, testInfo) => {
   test.setTimeout(420_000)
+  // Scripts follow the login (PD5), and a server reset keeps the admin's account, so an earlier
+  // run's scripts may still be there on ejabberd: this run's names are its own.
+  const tag = Date.now().toString(36)
+  const strike = `Artillery strike ${tag}`
+  const refuel = `Refuel ${tag}`
 
   // Blue CO watches the map throughout; it has no Scripts tab and no umpire room (PD4, PD8).
   const blue = await context.newPage()
@@ -124,8 +129,8 @@ test('SC-12: the White Force proposes from a script, the admin loads it, adjusts
   const whiteErrors = watchErrors(white)
   await signIn(white, backend, 'white-cell')
   const whiteScripts = await openScripts(white)
-  await createScript(whiteScripts, 'Artillery strike', PROPOSE)
-  await runToTheEnd(whiteScripts, 'Artillery strike')
+  await createScript(whiteScripts, strike, PROPOSE)
+  await runToTheEnd(whiteScripts, strike)
   await mainTab(white, UMPIRES).click()
   const whiteCard = white
     .getByRole('region', { name: UMPIRES, exact: true })
@@ -170,9 +175,9 @@ test('SC-12: the White Force proposes from a script, the admin loads it, adjusts
 
   // 4. An admin script adjusts the draft; its change lands on top, the hand edit kept (PY-9, PD9).
   const scripts = await openScripts(admin)
-  await createScript(scripts, 'Refuel', REFUEL)
+  await createScript(scripts, refuel, REFUEL)
   await expect(scripts.getByRole('checkbox', { name: 'Publish without review' })).not.toBeChecked()
-  await runToTheEnd(scripts, 'Refuel')
+  await runToTheEnd(scripts, refuel)
   await expect(scripts.getByRole('region', { name: 'Output' })).toContainText(
     'refuelled Tank Company',
   )

@@ -37,6 +37,7 @@ The product owner decided, on November 6:
 
 - **One security policy for every role's client**, including the setting Python needs, rather than a separate policy for the umpires.
 - **Pull request previews carry Python only when the pull request changes it**, to keep the site small; the main site's demo always has it.
+- **The app's start-up code may grow with new features**, as it did by about 1% here; the Python runner itself must stay out of it.
 
 ## What is still open
 
