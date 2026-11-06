@@ -40,6 +40,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - name: PR list for the index (DOC-9)
         run: node tools/site/fetch-pulls.ts "$RUNNER_TEMP/pulls.json"
         env:

@@ -50,6 +50,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - run: pnpm build
       - name: Bundle has no external references (NFR-7, DOC-11)
         run: pnpm check:bundle
@@ -121,6 +128,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - run: pnpm --filter @wrx/web exec playwright install --with-deps ${{ matrix.browser }}
       # Test failures here are warnings, not a red job (product owner, Nov 3, 2026): each failed
       # test becomes a warning annotation and a line in the job summary, and the job passes. A run
