@@ -263,9 +263,36 @@ export async function buildRunner(folder: string): Promise<void> {
   })
 }
 
+/** What the Scripts panel says in a build made without the runner (`WRX_PY_RUNNER=off`). */
+export const RUNNER_LEFT_OUT =
+  'This build of the app was made without Python, to keep it small: a pull request preview includes it only when the pull request changes the Python runner or the SDK. The demo on the main site has it.'
+
+/**
+ * The stand-in `py/runner.js` of a build without the runner (owner decision, Nov 6, 2026: PR
+ * previews include `py/` only when the PR touches the runner, the SDK or Python files). It
+ * exports `unavailable`, which the Scripts panel shows, and a `createRunner` that refuses.
+ */
+export function runnerStub(): string {
+  const text = JSON.stringify(RUNNER_LEFT_OUT)
+  return [
+    '// The Python runner was left out of this build (WRX_PY_RUNNER=off).',
+    `export const unavailable = ${text}`,
+    'export function createRunner() {',
+    '  throw new Error(unavailable)',
+    '}',
+    '',
+  ].join('\n')
+}
+
+/** Whether this build includes the runner and Pyodide: yes unless `WRX_PY_RUNNER` is `off`. */
+export function includesRunner(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.WRX_PY_RUNNER !== 'off'
+}
+
 /**
  * The app's Vite plugin: after the app is written, the runner and Pyodide go to `py/` in the
- * output folder. The app imports neither, so its own chunks are unchanged.
+ * output folder. The app imports neither, so its own chunks are unchanged. With
+ * `WRX_PY_RUNNER=off` (a PR preview that does not touch Python), `py/` holds only the stub.
  */
 export function pyRunnerPlugin(): Plugin {
   let outDir = ''
@@ -277,6 +304,13 @@ export function pyRunnerPlugin(): Plugin {
     },
     async closeBundle() {
       const folder = join(outDir, 'py')
+      if (!includesRunner()) {
+        rmSync(folder, { recursive: true, force: true })
+        mkdirSync(folder, { recursive: true })
+        writeFileSync(join(folder, 'runner.js'), runnerStub())
+        this.info('py/: left out (WRX_PY_RUNNER=off); the Scripts panel says it is unavailable')
+        return
+      }
       await buildRunner(folder)
       const { files, bytes } = await emitPyodide(join(folder, 'pyodide'), (line) => {
         this.info(line)
