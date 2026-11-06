@@ -127,6 +127,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
 17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
 18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a write entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); members keep voice, so the map room adds no role to the observer vault, and clients accept only the admin's messages as world state (D25, PLY-58).
+19. After v1 (Annex C PD8, PY-8; WP 6.4), there SHALL be exactly one umpire room per game, made and kept like the map room: publishing creates it, and its participants are fixed rather than edited by the admin. They are each White Force as a write entry, plus a read entry for each White Force observer that has assigned rooms elsewhere (rule 4: without it, such an observer would not see the room; a force entry assigns nobody), so the admin and every White Force role are its members and no other role is. White Force roles that are not observers write; its observers read, and are in the observer vault and made read-only as for any read-only entry (ADM-37). It carries chat text and White Force proposals (`world-proposal`: a full world state and a summary, up to 500 KB, PLY-53), which clients accept only in the umpire room and only from the admin or a White Force role.
 
 ## 4. Functional requirements — admin backend
 
@@ -864,6 +865,11 @@ Changes from spike S17 (Nov 6, 2026):
 
 - Annex C: S17's outcome added under the spike's paragraph (pass with conditions; `plan/decisions/S17.md`). PR4 and PY-8 are not yet changed; the record proposes changes for the owner. PR3 decided (Nov 6, 2026): the wider policy applies to every role's client.
 
+Changes from WP 6.4, act and adjudicate (Nov 6, 2026):
+
+- §3 rule 19 added: the umpire room (PD8, PY-8), fixed like the map room. Its participants are the White Force as a write entry plus a read entry for each White Force observer assigned rooms elsewhere, because a role entry for a White Force observer assigns it (rule 4) and would take away its other rooms, while without one an assigned observer would not see the umpire room. Its observers are read-only through the vault, as for any read-only entry; unlike the map room, it does add roles to the vault (the White Force's observers, who are there already).
+- Decided (Nov 6, 2026, WP 6.4): an admin script's draft write is applied as its change from the state it read (the draft, or the published state), on top of the draft as it is when the script finishes (PY-9). Before, the script's state replaced the whole draft and could silently drop the admin's hand edits.
+
 ## Annex A. Message templates (built in Phase 4)
 
 Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
@@ -1005,7 +1011,7 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PY-6 The admin view and White Force roles SHALL have a script panel: a list of the account's scripts, an editor, Run and Stop, and the script's output and errors. Other roles SHALL NOT be offered it.
 - PY-7 Scripts SHALL be stored in the account's private storage, with name, code and settings, and SHALL be exportable and importable as files.
 - PY-8 A White Force proposal SHALL be posted as a message of a dedicated type to the game's umpire room (PD8), never a player room. Publishing SHALL create that room with the map room and keep its members to the admin and the White Force roles, as §3 rule 18 fixes the map room's. The admin client SHALL offer to load it into the draft and SHALL show the change summary first. It SHALL be validated against the world-state schema and the 500 KB cap (PLY-53) before posting and on receipt.
-- PY-9 An admin script's world state SHALL go to the draft. Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8 and SHALL be recorded with its change summary where the admin can see it. It MAY happen at any time, not only at a phase change.
+- PY-9 An admin script's world state SHALL go to the draft, applied as the script's change from the state it read, on top of the draft as it is when the script finishes, so the admin's edits to other assets are kept (WP 6.4). Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8 and SHALL be recorded with its change summary where the admin can see it. It MAY happen at any time, not only at a phase change.
 - PY-10 A script SHALL be stoppable at any time, and a run SHALL have a time limit the admin can set. A script's draft writes SHALL be applied together when it finishes; a run that is stopped, times out or fails SHALL leave the draft as it was before the run (PD9).
 - PY-11 In the browser runner, an automated player runs only while its tab is open. Long-running automated players wait for the native runner.
 - PY-12 The same contract-test suite SHALL run against the browser and native runners.

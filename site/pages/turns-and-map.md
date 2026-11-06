@@ -70,13 +70,7 @@ A design export carries the world state: the admin's draft if this browser holds
 
 ## Python scripts for umpires
 
-After v1 (Phase 6), umpires can automate their work with short Python scripts that run in the browser. The admin, in the umpire's game view, and every White Force role that is not an observer have a **Scripts** tab in the strip at the bottom of the workspace; players and observers do not. It can be dragged beside the rooms or popped out like any other panel.
-
-- **Write and run.** Create, rename, duplicate and delete scripts, edit the code, and run it. Output shows as it is printed, and an error shows Python's own report of where it went wrong. Stop ends a run at once, and every run has a time limit, 30 seconds unless the script sets another (at most 10 minutes).
-- **Same rights as the role.** A script reads the game as its role does: the turn, forces, roles, its rooms and their messages, the world state and objectives. It can do nothing the role cannot.
-- **The admin's draft.** An admin script can work out a new world state and put it in the admin's draft. It lands only when the script finishes cleanly; a stopped, timed-out or failed run leaves the draft as it was. Nothing is published: the admin reviews the change summary in the map room and publishes as usual.
-- **Kept with the login.** Scripts are stored on the server with the login, not in the browser, so they follow it to another device and to the next game, and everyone who shares a role's login shares its scripts. If two people save at once, the second is told and chooses whether to reload or keep their change.
-- **Files.** Export saves all of a login's scripts as one file, and import adds scripts from such a file or from `.py` files. Importing never runs anything.
+After v1 (Phase 6), umpires can automate their work with short Python scripts that run in the browser, propose world states to the admin in the umpires room, and, when the admin allows it per script, publish without review. See [Umpires and Python scripts](./umpires).
 
 ## Layouts and design changes
 
