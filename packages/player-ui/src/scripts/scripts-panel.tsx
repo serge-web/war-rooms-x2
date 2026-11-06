@@ -1088,7 +1088,9 @@ function RenameForm({
   const [value, setValue] = useState(name)
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => {
+    const restore = keepFocusOnClose(input.current)
     input.current?.select()
+    return restore
   }, [])
   const submit = (event: SyntheticEvent) => {
     event.preventDefault()
@@ -1121,6 +1123,26 @@ function RenameForm({
   )
 }
 
+/**
+ * Focus for an inline form or confirmation (NFR-14; WP 6.5 review, as the asset form's A1 fix):
+ * call when it opens, before it takes focus, and run the result when it closes. If focus would
+ * then be lost to the page's body, it goes back to the control that opened it, if that is still
+ * in the page, else to the panel's first action ("New script").
+ */
+function keepFocusOnClose(inside: HTMLElement | null): () => void {
+  const opener = document.activeElement
+  const panel = inside?.closest('.wrx-scripts')
+  return () => {
+    const lost = document.activeElement === null || document.activeElement === document.body
+    if (!lost) return
+    if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) {
+      opener.focus()
+      return
+    }
+    panel?.querySelector<HTMLElement>('.wrx-scripts__toolbar button')?.focus()
+  }
+}
+
 /** A confirmation in the panel, not a modal, so it works popped out (as the map editor's). */
 function InlineConfirm({
   title,
@@ -1138,7 +1160,9 @@ function InlineConfirm({
   const headingId = useId()
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
+    const restore = keepFocusOnClose(heading.current)
     heading.current?.focus()
+    return restore
   }, [])
   return (
     <section

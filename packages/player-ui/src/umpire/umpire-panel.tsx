@@ -104,8 +104,15 @@ function LoadProposal({
   const headingId = useId()
   const heading = useRef<HTMLHeadingElement>(null)
   const forces = useForces().data
+  // It takes focus when it opens; when it closes and focus would be lost with it, focus goes back
+  // to the card's "Load into draft…" (NFR-14; WP 6.5 review, as the asset form's A1 fix).
   useEffect(() => {
+    const opener = document.activeElement
     heading.current?.focus()
+    return () => {
+      const lost = document.activeElement === null || document.activeElement === document.body
+      if (lost && opener instanceof HTMLElement && opener.isConnected) opener.focus()
+    }
   }, [])
   const diff = diffWorldStates(published?.state, proposal.state)
   return (
