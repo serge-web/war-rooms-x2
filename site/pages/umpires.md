@@ -45,4 +45,6 @@ The admin, in the umpire's game view, and every White Force role that is not an 
 - **Kept with the login.** Scripts are stored on the server with the login, not in the browser, so they follow it to another device and to the next game, and everyone who shares a role's login shares its scripts. If two people save at once, the second is told and chooses whether to reload or keep their change.
 - **Files.** Export saves all of a login's scripts as one file, and import adds scripts from such a file or from `.py` files. Importing never runs anything, and an imported script never publishes without review until the admin turns it on.
 
+[Scripting for umpires](./scripting.md) walks through a turn with scripts, with examples and good practice.
+
 In a pull request's preview of the site, the app includes Python only when the pull request changes the Python parts; otherwise the Scripts panel says Python is not available in that build. The demo on the main site always has it.

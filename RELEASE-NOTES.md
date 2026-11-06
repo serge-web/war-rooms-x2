@@ -41,6 +41,28 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 
 Rooms can take structured messages: the admin builds forms in the design editor, offers them per room to forces and roles, and players send them as cards. Every client checks each message against its template; a template locks once a published room offers it, and changes go through a copy. See the site's message templates page.
 
+### The Python API (Phase 6, after v1)
+
+Gate G6, Nov 6, 2026 (SRD Annex C). The umpire team, the admin and the White Force's roles that are not observers, write and run short Python scripts in the browser, with exactly their role's rights. Players and observers have none of it. See the site's pages "Umpires and Python scripts" and "Scripting for umpires", and `docs/python-sdk.md`.
+
+- **The SDK, `wrx`.** Typed models generated from the game's JSON Schemas; reads of the game, its turn, forces, roles, rooms and messages, the world state and objectives, with pandas tables; sending text and templated messages; reacting to new messages and turn changes; the admin's world-state draft; White Force proposals.
+- **The Scripts panel**, a workspace tab: scripts kept with the login on the server, an editor, Run and Stop, a time limit, the output and errors, export and import as files.
+- **The umpires room**, one per game, fixed like the map room, for the admin and the White Force: White Force proposals arrive there as cards the admin loads into the draft after a change summary.
+- **The admin's scripts** change the draft on top of hand edits; nothing reaches players until the admin publishes, unless the admin turns on **Publish without review** for a script, after a confirmation.
+- **In the build:** Python runs in a locked-down worker from files in the build (`py/`, about 23 MB, checked by sha256), loaded only when the Scripts panel first opens; the page's start-up code does not carry it. Python is ready about 2 s after the panel opens, a first script that uses the SDK takes about 1 s more, and a first pandas table about 3 s more.
+- **Accessibility (WP 6.5):** every inline form and confirmation of the panel and the umpires room now gives focus back when it closes.
+- **Security review fixes (WP 6.5):** a script can no longer take a hidden world state ("Look further back") for an empty map, and publishing without review refuses to publish against one; proposals count only from White Force roles that are not observers.
+
+**Known limits of the Python API**
+
+- A script runs only while its tab is open (PY-11); long-running automated players wait for a native runner.
+- Runs in one panel share a Python session until Stop, a time limit or the panel closing: a script can leave changes behind that affect the next run. Choose Stop before running an important script after one you are not sure of.
+- Nothing limits how many messages a run sends; a handler that answers every message can fill a room.
+- Publishing without review publishes the whole draft, including unreviewed hand edits.
+- Everyone sharing a role's login shares its scripts; another session's save replaces the open script within 5 s when it has no unsaved edits.
+- Events a script does not take in time are dropped after 1,000, without a warning.
+- Chromium only was tested here; WebKit runs in CI.
+
 ### Supported browsers
 
 Decided in WP 0.4, and on Nov 3, 2026 for Firefox:

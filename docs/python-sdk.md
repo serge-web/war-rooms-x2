@@ -50,7 +50,7 @@ The game as the script's role sees it. Without `bridge`, the runner's own (`wrx.
 | `await rooms()` | `list[Room]`: the rooms the role is in, in order | `readRooms` |
 | `room(room)` | `RoomReader` for a `Room` or a room id; reads nothing yet | |
 | `await map_room()` | the map room's `RoomReader`, or `None` if the role is not in it | `readRooms` |
-| `await world_state()` | the latest published `WorldState`, or `None` | `readWorldState` |
+| `await world_state()` | the latest published `WorldState`, or `None` if none was ever published; `UnavailableError` if it is further back in the map room than the client searched (behind many other posts: open the Map room and choose "Look further back") | `readWorldState` |
 | `await world_state_record()` | `ReadWorldStateResult`: the state with its `messageId` and `sentAt` | `readWorldState` |
 | `world_states(order=...)` | async iterator of the map room's world-state messages from the admin: the turn history | `readRoomMessages` |
 | `await objectives(force)` | a force's newest `Objectives` (by `Force` or id), or `None` | `readObjectives` |
@@ -207,7 +207,7 @@ await game.post_proposal(state, "Tank Company hit by artillery: damaged, 40%.")
 
 ### Where scripts are kept
 
-Scripts are kept in the login's own XEP-0049 private storage, under one key (`wrx-scripts`), so they follow the login from game to game and from browser to browser, and everyone who uses a role's login shares them (PD5). Each script has its name, code, settings (the time limit, and `autoPublish`, reserved for WP 6.4 and always off) and the time it was last saved.
+Scripts are kept in the login's own XEP-0049 private storage, under one key (`wrx-scripts`), so they follow the login from game to game and from browser to browser, and everyone who uses a role's login shares them (PD5). Each script has its name, code, settings (the time limit, and `autoPublish`, publishing without review: off unless the admin turns it on for an admin script) and the time it was last saved. The admin account also keeps the record of publishes without review under its own key (`wrx-script-publishes`, the newest 50).
 
 - **Size.** Everything a login keeps is at most 200,000 bytes as stored (XML-escaped UTF-8; `<`, `>` and `&` count four or five bytes). A save over it is refused with the sizes; export first, then shorten or delete scripts.
 - **Two sessions of one login.** Every save carries the revision it was based on. If another session saved since, nothing is written and the panel says **Changed in another session**: **Reload** takes what is stored and drops this session's unsaved edits; **Keep my change** applies this session's change to what the other saved. The panel re-reads the scripts every 5 seconds while it is open: with no unsaved edits it takes another session's save at once; with unsaved edits it says so and lets you reload or keep editing. The check is a read just before the write, since XEP-0049 has no conditional write, so two saves within one round trip of each other still end last-writer-wins.
@@ -226,6 +226,17 @@ Scripts are kept in the login's own XEP-0049 private storage, under one key (`wr
 ```
 
 A bundle keeps every script and its settings in one file, which `.py` files cannot. **Import…** reads bundles and `.py` files (a `.py` file is named after the file and gets the default time limit). Every file is validated first and a wrong one is refused with the reason; imported scripts are added as new scripts, with names made unique and `autoPublish` off whatever the file says. Importing never runs anything (PR1): check a script before you run it, since it runs with the login's rights.
+
+## Limits and what to expect
+
+Measured on the development container in WP 6.5 (`plan/reviews/phase-6-performance.md`; `apps/web/e2e/py-runner-perf.spec.ts` prints them on every run):
+
+- **Start-up.** Python is ready about 2 s after the panel first opens, then the first script that imports `wrx` takes about another second (pydantic). Later runs start at once. The first run that makes a table loads pandas, about 3 s. A slower network adds to the first start, since the browser fetches about 23 MB once and then caches it.
+- **Size of work.** A script that reads a 600-asset world state, changes every asset and writes the draft takes under 0.1 s once Python is warm. Handlers keep up with hundreds of messages a second.
+- **One interpreter for a panel's runs.** Runs in one panel share a Python interpreter until Stop, a time limit or closing the panel ends it. Each run gets fresh variables, but whatever a script changes elsewhere (a module it patches, a value it puts in `builtins`) is still there for the next run. Do not rely on it, and Stop once before running a script you trust after one you do not.
+- **Events** wait in a queue of 1,000 while a handler runs; past that the oldest are dropped, and the count is in `_wrx_bridge.dropped_events()`. The SDK does not report it yet.
+- **No send budget.** A script sends as many messages as it asks for; a loop or a handler that answers every message can fill a room. Test handlers with `run_forever(seconds=...)` first.
+- **Publishing without review publishes the whole draft**, including edits you made by hand and have not reviewed. Publish or discard hand edits before running a script with it turned on.
 
 ## Regenerating and checking
 

@@ -4,7 +4,7 @@ import { isSlug } from './paths.ts'
 /** The blog folder. A blog-only PR may change nothing else (DOC-23). */
 export const BLOG_DIR = 'site/pages/blog/'
 
-/** Phase branches a snapshot may be built from: `phase-0` to `phase-5`, and Phase 0's stand-in. */
+/** Phase branches a snapshot may be built from: `phase-0` to `phase-6`, and Phase 0's stand-in. */
 export const PHASE_BRANCHES: readonly RegExp[] = Object.freeze([
   /^phase-\d+$/,
   /^claude\/gracious-thompson-aowbqs$/,
@@ -84,7 +84,7 @@ export function parsePost(file: string, text: string): ParsedPost {
   if (date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) problems.push(`${file}: date is YYYY-MM-DD`)
   const phaseText = need('phase')
   const phase = Number(phaseText)
-  if (phaseText !== '' && !/^[0-5]$/.test(phaseText)) problems.push(`${file}: phase is 0 to 5`)
+  if (phaseText !== '' && !/^[0-6]$/.test(phaseText)) problems.push(`${file}: phase is 0 to 6`)
   const status = need('status')
   if (status !== '' && status !== 'work-in-progress' && status !== 'gate') {
     problems.push(`${file}: status is work-in-progress or gate (DOC-26)`)
