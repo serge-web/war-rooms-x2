@@ -124,7 +124,7 @@ flowchart TB
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
     class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp58,wp52,wp54,wp53,wp55,wp56,wp57,wp59 done
     class wp33,wp34 active
-    class wps17 todo
+    class wps17 done
     class G0,G1,G2,G3,G4,G5 gate
 ```
 

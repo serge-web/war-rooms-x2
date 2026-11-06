@@ -1,0 +1,53 @@
+{
+  "read": "3 blue-co Morning all. Orders for the crossing are out.",
+  "moved": {
+    "output": "moved 1st Rifles",
+    "ms": 6,
+    "summary": {
+      "added": [],
+      "removed": [],
+      "changed": [
+        {
+          "title": "1st Rifles",
+          "fields": [
+            "lat",
+            "lon"
+          ]
+        }
+      ]
+    }
+  },
+  "refusals": {
+    "white writes the draft": "refused: writeDraft is not open to the white role",
+    "unknown op": "refused: no operation publishWorldState",
+    "White Force reads Blue HQ": "allowed",
+    "a room not the role's": "refused: not a room of this role",
+    "invalid state": "refused: invalid world state: turn Too small: expected number to be >=1",
+    "not JSON": "{\"ok\":false,\"error\":\"the payload is not JSON\"}",
+    "admin posts a proposal": "wrx.BridgeError: postProposal is not open to the admin role"
+  },
+  "proposal": {
+    "received": [
+      {
+        "from": "white-cell",
+        "note": "Bridge strike: Tank Company",
+        "valid": true,
+        "chars": 1724
+      }
+    ],
+    "summary": {
+      "added": [],
+      "removed": [],
+      "changed": [
+        {
+          "title": "Tank Company",
+          "fields": [
+            "state",
+            "health"
+          ]
+        }
+      ]
+    },
+    "proposalChars": 1724
+  }
+}

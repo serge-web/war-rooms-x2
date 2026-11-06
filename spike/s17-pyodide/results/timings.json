@@ -1,0 +1,188 @@
+{
+  "machine": "CI-like container: 4 vCPU, 15 GiB, headless Chromium (Playwright 1.63), loopback HTTP",
+  "samples": 5,
+  "cold": {
+    "pageMs": {
+      "median": 123,
+      "samples": [
+        113,
+        123,
+        121,
+        132,
+        139
+      ]
+    },
+    "workerReadyMs": {
+      "median": 1800,
+      "samples": [
+        1782,
+        1663,
+        1800,
+        1835,
+        1963
+      ]
+    },
+    "loadPyodideMs": {
+      "median": 1791,
+      "samples": [
+        1773,
+        1655,
+        1791,
+        1801,
+        1955
+      ]
+    },
+    "firstRunMs": {
+      "median": 10,
+      "samples": [
+        9,
+        9,
+        10,
+        10,
+        10
+      ]
+    },
+    "pandasFirstRunMs": {
+      "median": 3237,
+      "samples": [
+        2992,
+        3062,
+        3314,
+        3255,
+        3237
+      ]
+    },
+    "pandasImportLoadMs": {
+      "median": 748,
+      "samples": [
+        732,
+        731,
+        815,
+        753,
+        748
+      ]
+    },
+    "pandasSecondRunMs": {
+      "median": 1,
+      "samples": [
+        2,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "wasmMemoryCoreMB": {
+      "median": 30,
+      "samples": [
+        30,
+        30,
+        30,
+        30,
+        30
+      ]
+    },
+    "wasmMemoryPandasMB": {
+      "median": 75,
+      "samples": [
+        75,
+        75,
+        75,
+        75,
+        75
+      ]
+    }
+  },
+  "warm": {
+    "pageMs": {
+      "median": 81,
+      "samples": [
+        77,
+        84,
+        81,
+        84,
+        78
+      ]
+    },
+    "workerReadyMs": {
+      "median": 1830,
+      "samples": [
+        1830,
+        1969,
+        1708,
+        1806,
+        1997
+      ]
+    },
+    "loadPyodideMs": {
+      "median": 1823,
+      "samples": [
+        1823,
+        1961,
+        1701,
+        1792,
+        1989
+      ]
+    },
+    "firstRunMs": {
+      "median": 10,
+      "samples": [
+        10,
+        10,
+        10,
+        9,
+        11
+      ]
+    },
+    "pandasFirstRunMs": {
+      "median": 3240,
+      "samples": [
+        3087,
+        3277,
+        3240,
+        3231,
+        3547
+      ]
+    },
+    "pandasImportLoadMs": {
+      "median": 743,
+      "samples": [
+        749,
+        743,
+        730,
+        716,
+        813
+      ]
+    },
+    "pandasSecondRunMs": {
+      "median": 2,
+      "samples": [
+        2,
+        2,
+        2,
+        2,
+        2
+      ]
+    },
+    "wasmMemoryCoreMB": {
+      "median": 30,
+      "samples": [
+        30,
+        30,
+        30,
+        30,
+        30
+      ]
+    },
+    "wasmMemoryPandasMB": {
+      "median": 75,
+      "samples": [
+        75,
+        75,
+        75,
+        75,
+        75
+      ]
+    }
+  }
+}

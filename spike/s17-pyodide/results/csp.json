@@ -1,0 +1,32 @@
+{
+  "app": {
+    "core": "start failed: Error: no ready within 15000 ms; violations: script-src wasm-eval"
+  },
+  "wasm": {
+    "core": "ok (3.14.2)",
+    "numpy": "ok (45)",
+    "pandas": "ok (3)",
+    "pydantic": "ok (2.12.5)"
+  },
+  "wasm-strict": {
+    "core": "ok (3.14.2)",
+    "numpy": "ok (45)",
+    "pandas": "ok (3)",
+    "pydantic": "ok (2.12.5)"
+  },
+  "unsafe-eval": {
+    "core": "ok (3.14.2)",
+    "numpy": "ok (45)",
+    "pandas": "ok (3)",
+    "pydantic": "ok (2.12.5)"
+  },
+  "wasm-octet": {
+    "core": "start failed: Error: no ready within 15000 ms"
+  },
+  "wasm-meta": {
+    "core": "ok (3.14.2)",
+    "numpy": "ok (45)",
+    "pandas": "ok (3)",
+    "pydantic": "ok (2.12.5)"
+  }
+}
