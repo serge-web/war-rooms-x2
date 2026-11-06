@@ -59,7 +59,13 @@ export const fromWorkerSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
   z
-    .object({ kind: z.literal('output'), runId: z.number().int(), text: z.string().max(MAX_TEXT) })
+    .object({
+      kind: z.literal('output'),
+      runId: z.number().int(),
+      /** Which stream printed it (WP 6.3); absent means stdout. */
+      stream: z.enum(['stdout', 'stderr']).optional(),
+      text: z.string().max(MAX_TEXT),
+    })
     .strict(),
   z
     .object({

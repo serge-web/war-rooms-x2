@@ -20,6 +20,12 @@ export interface StartOptions {
 
 export type RunStatus = 'finished' | 'failed' | 'stopped' | 'timed-out'
 
+/** One line a script printed (WP 6.3). */
+export interface OutputLine {
+  readonly stream: 'stdout' | 'stderr'
+  readonly text: string
+}
+
 export interface RunOutcome {
   readonly status: RunStatus
   readonly error?: string
@@ -53,6 +59,7 @@ interface ActiveRun {
   readonly output: string[]
   outputChars: number
   readonly t0: number
+  readonly onOutput: ((line: OutputLine) => void) | undefined
   readonly finish: (outcome: RunOutcome) => void
 }
 
@@ -140,6 +147,11 @@ export class ScriptRunner {
     if (!('runId' in message) || message.runId !== run.runId) return
     if (message.kind === 'output') {
       run.output.push(message.text)
+      try {
+        run.onOutput?.({ stream: message.stream ?? 'stdout', text: message.text })
+      } catch {
+        // The page's listener failing must not stop the run.
+      }
       run.outputChars += message.text.length + 1
       while (run.outputChars > MAX_OUTPUT && run.output.length > 1) {
         run.outputChars -= (run.output.shift()?.length ?? 0) + 1
@@ -170,7 +182,12 @@ export class ScriptRunner {
   }
 
   /** Runs a script through `bridge`, in a started worker; `timeoutMs` is its limit (PY-10). */
-  run(bridge: ScriptBridge, code: string, timeoutMs: number): Promise<RunOutcome> {
+  run(
+    bridge: ScriptBridge,
+    code: string,
+    timeoutMs: number,
+    onOutput?: (line: OutputLine) => void,
+  ): Promise<RunOutcome> {
     const ready = this.ready
     if (ready === undefined) return Promise.reject(new Error('the script worker is not started'))
     if (this.active !== undefined) return Promise.reject(new Error('a script is already running'))
@@ -186,6 +203,7 @@ export class ScriptRunner {
         output: [],
         outputChars: 0,
         t0: performance.now(),
+        onOutput,
         finish: (outcome) => {
           clearTimeout(timer)
           if (this.active === run) this.active = undefined

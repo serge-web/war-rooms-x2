@@ -6,18 +6,19 @@
 //
 // zod must not compile parsers with `new Function` under the policy (F7): first, as in main.tsx.
 import '@wrx/schemas/jitless'
-import { MAP_ROOM_TYPE } from '@wrx/schemas'
+import { scriptRoleOf as domainScriptRole } from '@wrx/domain'
+import { LIMITS, MAP_ROOM_TYPE } from '@wrx/schemas'
 import type { WorldState } from '@wrx/schemas'
 import { ScriptBridge } from './bridge.ts'
 import type { CallRecord, RunnerStore } from './bridge.ts'
 import { ScriptRunner } from './runner.ts'
-import type { RunOutcome, StartResult } from './runner.ts'
+import type { OutputLine, RunOutcome, StartResult } from './runner.ts'
 import { SCRIPT_ROLES } from './sdk-ops.ts'
 import type { ScriptRole } from './sdk-ops.ts'
 import workerPath from './worker.ts?worker&url'
 
 export type { CallRecord, RunnerStore } from './bridge.ts'
-export type { RunOutcome, RunStatus, StartResult } from './runner.ts'
+export type { OutputLine, RunOutcome, RunStatus, StartResult } from './runner.ts'
 export type { Timings } from './protocol.ts'
 export { OPERATION_ROLES, SCRIPT_ROLES, SDK_OPERATIONS } from './sdk-ops.ts'
 export type { ScriptRole, SdkOperation } from './sdk-ops.ts'
@@ -42,13 +43,15 @@ export interface RunnerOptions {
   readonly packages?: readonly string[]
   /** Give up on a worker that is not ready by then; default 60 s. */
   readonly startTimeoutMs?: number
-  /** A run's time limit when `run` names none (PY-10); default 30 s. */
+  /** A run's time limit when `run` names none (PY-10); default `LIMITS.scriptRunDefaultSeconds`. */
   readonly defaultTimeoutMs?: number
 }
 
 export interface RunOptions {
-  /** This run's time limit (PY-10). */
+  /** This run's time limit (PY-10), at most `LIMITS.scriptRunMaxSeconds`. */
   readonly timeoutMs?: number
+  /** Each line the script prints, as it prints it, told apart by stream (WP 6.3). */
+  readonly onOutput?: (line: OutputLine) => void
 }
 
 export interface Runner {
@@ -74,13 +77,14 @@ export interface Runner {
 
 /** The role a store's session may run scripts as, if any (PD4). */
 export function scriptRoleOf(store: Pick<RunnerStore, 'me'>): ScriptRole | undefined {
-  const me = store.me().data
-  if (me.identity.anonymous) return undefined
-  if (me.identity.isAdmin) return 'admin'
-  return me.isUmpire && me.role !== undefined ? 'white-force' : undefined
+  // One rule for the runner and the panel (WP 6.3): White Force observers run nothing.
+  return domainScriptRole(store.me().data)
 }
 
 const PYODIDE_FOLDER = 'pyodide/'
+/** PY-10: a run's time limit, by default and at most. */
+export const DEFAULT_RUN_MS = LIMITS.scriptRunDefaultSeconds * 1000
+export const MAX_RUN_MS = LIMITS.scriptRunMaxSeconds * 1000
 
 export function createRunner(options: RunnerOptions): Runner {
   const { role, store, draft } = options
@@ -126,7 +130,8 @@ export function createRunner(options: RunnerOptions): Runner {
       if (disposed) return Promise.reject(new Error('the runner was disposed'))
       // A failed start is reported by the run itself, as a failed outcome.
       start().catch(() => undefined)
-      return runner.run(bridge, code, runOptions?.timeoutMs ?? options.defaultTimeoutMs ?? 30_000)
+      const limit = runOptions?.timeoutMs ?? options.defaultTimeoutMs ?? DEFAULT_RUN_MS
+      return runner.run(bridge, code, Math.min(limit, MAX_RUN_MS), runOptions?.onOutput)
     },
     stop: () => {
       runner.stop()

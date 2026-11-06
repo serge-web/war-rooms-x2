@@ -147,8 +147,8 @@ function serve(): void {
   let currentRun = 0
   let running = false
 
-  function output(text: string): void {
-    if (running) post({ kind: 'output', runId: currentRun, text: text.slice(0, MAX_TEXT) })
+  function output(stream: 'stdout' | 'stderr', text: string): void {
+    if (running) post({ kind: 'output', runId: currentRun, stream, text: text.slice(0, MAX_TEXT) })
   }
 
   async function init(message: InitMessage): Promise<void> {
@@ -162,8 +162,12 @@ function serve(): void {
       // The lock file the build trimmed to the shipped packages; relative wheels resolve to it.
       lockFileURL: `${message.indexURL}pyodide-lock.json`,
       packageBaseUrl: message.indexURL,
-      stdout: output,
-      stderr: output,
+      stdout: (text: string) => {
+        output('stdout', text)
+      },
+      stderr: (text: string) => {
+        output('stderr', text)
+      },
     })
     pyodide = api
     const loaded = performance.now()
