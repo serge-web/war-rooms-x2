@@ -69,6 +69,14 @@ flowchart TB
         wp57["5.7 Acceptance and review"]
         wp59["5.9 Phase 5 polish"]
     end
+    subgraph P6["Phase 6 — Python API (after v1)"]
+        direction LR
+        wp61["6.1 SDK models and read layer"]
+        wp62["6.2 Browser runner and packaging"]
+        wp63["6.3 Script panel and storage"]
+        wp64["6.4 Act and adjudicate"]
+        wp65["6.5 Acceptance and review"]
+    end
     subgraph PX["After v1 — Annexes A to C"]
         direction LR
         wps14["S14 Collection access spike"]
@@ -80,6 +88,7 @@ flowchart TB
     G3{{"Gate G3 — v1"}}
     G4{{"Gate G4 — templates"}}
     G5{{"Gate G5 — turns and map"}}
+    G6{{"Gate G6 — Python API"}}
 
     wp05 --> wp06 --> wp07
     wp05 --> wp08
@@ -117,6 +126,12 @@ flowchart TB
     wp53 & wp56 & wp58 --> wp57
     wp57 --> wp59
     P5 -.-> G5
+    wps17 --> wp61
+    wp61 --> wp62
+    wp62 --> wp63
+    wp63 --> wp64
+    wp64 --> wp65
+    P6 -.-> G6
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
@@ -125,7 +140,8 @@ flowchart TB
     class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp24,wp25,wp26,wp27,wp28,wp29,wp210,wp211,wp31,wp32,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp58,wp52,wp54,wp53,wp55,wp56,wp57,wp59 done
     class wp33,wp34 active
     class wps17 done
-    class G0,G1,G2,G3,G4,G5 gate
+    class wp61,wp62,wp63,wp64,wp65 todo
+    class G0,G1,G2,G3,G4,G5,G6 gate
 ```
 
 ## Documents

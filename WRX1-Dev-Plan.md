@@ -38,7 +38,7 @@ Each work package (WP) is a written brief that one Claude Code session builds on
 
 ## Phases and work packages
 
-There are 40 work packages, including the spike S14 and the Phase 5 spike checks. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
+There are 50 work packages, including the spikes S14 and S17 and the Phase 5 spike checks. Each is sized for one to three Claude Code PRs, and the order is set by dependencies, not dates.
 
 | WP | Work package | SRD ids | Depends on |
 | --- | --- | --- | --- |
@@ -91,9 +91,15 @@ There are 40 work packages, including the spike S14 and the Phase 5 spike checks
 | 5.8 | Objectives edited by the White Force: one item per author, newest by server timestamp, publisher affiliations for White Force non-observers, cleanup when a role leaves the White Force or is deleted, umpire editing in the player client for those roles | D21, §3 rule 14, PLY-35, R10 | 5.1 |
 | 5.7 | Acceptance: scenario SC-11 on both backends, SC-6 updated for the layout reset, performance, accessibility of the map, security review, docs, release notes and the gate post | SC-11, NFR-11, NFR-14, R28, R29 | 5.3, 5.6, 5.8 |
 | 5.9 | Phase 5 polish: the reviews' L3 (a phase change failing after its world state went out), M3 (discarding the world-state draft at a reset), L7 (roles added or removed not structural), A2 (one Tab stop for the asset table) and the margin of the map's first render at 600 assets | ADM-15, ADM-43, ADM-45, R25, R28, NFR-11, NFR-14 | 5.7 |
+| **Phase 6 — Python API, browser runner (after v1, SRD Annex C)** |  |  |  |
+| 6.1 | Python SDK models and read layer: pydantic models generated from the JSON Schema export (naming the asset model, adding the 5,000-asset cap and key rule, exporting chat and template bodies), the `wrx` read API (game, turn, forces, roles, rooms, messages, world state, objectives) and pandas helpers loaded on use | Annex C: PD1, PD2, PY-1–3; ARC-6 | S17 |
+| 6.2 | Browser runner and packaging: the worker, its lockdown and the bridge as a lazy chunk with a `blob:` bootstrap; the build step that fetches and checksums the wheels; the client policy for every role (`'wasm-unsafe-eval'`, `blob:` workers) and `.wasm` as `application/wasm` in the reference deployment; a check that the main bundle does not grow; S17's probes as a regression test | Annex C: PD3, PY-4, PY-5, PR1, PR3; NFR-7 | 6.1 |
+| 6.3 | Script panel and private storage: the panel for the admin and White Force roles, the editor, Run and Stop with a time limit, output and errors, scripts in the account's private storage with export and import | Annex C: PD4, PD5, PY-6, PY-7, PY-10 | 6.2 |
+| 6.4 | Act and adjudicate: sending messages and reacting to messages and phase changes; the built-in umpire room created and kept by publishing; the proposal message type with the 500 KB cap; loading a proposal into the draft; the admin's opt-in publishing per script, at any time, validated and recorded | Annex C: PD6–PD9, PY-2, PY-8, PY-9; ADM-44–46 | 6.3 |
+| 6.5 | Acceptance: a Python scenario on both backends, performance (start-up, pandas), accessibility of the panel, security review of the sandbox and bridge, docs, release notes and the gate post | Annex C: PY-11, PR1–PR5 | 6.4 |
 | **After v1 — Annexes A to C** |  |  |  |
 | S14 | Spike: collection-level access control on ejabberd, which decides the force-asset node layout (SRD Annex B) | Annex B, TPL-10 | 1.2 |
-| S17 | **Done (Nov 6, 2026): pass with conditions** (`plan/decisions/S17.md`, `spike/s17-pyodide/`). Everything is served from the build, under the client's policy plus `'wasm-unsafe-eval'`; `'unsafe-eval'` is not needed. Core 13.4 MB, plus 7.9 MB for pandas with numpy. The worker is ready in about 1.8 s. The round trip, the PD9 draft rule and pydantic models run. Conditions: the worker must run under the policy itself, by header or as a `blob:` worker; it removes its network and storage globals before a script runs; the server sends `.wasm` as `application/wasm`; a proposal needs its own message type. The wider policy needs a decision (PR3). Spike: Pyodide in a Web Worker in the admin view, bundled offline under the content security policy, with a minimal bridge that reads the world state and messages, fills the draft and posts a White Force proposal; records bundle size, start-up times and the policy needed (SRD Annex C) | Annex C | 5.6 |
+| S17 | **Done (Nov 6, 2026): pass with conditions** (`plan/decisions/S17.md`, `spike/s17-pyodide/`). Everything is served from the build, under the client's policy plus `'wasm-unsafe-eval'`; `'unsafe-eval'` is not needed. Core 13.4 MB, plus 7.9 MB for pandas with numpy. The worker is ready in about 1.8 s. The round trip, the PD9 draft rule and pydantic models run. Conditions: the worker must run under the policy itself, by header or as a `blob:` worker; it removes its network and storage globals before a script runs; the server sends `.wasm` as `application/wasm`; a proposal needs its own message type. The wider policy is decided: every role's client (PR3, Nov 6, 2026). Spike: Pyodide in a Web Worker in the admin view, bundled offline under the content security policy, with a minimal bridge that reads the world state and messages, fills the draft and posts a White Force proposal; records bundle size, start-up times and the policy needed (SRD Annex C) | Annex C | 5.6 |
 
 **Traceability.** Every live SRD requirement id is assigned to at least one WP above, except four that apply to every PR: ARC-15 (team's choice), DOC-4 and DOC-18 (working model item 5) and DOC-5 (blog posts). CI checks this on every PR (`pnpm check:trace`), so a requirement added to the SRD without a WP fails the build.
 
@@ -108,7 +114,7 @@ Raised during the build, not yet given a work package.
 | FT-1 | **(Brief: `plan/briefs/WP-FT-1.md`.) Done:** the breakpoint is 45rem (720 px at default size), not 400 px, see the SRD §14 note. **Out-of-game column as a tab when narrow.** Below a breakpoint (about 400 px, to be tuned), the out-of-game column becomes a workspace tab like the rooms, with its own tab styling that marks it as special (for example the game's accent colour and an icon), and it cannot be closed. Above the breakpoint it returns to the fixed column. Measure the width of the client itself (a container query), not the screen, so each multi-client pane switches on its own width. Its announcements must stay noticeable while the tab is hidden, for example with an unread badge | PLY-36, PLY-8, PLY-16 | Product owner, Phase 2 review of the multi-client view: the column takes too much space in narrow panes |
 | FT-2 | **Message templates (SRD Annex A), after v1. A1 to A4 became Phase 4 (WPs 4.1 to 4.4); A5, the image and asset pickers, stays here.** Proposed WPs A1 to A5 (template model, composer and card, template editor, acceptance, image and asset pickers) in `plan/decisions/annex-a-b-implementation.md`; numbered when the product owner approves and answers its open questions | Annex A | Product owner's revision, Nov 1, 2026 |
 | FT-3 | **Superseded (Nov 3, 2026).** Force assets in their own store (SRD Annex B) are replaced by the map room's world state (D25), built in Phase 5. Spike S14's result (no collection nodes on ejabberd 26.09) still stands and shapes room discovery (PLY-60). | Annex B | Oct 2026 |
-| FT-4 | **Python API (SRD Annex C), after v1.** Proposed WPs, numbered when spike S17 reports: P1 SDK models generated from the JSON Schemas, and the read layer; P2 the browser runner (worker, bridge, script panel, private storage); P3 act and adjudicate layers, White Force proposals and the admin's opt-in publishing; P4 acceptance (scenario, performance, accessibility, security review, docs); P5 the native runner on the same contract suite. Bot players are to be discussed separately | Annex C | Product owner, Nov 5, 2026 |
+| FT-4 | **Python API (SRD Annex C), after v1.** P1 to P4 became Phase 6 (WPs 6.1 to 6.5, P2 split into 6.2 and 6.3) on Nov 6, 2026. P5, the native runner on the same contract suite (PY-12), stays here until bot players have been discussed, since they may change it | Annex C | Product owner, Nov 5, 2026 |
 
 ## The README plan chart
 
@@ -177,6 +183,14 @@ flowchart TB
         wp57["5.7 Acceptance and review"]
         wp59["5.9 Phase 5 polish"]
     end
+    subgraph P6["Phase 6 — Python API (after v1)"]
+        direction LR
+        wp61["6.1 SDK models and read layer"]
+        wp62["6.2 Browser runner and packaging"]
+        wp63["6.3 Script panel and storage"]
+        wp64["6.4 Act and adjudicate"]
+        wp65["6.5 Acceptance and review"]
+    end
     subgraph PX["After v1 — Annexes A to C"]
         direction LR
         wps14["S14 Collection access spike"]
@@ -188,6 +202,7 @@ flowchart TB
     G3{{"Gate G3 — v1"}}
     G4{{"Gate G4 — templates"}}
     G5{{"Gate G5 — turns and map"}}
+    G6{{"Gate G6 — Python API"}}
 
     wp05 --> wp06 --> wp07
     wp05 --> wp08
@@ -225,13 +240,19 @@ flowchart TB
     wp53 & wp56 & wp58 --> wp57
     wp57 --> wp59
     P5 -.-> G5
+    wps17 --> wp61
+    wp61 --> wp62
+    wp62 --> wp63
+    wp63 --> wp64
+    wp64 --> wp65
+    P6 -.-> G6
 
     classDef todo fill:#f2f2f2,stroke:#888,color:#222
     classDef active fill:#fff1c2,stroke:#c9a000,color:#222,stroke-width:2px
     classDef done fill:#d6f0dc,stroke:#2e7d32,color:#222
     classDef gate fill:#e3ecfa,stroke:#3b5bab,color:#222
-    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58,wp59,wps17 todo
-    class G0,G1,G2,G3,G4,G5 gate
+    class wp01,wp02,wp03,wp04,wp05,wp06,wp07,wp08,wp11,wp12,wp13,wp14,wp15,wp16,wp21,wp22,wp23,wp210,wp211,wp24,wp25,wp26,wp27,wp28,wp29,wp31,wp32,wp33,wp34,wp35,wps14,wp41,wp42,wp43,wp44,wp51,wp52,wp53,wp54,wp55,wp56,wp57,wp58,wp59,wps17,wp61,wp62,wp63,wp64,wp65 todo
+    class G0,G1,G2,G3,G4,G5,G6 gate
 ```
 
 **How PRs update the chart**
@@ -323,4 +344,5 @@ Changes from the baseline above are listed here and in the phase PR's gate summa
 | NFR-13 narrowed to Chrome and Edge as the SHALL, Firefox and Safari as a SHOULD; the Firefox CI job becomes advisory, like WebKit's | WP 0.4: the customer's analysts use Chrome and Edge only (`plan/decisions/target-environment.md`). Firefox and WebKit failures are recorded in `plan/reviews/phase-3-browsers.md` |
 | 2.6 gains PLY-54, the collapsible composer: free text and templated, remembered per room in the saved layout, collapsed by default for read-only roles | Product-owner request of Nov 2, 2026: some users only read a room and want the space for messages |
 | Spike S17 and FT-4 added, after v1, with a node in the chart | SRD Annex C (Nov 5, 2026): the Python API's browser runner depends on Pyodide working offline under the client's security policy |
-| S17 done, its chart node green; FT-4 keeps its proposed WPs P1–P5 until the owner approves, with the record's sizing (P2 split into the runner and the panel); the deny-list gains S17 | `plan/decisions/S17.md`: pass with conditions. It covers the script sandbox and the policy, so its record stays off the site like S14's |
+| S17 done, its chart node green; FT-4 keeps its proposed WPs P1–P5 until the owner approves, with the record's sizing (P2 split into the runner and the panel). S17 is not deny-listed: the owner keeps it public (Nov 6, 2026) | `plan/decisions/S17.md`: pass with conditions |
+| Phase 6 added (WPs 6.1–6.5), the browser runner of the Python API, with gate G6; P5, the native runner, stays in FT-4 | Product owner, Nov 6, 2026, after S17 |
