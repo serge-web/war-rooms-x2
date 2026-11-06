@@ -240,6 +240,23 @@ describe('the bridge answers protocol 2 (PY-4)', () => {
     expect(result.ok && (result.value.state as { turn: number }).turn).toBe(sampleWorldState().turn)
   })
 
+  it('refuses, rather than reads as none, a world state behind other map-room posts (Phase 5 H1)', async () => {
+    // A modified client's many posts after the admin's state (WP 5.7): the search stopped there.
+    for (const role of ['admin', 'white-force'] as const) {
+      const fake = fakeStore(role === 'admin')
+      Object.assign(fake.store, {
+        worldState: () =>
+          ready({ state: undefined, searching: false, none: false, unreached: true }),
+      })
+      const b = bridge(role, fake)
+      for (const op of role === 'admin' ? ['readWorldState', 'readDraft'] : ['readWorldState']) {
+        const result = await call(b, op)
+        expect(result, op).toMatchObject({ ok: false, code: 'unavailable' })
+        expect(result.ok ? '' : result.error).toMatch(/further back/)
+      }
+    }
+  })
+
   it('pages a room’s messages with a cursor, leaving out invalid bodies (PD2)', async () => {
     const admin = bridge('admin')
     const first = await call(admin, 'readRoomMessages', { roomId: ROOM.blueHq, limit: 2 })

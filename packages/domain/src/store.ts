@@ -1576,10 +1576,11 @@ class Store implements SessionStore {
       }
       return { ...base, kind: 'unreadable', reason: `not a ${definition.type} message` }
     }
-    // PY-8: a proposal counts only from the admin or a White Force role (the umpire room's
-    // members; its type already keeps proposals out of every other room).
+    // PY-8: a proposal counts only from the admin or a White Force role that is not an observer
+    // (PD6: the roles that may post one; its observers are read-only, which the server enforces
+    // only through the vault, Phase 6 review). Its type already keeps it out of every other room.
     if (parsed.value.type === 'world-proposal' && !base.sender.isAdmin) {
-      if (!this.isWhiteForceLogin(base.sender.loginName)) {
+      if (!this.isWhiteForceWriter(base.sender.loginName)) {
         this.logger.warn('Ignoring a proposal not from the White Force', {
           room: entry.roomId,
           stanzaId: message.stanzaId,
@@ -1599,11 +1600,13 @@ class Store implements SessionStore {
     return { ...base, kind: 'message', body: parsed.value }
   }
 
-  /** Whether a login name is a White Force role's (the umpire flag on its force). */
-  private isWhiteForceLogin(loginName: string | undefined): boolean {
+  /** Whether a login name is a White Force role's (the umpire flag on its force), not an observer. */
+  private isWhiteForceWriter(loginName: string | undefined): boolean {
     if (loginName === undefined) return false
     const role = this.collection('role').find((r) => r.loginName === loginName)
-    return role !== undefined && this.docOf('force', role.forceId)?.isUmpire === true
+    return (
+      role !== undefined && !role.isObserver && this.docOf('force', role.forceId)?.isUmpire === true
+    )
   }
 
   /** Identity from the occupant JID only, never the body (§3 rule 3). */

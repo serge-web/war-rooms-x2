@@ -110,6 +110,55 @@ def walk():
     return {"visited": count, "found": found[:10]}
 
 
+def deep_walk():
+    """As walk, into Pyodide's internals too (its Emscripten module and API), which walk skips:
+    added by the Phase 6 security review (WP 6.5)."""
+    import pyodide_js as root_api
+
+    starts = [("pyodide_js._module", root_api._module), ("pyodide_js._api", root_api._api)]
+    seen, queue, found, count = set(), list(starts), [], 0
+    skip = ("Array", "Buffer", "Memory", "DataView")
+    while queue and count < 6000:
+        path, obj = queue.pop(0)
+        count += 1
+        try:
+            ctor = str(obj.constructor.name)
+        except BaseException:  # noqa: BLE001
+            ctor = ""
+        if ctor in ("DedicatedWorkerGlobalScope", "WorkerGlobalScope", "IDBFactory", "XMLHttpRequest", "WebSocket"):
+            found.append(path + ":" + ctor)
+        if any(s in ctor for s in skip) or path.count(".") > 5:
+            continue
+        try:
+            names = [n for n in dir(obj) if not n.startswith("__")][:300]
+        except BaseException:  # noqa: BLE001
+            continue
+        for n in names:
+            if n.startswith("HEAP"):
+                continue
+            try:
+                v = getattr(obj, n)
+            except BaseException:  # noqa: BLE001
+                continue
+            if type(v).__name__.startswith("Js") and id(v) not in seen:
+                seen.add(id(v))
+                queue.append((path + "." + n, v))
+    return {"visited": count, "found": found[:10]}
+
+
+def async_function_constructor():
+    import pyodide_js
+
+    return pyodide_js.loadPackage.constructor("return globalThis")()
+
+
+def timer_with_text():
+    import js
+
+    # Eval by another name: the policy refuses it without throwing, so the proof is the canary.
+    return js.setTimeout(f"import('{CANARY}timer-import.js')", 0)
+
+
 await probe("js module names", js_names)
 for name in (
     "self",
@@ -152,4 +201,7 @@ await probe(
 await probe("Emscripten IDBFS.indexedDB()", lambda: pyodide_js().FS.filesystems.IDBFS.indexedDB())
 await probe("pyodide_js._module (Emscripten)", lambda: type(pyodide_js()._module).__name__)
 await probe("object graph walk", walk)
+await probe("deep walk (Emscripten module and API)", deep_walk)
+await probe("AsyncFunction constructor", async_function_constructor)
+await probe("setTimeout with a string (eval)", timer_with_text)
 print(json.dumps(results))

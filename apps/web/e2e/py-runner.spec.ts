@@ -208,6 +208,8 @@ const MUST_BE_BLOCKED = [
   'global.WebSocket',
   'import() via Function constructor (canary)',
   'Emscripten IDBFS.indexedDB()',
+  // The Phase 6 security review's additions (WP 6.5).
+  'AsyncFunction constructor',
 ]
 
 for (const delivery of ['header', 'meta'] as const) {
@@ -219,6 +221,7 @@ for (const delivery of ['header', 'meta'] as const) {
       expect(result.probes[name], name).toMatch(/^blocked/)
     }
     expect(result.probes['object graph walk']).toContain("'found': []")
+    expect(result.probes['deep walk (Emscripten module and API)']).toContain("'found': []")
     // loadPackage(url) resolves even when its fetch is refused, so its proof is the canary.
     expect(result.canaryHits).toEqual([])
     expect(result.sameOriginOutside).toEqual([])
@@ -236,6 +239,8 @@ test('the control: with no policy at all, new Function reaches another origin (w
   const result = await probe(page, 'none')
   expect(result.probes['Function constructor']).toMatch(/^reached/)
   expect(result.canaryHits).toContain('/fn-import.js')
+  // A timer given text is eval too (Phase 6 review): the policy is what refuses it.
+  expect(result.canaryHits).toContain('/timer-import.js')
   // The lockdown still holds for the globals.
   expect(result.probes['js.fetch']).toMatch(/^blocked/)
   expect(result.probes['global.indexedDB.open']).toMatch(/^blocked/)
@@ -444,4 +449,41 @@ test('Stop, the time limit and a failure leave the draft unchanged (PD9, PY-10)'
   expect(ok.status, ok.error).toBe('finished')
   expect(await draft()).toBeDefined()
   expect(await page.evaluate(() => window.pyHarness.applied())).toBe(1)
+})
+
+// Phase 6 security review (WP 6.5), finding M1: runs share one interpreter until Stop, a time
+// limit or the panel closing ends the worker. Each run gets fresh globals, but modules, builtins
+// and anything else a script changes outlast it, so one script can alter what a later one does.
+// This records the behaviour the review rates; it changes if the owner chooses a fresh
+// interpreter per run.
+test('one run can change what a later run in the same worker does (review M1, recorded)', async ({
+  page,
+}) => {
+  await open(page, 'header')
+  const first = await run(
+    page,
+    'admin',
+    [
+      'import builtins, wrx',
+      'builtins.left_behind = "by the first run"',
+      'original = wrx.Game.write_draft',
+      'async def tampered(self, state):',
+      '    for asset in state.assets.values():',
+      '        asset.health = 1',
+      '    return await original(self, state)',
+      'wrx.Game.write_draft = tampered',
+      'print("patched")',
+    ].join('\n'),
+  )
+  expect(first.status, first.error).toBe('finished')
+  const second = await run(page, 'admin', `${MOVE}\nprint(left_behind)`)
+  expect(second.status, second.error).toBe('finished')
+  expect(second.output).toContain('by the first run')
+  const draft = await page.evaluate(() => window.pyHarness.draft())
+  expect(Object.values(draft?.assets ?? {}).every((a) => a.health === 1)).toBe(true)
+  // A new worker (after Stop) starts clean.
+  await page.evaluate(() => window.pyHarness.stop())
+  const clean = await run(page, 'admin', 'import builtins\nprint(hasattr(builtins, "left_behind"))')
+  expect(clean.status, clean.error).toBe('finished')
+  expect(clean.output).toContain('False')
 })

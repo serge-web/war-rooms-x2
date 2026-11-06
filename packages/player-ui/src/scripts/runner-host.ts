@@ -164,13 +164,24 @@ export async function publishScriptDraft(
     return { status: 'failed', error: 'there is no world-state draft to publish' }
   }
   const published = store.worldState(mapRoomId).data
-  const diff = diffWorldStates(published?.state, held.value.state)
+  // As "Publish world state…" does (Phase 5 H1): never against a published state not found yet,
+  // or one behind many other map-room posts, which would read as an empty map (Phase 6 review).
+  if (published?.state === undefined && published?.none !== true) {
+    return {
+      status: 'failed',
+      error:
+        published?.unreached === true
+          ? 'the latest world state is further back in the map room, behind other messages; open the Map room, choose “Look further back”, and publish from there'
+          : 'the published world state has not loaded yet; publish from the Map room once it has',
+    }
+  }
+  const diff = diffWorldStates(published.state, held.value.state)
   if (isEmptyDiff(diff)) return { status: 'unchanged' }
   const toPublish = draftForTurn(held.value, store.gameState().data?.turn)
   const tooLarge = sizeRefusal(toPublish)
   if (tooLarge !== undefined) return { status: 'failed', error: tooLarge }
   const sent = await store.sendWorldState(mapRoomId, toPublish)
   if (!sent.ok) return { status: 'failed', error: worldPublishErrorText(sent.error) }
-  storage.published(key, text, toPublish, published?.stanzaId)
+  storage.published(key, text, toPublish, published.stanzaId)
   return { status: 'published', stanzaId: sent.value.stanzaId, turn: toPublish.turn, diff }
 }

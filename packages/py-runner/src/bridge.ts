@@ -496,6 +496,14 @@ export class ScriptBridge {
         return view !== undefined && (view.state !== undefined || !view.searching)
       }, 'the world state')
       const view = store.worldState(mapRoomId).data
+      // Behind many other map-room posts, the latest state is not "none" (Phase 5 H1): a script
+      // must not take an empty room as the game's map, nor base a draft on it (Phase 6 review).
+      if (view?.state === undefined && view?.unreached === true) {
+        throw new Refusal(
+          'unavailable',
+          'the latest world state is further back in the map room, behind other messages; open the Map room and choose “Look further back”, then run again',
+        )
+      }
       if (view?.state === undefined) return none
       return { state: view.state, messageId: view.stanzaId ?? null, sentAt: view.timestamp ?? null }
     } finally {
