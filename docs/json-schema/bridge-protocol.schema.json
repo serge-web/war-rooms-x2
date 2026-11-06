@@ -1,0 +1,1173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:bridge-protocol.schema.json",
+  "title": "Python SDK bridge protocol, version 1",
+  "type": "object",
+  "properties": {
+    "protocolVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "op": {
+      "$ref": "#/$defs/BridgeOp"
+    },
+    "requests": {
+      "$ref": "#/$defs/BridgeRequests"
+    },
+    "results": {
+      "$ref": "#/$defs/BridgeResults"
+    },
+    "reply": {
+      "$ref": "#/$defs/BridgeReply"
+    }
+  },
+  "required": [
+    "protocolVersion",
+    "op",
+    "requests",
+    "results",
+    "reply"
+  ],
+  "description": "The bridge protocol between the Python SDK and its runner, version 1: a catalogue of its parts, not a message",
+  "$defs": {
+    "BridgeOp": {
+      "type": "string",
+      "enum": [
+        "readContext",
+        "readGameSetup",
+        "readTurn",
+        "readForces",
+        "readRoles",
+        "readRooms",
+        "readRoomMessages",
+        "readWorldState",
+        "readObjectives"
+      ],
+      "description": "A bridge operation (protocol 1)"
+    },
+    "BridgeRequests": {
+      "type": "object",
+      "properties": {
+        "readContext": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readGameSetup": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readTurn": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readForces": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readRoles": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readRooms": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readRoomMessages": {
+          "$ref": "#/$defs/ReadRoomMessagesRequest"
+        },
+        "readWorldState": {
+          "$ref": "#/$defs/EmptyRequest"
+        },
+        "readObjectives": {
+          "$ref": "#/$defs/ReadObjectivesRequest"
+        }
+      },
+      "required": [
+        "readContext",
+        "readGameSetup",
+        "readTurn",
+        "readForces",
+        "readRoles",
+        "readRooms",
+        "readRoomMessages",
+        "readWorldState",
+        "readObjectives"
+      ],
+      "description": "Each operation's request, by operation name"
+    },
+    "EmptyRequest": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "No parameters: `{}`"
+    },
+    "ReadRoomMessagesRequest": {
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "A room the role is in"
+        },
+        "limit": {
+          "default": 100,
+          "description": "Most messages in this page",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "order": {
+          "default": "oldest-first",
+          "description": "The page order, and the direction `cursor` continues in",
+          "type": "string",
+          "enum": [
+            "oldest-first",
+            "newest-first"
+          ]
+        },
+        "cursor": {
+          "description": "The previous page's `cursor`, to continue; unset, start at the first message",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "roomId"
+      ],
+      "additionalProperties": false,
+      "description": "One page of a room's messages, as the role sees them"
+    },
+    "ReadObjectivesRequest": {
+      "type": "object",
+      "properties": {
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The force whose objectives to read"
+        }
+      },
+      "required": [
+        "forceId"
+      ],
+      "additionalProperties": false,
+      "description": "A force's objectives, if the role may read them (§3 rule 14)"
+    },
+    "BridgeResults": {
+      "type": "object",
+      "properties": {
+        "readContext": {
+          "$ref": "#/$defs/Context"
+        },
+        "readGameSetup": {
+          "$ref": "#/$defs/ReadGameSetupResult"
+        },
+        "readTurn": {
+          "$ref": "#/$defs/ReadTurnResult"
+        },
+        "readForces": {
+          "$ref": "#/$defs/ReadForcesResult"
+        },
+        "readRoles": {
+          "$ref": "#/$defs/ReadRolesResult"
+        },
+        "readRooms": {
+          "$ref": "#/$defs/ReadRoomsResult"
+        },
+        "readRoomMessages": {
+          "$ref": "#/$defs/ReadRoomMessagesResult"
+        },
+        "readWorldState": {
+          "$ref": "#/$defs/ReadWorldStateResult"
+        },
+        "readObjectives": {
+          "$ref": "#/$defs/ReadObjectivesResult"
+        }
+      },
+      "required": [
+        "readContext",
+        "readGameSetup",
+        "readTurn",
+        "readForces",
+        "readRoles",
+        "readRooms",
+        "readRoomMessages",
+        "readWorldState",
+        "readObjectives"
+      ],
+      "description": "Each operation's result, the `value` of its reply, by operation name"
+    },
+    "Context": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "type": "number",
+          "const": 1,
+          "description": "The protocol version the bridge speaks"
+        },
+        "isAdmin": {
+          "type": "boolean",
+          "description": "The script runs as the game admin"
+        },
+        "roleId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The role the script runs as (PD2); null for the admin, who has no role"
+        },
+        "forceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The role's force; null for the admin"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "isAdmin",
+        "roleId",
+        "forceId"
+      ],
+      "description": "Who the script runs as: data, not access; the bridge enforces access (PD2, PY-4)"
+    },
+    "ReadGameSetupResult": {
+      "type": "object",
+      "properties": {
+        "setup": {
+          "$ref": "#/$defs/GameSetup"
+        }
+      },
+      "required": [
+        "setup"
+      ],
+      "description": "The game setup document"
+    },
+    "GameSetup": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Short description"
+        },
+        "briefing": {
+          "type": "string",
+          "maxLength": 20000,
+          "description": "Public Markdown briefing for the welcome page (PLY-46–48)"
+        },
+        "designVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Incremented by a publish that changes the structure: a room added or removed, or the effective access to a room of a role in both designs (§3 rule 8); keys saved layouts (PLY-5)"
+        },
+        "theme": {
+          "$ref": "#/$defs/Theme"
+        },
+        "roomTypeDefaults": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "Readable URL-safe name: lowercase letters, digits and single hyphens"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "description": "Default config per room type, validated by that type (ARC-5)"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "name",
+        "description",
+        "briefing",
+        "designVersion",
+        "theme",
+        "roomTypeDefaults"
+      ],
+      "description": "Game properties and the game theme"
+    },
+    "Theme": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/ThemeTokens"
+        },
+        "logoAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "iconAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "tokens"
+      ],
+      "description": "Theme: tokens plus optional logo and icon assets"
+    },
+    "ThemeTokens": {
+      "type": "object",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "secondary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "fontFamily": {
+          "description": "Bundled font id",
+          "type": "string",
+          "enum": [
+            "sans",
+            "serif",
+            "mono"
+          ]
+        }
+      },
+      "description": "Design tokens; an unset token inherits from the game theme, then the default"
+    },
+    "ReadTurnResult": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GameState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The turn and phase; null before the first publish"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "description": "The current turn and phase (D7)"
+    },
+    "GameState": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "The turn number, from 1"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "planning",
+            "adjudication"
+          ],
+          "description": "Each turn has a planning phase, then an adjudication phase (D7)"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "turn",
+        "phase"
+      ],
+      "description": "The current turn and phase"
+    },
+    "ReadForcesResult": {
+      "type": "object",
+      "properties": {
+        "forces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Force"
+          },
+          "description": "The forces the role can read, in order"
+        }
+      },
+      "required": [
+        "forces"
+      ],
+      "description": "The game's forces"
+    },
+    "Force": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name"
+        },
+        "colour": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour for message authors; not a theme token (§3 rule 13)"
+        },
+        "iconAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "isUmpire": {
+          "type": "boolean",
+          "description": "The umpire flag: this is the White Force, which the admin plays in as umpire; exactly one force has it (ADM-4, D8)"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+        },
+        "theme": {
+          "description": "Styles the force panel only (D19)",
+          "$ref": "#/$defs/Theme"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "name",
+        "colour",
+        "isUmpire",
+        "order"
+      ],
+      "description": "A side in the game"
+    },
+    "ReadRolesResult": {
+      "type": "object",
+      "properties": {
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Role"
+          },
+          "description": "The roles the role can read, in order"
+        }
+      },
+      "required": [
+        "roles"
+      ],
+      "description": "The game's roles"
+    },
+    "Role": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Role id, a GUID"
+        },
+        "loginName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Login name: the role's XMPP account name, readable, fixed once published (§3 rule 1, ADM-5)"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name"
+        },
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Id of the role's force"
+        },
+        "isObserver": {
+          "type": "boolean",
+          "description": "Observers read but never post, in all their rooms (D8)"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "loginName",
+        "name",
+        "forceId",
+        "isObserver",
+        "order"
+      ],
+      "description": "A player position; one XMPP account"
+    },
+    "ReadRoomsResult": {
+      "type": "object",
+      "properties": {
+        "rooms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Room"
+          },
+          "description": "The rooms the role is in, in order"
+        }
+      },
+      "required": [
+        "rooms"
+      ],
+      "description": "The role's rooms"
+    },
+    "Room": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name"
+        },
+        "roomType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Room type id from the registry (v1: chat and map)"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Participant"
+          },
+          "description": "Mixed force and role entries; White Force roles are added implicitly, and a role entry assigns a White Force observer the room (§3 rule 4)"
+        },
+        "config": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {},
+          "description": "Type-specific config, validated by the room type (ARC-5)"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+        },
+        "theme": {
+          "description": "Styles this room's panel and tab",
+          "$ref": "#/$defs/Theme"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "id",
+        "name",
+        "roomType",
+        "participants",
+        "config",
+        "order"
+      ],
+      "description": "A channel: one MUC room plus this config"
+    },
+    "Participant": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "force",
+            "role"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Force or role id"
+        },
+        "access": {
+          "type": "string",
+          "enum": [
+            "write",
+            "read"
+          ],
+          "description": "Read-only entries join as MUC visitors"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "access"
+      ],
+      "description": "A room participant entry (§3 rule 4)"
+    },
+    "ReadRoomMessagesResult": {
+      "type": "object",
+      "properties": {
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoomMessage"
+          },
+          "description": "This page, in the requested order"
+        },
+        "cursor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pass it back for the next page; null when there are no more"
+        }
+      },
+      "required": [
+        "messages",
+        "cursor"
+      ],
+      "description": "One page of a room's messages"
+    },
+    "RoomMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The server's stanza id; unique within the room"
+        },
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The room it was posted in"
+        },
+        "sentAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "Server time"
+        },
+        "sender": {
+          "$ref": "#/$defs/MessageSender"
+        },
+        "body": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ChatMessage"
+            },
+            {
+              "$ref": "#/$defs/TemplateMessage"
+            },
+            {
+              "$ref": "#/$defs/WorldStateMessage"
+            }
+          ],
+          "description": "The body; messages whose body fails validation are left out, as clients do"
+        }
+      },
+      "required": [
+        "id",
+        "roomId",
+        "sentAt",
+        "sender",
+        "body"
+      ],
+      "description": "A message in a room, with its sender and server time"
+    },
+    "MessageSender": {
+      "type": "object",
+      "properties": {
+        "isAdmin": {
+          "type": "boolean",
+          "description": "Sent from the admin's real JID"
+        },
+        "roleId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The role whose account sent it; null for the admin or an unknown account"
+        },
+        "loginName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "description": "Login name: the role's XMPP account name, readable, fixed once published (§3 rule 1, ADM-5)"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sender's account name (`admin` for the admin); null if unknown"
+        }
+      },
+      "required": [
+        "isAdmin",
+        "roleId",
+        "loginName"
+      ],
+      "description": "Who sent a message, from the stanza, never from the body (§3 rule 3)"
+    },
+    "ChatMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "chat"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000,
+              "description": "Plain text; rendered without HTML (PLY-14)"
+            }
+          },
+          "required": [
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "content"
+      ],
+      "description": "A chat room message"
+    },
+    "TemplateMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "template"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "templateId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "description": "The template used"
+            },
+            "values": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "description": "A template field name",
+                "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 8000
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "description": "Field values by field name; pickers hold GUIDs, never names (TPL-8)",
+              "maxProperties": 100
+            }
+          },
+          "required": [
+            "templateId",
+            "values"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "content"
+      ],
+      "description": "A templated message"
+    },
+    "WorldStateMessage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "world-state"
+        },
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "content": {
+          "$ref": "#/$defs/WorldState"
+        }
+      },
+      "required": [
+        "type",
+        "schemaVersion",
+        "content"
+      ],
+      "description": "A world-state message in the map room, posted by the admin only"
+    },
+    "WorldState": {
+      "type": "object",
+      "properties": {
+        "turn": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "The turn this state belongs to"
+        },
+        "assets": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/WorldAsset"
+          },
+          "description": "Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)",
+          "maxProperties": 5000
+        }
+      },
+      "required": [
+        "turn",
+        "assets"
+      ],
+      "description": "The full world state: every asset with its position and status (D25)"
+    },
+    "WorldAsset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The asset GUID; also its key in `assets` (§3 rules 1, 16)"
+        },
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The force that owns the asset"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name, e.g. \"1st Armoured Squadron\""
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "What kind of asset it is, e.g. \"armour\" or \"frigate\""
+        },
+        "sidc": {
+          "type": "string",
+          "pattern": "^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$",
+          "description": "MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude, WGS 84 decimal degrees"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude, WGS 84 decimal degrees"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Its condition in words, e.g. \"operational\" or \"damaged\""
+        },
+        "health": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Health, 0 (destroyed) to 100 (full)"
+        },
+        "fuel": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Fuel, 0 (empty) to 100 (full)"
+        }
+      },
+      "required": [
+        "id",
+        "forceId",
+        "title",
+        "category",
+        "sidc",
+        "lat",
+        "lon",
+        "state",
+        "health",
+        "fuel"
+      ],
+      "description": "A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)"
+    },
+    "ReadWorldStateResult": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorldState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The latest world state from the admin in the map room (D25); null if none"
+        },
+        "messageId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The stanza id of the message that carried it"
+        },
+        "sentAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "description": "ISO 8601 date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "When the admin posted it, server time"
+        }
+      },
+      "required": [
+        "state",
+        "messageId",
+        "sentAt"
+      ],
+      "description": "The latest published world state"
+    },
+    "ReadObjectivesResult": {
+      "type": "object",
+      "properties": {
+        "objectives": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Objectives"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The force's newest objectives (§3 rule 14); null if none"
+        }
+      },
+      "required": [
+        "objectives"
+      ],
+      "description": "A force's objectives"
+    },
+    "Objectives": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "number",
+          "const": 1
+        },
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "Id of the force these objectives belong to"
+        },
+        "markdown": {
+          "type": "string",
+          "maxLength": 50000,
+          "description": "Objectives as Markdown"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "When the admin wrote this version, by the admin's clock; display only. The node holds one item, the admin's, replaced on each edit; a live notification replaces the copy fetched at login, whatever this says (§3 rule 14)"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "forceId",
+        "markdown",
+        "updatedAt"
+      ],
+      "description": "A force's objectives; confidential to that force, the White Force and the admin"
+    },
+    "BridgeReply": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/BridgeOkReply"
+        },
+        {
+          "$ref": "#/$defs/BridgeErrorReply"
+        }
+      ],
+      "description": "Every reply, as JSON text"
+    },
+    "BridgeOkReply": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true
+        },
+        "value": {
+          "description": "The operation's result"
+        }
+      },
+      "required": [
+        "ok",
+        "value"
+      ],
+      "description": "A successful reply"
+    },
+    "BridgeErrorReply": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": false
+        },
+        "code": {
+          "$ref": "#/$defs/BridgeErrorCode"
+        },
+        "error": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "What went wrong, for the script"
+        }
+      },
+      "required": [
+        "ok",
+        "code",
+        "error"
+      ],
+      "description": "A refused or failed operation"
+    },
+    "BridgeErrorCode": {
+      "type": "string",
+      "enum": [
+        "unknown-op",
+        "invalid-request",
+        "forbidden",
+        "not-found",
+        "unavailable",
+        "failed"
+      ],
+      "description": "`unknown-op`: not an operation of this protocol; `invalid-request`: the request failed its schema; `forbidden`: the role may not do it (PD2); `not-found`: no such room or force for this role; `unavailable`: not loaded yet or offline; `failed`: anything else"
+    }
+  }
+}

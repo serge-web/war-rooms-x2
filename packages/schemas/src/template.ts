@@ -51,6 +51,8 @@ export const fieldNameSchema = z
   .string()
   .refine(isFieldName, 'must be a field name: a letter, then letters, digits or underscores')
   .describe('A template field name')
+  // The refinement as JSON Schema too (WP 6.1); only the two forbidden names stay zod's alone.
+  .meta({ pattern: FIELD_NAME_PATTERN.source })
 
 /** `x-wrx-picker`: the field holds the GUID of a force or a role (TPL-8). */
 export const PICKER_KINDS = Object.freeze(['force', 'role'] as const)
@@ -977,7 +979,8 @@ export const templateMessageBodySchema = z
           (values) => Object.keys(values).length <= TEMPLATE_LIMITS.fields,
           `at most ${TEMPLATE_LIMITS.fields} values`,
         )
-        .describe('Field values by field name; pickers hold GUIDs, never names (TPL-8)'),
+        .describe('Field values by field name; pickers hold GUIDs, never names (TPL-8)')
+        .meta({ maxProperties: TEMPLATE_LIMITS.fields }),
     }),
   })
   .describe('A templated message')

@@ -276,7 +276,7 @@ A templated message.
 | `schemaVersion` | constant | yes | = 1 |  |
 | `content` | object | yes |  |  |
 | `content.templateId` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The template used |
-| `content.values` | map of any | yes |  | Field values by field name; pickers hold GUIDs, never names (TPL-8) |
+| `content.values` | map of any | yes | entries ≤ 100 | Field values by field name; pickers hold GUIDs, never names (TPL-8) |
 
 ## Map room config
 
@@ -306,7 +306,7 @@ A world-state message in the map room, posted by the admin only.
 | `schemaVersion` | constant | yes | = 1 |  |
 | `content` | object | yes |  | The full world state: every asset with its position and status (D25) |
 | `content.turn` | integer | yes | ≥ 1; ≤ 10000 | The turn this state belongs to |
-| `content.assets` | map of object | yes |  | Every asset, keyed by its GUID; each key is its asset’s `id` |
+| `content.assets` | map of object | yes | entries ≤ 5000 | Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it) |
 
 ## World-state asset
 

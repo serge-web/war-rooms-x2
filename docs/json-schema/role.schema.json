@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:role.schema.json",
+  "title": "Role (`roles:<roleId>`)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Role id, a GUID"
+    },
+    "loginName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "Login name: the role's XMPP account name, readable, fixed once published (§3 rule 1, ADM-5)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Display name"
+    },
+    "forceId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Id of the role's force"
+    },
+    "isObserver": {
+      "type": "boolean",
+      "description": "Observers read but never post, in all their rooms (D8)"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "loginName",
+    "name",
+    "forceId",
+    "isObserver",
+    "order"
+  ],
+  "description": "A player position; one XMPP account"
+}

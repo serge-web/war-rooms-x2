@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:chat-message.schema.json",
+  "title": "Chat message body",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "chat"
+    },
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Plain text; rendered without HTML (PLY-14)"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  },
+  "required": [
+    "type",
+    "schemaVersion",
+    "content"
+  ],
+  "description": "A chat room message"
+}
