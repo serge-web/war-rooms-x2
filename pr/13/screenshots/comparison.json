@@ -1,7 +1,7 @@
 [
   {
     "name": "admin-design-editor",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-preview-as-role",
@@ -9,11 +9,11 @@
   },
   {
     "name": "admin-publish-plan",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-room-templates",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "admin-template-builder",
@@ -45,15 +45,15 @@
   },
   {
     "name": "page-architecture",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-background",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-blog",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-data-dictionary",
@@ -61,11 +61,11 @@
   },
   {
     "name": "page-home",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "page-technical",
-    "status": "unchanged"
+    "status": "changed"
   },
   {
     "name": "player-chat",

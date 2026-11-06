@@ -2,8 +2,10 @@ const e=/* #__PURE__ */ Object.assign({"../../../python/wrx/__init__.py":`"""wrx
 
 One SDK for umpire reconcilers, analysis and automated players. It is role-scoped (PD2): a
 script reads as the role it runs as, through its runner's bridge, and sees only what that role
-may see. This is the read layer (PY-2): \`Game\` and its rooms; typed models in \`wrx.models\`
-(PY-1); pandas helpers in \`wrx.frames\`, imported only when used (PY-3).
+may see. \`Game\` offers the three layers (PY-2): read (the game, its rooms, messages and world
+state), act (send messages, react to messages and phase changes) and adjudicate (the admin's
+world-state draft, White Force proposals); typed models in \`wrx.models\` (PY-1); pandas helpers
+in \`wrx.frames\`, imported only when used (PY-3).
 
     import wrx
 
@@ -12,6 +14,7 @@ may see. This is the read layer (PY-2): \`Game\` and its rooms; typed models in 
     async for message in game.room(room_id).messages():
         ...
     frame = wrx.to_frame(await game.world_state())
+    await game.send_message(room_id, "Received.")
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from .errors import (
     ForbiddenError,
     InvalidRequestError,
     NotFoundError,
+    PausedError,
     ProtocolError,
     UnavailableError,
     UnknownOperationError,
@@ -32,7 +36,7 @@ from .errors import (
 from .game import Game, RoomReader
 from .protocol import PROTOCOL_VERSION
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "PROTOCOL_VERSION",
@@ -42,6 +46,7 @@ __all__ = [
     "Game",
     "InvalidRequestError",
     "NotFoundError",
+    "PausedError",
     "ProtocolError",
     "PyodideBridge",
     "RoomReader",
@@ -74,7 +79,9 @@ __all__ = [
     "role",
     "room",
     "template_message",
+    "umpire_room_config",
     "world_asset",
+    "world_proposal_message",
     "world_state_message",
 ]
 `,"../../../python/wrx/_models/bridge_protocol.py":`# Generated from docs/json-schema/bridge-protocol.schema.json by tools/python/generate_models.py
@@ -108,6 +115,13 @@ class BridgeOp(
             "readRoomMessages",
             "readWorldState",
             "readObjectives",
+            "sendMessage",
+            "sendTemplate",
+            "readDraft",
+            "writeDraft",
+            "postProposal",
+            "subscribeMessages",
+            "subscribePhase",
         ]
     ]
 ):
@@ -121,9 +135,16 @@ class BridgeOp(
         "readRoomMessages",
         "readWorldState",
         "readObjectives",
+        "sendMessage",
+        "sendTemplate",
+        "readDraft",
+        "writeDraft",
+        "postProposal",
+        "subscribeMessages",
+        "subscribePhase",
     ]
     """
-    A bridge operation (protocol 1)
+    A bridge operation (protocol 2)
     """
 
 
@@ -181,12 +202,168 @@ class ReadObjectivesRequest(BaseModel):
     """
 
 
+class SendMessageRequest(BaseModel):
+    """
+    A chat message, sent as the role (PD2)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role can write in
+    """
+    text: constr(min_length=1, max_length=8000)
+    """
+    Plain text (PLY-14)
+    """
+
+
+class SendTemplateRequest(BaseModel):
+    """
+    A templated message (TPL-3), checked as the composer checks it before it is sent (TPL-6)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role can write in that offers the template
+    """
+    templateId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The template used
+    """
+    values: dict[
+        constr(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$"),
+        constr(max_length=8000) | float | bool,
+    ] = Field(..., max_length=100)
+    """
+    Field values by field name; pickers hold GUIDs, never names (TPL-8)
+    """
+
+
+class WorldAsset(BaseModel):
+    """
+    A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)
+    """
+
+    id: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The asset GUID; also its key in \`assets\` (§3 rules 1, 16)
+    """
+    forceId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The force that owns the asset
+    """
+    title: constr(min_length=1, max_length=120)
+    """
+    Display name, e.g. "1st Armoured Squadron"
+    """
+    category: constr(min_length=1, max_length=60)
+    """
+    What kind of asset it is, e.g. "armour" or "frigate"
+    """
+    sidc: constr(
+        pattern=r"^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$"
+    )
+    """
+    MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)
+    """
+    lat: confloat(ge=-90.0, le=90.0)
+    """
+    Latitude, WGS 84 decimal degrees
+    """
+    lon: confloat(ge=-180.0, le=180.0)
+    """
+    Longitude, WGS 84 decimal degrees
+    """
+    state: constr(min_length=1, max_length=60)
+    """
+    Its condition in words, e.g. "operational" or "damaged"
+    """
+    health: confloat(ge=0.0, le=100.0)
+    """
+    Health, 0 (destroyed) to 100 (full)
+    """
+    fuel: confloat(ge=0.0, le=100.0)
+    """
+    Fuel, 0 (empty) to 100 (full)
+    """
+
+
+class WorldState(BaseModel):
+    """
+    The full world state: every asset with its position and status (D25)
+    """
+
+    turn: conint(ge=1, le=10000)
+    """
+    The turn this state belongs to
+    """
+    assets: dict[
+        constr(
+            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        ),
+        WorldAsset,
+    ] = Field(..., max_length=5000)
+    """
+    Every asset, keyed by its GUID; each key is its asset’s \`id\` (JSON Schema cannot say so: zod and the Python SDK check it)
+    """
+
+
+class PostProposalRequest(BaseModel):
+    """
+    A world state proposed to the admin in the umpire room (PD6, PY-8)
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    state: WorldState
+    """
+    The proposed world state, in full (D25)
+    """
+    summary: constr(min_length=1, max_length=2000)
+    """
+    What the proposal changes, in words, for the admin; plain text
+    """
+
+
+class SubscribeMessagesRequest(BaseModel):
+    """
+    Events for each new message in the room, while the run lasts
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    roomId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    A room the role is in
+    """
+
+
 class Context(BaseModel):
     """
     Who the script runs as: data, not access; the bridge enforces access (PD2, PY-4)
     """
 
-    protocolVersion: Literal[1]
+    protocolVersion: Literal[2]
     """
     The protocol version the bridge speaks
     """
@@ -367,56 +544,47 @@ class TemplateContent(BaseModel):
     """
 
 
-class WorldAsset(BaseModel):
+class WorldStateMessage(BaseModel):
     """
-    A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)
+    A world-state message in the map room, posted by the admin only
     """
 
-    id: constr(
-        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    )
+    type: Literal["world-state"]
+    schemaVersion: Literal[1]
+    content: WorldState
+
+
+class WorldProposalContent(BaseModel):
     """
-    The asset GUID; also its key in \`assets\` (§3 rules 1, 16)
+    A proposed world state and its summary
     """
-    forceId: constr(
-        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    )
+
+    state: WorldState
     """
-    The force that owns the asset
+    The proposed world state, in full (D25)
     """
-    title: constr(min_length=1, max_length=120)
+    summary: constr(min_length=1, max_length=2000)
     """
-    Display name, e.g. "1st Armoured Squadron"
+    What the proposal changes, in words, for the admin; plain text
     """
-    category: constr(min_length=1, max_length=60)
+
+
+class ReadWorldStateResult(BaseModel):
     """
-    What kind of asset it is, e.g. "armour" or "frigate"
+    The latest published world state
     """
-    sidc: constr(
-        pattern=r"^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$"
-    )
+
+    state: WorldState | None
     """
-    MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)
+    The latest world state from the admin in the map room (D25); null if none
     """
-    lat: confloat(ge=-90.0, le=90.0)
+    messageId: constr(min_length=1, max_length=256) | None
     """
-    Latitude, WGS 84 decimal degrees
+    The stanza id of the message that carried it
     """
-    lon: confloat(ge=-180.0, le=180.0)
+    sentAt: AwareDatetime | None
     """
-    Longitude, WGS 84 decimal degrees
-    """
-    state: constr(min_length=1, max_length=60)
-    """
-    Its condition in words, e.g. "operational" or "damaged"
-    """
-    health: confloat(ge=0.0, le=100.0)
-    """
-    Health, 0 (destroyed) to 100 (full)
-    """
-    fuel: confloat(ge=0.0, le=100.0)
-    """
-    Fuel, 0 (empty) to 100 (full)
+    When the admin posted it, server time
     """
 
 
@@ -442,6 +610,49 @@ class Objectives(BaseModel):
     """
 
 
+class SentResult(BaseModel):
+    """
+    A message sent
+    """
+
+    stanzaId: constr(min_length=1, max_length=256)
+    """
+    The server's stanza id of the message sent
+    """
+
+
+class ReadDraftResult(BaseModel):
+    """
+    The admin's world-state draft (ADM-45)
+    """
+
+    state: WorldState | None
+    """
+    The admin's world-state draft as it is now; with no draft held, the published state; null if neither
+    """
+    held: bool
+    """
+    A draft is held (unpublished edits); false: \`state\` is the published one
+    """
+
+
+class WriteDraftResult(BaseModel):
+    """
+    The draft write is held until the run finishes cleanly (PD9)
+    """
+
+    assets: conint(ge=0, le=9007199254740991)
+    """
+    Assets in the state written
+    """
+
+
+class SubscribedResult(BaseModel):
+    """
+    Subscribed until the run ends
+    """
+
+
 class BridgeOkReply(BaseModel):
     """
     A successful reply
@@ -462,6 +673,7 @@ class BridgeErrorCode(
             "forbidden",
             "not-found",
             "unavailable",
+            "paused",
             "failed",
         ]
     ]
@@ -472,27 +684,35 @@ class BridgeErrorCode(
         "forbidden",
         "not-found",
         "unavailable",
+        "paused",
         "failed",
     ]
     """
-    \`unknown-op\`: not an operation of this protocol; \`invalid-request\`: the request failed its schema; \`forbidden\`: the role may not do it (PD2); \`not-found\`: no such room or force for this role; \`unavailable\`: not loaded yet or offline; \`failed\`: anything else
+    \`unknown-op\`: not an operation of this protocol; \`invalid-request\`: the request failed its schema; \`forbidden\`: the role may not do it (PD2); \`not-found\`: no such room or force for this role; \`unavailable\`: not loaded yet or offline; \`paused\`: posting is paused for the role during adjudication (PLY-56); \`failed\`: anything else
     """
 
 
-class BridgeRequests(BaseModel):
+class PhaseEvent(BaseModel):
     """
-    Each operation's request, by operation name
+    The turn state, when its turn or phase changes
     """
 
-    readContext: EmptyRequest
-    readGameSetup: EmptyRequest
-    readTurn: EmptyRequest
-    readForces: EmptyRequest
-    readRoles: EmptyRequest
-    readRooms: EmptyRequest
-    readRoomMessages: ReadRoomMessagesRequest
-    readWorldState: EmptyRequest
-    readObjectives: ReadObjectivesRequest
+    type: Literal["phase"]
+    state: GameState
+
+
+class WriteDraftRequest(BaseModel):
+    """
+    The admin's world-state draft (PD7): applied when the run finishes cleanly (PD9), as the change from what the script read, on top of the draft as it is then
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    state: WorldState
+    """
+    The world state the script wants in the draft: the draft it read (\`readDraft\`) or the published state, changed
+    """
 
 
 class Theme(BaseModel):
@@ -644,43 +864,14 @@ class TemplateMessage(BaseModel):
     content: TemplateContent
 
 
-class WorldState(BaseModel):
+class WorldProposalMessage(BaseModel):
     """
-    The full world state: every asset with its position and status (D25)
-    """
-
-    turn: conint(ge=1, le=10000)
-    """
-    The turn this state belongs to
-    """
-    assets: dict[
-        constr(
-            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        ),
-        WorldAsset,
-    ] = Field(..., max_length=5000)
-    """
-    Every asset, keyed by its GUID; each key is its asset’s \`id\` (JSON Schema cannot say so: zod and the Python SDK check it)
+    A White Force proposal in the umpire room (PY-8)
     """
 
-
-class ReadWorldStateResult(BaseModel):
-    """
-    The latest published world state
-    """
-
-    state: WorldState | None
-    """
-    The latest world state from the admin in the map room (D25); null if none
-    """
-    messageId: constr(min_length=1, max_length=256) | None
-    """
-    The stanza id of the message that carried it
-    """
-    sentAt: AwareDatetime | None
-    """
-    When the admin posted it, server time
-    """
+    type: Literal["world-proposal"]
+    schemaVersion: Literal[1]
+    content: WorldProposalContent
 
 
 class ReadObjectivesResult(BaseModel):
@@ -705,6 +896,29 @@ class BridgeErrorReply(BaseModel):
     """
     What went wrong, for the script
     """
+
+
+class BridgeRequests(BaseModel):
+    """
+    Each operation's request, by operation name
+    """
+
+    readContext: EmptyRequest
+    readGameSetup: EmptyRequest
+    readTurn: EmptyRequest
+    readForces: EmptyRequest
+    readRoles: EmptyRequest
+    readRooms: EmptyRequest
+    readRoomMessages: ReadRoomMessagesRequest
+    readWorldState: EmptyRequest
+    readObjectives: ReadObjectivesRequest
+    sendMessage: SendMessageRequest
+    sendTemplate: SendTemplateRequest
+    readDraft: EmptyRequest
+    writeDraft: WriteDraftRequest
+    postProposal: PostProposalRequest
+    subscribeMessages: SubscribeMessagesRequest
+    subscribePhase: EmptyRequest
 
 
 class GameSetup(BaseModel):
@@ -761,31 +975,6 @@ class ReadRoomsResult(BaseModel):
     """
 
 
-class WorldStateMessage(BaseModel):
-    """
-    A world-state message in the map room, posted by the admin only
-    """
-
-    type: Literal["world-state"]
-    schemaVersion: Literal[1]
-    content: WorldState
-
-
-class BridgeReply(RootModel[BridgeOkReply | BridgeErrorReply]):
-    root: BridgeOkReply | BridgeErrorReply
-    """
-    Every reply, as JSON text
-    """
-
-
-class ReadGameSetupResult(BaseModel):
-    """
-    The game setup document
-    """
-
-    setup: GameSetup
-
-
 class RoomMessage(BaseModel):
     """
     A message in a room, with its sender and server time
@@ -806,10 +995,34 @@ class RoomMessage(BaseModel):
     Server time
     """
     sender: MessageSender
-    body: ChatMessage | TemplateMessage | WorldStateMessage
+    body: ChatMessage | TemplateMessage | WorldStateMessage | WorldProposalMessage
     """
     The body; messages whose body fails validation are left out, as clients do
     """
+
+
+class BridgeReply(RootModel[BridgeOkReply | BridgeErrorReply]):
+    root: BridgeOkReply | BridgeErrorReply
+    """
+    Every reply, as JSON text
+    """
+
+
+class MessageEvent(BaseModel):
+    """
+    A new message in a subscribed room
+    """
+
+    type: Literal["message"]
+    message: RoomMessage
+
+
+class ReadGameSetupResult(BaseModel):
+    """
+    The game setup document
+    """
+
+    setup: GameSetup
 
 
 class ReadRoomMessagesResult(BaseModel):
@@ -827,6 +1040,13 @@ class ReadRoomMessagesResult(BaseModel):
     """
 
 
+class BridgeEvent(RootModel[MessageEvent | PhaseEvent]):
+    root: MessageEvent | PhaseEvent
+    """
+    An event for a subscribed script
+    """
+
+
 class BridgeResults(BaseModel):
     """
     Each operation's result, the \`value\` of its reply, by operation name
@@ -841,18 +1061,26 @@ class BridgeResults(BaseModel):
     readRoomMessages: ReadRoomMessagesResult
     readWorldState: ReadWorldStateResult
     readObjectives: ReadObjectivesResult
+    sendMessage: SentResult
+    sendTemplate: SentResult
+    readDraft: ReadDraftResult
+    writeDraft: WriteDraftResult
+    postProposal: SentResult
+    subscribeMessages: SubscribedResult
+    subscribePhase: SubscribedResult
 
 
 class BridgeProtocol(BaseModel):
     """
-    The bridge protocol between the Python SDK and its runner, version 1: a catalogue of its parts, not a message
+    The bridge protocol between the Python SDK and its runner, version 2: a catalogue of its parts, not a message
     """
 
-    protocolVersion: Literal[1]
+    protocolVersion: Literal[2]
     op: BridgeOp
     requests: BridgeRequests
     results: BridgeResults
     reply: BridgeReply
+    event: BridgeEvent
 `,"../../../python/wrx/_models/chat_message.py":`# Generated from docs/json-schema/chat-message.schema.json by tools/python/generate_models.py
 # (datamodel-code-generator). Do not edit: run \`pnpm python:models\`.
 
@@ -1417,6 +1645,25 @@ class TemplateMessage(BaseModel):
     type: Literal["template"]
     schemaVersion: Literal[1]
     content: TemplateContent
+`,"../../../python/wrx/_models/umpire_room_config.py":`# Generated from docs/json-schema/umpire-room-config.schema.json by tools/python/generate_models.py
+# (datamodel-code-generator). Do not edit: run \`pnpm python:models\`.
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+
+class UmpireRoomConfig(BaseModel):
+    """
+    Umpire room config: nothing to set
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    schemaVersion: Literal[1]
 `,"../../../python/wrx/_models/world_asset.py":`# Generated from docs/json-schema/world-asset.schema.json by tools/python/generate_models.py
 # (datamodel-code-generator). Do not edit: run \`pnpm python:models\`.
 
@@ -1476,6 +1723,112 @@ class WorldAsset(BaseModel):
     """
     Fuel, 0 (empty) to 100 (full)
     """
+`,"../../../python/wrx/_models/world_proposal_message.py":`# Generated from docs/json-schema/world-proposal-message.schema.json by tools/python/generate_models.py
+# (datamodel-code-generator). Do not edit: run \`pnpm python:models\`.
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field, confloat, conint, constr
+
+
+class WorldAsset(BaseModel):
+    """
+    A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)
+    """
+
+    id: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The asset GUID; also its key in \`assets\` (§3 rules 1, 16)
+    """
+    forceId: constr(
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The force that owns the asset
+    """
+    title: constr(min_length=1, max_length=120)
+    """
+    Display name, e.g. "1st Armoured Squadron"
+    """
+    category: constr(min_length=1, max_length=60)
+    """
+    What kind of asset it is, e.g. "armour" or "frigate"
+    """
+    sidc: constr(
+        pattern=r"^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$"
+    )
+    """
+    MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)
+    """
+    lat: confloat(ge=-90.0, le=90.0)
+    """
+    Latitude, WGS 84 decimal degrees
+    """
+    lon: confloat(ge=-180.0, le=180.0)
+    """
+    Longitude, WGS 84 decimal degrees
+    """
+    state: constr(min_length=1, max_length=60)
+    """
+    Its condition in words, e.g. "operational" or "damaged"
+    """
+    health: confloat(ge=0.0, le=100.0)
+    """
+    Health, 0 (destroyed) to 100 (full)
+    """
+    fuel: confloat(ge=0.0, le=100.0)
+    """
+    Fuel, 0 (empty) to 100 (full)
+    """
+
+
+class WorldState(BaseModel):
+    """
+    The full world state: every asset with its position and status (D25)
+    """
+
+    turn: conint(ge=1, le=10000)
+    """
+    The turn this state belongs to
+    """
+    assets: dict[
+        constr(
+            pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        ),
+        WorldAsset,
+    ] = Field(..., max_length=5000)
+    """
+    Every asset, keyed by its GUID; each key is its asset’s \`id\` (JSON Schema cannot say so: zod and the Python SDK check it)
+    """
+
+
+class WorldProposalContent(BaseModel):
+    """
+    A proposed world state and its summary
+    """
+
+    state: WorldState
+    """
+    The proposed world state, in full (D25)
+    """
+    summary: constr(min_length=1, max_length=2000)
+    """
+    What the proposal changes, in words, for the admin; plain text
+    """
+
+
+class WorldProposalMessage(BaseModel):
+    """
+    A White Force proposal in the umpire room (PY-8)
+    """
+
+    type: Literal["world-proposal"]
+    schemaVersion: Literal[1]
+    content: WorldProposalContent
 `,"../../../python/wrx/_models/world_state_message.py":`# Generated from docs/json-schema/world-state-message.schema.json by tools/python/generate_models.py
 # (datamodel-code-generator). Do not edit: run \`pnpm python:models\`.
 
@@ -1584,11 +1937,17 @@ from collections.abc import Awaitable, Callable
 
 
 class Bridge(abc.ABC):
-    """Where the SDK's operations go. Implement \`call\` to plug in a runner."""
+    """Where the SDK's operations go. Implement \`call\` to plug in a runner, and \`next_event\` if
+    it delivers events (protocol 2, WP 6.4)."""
 
     @abc.abstractmethod
     async def call(self, op: str, payload: str) -> str:
         """Sends one operation with its request as JSON text; returns the reply's JSON text."""
+
+    async def next_event(self, timeout_ms: int | None = None) -> str | None:
+        """The next event for the script's subscriptions, as JSON text; None if \`timeout_ms\`
+        passes first. A bridge that delivers no events raises \`NotImplementedError\`."""
+        raise NotImplementedError("this bridge delivers no events")
 
 
 class PyodideBridge(Bridge):
@@ -1597,12 +1956,18 @@ class PyodideBridge(Bridge):
     Only strings cross: the worker never hands Python a proxy of a page object.
     """
 
-    def __init__(self, call: Callable[[str, str], Awaitable[object]] | None = None) -> None:
+    def __init__(
+        self,
+        call: Callable[[str, str], Awaitable[object]] | None = None,
+        next_event: Callable[[int], Awaitable[object]] | None = None,
+    ) -> None:
         if call is None:
-            from _wrx_bridge import call as worker_call  # type: ignore[import-not-found]
+            import _wrx_bridge  # type: ignore[import-not-found]
 
-            call = worker_call
+            call = _wrx_bridge.call
+            next_event = getattr(_wrx_bridge, "next_event", None)
         self._call = call
+        self._next_event = next_event
 
     async def call(self, op: str, payload: str) -> str:
         reply = self._call(op, payload)
@@ -1611,6 +1976,14 @@ class PyodideBridge(Bridge):
         if not isinstance(reply, str):
             reply = str(reply)
         return reply
+
+    async def next_event(self, timeout_ms: int | None = None) -> str | None:
+        if self._next_event is None:
+            raise NotImplementedError("this runner delivers no events")
+        event = self._next_event(-1 if timeout_ms is None else timeout_ms)
+        if inspect.isawaitable(event):
+            event = await event
+        return None if event is None else str(event)
 
 
 def default_bridge() -> Bridge:
@@ -1667,6 +2040,16 @@ class UnavailableError(BridgeError):
     code = "unavailable"
 
 
+class PausedError(BridgeError):
+    """Posting is paused for the role during adjudication (\`paused\`, PLY-56).
+
+    Advisory, as in the composer: roles outside the White Force do not post while the game is in
+    adjudication. The White Force is exempt.
+    """
+
+    code = "paused"
+
+
 class ProtocolError(BridgeError):
     """The bridge's reply broke the protocol: not JSON, the wrong shape, or invalid data.
 
@@ -1685,6 +2068,7 @@ ERRORS: dict[str, type[BridgeError]] = {
         ForbiddenError,
         NotFoundError,
         UnavailableError,
+        PausedError,
     )
 }
 `,"../../../python/wrx/frames.py":`"""Tabular helpers (Annex C PY-3): pandas DataFrames of messages, turns and assets.
@@ -1853,8 +2237,13 @@ def to_frame(source: Any, kind: Kind | None = None) -> pandas.DataFrame:
     if kind == "assets":
         return assets_frame(messages)
     raise ValueError(f"unknown kind: {kind}")
-`,"../../../python/wrx/game.py":`"""The read layer (Annex C PY-2): the game, its turn, forces, roles, rooms, messages, world state
-and objectives, as the role the script runs as sees them.
+`,"../../../python/wrx/game.py":`"""The SDK's three layers (Annex C PY-2), as the role the script runs as sees them.
+
+- Read: the game, its turn, forces, roles, rooms, messages, world state and objectives.
+- Act (WP 6.4): send text and templated messages; react to new messages and phase changes with
+  \`on_message\` and \`on_phase\`, kept alive by \`run_forever\`.
+- Adjudicate (WP 6.4): the admin reads and writes the world-state draft; a White Force role
+  proposes a world state to the admin in the umpire room.
 
 Role-scoped (PD2): every method asks the bridge, and returns exactly what the bridge returns for
 the role, validated against the protocol's models. The SDK never widens it: a room the role is
@@ -1863,14 +2252,28 @@ not in is refused by the bridge (\`ForbiddenError\` or \`NotFoundError\`), not h
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Literal, cast
+import inspect
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from typing import Any, Literal, cast
+
+from pydantic import ValidationError
 
 from . import protocol
 from .bridge import Bridge, default_bridge
 from .errors import ProtocolError
 from .models import (
+    BridgeEvent,
     Context,
+    MessageEvent,
+    PostProposalRequest,
+    ReadDraftResult,
+    SendMessageRequest,
+    SendTemplateRequest,
+    SentResult,
+    SubscribeMessagesRequest,
+    WriteDraftRequest,
+    WriteDraftResult,
     Force,
     GameSetup,
     GameState,
@@ -1891,12 +2294,17 @@ from .models import (
     WorldState,
     WorldStateMessage,
     check_world_state,
+    parse_world_state,
 )
 
 Order = Literal["oldest-first", "newest-first"]
 
 MAP_ROOM_TYPE = "map"
+UMPIRE_ROOM_TYPE = "umpire"
 PAGE_MAX = 500
+
+MessageHandler = Callable[[RoomMessage], Awaitable[None] | None]
+PhaseHandler = Callable[[GameState], Awaitable[None] | None]
 
 
 class Game:
@@ -1909,6 +2317,9 @@ class Game:
     def __init__(self, bridge: Bridge | None = None) -> None:
         self._bridge = bridge if bridge is not None else default_bridge()
         self._context: Context | None = None
+        self._message_handlers: dict[str, list[tuple[MessageHandler, bool]]] = {}
+        self._phase_handlers: list[PhaseHandler] = []
+        self._stopping = False
 
     @property
     def bridge(self) -> Bridge:
@@ -1980,6 +2391,161 @@ class Game:
             if isinstance(message.body, WorldStateMessage) and message.sender.isAdmin:
                 yield message
 
+    async def umpire_room(self) -> RoomReader | None:
+        """The game's umpire room (PD8): the admin and the White Force only; None for others."""
+        for room in await self.rooms():
+            if room.roomType == UMPIRE_ROOM_TYPE:
+                return self.room(room)
+        return None
+
+    # ---- Act (PY-2) -----------------------------------------------------------------------------
+
+    async def send_message(self, room: Room | RoomReader | str, text: str) -> str:
+        """Posts chat text to a room the role can write in, as the role; returns its stanza id.
+
+        Refused like the composer: a room the role only reads (\`ForbiddenError\`), and, for a role
+        outside the White Force, while the game is in adjudication (\`PausedError\`, PLY-56).
+        """
+        request = SendMessageRequest(roomId=_room_id(room), text=text)
+        result = cast(SentResult, await protocol.call(self._bridge, "sendMessage", request))
+        return result.stanzaId
+
+    async def send_template(
+        self,
+        room: Room | RoomReader | str,
+        template_id: str,
+        values: Mapping[str, str | float | bool],
+    ) -> str:
+        """Posts a templated message (TPL-3), checked as the composer checks it; its stanza id."""
+        request = SendTemplateRequest(
+            roomId=_room_id(room), templateId=template_id, values=dict(values)
+        )
+        result = cast(SentResult, await protocol.call(self._bridge, "sendTemplate", request))
+        return result.stanzaId
+
+    # ---- Adjudicate (PD6, PD7) ------------------------------------------------------------------
+
+    async def read_draft(self) -> ReadDraftResult:
+        """The admin's world-state draft as it is now (\`held\`), or the published state.
+
+        Admin only. Write your changes on top of it: \`write_draft\` applies only what you changed
+        from the state you read, so the admin's hand edits survive.
+        """
+        result = cast(ReadDraftResult, await protocol.call(self._bridge, "readDraft"))
+        if result.state is not None:
+            _checked("readDraft", result.state)
+        return result
+
+    async def draft(self) -> WorldState | None:
+        """The state of \`read_draft()\`: the draft, or the published state; None if neither."""
+        return (await self.read_draft()).state
+
+    async def write_draft(self, state: WorldState | Mapping[str, Any]) -> int:
+        """Writes the admin's world-state draft (PD7); returns the number of assets.
+
+        Admin only. Held until the script finishes: a run that is stopped, times out or fails
+        leaves the draft as it was (PD9). The change from what the script read (\`read_draft\`, or
+        else the published state) is applied on top of the draft as it is then. The page checks
+        the world-state schema and the 500 KB cap (PLY-53).
+        """
+        request = WriteDraftRequest(state=_state(state))
+        result = cast(WriteDraftResult, await protocol.call(self._bridge, "writeDraft", request))
+        return result.assets
+
+    async def post_proposal(self, state: WorldState | Mapping[str, Any], summary: str) -> str:
+        """Proposes a world state to the admin in the umpire room (PD6, PY-8); its stanza id.
+
+        White Force roles that are not observers only; allowed in adjudication. \`summary\` says
+        what it changes, in words. The page checks the state and the 500 KB cap first (PLY-53).
+        """
+        request = PostProposalRequest(state=_state(state), summary=summary)
+        result = cast(SentResult, await protocol.call(self._bridge, "postProposal", request))
+        return result.stanzaId
+
+    # ---- Events (PY-2) --------------------------------------------------------------------------
+
+    def on_message(
+        self,
+        room: Room | RoomReader | str,
+        handler: MessageHandler | None = None,
+        *,
+        include_own: bool = False,
+    ) -> Any:
+        """Calls \`handler(message)\` for each new message in \`room\` while \`run_forever\` runs.
+
+        Messages posted under the script's own login are left out unless \`include_own\`, so a
+        handler that replies does not answer itself. A handler may be \`async\`. Usable as a
+        decorator: \`@game.on_message(room)\`.
+        """
+        room_id = _room_id(room)
+
+        def register(fn: MessageHandler) -> MessageHandler:
+            self._message_handlers.setdefault(room_id, []).append((fn, include_own))
+            return fn
+
+        return register if handler is None else register(handler)
+
+    def on_phase(self, handler: PhaseHandler | None = None) -> Any:
+        """Calls \`handler(state)\` when the turn or phase changes, while \`run_forever\` runs."""
+
+        def register(fn: PhaseHandler) -> PhaseHandler:
+            self._phase_handlers.append(fn)
+            return fn
+
+        return register if handler is None else register(handler)
+
+    def stop(self) -> None:
+        """Ends \`run_forever\` after the handler that calls it returns: the run then finishes."""
+        self._stopping = True
+
+    async def run_forever(self, seconds: float | None = None) -> None:
+        """Subscribes the handlers and delivers events to them until stopped.
+
+        The run stays alive while this waits. It returns after \`seconds\`, if given, or when a
+        handler calls \`stop()\`; the script then finishes cleanly (an admin's draft write lands).
+        Otherwise the run's time limit or Stop ends it, which counts as not finishing (PD9). A
+        handler that raises ends it with that error.
+        """
+        if not self._message_handlers and not self._phase_handlers:
+            raise RuntimeError("no handlers: call on_message or on_phase first")
+        if seconds is not None and seconds < 0:
+            raise ValueError("seconds must not be negative")
+        for room_id in self._message_handlers:
+            await protocol.call(
+                self._bridge, "subscribeMessages", SubscribeMessagesRequest(roomId=room_id)
+            )
+        if self._phase_handlers:
+            await protocol.call(self._bridge, "subscribePhase")
+        context = await self.context()
+        deadline = None if seconds is None else time.monotonic() + seconds
+        self._stopping = False
+        while not self._stopping:
+            wait_ms: int | None = None
+            if deadline is not None:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    return
+                wait_ms = max(1, int(left * 1000))
+            text = await self._bridge.next_event(wait_ms)
+            if text is None:
+                continue
+            try:
+                event = BridgeEvent.model_validate_json(text).root
+            except ValidationError as error:
+                raise ProtocolError("event", f"not an event: {error.errors()[0]['msg']}") from None
+            if isinstance(event, MessageEvent):
+                message = event.message
+                if isinstance(message.body, WorldStateMessage):
+                    _checked("event", message.body.content)
+                own = _is_own(message, context)
+                for handler, include_own in self._message_handlers.get(message.roomId, []):
+                    if own and not include_own:
+                        continue
+                    await _call_handler(handler, message)
+            else:
+                for phase_handler in self._phase_handlers:
+                    await _call_handler(phase_handler, event.state)
+
     async def objectives(self, force: Force | str) -> Objectives | None:
         """A force's newest objectives, if the role may read them (§3 rule 14); None if none."""
         force_id = force.id if isinstance(force, Force) else force
@@ -2050,6 +2616,30 @@ class RoomReader:
         return [message async for message in self.messages(**options)]  # type: ignore[arg-type]
 
 
+def _room_id(room: Room | RoomReader | str) -> str:
+    return room.id if isinstance(room, (Room, RoomReader)) else room
+
+
+def _state(state: WorldState | Mapping[str, Any]) -> WorldState:
+    """A world state from a model or a dict, checked completely (the key rule too)."""
+    if isinstance(state, WorldState):
+        return check_world_state(state)
+    return parse_world_state(dict(state))
+
+
+def _is_own(message: RoomMessage, context: Context) -> bool:
+    """Posted under the script's own login: the admin's, or the role's (any of its sessions)."""
+    if context.isAdmin:
+        return message.sender.isAdmin
+    return not message.sender.isAdmin and message.sender.roleId == context.roleId
+
+
+async def _call_handler(handler: Callable[[Any], Any], value: Any) -> None:
+    result = handler(value)
+    if inspect.isawaitable(result):
+        await result
+
+
 def _checked(op: str, state: WorldState) -> WorldState:
     try:
         return check_world_state(state)
@@ -2065,8 +2655,10 @@ model, and a test checks that they agree.
 
 Field names are the documents' own (\`forceId\`, \`sentAt\`), as in the data dictionary.
 
-Message bodies are named after their schema files: \`ChatMessage\`, \`TemplateMessage\` and
-\`WorldStateMessage\` are bodies; a \`RoomMessage\` carries one with its sender and server time.
+Message bodies are named after their schema files: \`ChatMessage\`, \`TemplateMessage\`,
+\`WorldStateMessage\` and \`WorldProposalMessage\` (a White Force proposal, WP 6.4) are bodies; a
+\`RoomMessage\` carries one with its sender and server time. A \`BridgeEvent\` (a \`MessageEvent\` or
+a \`PhaseEvent\`) is what a subscribed script receives.
 
 One rule JSON Schema cannot state, so the generated models do not check it: each asset in a
 world state is keyed by its own \`id\` (§3 rule 16). \`check_world_state\` checks it, and the read
@@ -2080,6 +2672,7 @@ from typing import Any
 
 from ._models.bridge_protocol import (
     BridgeErrorReply,
+    BridgeEvent,
     BridgeOkReply,
     BridgeProtocol,
     BridgeReply,
@@ -2090,9 +2683,13 @@ from ._models.bridge_protocol import (
     Force,
     GameSetup,
     GameState,
+    MessageEvent,
     MessageSender,
     Objectives,
     Participant,
+    PhaseEvent,
+    PostProposalRequest,
+    ReadDraftResult,
     ReadForcesResult,
     ReadGameSetupResult,
     ReadObjectivesRequest,
@@ -2106,19 +2703,30 @@ from ._models.bridge_protocol import (
     Role,
     Room,
     RoomMessage,
+    SendMessageRequest,
+    SendTemplateRequest,
+    SentResult,
+    SubscribeMessagesRequest,
+    SubscribedResult,
     TemplateContent,
     TemplateMessage,
     Theme,
     ThemeTokens,
     WorldAsset,
+    WorldProposalContent,
+    WorldProposalMessage,
     WorldState,
     WorldStateMessage,
+    WriteDraftRequest,
+    WriteDraftResult,
 )
 from ._models.chat_room_config import ChatRoomConfig, TemplateEntry
 from ._models.map_room_config import LatLon, MapRoomConfig
+from ._models.umpire_room_config import UmpireRoomConfig
 
 __all__ = [
     "BridgeErrorReply",
+    "BridgeEvent",
     "BridgeOkReply",
     "BridgeProtocol",
     "BridgeReply",
@@ -2132,9 +2740,13 @@ __all__ = [
     "GameState",
     "LatLon",
     "MapRoomConfig",
+    "MessageEvent",
     "MessageSender",
     "Objectives",
     "Participant",
+    "PhaseEvent",
+    "PostProposalRequest",
+    "ReadDraftResult",
     "ReadForcesResult",
     "ReadGameSetupResult",
     "ReadObjectivesRequest",
@@ -2148,14 +2760,24 @@ __all__ = [
     "Role",
     "Room",
     "RoomMessage",
+    "SendMessageRequest",
+    "SendTemplateRequest",
+    "SentResult",
+    "SubscribeMessagesRequest",
+    "SubscribedResult",
     "TemplateContent",
     "TemplateEntry",
     "TemplateMessage",
     "Theme",
     "ThemeTokens",
+    "UmpireRoomConfig",
     "WorldAsset",
+    "WorldProposalContent",
+    "WorldProposalMessage",
     "WorldState",
     "WorldStateMessage",
+    "WriteDraftRequest",
+    "WriteDraftResult",
     "check_world_state",
     "parse_world_state",
 ]
@@ -2180,7 +2802,10 @@ def parse_world_state(data: Any) -> WorldState:
     else:
         state = WorldState.model_validate(data)
     return check_world_state(state)
-`,"../../../python/wrx/protocol.py":`"""The bridge protocol, version 1 (WP 6.1): operation names and their request and result models.
+`,"../../../python/wrx/protocol.py":`"""The bridge protocol, version 2 (WPs 6.1, 6.4): operation names and their request and result models.
+
+Version 1's read operations are unchanged; version 2 adds act and adjudicate (sending, the
+admin's draft, White Force proposals) and event subscriptions.
 
 The protocol is defined once, in zod (\`packages/schemas/src/bridge.ts\`, \`@wrx/schemas/bridge\`),
 and exported as \`docs/json-schema/bridge-protocol.schema.json\`; the models here are generated
@@ -2201,6 +2826,8 @@ from .models import (
     BridgeReply,
     Context,
     EmptyRequest,
+    PostProposalRequest,
+    ReadDraftResult,
     ReadForcesResult,
     ReadGameSetupResult,
     ReadObjectivesRequest,
@@ -2211,9 +2838,16 @@ from .models import (
     ReadRoomsResult,
     ReadTurnResult,
     ReadWorldStateResult,
+    SendMessageRequest,
+    SendTemplateRequest,
+    SentResult,
+    SubscribeMessagesRequest,
+    SubscribedResult,
+    WriteDraftRequest,
+    WriteDraftResult,
 )
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -2232,6 +2866,13 @@ OPERATIONS: dict[str, Operation] = {
     "readRoomMessages": Operation(ReadRoomMessagesRequest, ReadRoomMessagesResult),
     "readWorldState": Operation(EmptyRequest, ReadWorldStateResult),
     "readObjectives": Operation(ReadObjectivesRequest, ReadObjectivesResult),
+    "sendMessage": Operation(SendMessageRequest, SentResult),
+    "sendTemplate": Operation(SendTemplateRequest, SentResult),
+    "readDraft": Operation(EmptyRequest, ReadDraftResult),
+    "writeDraft": Operation(WriteDraftRequest, WriteDraftResult),
+    "postProposal": Operation(PostProposalRequest, SentResult),
+    "subscribeMessages": Operation(SubscribeMessagesRequest, SubscribedResult),
+    "subscribePhase": Operation(EmptyRequest, SubscribedResult),
 }
 
 
@@ -2266,32 +2907,6 @@ def _first(error: ValidationError) -> str:
     where = ".".join(str(part) for part in issue["loc"])
     return f"{where}: {issue['msg']}" if where else issue["msg"]
 
-`}),t=`/home/pyodide/`,n=Object.freeze([`pydantic`]),r=/\bto_frame\b|\bwrx\.frames\b|\bfrom\s+wrx\s+import\b[^\n]*\bframes\b/,i=/\bwrx(?:_draft)?\b/;function a(n){let r=n.FS,i=Object.entries(e).map(([e,t])=>[e.slice(e.indexOf(`/python/`)+8),t]);if(!i.some(([e])=>e===`wrx/__init__.py`))throw Error(`the SDK is missing`);for(let[e,n]of i)r.mkdirTree(t+e.slice(0,e.lastIndexOf(`/`))),r.writeFile(t+e,n);r.writeFile(`${t}wrx_draft.py`,`"""The browser runner's draft write (WP 6.2), until the SDK's act layer (WP 6.4) replaces it.
-
-Admin only: the world-state draft, held on the page and applied only when the script finishes
-cleanly; a run that is stopped, times out or fails leaves the draft as it was (PD7, PD9). The
-page checks the state against the world-state schema and the 500 KB cap (PLY-53).
-
-    import wrx, wrx_draft
-    state = await wrx.Game().world_state()
-    ...
-    await wrx_draft.write_draft(state)
-"""
-
-import json
-
-from _wrx_bridge import call as _call
-from wrx.errors import ERRORS, BridgeError
-
-
-async def write_draft(state):
-    """Writes the draft: a \`wrx.models.WorldState\`, or the same as a plain dict."""
-    if hasattr(state, "model_dump"):
-        state = state.model_dump(mode="json", exclude_none=True)
-    reply = json.loads(await _call("writeDraft", json.dumps(state)))
-    if not reply["ok"]:
-        raise ERRORS.get(reply.get("code", "failed"), BridgeError)("writeDraft", reply["error"])
-    return reply["value"]
-`)}const o=performance.now(),s=self.postMessage.bind(self),c=self.fetch.bind(self);function l(e){return(e?._module)?.HEAPU8?.byteLength??0}function u(e){return(t,n)=>{let r=new URL(t instanceof Request?t.url:String(t),e),i=(n?.method??(t instanceof Request?t.method:`GET`)).toUpperCase();return!r.href.startsWith(e)||i!==`GET`||r.search!==``?Promise.reject(/* @__PURE__ */ TypeError(`fetch refused by the script sandbox: ${r.href}`)):c(r.href,{integrity:n?.integrity??``,credentials:`same-origin`})}}const d=Object.freeze([`fetch`,`XMLHttpRequest`,`WebSocket`,`WebSocketStream`,`WebTransport`,`EventSource`,`importScripts`,`indexedDB`,`caches`,`cookieStore`,`BroadcastChannel`,`Worker`,`SharedWorker`,`postMessage`,`MessageChannel`,`FileSystemHandle`,`StorageManager`,`Notification`,`webkitRequestFileSystem`,`webkitResolveLocalFileSystemURL`]),f=Object.freeze([`storage`,`locks`,`serviceWorker`,`usb`,`serial`,`hid`]);function p(e,t){for(let n=e;n!==null;n=Object.getPrototypeOf(n)){let e=Object.getOwnPropertyDescriptor(n,t);e!==void 0&&(e.configurable===!0?Reflect.deleteProperty(n,t):e.writable===!0&&Reflect.set(n,t,void 0))}}function m(e){for(let e of d)p(self,e);for(let e of f)p(navigator,e);Object.defineProperty(self,"fetch",{value:u(e),configurable:!1})}function h(){return Object.freeze(Object.assign(Object.create(null),{setTimeout:(e,t)=>setTimeout(e,t),clearTimeout:e=>{clearTimeout(e)}}))}function g(){let e,t=1,c=/* @__PURE__ */ new Map,u=0,d=!1;function f(e,t){d&&s({kind:`output`,runId:u,stream:e,text:t.slice(0,1e5)})}async function p(n){if(e!==void 0)throw Error(`already initialised`);let{loadPyodide:r}=await import(
+`}),t=`/home/pyodide/`,n=Object.freeze([`pydantic`]),r=/\bto_frame\b|\bwrx\.frames\b|\bfrom\s+wrx\s+import\b[^\n]*\bframes\b/,i=/\bwrx\b/;function a(n){let r=n.FS,i=Object.entries(e).map(([e,t])=>[e.slice(e.indexOf(`/python/`)+8),t]);if(!i.some(([e])=>e===`wrx/__init__.py`))throw Error(`the SDK is missing`);for(let[e,n]of i)r.mkdirTree(t+e.slice(0,e.lastIndexOf(`/`))),r.writeFile(t+e,n)}const o=performance.now(),s=self.postMessage.bind(self),c=self.fetch.bind(self);function l(e){return(e?._module)?.HEAPU8?.byteLength??0}function u(e){return(t,n)=>{let r=new URL(t instanceof Request?t.url:String(t),e),i=(n?.method??(t instanceof Request?t.method:`GET`)).toUpperCase();return!r.href.startsWith(e)||i!==`GET`||r.search!==``?Promise.reject(/* @__PURE__ */ TypeError(`fetch refused by the script sandbox: ${r.href}`)):c(r.href,{integrity:n?.integrity??``,credentials:`same-origin`})}}const d=Object.freeze([`fetch`,`XMLHttpRequest`,`WebSocket`,`WebSocketStream`,`WebTransport`,`EventSource`,`importScripts`,`indexedDB`,`caches`,`cookieStore`,`BroadcastChannel`,`Worker`,`SharedWorker`,`postMessage`,`MessageChannel`,`FileSystemHandle`,`StorageManager`,`Notification`,`webkitRequestFileSystem`,`webkitResolveLocalFileSystemURL`]),f=Object.freeze([`storage`,`locks`,`serviceWorker`,`usb`,`serial`,`hid`]);function p(e,t){for(let n=e;n!==null;n=Object.getPrototypeOf(n)){let e=Object.getOwnPropertyDescriptor(n,t);e!==void 0&&(e.configurable===!0?Reflect.deleteProperty(n,t):e.writable===!0&&Reflect.set(n,t,void 0))}}function m(e){for(let e of d)p(self,e);for(let e of f)p(navigator,e);Object.defineProperty(self,"fetch",{value:u(e),configurable:!1})}function h(){return Object.freeze(Object.assign(Object.create(null),{setTimeout:(e,t)=>setTimeout(e,t),clearTimeout:e=>{clearTimeout(e)}}))}function g(){let e,t=1,c=/* @__PURE__ */ new Map,u=0,d=!1,f=[],p=0,g;function _(e){let t=g;t!==void 0&&(g=void 0,t.timer!==void 0&&clearTimeout(t.timer),t.resolve(e))}function v(e,t){d&&s({kind:`output`,runId:u,stream:e,text:t.slice(0,1e5)})}async function y(n){if(e!==void 0)throw Error(`already initialised`);let{loadPyodide:r}=await import(
 /* @vite-ignore */
-`${n.indexURL}pyodide.mjs`),i=await r({indexURL:n.indexURL,jsglobals:h(),lockFileURL:`${n.indexURL}pyodide-lock.json`,packageBaseUrl:n.indexURL,stdout:e=>{f(`stdout`,e)},stderr:e=>{f(`stderr`,e)}});e=i;let d=performance.now();n.packages.length>0&&await i.loadPackage([...n.packages],{messageCallback:()=>void 0});let p=performance.now();i.registerJsModule(`_wrx_bridge`,{call:(e,n)=>new Promise(r=>{let i=t++;c.set(i,r),s({kind:`call`,runId:u,callId:i,op:String(e),payload:String(n)})})}),a(i),m(n.indexURL),s({kind:`ready`,timings:{loadPyodide:d-o,loadPackages:p-d,wasmMemory:l(e)}})}async function g(t){let a=e;if(a===void 0||d)return;d=!0,u=t.runId;let o=performance.now(),c=a.toPy({__name__:`__main__`});try{await a.loadPackagesFromImports(t.code,{messageCallback:()=>void 0});let u=[...i.test(t.code)?n:[],...r.test(t.code)?[`pandas`]:[]];u.length>0&&await a.loadPackage(u,{messageCallback:()=>void 0});let d=performance.now()-o;s({kind:`started`,runId:t.runId}),await a.runPythonAsync(t.code,{globals:c}),s({kind:`done`,runId:t.runId,ok:!0,ms:performance.now()-o,importsMs:d,wasmMemory:l(e)})}catch(n){s({kind:`done`,runId:t.runId,ok:!1,error:String(n).slice(-4e3),ms:performance.now()-o,wasmMemory:l(e)})}finally{d=!1,c.destroy()}}self.addEventListener(`message`,e=>{let t=e.data;t.kind===`init`?p(t).catch(e=>{s({kind:`init-failed`,error:String(e).slice(-4e3)})}):t.kind===`run`?g(t):(c.get(t.callId)?.(t.result),c.delete(t.callId))}),s({kind:`hello`})}g();
+`${n.indexURL}pyodide.mjs`),i=await r({indexURL:n.indexURL,jsglobals:h(),lockFileURL:`${n.indexURL}pyodide-lock.json`,packageBaseUrl:n.indexURL,stdout:e=>{v(`stdout`,e)},stderr:e=>{v(`stderr`,e)}});e=i;let d=performance.now();n.packages.length>0&&await i.loadPackage([...n.packages],{messageCallback:()=>void 0});let y=performance.now();i.registerJsModule(`_wrx_bridge`,{call:(e,n)=>new Promise(r=>{let i=t++;c.set(i,r),s({kind:`call`,runId:u,callId:i,op:String(e),payload:String(n)})}),next_event:e=>new Promise(t=>{_(null);let n=f.shift();if(n!==void 0){t(n);return}let r=typeof e==`number`&&e>=0?e:void 0;g={resolve:t,timer:r===void 0?void 0:setTimeout(()=>{_(null)},r)}}),dropped_events:()=>p}),a(i),m(n.indexURL),s({kind:`ready`,timings:{loadPyodide:d-o,loadPackages:y-d,wasmMemory:l(e)}})}async function b(t){let a=e;if(a===void 0||d)return;d=!0,u=t.runId,f.length=0,p=0,_(null);let o=performance.now(),c=a.toPy({__name__:`__main__`});try{await a.loadPackagesFromImports(t.code,{messageCallback:()=>void 0});let u=[...i.test(t.code)?n:[],...r.test(t.code)?[`pandas`]:[]];u.length>0&&await a.loadPackage(u,{messageCallback:()=>void 0});let d=performance.now()-o;s({kind:`started`,runId:t.runId}),await a.runPythonAsync(t.code,{globals:c}),s({kind:`done`,runId:t.runId,ok:!0,ms:performance.now()-o,importsMs:d,wasmMemory:l(e)})}catch(n){s({kind:`done`,runId:t.runId,ok:!1,error:String(n).slice(-4e3),ms:performance.now()-o,wasmMemory:l(e)})}finally{d=!1,c.destroy()}}self.addEventListener(`message`,e=>{let t=e.data;if(t.kind===`init`)y(t).catch(e=>{s({kind:`init-failed`,error:String(e).slice(-4e3)})});else if(t.kind===`run`)b(t);else if(t.kind===`event`){if(!d||t.runId!==u)return;g===void 0?(f.push(t.event),f.length>1e3&&(f.shift(),p++)):_(t.event)}else c.get(t.callId)?.(t.result),c.delete(t.callId)}),s({kind:`hello`})}g();
