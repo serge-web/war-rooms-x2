@@ -862,7 +862,7 @@ Changes from the Python API discussion (Nov 5, 2026):
 
 Changes from spike S17 (Nov 6, 2026):
 
-- Annex C: S17's outcome added under the spike's paragraph (pass with conditions; `plan/decisions/S17.md`). PR3, PR4 and PY-8 are not yet changed; the record proposes changes for the owner.
+- Annex C: S17's outcome added under the spike's paragraph (pass with conditions; `plan/decisions/S17.md`). PR4 and PY-8 are not yet changed; the record proposes changes for the owner. PR3 decided (Nov 6, 2026): the wider policy applies to every role's client.
 
 ## Annex A. Message templates (built in Phase 4)
 
@@ -1014,7 +1014,7 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 
 - PR1 **A script runs with the rights of its account.** For the admin that includes publishing the world state. The worker and bridge (PY-4) stop a script reaching the session directly, but a script the admin chooses to run can do anything the SDK lets the admin do. Mitigation: no script is loaded from a document players can publish to; scripts come only from the account's own storage or from a file the user imports.
 - PR2 **Unreviewed publishing (PD7).** A faulty script could change the live map. It may publish at any time, mid-phase included (PD7). Mitigation: off by default, per script, validated and recorded (PY-9); the admin can fix a bad state with a manual publish (ADM-46).
-- PR3 **Content security policy.** Pyodide needs WebAssembly compilation (`wasm-unsafe-eval`); spike S17 checks the policy that is needed.
+- PR3 **Content security policy.** Pyodide needs WebAssembly compilation. Decided (Nov 6, 2026, after S17): one policy for every role's client, adding `'wasm-unsafe-eval'` to `script-src` and, on static hosts, `blob:` to `worker-src`; `'unsafe-eval'` stays forbidden. Every player's page may then compile WebAssembly although only the admin and White Force run scripts; accepted for one simple policy. Servers SHALL send `.wasm` as `application/wasm`.
 - PR4 **Size and start-up.** The Pyodide core is several megabytes and pandas adds tens; a cold start takes seconds. Acceptable for adjudication and analysis, not for interactive use. S17 measures both.
 - PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
 
@@ -1023,7 +1023,7 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 **S17 outcome (Nov 6, 2026): pass with conditions** (`plan/decisions/S17.md`).
 
 - **Offline:** everything is served from the build. The core is 13.4 MB (6.4 MB gzip), and pandas with numpy adds 7.9 MB.
-- **Policy:** the client's policy plus `'wasm-unsafe-eval'` is enough; `'unsafe-eval'` is not needed. A static host also needs `blob:` in `worker-src`, and the server must send `.wasm` as `application/wasm`. Which roles get the wider policy needs a decision (PR3).
+- **Policy:** the client's policy plus `'wasm-unsafe-eval'` is enough; `'unsafe-eval'` is not needed. A static host also needs `blob:` in `worker-src`, and the server must send `.wasm` as `application/wasm`. Decided: every role's client gets it (PR3, Nov 6, 2026).
 - **Start-up:** the worker is ready in about 1.8 s, cold or warm. The first pandas run takes 3.2 s.
 - **Round trip:** the bridge round trip and PD9 hold on the mock.
 - **Conditions for PY-4:** the worker must run under the policy itself (a header, or a `blob:` worker under a `<meta>` policy), and its network, storage and messaging globals must be removed before a script runs.
