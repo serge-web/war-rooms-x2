@@ -58,12 +58,23 @@ Decided by the owner on Nov 6, 2026, after the gate's reviews, and applied on th
 3. **M4, publishing without review and hand edits: accepted.** It publishes the whole draft, hand edits included; the setting's hint, its confirmation and the docs say so plainly.
 4. **Blog snapshots and `py/`: only for posts about Python.** A post declares it with `python: true` in its front matter (default off; `check:blog` refuses other values); its snapshot then carries `py/`. Every other snapshot builds with `WRX_PY_RUNNER=off` and the stub runner, as a PR preview that does not touch Python does. The Phase 6 post has `python: true`. Documented in `site/README.md`.
 
+## Fixed after the reviews (Nov 6, 2026)
+
+- **Lazy chunks:** a chunk that timed out on the PR preview was thrown to the root, which had no error boundary, and the view broke.
+  - Chromium keeps a failed `import()` for the life of the page, so a retry imports the module again with a query added.
+  - `ChunkBoundary` (`@wrx/ui`) keeps a failure to the part that needed it, with Try again and Reload: the map, the symbol preview, the template form, the Scripts panel, the admin backend and the app.
+  - Two e2e tests cover it.
+- **PLY-49 e2e flake:** the cause was not the message list. The test reloaded before the mock host had saved to IndexedDB, and its SharedWorker ends with the last tab. The test helper now waits for the save.
+- **Runner time limit:** it now counts the script's own time, not the worker's start-up and package loading.
+
 ## Open risks
 
 - M2 and M4, accepted by the owner (above). M1 is fixed.
 - The sandbox is a deny-list plus the policy; the probes are a sample, not a proof. A new browser global is out of reach only because no path to the global scope exists.
 - R29 (no session eviction) and Phase 5's M1 (the map denial's remainder) are unchanged.
 - WebKit's Pyodide start-up, real screen readers, and Python throughput on ejabberd were not measured in this WP.
+- The mock backend can lose the last posts if the page is reloaded before its save to IndexedDB lands (demo only; ejabberd is not affected).
+- The screenshots' repeat check (DOC-20) has failed intermittently on different shots (`player-chat`, `template-card`) without an identified cause.
 - WP 3.3's real-hardware install is still with the owner; v1's release waits on it.
 
 ## Links
