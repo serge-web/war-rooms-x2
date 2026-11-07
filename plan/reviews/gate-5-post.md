@@ -37,7 +37,7 @@ Draft of the Phase 5 gate summary, for the phase PR's description (working model
 ## Differences from the baseline plan chart
 
 - Phase 5 ran as drawn: eight WPs, none added or split; WP 5.7 also took on the owner's narrowing of the structural change (Plan changes, Nov 4).
-- The README chart now shows wp33 and wp34 done; they had stayed amber after merging. WP 3.3's real-hardware run is still with the product owner (its brief says so), and v1's release waits on it.
+- WP 5.7 marked wp33 and wp34 done in the README chart; that was set back to active (WP 3.3's real-hardware run is still with the product owner, and v1's release waits on it).
 
 ## Decided by the owner during Phase 5 (Nov 4, 2026)
 
@@ -48,10 +48,20 @@ Draft of the Phase 5 gate summary, for the phase PR's description (working model
 - Structural change narrowed: rooms added/removed or a role's room access changes (§3 rule 8, D6, R28).
 - Certificates are chosen per install.
 
+## After the gate (Nov 4, 2026)
+
+WP 5.9, Phase 5 polish (PR #9), fixed what the reviews left open:
+
+- **L3:** a phase change that fails after its world state went out now says the world state was published.
+- **M3:** the reset confirmation offers to discard this browser's world-state draft.
+- **L7:** a role added or removed is no longer a structural change.
+- **A2:** the asset table is one Tab stop.
+- **Map render:** the first render with the map preloaded fell from 696 to 357 ms.
+
 ## Open risks
 
 - H1's remainder (M1) and the draft's confidentiality (M2), above.
-- The map's first open has little margin on 1 s at 600 assets on a loaded machine.
+- The map opened straight after login still takes about 1.05 s at 600 assets on a loaded machine, mostly the mock host's saves (WP 5.9); preloaded, about 0.4 s. Not measured on a real server.
 - R30: the base map's tile server learns where players look; the demo uses OpenStreetMap's.
 - R29 (no session eviction) is unchanged: deleting and recreating the role is still the only remedy.
 - WebKit, real screen readers and ejabberd publish timing were not measured in this WP.
