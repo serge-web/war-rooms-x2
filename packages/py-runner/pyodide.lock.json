@@ -1,0 +1,194 @@
+{
+  "description": "The Pyodide files the runner ships (WP 6.2): checked by sha256 at every build. Regenerate with `pnpm --filter @wrx/py-runner lock` after changing the pyodide version or PACKAGE_SETS.",
+  "pyodide": "314.0.7",
+  "release": "https://cdn.jsdelivr.net/pyodide/v314.0.7/full/",
+  "sets": {
+    "pydantic": [
+      "pydantic"
+    ],
+    "pandas": [
+      "pandas"
+    ]
+  },
+  "core": {
+    "pyodide.mjs": {
+      "sha256": "6f1d60f7bf529beb300f0f47983c921d3982363640ba20af0e38efdddbc66109",
+      "bytes": 17931
+    },
+    "pyodide.asm.mjs": {
+      "sha256": "f7cdc8ece80678ceb712f8e65ebe6d3a83203a180c399865f49612a051693635",
+      "bytes": 1250344
+    },
+    "pyodide.asm.wasm": {
+      "sha256": "cc36e3cab04fdfc9a63ff13eb52eae2b911bf46c025cc7b281f394bd3de1d5e6",
+      "bytes": 9598218
+    },
+    "python_stdlib.zip": {
+      "sha256": "fa1957e5777068fc4f7437f96d860ae2fbe9c19732ba06c84e004ec16dd7dd7a",
+      "bytes": 2545637
+    }
+  },
+  "lock": {
+    "info": {
+      "abi_version": "2026_0",
+      "arch": "wasm32",
+      "platform": "emscripten_5_0_3",
+      "python": "3.14.2"
+    },
+    "packages": {
+      "annotated-types": {
+        "depends": [],
+        "file_name": "annotated_types-0.7.0-py3-none-any.whl",
+        "imports": [
+          "annotated_types"
+        ],
+        "install_dir": "site",
+        "name": "annotated-types",
+        "package_type": "package",
+        "sha256": "6541523b4b16c1953d2fc9b82fb86c540eea9f78fca329ab371ed13a8b0faa51",
+        "tool": {},
+        "unvendored_tests": true,
+        "version": "0.7.0"
+      },
+      "numpy": {
+        "depends": [],
+        "file_name": "numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+        "imports": [
+          "numpy"
+        ],
+        "install_dir": "site",
+        "name": "numpy",
+        "package_type": "package",
+        "sha256": "a292c1f5d7d8a2208cd5e94fc467604c131cabcd2fc14fed6eefde121e7fabdf",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "2.4.6"
+      },
+      "pandas": {
+        "depends": [
+          "numpy",
+          "python-dateutil",
+          "pytz"
+        ],
+        "file_name": "pandas-3.0.2-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+        "imports": [
+          "pandas"
+        ],
+        "install_dir": "site",
+        "name": "pandas",
+        "package_type": "package",
+        "sha256": "45ff57772cc2f366a8582c7d3097cc4e6676342ecd5a3c08184a43462d5a02ae",
+        "tool": {},
+        "unvendored_tests": true,
+        "version": "3.0.2"
+      },
+      "pydantic": {
+        "depends": [
+          "typing-extensions",
+          "pydantic_core",
+          "annotated-types",
+          "typing-inspection"
+        ],
+        "file_name": "pydantic-2.12.5-py3-none-any.whl",
+        "imports": [
+          "pydantic"
+        ],
+        "install_dir": "site",
+        "name": "pydantic",
+        "package_type": "package",
+        "sha256": "04854875001e07a8a74d87b7c80296cba168773d8c9804e232d695f82484d7d7",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "2.12.5"
+      },
+      "pydantic-core": {
+        "depends": [
+          "typing-extensions"
+        ],
+        "file_name": "pydantic_core-2.41.5-cp314-cp314-pyemscripten_2026_0_wasm32.whl",
+        "imports": [
+          "pydantic_core"
+        ],
+        "install_dir": "site",
+        "name": "pydantic_core",
+        "package_type": "package",
+        "sha256": "54703fa42a0d4d574283cfb8f08050ba7820c9a42b0a21bc1286407d9a9e54da",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "2.41.5"
+      },
+      "python-dateutil": {
+        "depends": [
+          "six"
+        ],
+        "file_name": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+        "imports": [
+          "dateutil"
+        ],
+        "install_dir": "site",
+        "name": "python-dateutil",
+        "package_type": "package",
+        "sha256": "9b13365edf9c188f570baf9c540bbb3029ada2a2dacb9694b3659941693ee9e5",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "2.9.0.post0"
+      },
+      "pytz": {
+        "depends": [],
+        "file_name": "pytz-2026.1.post1-py2.py3-none-any.whl",
+        "imports": [
+          "pytz"
+        ],
+        "install_dir": "site",
+        "name": "pytz",
+        "package_type": "package",
+        "sha256": "b8249d6450146e0b61e6d710dc02ebb35a904796c4c2f97fe87d4ac5872db36a",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "2026.1.post1"
+      },
+      "six": {
+        "depends": [],
+        "file_name": "six-1.17.0-py2.py3-none-any.whl",
+        "imports": [
+          "six"
+        ],
+        "install_dir": "site",
+        "name": "six",
+        "package_type": "package",
+        "sha256": "228c50f73aa7addf2c2ccf2979c256802a59ab69cad8152b31b9443cc8140f42",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "1.17.0"
+      },
+      "typing-extensions": {
+        "depends": [],
+        "file_name": "typing_extensions-4.15.0-py3-none-any.whl",
+        "imports": [
+          "typing_extensions"
+        ],
+        "install_dir": "site",
+        "name": "typing-extensions",
+        "package_type": "package",
+        "sha256": "4fec68770a05408e668a4fa53d6bf4f0f684b9dacf820c7c5d6e97d3ad225e29",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "4.15.0"
+      },
+      "typing-inspection": {
+        "depends": [],
+        "file_name": "typing_inspection-0.4.2-py3-none-any.whl",
+        "imports": [
+          "typing_inspection"
+        ],
+        "install_dir": "site",
+        "name": "typing-inspection",
+        "package_type": "package",
+        "sha256": "deb989630985f7a7296b90357a947a804a7612cecbb6439d6e71128e01f61051",
+        "tool": {},
+        "unvendored_tests": false,
+        "version": "0.4.2"
+      }
+    }
+  }
+}

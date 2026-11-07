@@ -127,6 +127,7 @@ Each theme is a `theme` object inside its owner's document; images live in separ
 16. The world state SHALL be a JSON object `{turn, assets}`, with `assets` keyed by asset id (a GUID, rule 1), not an array, so that later JSON Patch deltas (§8) have stable paths.
 17. Each asset SHALL have a fixed set of fields in v1: `id`, `forceId`, `title`, `category`, `sidc` (MIL-STD-2525/APP-6 symbol code), `lat`, `lon`, `state`, `health` and `fuel`. An admin-defined asset schema is post-v1.
 18. There SHALL be exactly one map room per game in v1. Its participants SHALL be every role in the game, fixed rather than edited by the admin (every force as a write entry, plus the White Force under rule 4), so every role sees the map (product owner, Nov 4, 2026); members keep voice, so the map room adds no role to the observer vault, and clients accept only the admin's messages as world state (D25, PLY-58).
+19. After v1 (Annex C PD8, PY-8; WP 6.4), there SHALL be exactly one umpire room per game, made and kept like the map room: publishing creates it, and its participants are fixed rather than edited by the admin. They are each White Force as a write entry, plus a read entry for each White Force observer that has assigned rooms elsewhere (rule 4: without it, such an observer would not see the room; a force entry assigns nobody), so the admin and every White Force role are its members and no other role is. White Force roles that are not observers write; its observers read, and are in the observer vault and made read-only as for any read-only entry (ADM-37). It carries chat text and White Force proposals (`world-proposal`: a full world state and a summary, up to 500 KB, PLY-53), which clients accept only in the umpire room and only from the admin or a White Force role.
 
 ## 4. Functional requirements — admin backend
 
@@ -568,7 +569,7 @@ Every interaction the mock supports SHALL be specified from the XMPP standards, 
 
 ## 12. User scenarios
 
-Nine end-to-end scenarios walk each actor through v1, SC-10 through message templates (Annex A) and SC-11 through turns and the map; each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
+Nine end-to-end scenarios walk each actor through v1, SC-10 through message templates (Annex A), SC-11 through turns and the map, and SC-12 through the Python API (Annex C, after v1); each traces to the requirements it exercises and doubles as the basis for a Playwright test (NFR-17). Walking them exposed four gaps, now covered by ADM-26 and PLY-32–34 at the end of this section.
 
 ### SC-1 Admin designs and publishes a game
 
@@ -699,6 +700,19 @@ Nine end-to-end scenarios walk each actor through v1, SC-10 through message temp
 7. During turn 2 planning, the admin sees a Blue asset in the wrong place, moves it and uses "Publish world state"; after the change summary, the corrected state appears for every player without a phase change.
 
 **Outcome:** the world state is published with phase changes or whenever the admin chooses, and every player sees the latest one. **Traces to:** ADM-43–46, PLY-55–59, D7, D25.
+
+### SC-12 The umpires adjudicate with Python (Annex C)
+
+**Actors:** admin, White Cell (a White Force role), Blue CO. **Start:** the demo game, published, in turn 1 planning.
+
+1. White Cell opens the Scripts panel and runs a script that reads the world state, marks the Tank Company damaged at 40% health and posts it to the umpire room as a proposal with a summary.
+2. The admin sees the proposal as a card in the umpire room, chooses "Load into draft…", reviews its change summary and loads it. Nothing is published.
+3. The admin moves 1st Rifles by hand in the map room's asset form; the map counts two changed assets.
+4. The admin runs a script that reads the draft and sets the Tank Company's fuel. The panel says what the script changed in the draft and that the rest of the draft, the hand edit included, is kept.
+5. The admin uses "Publish world state…"; the change summary lists the proposal's change, the hand edit and the script's change, and the admin publishes.
+6. Blue CO's map shows the new world state without a reload. Blue CO has no Scripts tab and no umpire room.
+
+**Outcome:** the White Force and the admin adjudicate with scripts through the umpire room and the draft, and nothing reaches players until the admin publishes. **Traces to:** PD4, PD6, PD7, PD8, PD9, PY-2, PY-6, PY-8, PY-9, ADM-45, ADM-46.
 
 ### Gaps found and requirements added
 
@@ -864,6 +878,16 @@ Changes from spike S17 (Nov 6, 2026):
 
 - Annex C: S17's outcome added under the spike's paragraph (pass with conditions; `plan/decisions/S17.md`). PR4 and PY-8 are not yet changed; the record proposes changes for the owner. PR3 decided (Nov 6, 2026): the wider policy applies to every role's client.
 
+Changes from WP 6.4, act and adjudicate (Nov 6, 2026):
+
+- §3 rule 19 added: the umpire room (PD8, PY-8), fixed like the map room. Its participants are the White Force as a write entry plus a read entry for each White Force observer assigned rooms elsewhere, because a role entry for a White Force observer assigns it (rule 4) and would take away its other rooms, while without one an assigned observer would not see the umpire room. Its observers are read-only through the vault, as for any read-only entry; unlike the map room, it does add roles to the vault (the White Force's observers, who are there already).
+- Decided (Nov 6, 2026, WP 6.4): an admin script's draft write is applied as its change from the state it read (the draft, or the published state), on top of the draft as it is when the script finishes (PY-9). Before, the script's state replaced the whole draft and could silently drop the admin's hand edits.
+
+Changes from WP 6.5, the Python API's acceptance (Nov 6, 2026):
+
+- §12: SC-12 added, the umpires adjudicating with Python on both backends: a White Force proposal loaded into the draft, a hand edit, an admin script on top of it, and a reviewed publish.
+- Nov 6, 2026, the owner's decisions on the Phase 6 security review: PY-4 now requires a fresh interpreter for every run (M1, fixed; about 3 s before a run's first output when it follows another at once); PR6 (no per-run send budget, M2) and PR7 (publishing without review publishes the whole draft, M4) added as accepted risks.
+
 ## Annex A. Message templates (built in Phase 4)
 
 Some rooms let players send structured messages from templates the admin designs, in place of, or alongside, free text. This annex was specified so that v1 left room for it, and was built after v1 in Phase 4 (WPs 4.1 to 4.4), except the image and asset pickers. What was built, and the provisional answers it rests on, are under "As built" at the end of the annex.
@@ -1000,12 +1024,12 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PY-1 The SDK SHALL expose typed models generated from the exported JSON Schemas (ARC-6), so the Python and TypeScript views of a document cannot drift.
 - PY-2 The SDK SHALL offer three layers: read (game, turn, forces, roles, rooms, message history, world state, objectives), act (send text and template messages, react to messages and phase changes), and adjudicate (propose a world state).
 - PY-3 The read layer SHALL offer tabular helpers (pandas DataFrames) for messages, turns and assets, loaded only when used.
-- PY-4 The browser runner SHALL run Python in a Web Worker with no direct access to the session, the DOM or storage. Every call SHALL pass through a bridge that offers only the SDK's operations, checked against the role's access in the client.
+- PY-4 The browser runner SHALL run Python in a Web Worker with no direct access to the session, the DOM or storage. Every call SHALL pass through a bridge that offers only the SDK's operations, checked against the role's access in the client. Each run SHALL start in a fresh interpreter, so that nothing one run leaves in the interpreter reaches a later run (decided Nov 6, 2026).
 - PY-5 Pyodide and every package the SDK needs SHALL be bundled with the build and loaded only when a script panel is first opened, never for other roles (NFR-7). The main bundle SHALL NOT grow.
 - PY-6 The admin view and White Force roles SHALL have a script panel: a list of the account's scripts, an editor, Run and Stop, and the script's output and errors. Other roles SHALL NOT be offered it.
 - PY-7 Scripts SHALL be stored in the account's private storage, with name, code and settings, and SHALL be exportable and importable as files.
 - PY-8 A White Force proposal SHALL be posted as a message of a dedicated type to the game's umpire room (PD8), never a player room. Publishing SHALL create that room with the map room and keep its members to the admin and the White Force roles, as §3 rule 18 fixes the map room's. The admin client SHALL offer to load it into the draft and SHALL show the change summary first. It SHALL be validated against the world-state schema and the 500 KB cap (PLY-53) before posting and on receipt.
-- PY-9 An admin script's world state SHALL go to the draft. Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8 and SHALL be recorded with its change summary where the admin can see it. It MAY happen at any time, not only at a phase change.
+- PY-9 An admin script's world state SHALL go to the draft, applied as the script's change from the state it read, on top of the draft as it is when the script finishes, so the admin's edits to other assets are kept (WP 6.4). Publishing without review SHALL be a per-script setting, off by default. Each such publish SHALL be validated as in PY-8 and SHALL be recorded with its change summary where the admin can see it. It MAY happen at any time, not only at a phase change.
 - PY-10 A script SHALL be stoppable at any time, and a run SHALL have a time limit the admin can set. A script's draft writes SHALL be applied together when it finishes; a run that is stopped, times out or fails SHALL leave the draft as it was before the run (PD9).
 - PY-11 In the browser runner, an automated player runs only while its tab is open. Long-running automated players wait for the native runner.
 - PY-12 The same contract-test suite SHALL run against the browser and native runners.
@@ -1017,6 +1041,8 @@ A Python API lets scripts take part in a game: umpire reconcilers that work out 
 - PR3 **Content security policy.** Pyodide needs WebAssembly compilation. Decided (Nov 6, 2026, after S17): one policy for every role's client, adding `'wasm-unsafe-eval'` to `script-src` and, on static hosts, `blob:` to `worker-src`; `'unsafe-eval'` stays forbidden. Every player's page may then compile WebAssembly although only the admin and White Force run scripts; accepted for one simple policy. Servers SHALL send `.wasm` as `application/wasm`.
 - PR4 **Size and start-up.** Measured by S17: the Pyodide core is 13.4 MB (5.4 MB brotli) and pandas with numpy adds 7.9 MB (7.6 MB brotli); the worker is ready in about 1.8 s, a small script runs in about 10 ms, and the first pandas run takes about 3.2 s (CI-like container, loopback, so real networks are slower). Acceptable for adjudication and analysis, not for interactive use.
 - PR5 **Two runners can drift.** Mitigation: generated models (PY-1) and one contract suite (PY-12).
+- PR6 **No per-run budget on what a script sends** (accepted by the owner, Nov 6, 2026). A loop, or a handler answering every message, can post as many messages, proposals and calls as it asks for, as its role; a player's posts can drive such a handler. Bounded only by the run's time limit (PY-10) and the server's per-player shaper.
+- PR7 **Publishing without review publishes the whole draft** (accepted by the owner, Nov 6, 2026), the admin's unpublished hand edits included, not only the script's change. The opt-in's confirmation says so (PD7, PY-9).
 
 **Spike S17 (before any build).** Pyodide in a Web Worker in the admin view, bundled for an air-gapped install, under the client's content security policy. It reads the world state and a room's messages through a minimal bridge, writes a world-state draft that appears in the change summary, and posts a White Force proposal. It records the bundle size with and without pandas, cold-start and warm-start times, the content security policy needed, and whether the bridge can be kept to the SDK's operations.
 

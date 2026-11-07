@@ -267,7 +267,7 @@ describe('the map room (§3 rule 18)', () => {
       r.roomType === MAP_ROOM_TYPE ? { ...r, config: { zoom: 99 } } : r,
     )
     expect(checkDesign({ ...design, rooms }).map((i) => i.path)).toEqual([
-      `rooms[${design.rooms.length - 1}].config`,
+      `rooms[${design.rooms.findIndex((r) => r.id === ROOM.map)}].config`,
     ])
   })
 

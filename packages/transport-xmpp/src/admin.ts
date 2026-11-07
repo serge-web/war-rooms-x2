@@ -1,5 +1,6 @@
 // Server administration with the admin's own session: XEP-0133 Service Administration over
 // XEP-0050 ad-hoc commands, and XEP-0049 private XML storage for the admin's own data.
+import { LIMITS } from '@wrx/schemas'
 import type { AdminApi, Outcome } from '@wrx/transport'
 import { JID, JXT } from 'stanza'
 import type * as XMPP from 'stanza'
@@ -8,6 +9,7 @@ import type { Core } from './core.ts'
 import { fieldNames, listField, submitForm } from './forms.ts'
 import type { FieldValue } from './forms.ts'
 import { Refusal } from './refusal.ts'
+import { privateValueWithinCap } from './size.ts'
 
 const NS_ADMIN = 'http://jabber.org/protocol/admin'
 /** The legacy store: every key in one JSON object (read only, for values written before F14). */
@@ -227,6 +229,13 @@ export class XmppAdmin implements AdminApi {
   setPrivate(key: string, value: string): Outcome<void> {
     return this.core.run(async () => {
       this.checkKey(key)
+      // Over the cap, the server would end the stream (`max_stanza_size`): refuse it here.
+      if (!privateValueWithinCap(value)) {
+        throw new Refusal({
+          condition: 'too-large',
+          text: `the value is over the ${LIMITS.privateValueBytes}-byte private-storage cap`,
+        })
+      }
       await sendIq(this.core.client, {
         type: 'set',
         privateStorage: { [pathOf(key)]: { v: '1', value } },

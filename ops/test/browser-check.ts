@@ -46,10 +46,55 @@ try {
   })
   const response = await page.goto(url)
   step(response?.status() === 200, `the client loads from ${url}`)
+  const header = response?.headers()['content-security-policy'] ?? ''
   step(
-    (response?.headers()['content-security-policy'] ?? '').includes("frame-ancestors 'none'"),
+    header.includes("frame-ancestors 'none'"),
     'the page carries the header Content-Security-Policy',
   )
+  step(
+    header.includes("script-src 'self' 'wasm-unsafe-eval';") &&
+      header.includes("worker-src 'self' blob:;") &&
+      !/(^|\s)'unsafe-eval'/.test(header),
+    "the policy allows WebAssembly ('wasm-unsafe-eval') and blob: workers, never 'unsafe-eval'",
+  )
+  // The Python runner (WP 6.2) starts under that header: its chunk, its blob: worker, Pyodide's
+  // .wasm (served as application/wasm, or the compile is refused) and the standard library.
+  const python = await page.evaluate(async () => {
+    // The slice of @wrx/py-runner's API this check uses.
+    interface Runner {
+      run(code: string): Promise<{ status: string; output: string; error?: string }>
+      dispose(): void
+    }
+    const { createRunner } = (await import(new URL('py/runner.js', document.baseURI).href)) as {
+      createRunner: (options: {
+        role: 'admin'
+        store: unknown
+        draft: { apply(state: unknown): void }
+      }) => Runner
+    }
+    const nothing = () => () => undefined
+    const me = {
+      identity: { anonymous: false, isAdmin: true },
+      isUmpire: true,
+      role: undefined,
+      rooms: [],
+    }
+    const store = {
+      me: () => ({ data: me }),
+      worldState: () => ({ data: undefined }),
+      roomView: () => ({ data: undefined }),
+      acquireRoom: nothing,
+      subscribe: nothing,
+    }
+    const runner = createRunner({ role: 'admin', store, draft: { apply: () => undefined } })
+    try {
+      const outcome = await runner.run('import sys\nprint(sys.version_info[0] + 1)')
+      return `${outcome.status} ${outcome.output.trim()} ${outcome.error ?? ''}`.trim()
+    } finally {
+      runner.dispose()
+    }
+  })
+  step(python === 'finished 4', `the Python runner starts and runs a script (${python})`)
   const badge = page.getByLabel(/^Backend: /)
   await badge.waitFor({ timeout: 20_000 })
   step(true, `backend badge: ${(await badge.getAttribute('aria-label')) ?? ''}`)
@@ -59,7 +104,7 @@ try {
     .first()
     .waitFor({ timeout: 20_000 })
   step(true, 'the welcome page answered (anonymous read over wss://)')
-  await page.getByLabel('Role id').fill('admin')
+  await page.getByLabel('Login name').fill('admin')
   await page.getByLabel('Password', { exact: true }).fill(password)
   await page.getByRole('button', { name: 'Log in' }).click()
   await page.getByLabel(/^Logged in as Umpire/).waitFor({ timeout: 20_000 })

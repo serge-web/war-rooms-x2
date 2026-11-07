@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:game-setup.schema.json",
+  "title": "Game setup (`game-setup`)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Display name"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "Short description"
+    },
+    "briefing": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Public Markdown briefing for the welcome page (PLY-46–48)"
+    },
+    "designVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "Incremented by a publish that changes the structure: a room added or removed, or the effective access to a room of a role in both designs (§3 rule 8); keys saved layouts (PLY-5)"
+    },
+    "theme": {
+      "$ref": "#/$defs/Theme"
+    },
+    "roomTypeDefaults": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "description": "Readable URL-safe name: lowercase letters, digits and single hyphens"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {}
+      },
+      "description": "Default config per room type, validated by that type (ARC-5)"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "name",
+    "description",
+    "briefing",
+    "designVersion",
+    "theme",
+    "roomTypeDefaults"
+  ],
+  "description": "Game properties and the game theme",
+  "$defs": {
+    "Theme": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/ThemeTokens"
+        },
+        "logoAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "iconAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "tokens"
+      ],
+      "description": "Theme: tokens plus optional logo and icon assets"
+    },
+    "ThemeTokens": {
+      "type": "object",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "secondary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "fontFamily": {
+          "description": "Bundled font id",
+          "type": "string",
+          "enum": [
+            "sans",
+            "serif",
+            "mono"
+          ]
+        }
+      },
+      "description": "Design tokens; an unset token inherits from the game theme, then the default"
+    }
+  }
+}

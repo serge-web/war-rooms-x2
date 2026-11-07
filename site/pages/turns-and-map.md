@@ -68,6 +68,10 @@ Either way the admin first sees a summary: the assets added, removed and changed
 
 A design export carries the world state: the admin's draft if this browser holds one, otherwise the latest published state. The export says when the file holds an unpublished draft, and when it holds no world state because the published one could not be read. Importing a design makes its world state the admin's draft, which players see only once it is published.
 
+## Python scripts for umpires
+
+After v1 (Phase 6), umpires can automate their work with short Python scripts that run in the browser, propose world states to the admin in the umpires room, and, when the admin allows it per script, publish without review. See [Umpires and Python scripts](./umpires).
+
 ## Layouts and design changes
 
 Players arrange their rooms in a dockable workspace, saved in their browser. A design change resets every online player's layout to the default, with a notice, only when it is **structural**: a room added or removed, or a change to which rooms a role can see or write in. Renaming, re-ordering, themes, objectives and templates never reset a layout, and nor does adding or removing a role: only the rooms of roles already in the game are compared.

@@ -1,7 +1,8 @@
 # Blog-only PRs to main (labelled `blog`, or from a `blog/` branch) merge automatically when
 # CI is green (DOC-23). The auto-merge is refused if the PR changes anything outside
 # site/pages/blog/ (DOC-23) or the deny-list flags a post (DOC-25). A post that shows the app
-# gets a frozen snapshot of the phase-branch commit its front matter names (DOC-24).
+# gets a frozen snapshot of the phase-branch commit its front matter names (DOC-24); only a
+# post about Python (`python: true`) gets one that carries `py/` (owner decision, Nov 6, 2026).
 name: Site blog
 
 on:
@@ -62,11 +63,13 @@ jobs:
       - name: Build the app at the post's phase-branch commit (DOC-24)
         run: >-
           node tools/site/snapshot.ts --slug "$SLUG" --branch "$BRANCH" --commit "$COMMIT"
-          --out "$RUNNER_TEMP/snapshot"
+          --python "$PYTHON" --out "$RUNNER_TEMP/snapshot"
         env:
           SLUG: ${{ matrix.snapshot.slug }}
           BRANCH: ${{ matrix.snapshot.branch }}
           COMMIT: ${{ matrix.snapshot.commit }}
+          # `python: true` in the post's front matter; otherwise WRX_PY_RUNNER=off (no py/).
+          PYTHON: ${{ matrix.snapshot.python }}
       - name: No secrets or real-server endpoints (NFR-1, DOC-12)
         run: node tools/site/check-site-bundle.ts "$RUNNER_TEMP/snapshot"
       - uses: actions/upload-artifact@v4

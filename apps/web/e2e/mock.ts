@@ -78,6 +78,55 @@ export async function asMockAdmin(page: Page, ops: readonly AdminOp[]): Promise<
     { ops, domain: DOMAIN },
   )
   expect(failed).toBeUndefined()
+  await mockSaved(page)
+}
+
+/**
+ * Waits until the mock host has written all it holds to IndexedDB. The host saves after each
+ * change, but asynchronously, and the SharedWorker holding the newer state ends with the last tab:
+ * a reload before the write lands starts a new worker from the older stored state. On a loaded
+ * CI runner that lost the tail of the 130 messages PLY-49 posts (the newest after the reload was
+ * item 069). Compares the stored document with a fresh export until they match.
+ */
+export async function mockSaved(page: Page): Promise<void> {
+  const failed = await page.evaluate(async () => {
+    const host = window.wrxMock
+    if (host === undefined) return 'no mock host'
+    const name = host.names.database
+    const stored = () =>
+      new Promise<unknown>((resolve, reject) => {
+        const open = indexedDB.open(name)
+        open.onerror = () => {
+          reject(open.error ?? new Error(`cannot open ${name}`))
+        }
+        open.onsuccess = () => {
+          const db = open.result
+          try {
+            const get = db.transaction('state', 'readonly').objectStore('state').get('current')
+            get.onsuccess = () => {
+              db.close()
+              resolve(get.result)
+            }
+            get.onerror = () => {
+              db.close()
+              reject(get.error ?? new Error('cannot read the stored state'))
+            }
+          } catch (error) {
+            db.close()
+            reject(error instanceof Error ? error : new Error(String(error)))
+          }
+        }
+      })
+    const deadline = performance.now() + 15_000
+    for (;;) {
+      const current = await host.exportDatabase()
+      if (!current.ok) return `export: ${current.error}`
+      if ((await stored()) === current.value) return undefined
+      if (performance.now() > deadline) return 'the mock host did not save within 15 s'
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  })
+  expect(failed).toBeUndefined()
 }
 
 /** Logs in on the welcome page with a role id and password. */

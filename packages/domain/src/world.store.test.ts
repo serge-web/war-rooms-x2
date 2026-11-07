@@ -391,3 +391,46 @@ describe('a phase change with the world state (ADM-45, WP 5.6)', () => {
     release()
   })
 })
+
+describe('White Force proposals on receipt (PY-8, PD6; Phase 6 review)', () => {
+  const UMPIRE = `${tid('umpires')}@${MUC}`
+  const proposal = (summary: string) =>
+    JSON.stringify({
+      type: 'world-proposal',
+      schemaVersion: 1,
+      content: { state: stateAt(1), summary },
+    })
+  const from = (login: string) => ({ nick: login, from: `${login}@${DOMAIN}/x` })
+
+  it('counts only from the admin or a White Force role that is not an observer', async () => {
+    const docs = sampleDocuments()
+    const umpires = room('umpires', [{ kind: 'force', id: 'white', access: 'write' }], {
+      roomType: 'umpire',
+      order: 4,
+    })
+    docs.set(nodeName.room(umpires.id), [umpires])
+    const h = harness({ docs })
+    h.archive.set(UMPIRE, [
+      message('umpires', { ...from('white-1'), body: proposal('from White 1') }),
+      // An observer is read-only through the vault only; a modified client, or a moment with
+      // its voice not yet revoked, must not make its post count as a proposal.
+      message('umpires', { ...from('white-observer'), body: proposal('from the observer') }),
+      message('umpires', { ...from('red-co'), body: proposal('from Red') }),
+      message('umpires', { nick: 'admin', from: `admin@${DOMAIN}/a`, body: proposal('admin') }),
+    ])
+    await h.store.ready()
+    const release = h.store.acquireRoom(tid('umpires'))
+    await flush(20)
+    const entries = h.store.roomView(tid('umpires')).data?.messages ?? []
+    expect(entries.map((e) => [e.sender.loginName ?? 'admin', e.kind])).toEqual([
+      ['white-1', 'message'],
+      ['white-observer', 'unreadable'],
+      ['red-co', 'unreadable'],
+      ['admin', 'message'],
+    ])
+    expect(
+      h.warnings.filter((w) => w === 'Ignoring a proposal not from the White Force'),
+    ).toHaveLength(2)
+    release()
+  })
+})

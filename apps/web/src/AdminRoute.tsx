@@ -5,12 +5,14 @@ import { demoPassword } from '@wrx/mock-server'
 import { AppBarCore, LoginFormCore, usePlayerSession } from '@wrx/player-ui'
 import type { DemoLogin } from '@wrx/player-ui'
 import { SessionStoreProvider } from '@wrx/hooks'
-import { Banner, Spinner, ThemeScope } from '@wrx/ui'
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import type { RouteProps } from './seams/types.ts'
+import { Banner, ChunkBoundary, Spinner, ThemeScope, lazyChunk } from '@wrx/ui'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import type { AdminAppProps, RouteProps } from './seams/types.ts'
 
 // The admin backend loads on demand, so players never download the editors.
-const AdminApp = lazy(() => import('./seams/AdminApp.tsx').then((m) => ({ default: m.AdminApp })))
+const AdminApp = lazyChunk<AdminAppProps>(() =>
+  import('./seams/AdminApp.tsx').then((m) => ({ default: m.AdminApp })),
+)
 
 export function AdminRoute(props: RouteProps) {
   const session = usePlayerSession(props.connection)
@@ -37,9 +39,11 @@ export function AdminRoute(props: RouteProps) {
   if (store !== undefined && isAdmin) {
     return (
       <SessionStoreProvider store={store}>
-        <Suspense fallback={<Spinner label="Loading the admin backend" />}>
-          <AdminApp {...props} session={store} onLogout={() => void logout()} />
-        </Suspense>
+        <ChunkBoundary what="the admin backend" onRetry={AdminApp.reset}>
+          <Suspense fallback={<Spinner label="Loading the admin backend" />}>
+            <AdminApp {...props} session={store} onLogout={() => void logout()} />
+          </Suspense>
+        </ChunkBoundary>
       </SessionStoreProvider>
     )
   }

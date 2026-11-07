@@ -4,7 +4,7 @@ import { isSlug } from './paths.ts'
 /** The blog folder. A blog-only PR may change nothing else (DOC-23). */
 export const BLOG_DIR = 'site/pages/blog/'
 
-/** Phase branches a snapshot may be built from: `phase-0` to `phase-5`, and Phase 0's stand-in. */
+/** Phase branches a snapshot may be built from: `phase-0` to `phase-6`, and Phase 0's stand-in. */
 export const PHASE_BRANCHES: readonly RegExp[] = Object.freeze([
   /^phase-\d+$/,
   /^claude\/gracious-thompson-aowbqs$/,
@@ -53,6 +53,12 @@ export interface Post {
   readonly phase: number
   readonly status: PostStatus
   readonly snapshot?: { readonly branch: string; readonly commit: string }
+  /**
+   * The post is about Python (`python: true`; default false): its snapshot carries the runner
+   * and Pyodide in `py/`; without it, the snapshot is built with WRX_PY_RUNNER=off and the
+   * stub runner, as a PR preview that does not touch Python is (owner decision, Nov 6, 2026).
+   */
+  readonly python: boolean
   readonly body: string
 }
 
@@ -84,7 +90,7 @@ export function parsePost(file: string, text: string): ParsedPost {
   if (date !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(date)) problems.push(`${file}: date is YYYY-MM-DD`)
   const phaseText = need('phase')
   const phase = Number(phaseText)
-  if (phaseText !== '' && !/^[0-5]$/.test(phaseText)) problems.push(`${file}: phase is 0 to 5`)
+  if (phaseText !== '' && !/^[0-6]$/.test(phaseText)) problems.push(`${file}: phase is 0 to 6`)
   const status = need('status')
   if (status !== '' && status !== 'work-in-progress' && status !== 'gate') {
     problems.push(`${file}: status is work-in-progress or gate (DOC-26)`)
@@ -100,6 +106,10 @@ export function parsePost(file: string, text: string): ParsedPost {
   if (commit !== undefined && !/^[0-9a-f]{40}$/.test(commit)) {
     problems.push(`${file}: snapshotCommit must be a full 40-character commit id (DOC-24)`)
   }
+  const python = data.python
+  if (python !== undefined && python !== 'true' && python !== 'false') {
+    problems.push(`${file}: python is true or false (a Python post's snapshot carries py/)`)
+  }
   if (problems.length > 0) return { problems }
   const body = text
     .split('\n')
@@ -113,6 +123,7 @@ export function parsePost(file: string, text: string): ParsedPost {
       phase,
       status: status === 'gate' ? 'gate' : 'work-in-progress',
       ...(branch !== undefined && commit !== undefined ? { snapshot: { branch, commit } } : {}),
+      python: python === 'true',
       body,
     },
     problems,
@@ -174,6 +185,8 @@ export interface SnapshotRequest {
   readonly commit: string
   /** The post is not on the base branch yet, so its snapshot may still change (DOC-24). */
   readonly replace: boolean
+  /** Build it with the Python runner and Pyodide (`python: true`); otherwise WRX_PY_RUNNER=off. */
+  readonly python: boolean
 }
 
 export interface BlogPrInput {
@@ -220,7 +233,14 @@ export function reviewBlogPr(input: BlogPrInput): BlogPrDecision {
   const snapshots = input.posts.flatMap(({ post }) =>
     post?.snapshot === undefined
       ? []
-      : [{ slug: post.slug, ...post.snapshot, replace: !input.published.has(post.slug) }],
+      : [
+          {
+            slug: post.slug,
+            ...post.snapshot,
+            replace: !input.published.has(post.slug),
+            python: post.python,
+          },
+        ],
   )
   return { eligible: reasons.length === 0, reasons, snapshots }
 }

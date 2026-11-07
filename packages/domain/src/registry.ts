@@ -7,10 +7,14 @@
 // registry can be shared by every pane (ARC-2).
 import {
   MAP_ROOM_TYPE,
+  UMPIRE_ROOM_TYPE,
+  chatMessageBodySchema,
   chatRoomConfigReader,
   mapRoomConfigReader,
-  messageBodySchema,
   slugSchema,
+  templateMessageBodySchema,
+  umpireRoomConfigReader,
+  worldProposalMessageBodySchema,
   worldStateMessageBodySchema,
 } from '@wrx/schemas'
 import type {
@@ -20,6 +24,7 @@ import type {
   MessageBody,
   Result,
   Room,
+  UmpireRoomConfig,
 } from '@wrx/schemas'
 import { z } from 'zod'
 
@@ -63,8 +68,8 @@ export const chatRoomType: RoomTypeDefinition<never, never, ChatConfig> = Object
   icon: 'chat',
   configSchema: chatConfigSchema,
   // Chat text and templated messages (TPL-3); a templated message is then checked against its
-  // template and the room's config (TPL-6, `@wrx/templates`).
-  messageSchema: messageBodySchema,
+  // template and the room's config (TPL-6, `@wrx/templates`). Never a world state or a proposal.
+  messageSchema: z.discriminatedUnion('type', [chatMessageBodySchema, templateMessageBodySchema]),
   playerComponent: undefined,
   adminEditor: undefined,
 })
@@ -84,6 +89,29 @@ export const mapRoomType: RoomTypeDefinition<never, never, MapConfig> = Object.f
   icon: 'map',
   configSchema: mapConfigSchema,
   messageSchema: worldStateMessageBodySchema,
+  playerComponent: undefined,
+  adminEditor: undefined,
+})
+
+/** Config of the umpire room: nothing to set; `{}` reads as version 1. */
+export const umpireConfigSchema: z.ZodType<UmpireRoomConfig> = umpireRoomConfigReader
+export type UmpireConfig = UmpireRoomConfig
+
+/**
+ * The `umpire` room type (PD8, PY-8, §3 rule 18): the game's one umpire room, the admin and the
+ * White Force only. Chat text and White Force proposals (`world-proposal`), which the store
+ * accepts only from the admin or a White Force role; no templates. Its panel is the chat panel
+ * with proposals shown as cards (WP 6.4).
+ */
+export const umpireRoomType: RoomTypeDefinition<never, never, UmpireConfig> = Object.freeze({
+  type: UMPIRE_ROOM_TYPE,
+  label: 'Umpires',
+  icon: 'umpire',
+  configSchema: umpireConfigSchema,
+  messageSchema: z.discriminatedUnion('type', [
+    chatMessageBodySchema,
+    worldProposalMessageBodySchema,
+  ]),
   playerComponent: undefined,
   adminEditor: undefined,
 })
@@ -108,7 +136,7 @@ export function createRoomTypeRegistry<Player, Editor>(
 
 /** The v1 registry with empty UI slots: what the domain layer and tests use. */
 export function defaultRoomTypes(): RoomTypeRegistry<never, never> {
-  return createRoomTypeRegistry([chatRoomType, mapRoomType])
+  return createRoomTypeRegistry([chatRoomType, mapRoomType, umpireRoomType])
 }
 
 /**

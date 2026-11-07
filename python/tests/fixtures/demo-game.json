@@ -1,0 +1,559 @@
+{
+  "readContext": {
+    "protocolVersion": 2,
+    "isAdmin": true,
+    "roleId": null,
+    "forceId": null
+  },
+  "readGameSetup": {
+    "setup": {
+      "schemaVersion": 1,
+      "name": "Exercise Northern Gate",
+      "description": "A two-sided negotiation exercise.",
+      "briefing": "## Briefing\n\nThe exercise starts at 09:00.",
+      "designVersion": 1,
+      "theme": {
+        "tokens": {
+          "primary": "#1d4ed8",
+          "fontFamily": "sans"
+        },
+        "logoAssetId": "40000000-0000-4000-8000-000000000001"
+      },
+      "roomTypeDefaults": {}
+    }
+  },
+  "readTurn": {
+    "state": {
+      "schemaVersion": 1,
+      "turn": 1,
+      "phase": "planning"
+    }
+  },
+  "readForces": {
+    "forces": [
+      {
+        "schemaVersion": 1,
+        "id": "10000000-0000-4000-8000-000000000001",
+        "name": "Blue",
+        "colour": "#1d4ed8",
+        "isUmpire": false,
+        "order": 0
+      },
+      {
+        "schemaVersion": 1,
+        "id": "10000000-0000-4000-8000-000000000002",
+        "name": "Red",
+        "colour": "#b91c1c",
+        "isUmpire": false,
+        "order": 1
+      },
+      {
+        "schemaVersion": 1,
+        "id": "10000000-0000-4000-8000-000000000003",
+        "name": "White",
+        "colour": "#4b5563",
+        "isUmpire": true,
+        "order": 2
+      }
+    ]
+  },
+  "readRoles": {
+    "roles": [
+      {
+        "schemaVersion": 1,
+        "id": "20000000-0000-4000-8000-000000000001",
+        "loginName": "blue-co",
+        "name": "Blue CO",
+        "forceId": "10000000-0000-4000-8000-000000000001",
+        "isObserver": false,
+        "order": 0
+      },
+      {
+        "schemaVersion": 1,
+        "id": "20000000-0000-4000-8000-000000000002",
+        "loginName": "blue-observer",
+        "name": "Blue Observer",
+        "forceId": "10000000-0000-4000-8000-000000000001",
+        "isObserver": true,
+        "order": 1
+      },
+      {
+        "schemaVersion": 1,
+        "id": "20000000-0000-4000-8000-000000000003",
+        "loginName": "red-co",
+        "name": "Red CO",
+        "forceId": "10000000-0000-4000-8000-000000000002",
+        "isObserver": false,
+        "order": 0
+      },
+      {
+        "schemaVersion": 1,
+        "id": "20000000-0000-4000-8000-000000000004",
+        "loginName": "white-observer",
+        "name": "White Observer",
+        "forceId": "10000000-0000-4000-8000-000000000003",
+        "isObserver": true,
+        "order": 0
+      },
+      {
+        "schemaVersion": 1,
+        "id": "20000000-0000-4000-8000-000000000005",
+        "loginName": "white-cell",
+        "name": "White Cell",
+        "forceId": "10000000-0000-4000-8000-000000000003",
+        "isObserver": false,
+        "order": 1
+      }
+    ]
+  },
+  "readRooms": {
+    "rooms": [
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000001",
+        "name": "Blue HQ",
+        "roomType": "chat",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000001",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 0
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000002",
+        "name": "Red HQ",
+        "roomType": "chat",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000002",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 1
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000003",
+        "name": "Blue–Red negotiation",
+        "roomType": "chat",
+        "participants": [
+          {
+            "kind": "role",
+            "id": "20000000-0000-4000-8000-000000000001",
+            "access": "write"
+          },
+          {
+            "kind": "role",
+            "id": "20000000-0000-4000-8000-000000000003",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 2
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000004",
+        "name": "Blue Reports",
+        "roomType": "chat",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000001",
+            "access": "write"
+          }
+        ],
+        "config": {
+          "schemaVersion": 2,
+          "freeText": false,
+          "templates": [
+            {
+              "kind": "force",
+              "id": "10000000-0000-4000-8000-000000000001",
+              "templateIds": [
+                "50000000-0000-4000-8000-000000000001",
+                "50000000-0000-4000-8000-000000000002"
+              ]
+            },
+            {
+              "kind": "role",
+              "id": "20000000-0000-4000-8000-000000000001",
+              "templateIds": [
+                "50000000-0000-4000-8000-000000000003"
+              ]
+            }
+          ]
+        },
+        "order": 3
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000005",
+        "name": "Map",
+        "roomType": "map",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000001",
+            "access": "write"
+          },
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000002",
+            "access": "write"
+          },
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000003",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 4
+      },
+      {
+        "schemaVersion": 1,
+        "id": "30000000-0000-4000-8000-000000000006",
+        "name": "Umpires",
+        "roomType": "umpire",
+        "participants": [
+          {
+            "kind": "force",
+            "id": "10000000-0000-4000-8000-000000000003",
+            "access": "write"
+          }
+        ],
+        "config": {},
+        "order": 5
+      }
+    ]
+  },
+  "readWorldState": {
+    "state": {
+      "turn": 1,
+      "assets": {
+        "60000000-0000-4000-8000-000000000001": {
+          "id": "60000000-0000-4000-8000-000000000001",
+          "forceId": "10000000-0000-4000-8000-000000000001",
+          "title": "1st Rifles",
+          "category": "infantry",
+          "sidc": "SFGPUCI----K---",
+          "lat": 51.985,
+          "lon": 5.87,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        },
+        "60000000-0000-4000-8000-000000000002": {
+          "id": "60000000-0000-4000-8000-000000000002",
+          "forceId": "10000000-0000-4000-8000-000000000001",
+          "title": "A Squadron",
+          "category": "armour",
+          "sidc": "SFGPUCA----K---",
+          "lat": 51.97,
+          "lon": 5.85,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        },
+        "60000000-0000-4000-8000-000000000003": {
+          "id": "60000000-0000-4000-8000-000000000003",
+          "forceId": "10000000-0000-4000-8000-000000000001",
+          "title": "Recce Troop",
+          "category": "reconnaissance",
+          "sidc": "SFGPUCR----K---",
+          "lat": 51.978,
+          "lon": 5.905,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        },
+        "60000000-0000-4000-8000-000000000004": {
+          "id": "60000000-0000-4000-8000-000000000004",
+          "forceId": "10000000-0000-4000-8000-000000000002",
+          "title": "3rd Motor Rifles",
+          "category": "infantry",
+          "sidc": "SHGPUCI----K---",
+          "lat": 52.01,
+          "lon": 5.93,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        },
+        "60000000-0000-4000-8000-000000000005": {
+          "id": "60000000-0000-4000-8000-000000000005",
+          "forceId": "10000000-0000-4000-8000-000000000002",
+          "title": "Tank Company",
+          "category": "armour",
+          "sidc": "SHGPUCA----K---",
+          "lat": 52.02,
+          "lon": 5.9,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        },
+        "60000000-0000-4000-8000-000000000006": {
+          "id": "60000000-0000-4000-8000-000000000006",
+          "forceId": "10000000-0000-4000-8000-000000000002",
+          "title": "Artillery Battery",
+          "category": "artillery",
+          "sidc": "SHGPUCF----K---",
+          "lat": 52.035,
+          "lon": 5.95,
+          "state": "operational",
+          "health": 100,
+          "fuel": 100
+        }
+      }
+    },
+    "messageId": "demo-world-1",
+    "sentAt": "2026-10-24T08:30:00.000Z"
+  },
+  "objectives": {
+    "10000000-0000-4000-8000-000000000001": {
+      "objectives": {
+        "schemaVersion": 1,
+        "forceId": "10000000-0000-4000-8000-000000000001",
+        "markdown": "1. Secure the crossing.",
+        "updatedAt": "2026-10-24T12:00:00.000Z"
+      }
+    },
+    "10000000-0000-4000-8000-000000000002": {
+      "objectives": {
+        "schemaVersion": 1,
+        "forceId": "10000000-0000-4000-8000-000000000002",
+        "markdown": "1. Delay Blue.",
+        "updatedAt": "2026-10-24T12:00:00.000Z"
+      }
+    }
+  },
+  "messages": {
+    "30000000-0000-4000-8000-000000000001": [
+      {
+        "id": "demo-001",
+        "roomId": "30000000-0000-4000-8000-000000000001",
+        "sentAt": "2026-10-24T08:40:00.000Z",
+        "sender": {
+          "isAdmin": false,
+          "roleId": "20000000-0000-4000-8000-000000000001",
+          "loginName": "blue-co"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Morning all. Orders for the crossing are out."
+          }
+        }
+      },
+      {
+        "id": "demo-002",
+        "roomId": "30000000-0000-4000-8000-000000000001",
+        "sentAt": "2026-10-24T08:45:00.000Z",
+        "sender": {
+          "isAdmin": true,
+          "roleId": null,
+          "loginName": "admin"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "The exercise clock starts at 09:00."
+          }
+        }
+      },
+      {
+        "id": "demo-003",
+        "roomId": "30000000-0000-4000-8000-000000000001",
+        "sentAt": "2026-10-24T08:52:30.000Z",
+        "sender": {
+          "isAdmin": false,
+          "roleId": "20000000-0000-4000-8000-000000000001",
+          "loginName": "blue-co"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Understood. Recce team moving to the bridge."
+          }
+        }
+      }
+    ],
+    "30000000-0000-4000-8000-000000000002": [
+      {
+        "id": "demo-004",
+        "roomId": "30000000-0000-4000-8000-000000000002",
+        "sentAt": "2026-10-24T08:41:00.000Z",
+        "sender": {
+          "isAdmin": false,
+          "roleId": "20000000-0000-4000-8000-000000000003",
+          "loginName": "red-co"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Hold the east bank and wait for Blue to commit."
+          }
+        }
+      },
+      {
+        "id": "demo-005",
+        "roomId": "30000000-0000-4000-8000-000000000002",
+        "sentAt": "2026-10-24T08:47:00.000Z",
+        "sender": {
+          "isAdmin": true,
+          "roleId": null,
+          "loginName": "admin"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Red, confirm your opening positions by 08:55."
+          }
+        }
+      }
+    ],
+    "30000000-0000-4000-8000-000000000003": [
+      {
+        "id": "demo-006",
+        "roomId": "30000000-0000-4000-8000-000000000003",
+        "sentAt": "2026-10-24T08:58:00.000Z",
+        "sender": {
+          "isAdmin": false,
+          "roleId": "20000000-0000-4000-8000-000000000001",
+          "loginName": "blue-co"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Blue proposes a ceasefire at the crossing until noon."
+          }
+        }
+      },
+      {
+        "id": "demo-007",
+        "roomId": "30000000-0000-4000-8000-000000000003",
+        "sentAt": "2026-10-24T08:59:10.000Z",
+        "sender": {
+          "isAdmin": false,
+          "roleId": "20000000-0000-4000-8000-000000000003",
+          "loginName": "red-co"
+        },
+        "body": {
+          "type": "chat",
+          "schemaVersion": 1,
+          "content": {
+            "text": "Red will consider it. What do you offer in return?"
+          }
+        }
+      }
+    ],
+    "30000000-0000-4000-8000-000000000004": [],
+    "30000000-0000-4000-8000-000000000005": [
+      {
+        "id": "demo-world-1",
+        "roomId": "30000000-0000-4000-8000-000000000005",
+        "sentAt": "2026-10-24T08:30:00.000Z",
+        "sender": {
+          "isAdmin": true,
+          "roleId": null,
+          "loginName": "admin"
+        },
+        "body": {
+          "type": "world-state",
+          "schemaVersion": 1,
+          "content": {
+            "turn": 1,
+            "assets": {
+              "60000000-0000-4000-8000-000000000001": {
+                "id": "60000000-0000-4000-8000-000000000001",
+                "forceId": "10000000-0000-4000-8000-000000000001",
+                "title": "1st Rifles",
+                "category": "infantry",
+                "sidc": "SFGPUCI----K---",
+                "lat": 51.985,
+                "lon": 5.87,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              },
+              "60000000-0000-4000-8000-000000000002": {
+                "id": "60000000-0000-4000-8000-000000000002",
+                "forceId": "10000000-0000-4000-8000-000000000001",
+                "title": "A Squadron",
+                "category": "armour",
+                "sidc": "SFGPUCA----K---",
+                "lat": 51.97,
+                "lon": 5.85,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              },
+              "60000000-0000-4000-8000-000000000003": {
+                "id": "60000000-0000-4000-8000-000000000003",
+                "forceId": "10000000-0000-4000-8000-000000000001",
+                "title": "Recce Troop",
+                "category": "reconnaissance",
+                "sidc": "SFGPUCR----K---",
+                "lat": 51.978,
+                "lon": 5.905,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              },
+              "60000000-0000-4000-8000-000000000004": {
+                "id": "60000000-0000-4000-8000-000000000004",
+                "forceId": "10000000-0000-4000-8000-000000000002",
+                "title": "3rd Motor Rifles",
+                "category": "infantry",
+                "sidc": "SHGPUCI----K---",
+                "lat": 52.01,
+                "lon": 5.93,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              },
+              "60000000-0000-4000-8000-000000000005": {
+                "id": "60000000-0000-4000-8000-000000000005",
+                "forceId": "10000000-0000-4000-8000-000000000002",
+                "title": "Tank Company",
+                "category": "armour",
+                "sidc": "SHGPUCA----K---",
+                "lat": 52.02,
+                "lon": 5.9,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              },
+              "60000000-0000-4000-8000-000000000006": {
+                "id": "60000000-0000-4000-8000-000000000006",
+                "forceId": "10000000-0000-4000-8000-000000000002",
+                "title": "Artillery Battery",
+                "category": "artillery",
+                "sidc": "SHGPUCF----K---",
+                "lat": 52.035,
+                "lon": 5.95,
+                "state": "operational",
+                "health": 100,
+                "fuel": 100
+              }
+            }
+          }
+        }
+      }
+    ],
+    "30000000-0000-4000-8000-000000000006": []
+  }
+}

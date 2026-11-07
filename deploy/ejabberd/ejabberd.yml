@@ -145,12 +145,15 @@ modules:
   # The Content-Security-Policy is the client's own (apps/web/vite.config.ts) narrowed to this
   # origin: the WebSocket is on the same origin, so 'self' covers it, and the client is never
   # framed. Nothing is cached without revalidation, so a new client or config.json shows at once.
+  # WP 6.2 (SRD Annex C PR3): the Python runner's WebAssembly ('wasm-unsafe-eval', never
+  # 'unsafe-eval') and its blob: worker bootstrap; .wasm must be application/wasm, or Pyodide's
+  # streaming compile refuses it.
   mod_http_fileserver:
     docroot: /home/ejabberd/www
     directory_indices:
       - index.html
     custom_headers:
-      Content-Security-Policy: "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+      Content-Security-Policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
       X-Content-Type-Options: nosniff
       Referrer-Policy: no-referrer
       Cache-Control: no-cache
@@ -165,6 +168,9 @@ modules:
       .woff: font/woff
       .woff2: font/woff2
       .webmanifest: application/manifest+json
+      .wasm: application/wasm
+      .whl: application/zip
+      .zip: application/zip
   mod_mam:
     assume_mam_usage: true
     default: always

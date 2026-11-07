@@ -125,6 +125,11 @@ export interface AdminWorldDraft {
   readonly saveProblem: string | undefined
   /** Applies an edit to what the map shows and saves it; returns why it was refused. */
   readonly edit: (change: (state: WorldState) => WorldEditResult) => string | undefined
+  /**
+   * Makes `state` the whole draft (a White Force proposal loaded after its summary, PY-8);
+   * returns why the browser did not keep it, if it did not.
+   */
+  readonly replace: (state: WorldState) => string | undefined
   /** Removes the draft (after the admin confirmed). */
   readonly discard: () => void
 }
@@ -182,6 +187,20 @@ export function useAdminWorldDraft(
     },
     [storage, key, working, draft, publishedStanzaId],
   )
+  const replace = useCallback(
+    (state: WorldState): string | undefined => {
+      if (storage === undefined || key === undefined) return 'drafts cannot be kept here'
+      const next: WorldDraft = {
+        state,
+        baseStanzaId: draft === undefined ? publishedStanzaId : draft.baseStanzaId,
+        savedAt: new Date().toISOString(),
+      }
+      const problem = storage.save(key, serialiseWorldDraft(next))
+      setSaveProblem(problem)
+      return problem
+    },
+    [storage, key, draft, publishedStanzaId],
+  )
   const discard = useCallback(() => {
     if (storage === undefined || key === undefined) return
     storage.remove(key)
@@ -211,6 +230,7 @@ export function useAdminWorldDraft(
       recent === undefined,
     saveProblem,
     edit,
+    replace,
     discard,
   }
 }

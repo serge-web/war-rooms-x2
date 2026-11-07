@@ -1,0 +1,29 @@
+{
+  "name": "@wrx/py-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Python API's browser runner (SRD Annex C, WP 6.2): Pyodide in a locked-down Web Worker behind a bridge that offers only the SDK's operations, built into the app's output at py/ and loaded only when asked for.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./load": "./src/load.ts",
+    "./packaging": "./src/packaging.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "lock": "node scripts/lock.ts",
+    "fetch": "node scripts/fetch.ts"
+  },
+  "dependencies": {
+    "@wrx/domain": "workspace:*",
+    "@wrx/schemas": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "pyodide": "314.0.7",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

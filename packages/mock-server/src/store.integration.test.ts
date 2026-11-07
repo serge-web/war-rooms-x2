@@ -95,7 +95,14 @@ describe('rooms created and deleted mid-session (PLY-60)', () => {
     await vi.waitFor(() => {
       expect(roomIds(umpire)).not.toContain('press')
     })
-    expect(roomIds(umpire)).toEqual(['blue-hq', 'red-hq', 'negotiation', 'blue-reports', 'map'])
+    expect(roomIds(umpire)).toEqual([
+      'blue-hq',
+      'red-hq',
+      'negotiation',
+      'blue-reports',
+      'map',
+      'umpire',
+    ])
     await umpire.logout()
   })
 

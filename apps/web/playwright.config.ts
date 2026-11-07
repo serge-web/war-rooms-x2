@@ -12,6 +12,11 @@ import type { Project } from '@playwright/test'
 // WRX_E2E_MOCK_PORT and WRX_E2E_SERVER_PORT move them, e.g. for two checkouts on one machine.
 const mockPort = Number(process.env.WRX_E2E_MOCK_PORT ?? 4173)
 const serverPort = Number(process.env.WRX_E2E_SERVER_PORT ?? 4175)
+/**
+ * The Python runner's server (e2e/py-runner/serve.ts, WP 6.2): the mock build under its policy
+ * as a header or a <meta> tag, and a canary origin on a free port. WRX_E2E_PY_PORT moves it.
+ */
+const pyPort = Number(process.env.WRX_E2E_PY_PORT ?? mockPort + 6)
 
 /**
  * Chromium trusts the reference ejabberd's test certificate by pinning its key, not by ignoring
@@ -71,13 +76,20 @@ function browserProjects(browser: BrowserName): Project[] {
   const projects: Project[] = [
     {
       name: `mock-build${suffix}`,
-      testIgnore: /(server|ejabberd)\.spec\.ts/,
+      testIgnore: /(server|ejabberd|py-runner|py-runner-perf)\.spec\.ts/,
       use: { ...device, baseURL: `http://localhost:${mockPort}/`, launchOptions: { args } },
     },
     {
       name: `server-build${suffix}`,
       testMatch: /(server|shell)\.spec\.ts/,
       use: { ...device, baseURL: `http://localhost:${serverPort}/`, launchOptions: { args } },
+    },
+    {
+      // The Python runner against the mock build (WP 6.2): its sandbox probes need their own
+      // server, which sends the policy as a header or not at all.
+      name: `py-runner${suffix}`,
+      testMatch: /py-runner(-perf)?\.spec\.ts/,
+      use: { ...device, baseURL: `http://localhost:${pyPort}/`, launchOptions: { args } },
     },
   ]
   if (browser === 'chromium') {
@@ -111,6 +123,12 @@ export default defineConfig({
     {
       command: `pnpm build:server && pnpm exec vite preview --mode server --port ${serverPort} --strictPort`,
       port: serverPort,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // After the first: it serves the mock build that one makes (web servers start in order).
+      command: `node e2e/py-runner/serve.ts ${pyPort}`,
+      port: pyPort,
       reuseExistingServer: !process.env.CI,
     },
   ],

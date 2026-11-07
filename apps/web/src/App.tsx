@@ -13,6 +13,7 @@ import {
   MapPreload,
   MapTilesProvider,
   PlayerClient,
+  UmpirePanel,
   UnreadProvider,
   WorldDraftProvider,
   Workspace,
@@ -25,7 +26,7 @@ import type {
   WorldDraftStorage,
 } from '@wrx/player-ui'
 import type { Transport } from '@wrx/transport'
-import { Banner, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
+import { Banner, ChunkBoundary, Spinner, ThemeScope, ToastProvider, useToast } from '@wrx/ui'
 import type { Tone } from '@wrx/ui'
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -36,12 +37,13 @@ import { MultiClientApp } from './seams/MultiClientApp.tsx'
 import type { RouteProps } from './seams/types.ts'
 
 /**
- * The room types with their player panels: chat (WP 2.6) and the map room (WP 5.5). Frozen, so
- * shared safely (ARC-2).
+ * The room types with their player panels: chat (WP 2.6), the map room (WP 5.5) and the umpire
+ * room (WP 6.4). Frozen, so shared safely (ARC-2).
  */
 const ROOM_TYPES: ReactRoomTypeRegistry = withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {
   chat: { playerComponent: ChatPanel },
   map: { playerComponent: MapPanel },
+  umpire: { playerComponent: UmpirePanel },
 })
 
 export interface AppProps {
@@ -72,7 +74,9 @@ export function App(props: AppProps) {
       <ToastProvider>
         <MapTilesProvider tiles={props.tiles}>
           <WorldDraftProvider storage={props.worldDrafts}>
-            <AppRoutes {...props} />
+            <ChunkBoundary what="this page">
+              <AppRoutes {...props} />
+            </ChunkBoundary>
           </WorldDraftProvider>
         </MapTilesProvider>
       </ToastProvider>

@@ -26,7 +26,7 @@
 //    to turn 1 again;
 // 6. reset removes everything (ADM-15), the templates node, the turn state and the map room
 //    included.
-import { INITIAL_GAME_STATE, LIMITS, nodeName } from '@wrx/schemas'
+import { INITIAL_GAME_STATE, LIMITS, nodeName, withUmpireRoom } from '@wrx/schemas'
 import type { DesignFile, Template } from '@wrx/schemas'
 import {
   ROOM,
@@ -39,7 +39,7 @@ import {
 } from '@wrx/schemas/fixtures'
 import type { Endpoint, Outcome, Session, Transport, TransportError } from '@wrx/transport'
 import { CLOSED_SIDE_CHANNELS, err } from '@wrx/transport'
-import { createSessionStore } from '@wrx/domain'
+import { accessOf, createSessionStore, effectiveAccess } from '@wrx/domain'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AdminOps,
@@ -1018,6 +1018,98 @@ export function definePublishIntegration(backend: PublishBackend): void {
         expect((await apply(again)).ok).toBe(true)
         expect(await turnState()).toEqual([INITIAL_GAME_STATE])
       })
+
+      afterAll(closeAll)
+    })
+
+    describe('5d. the umpire room (WP 6.4)', () => {
+      // Step 5c's design with its umpire room, and a White Force role that writes (White Cell
+      // is an observer since step 3): a new role, so not structural by itself (§3 rule 8).
+      const design = (): DesignFile => {
+        const base = withSampleMapRoom(templatedThirdDesign())
+        const withWriter: DesignFile = {
+          ...base,
+          roles: [
+            ...base.roles,
+            {
+              schemaVersion: 1,
+              id: tid('white-two'),
+              loginName: 'white-two',
+              name: 'White Cell 2',
+              forceId: tid('white'),
+              isObserver: false,
+              order: 9,
+            },
+          ],
+        }
+        return withUmpireRoom(withWriter, () => ROOM.umpire)
+      }
+
+      it('publishing creates it for the White Force only: writers post, its observers read, nobody else joins (§3 rule 19, PD8)', async () => {
+        const added = await plan(design())
+        expect(added.steps.map((s) => s.id)).toContain(`room:${ROOM.umpire}`)
+        expect((await apply(added)).ok).toBe(true)
+        const config = must(await theOps().session.muc.getRoomConfig(room(ROOM.umpire)), 'config')
+        expect(config).toMatchObject({ membersOnly: true, moderated: true, archive: true })
+        const matrix = effectiveAccess(design())
+        const seen = { write: 0, read: 0, none: 0 }
+        for (const role of design().roles) {
+          const access = accessOf(matrix, ROOM.umpire, role.id)
+          seen[access]++
+          if (access === 'write') {
+            expect(await postResult(role.loginName, ROOM.umpire), role.loginName).toMatchObject({
+              role: 'participant',
+              posted: 'ok',
+            })
+          } else if (access === 'read') {
+            await expectReadOnly(role.loginName, ROOM.umpire)
+          } else {
+            const result = await postResult(role.loginName, ROOM.umpire)
+            expect(result.joined?.condition, role.loginName).toBe('registration-required')
+          }
+        }
+        // The design has a White Force writer, a White Force observer and players.
+        expect(seen.write).toBeGreaterThan(0)
+        expect(seen.read).toBeGreaterThan(0)
+        expect(seen.none).toBeGreaterThan(0)
+        await closeAll()
+        expect((await plan(design())).steps).toEqual([])
+      })
+
+      it('a White Force writer’s proposal near 500 KB reaches the admin through MAM (PY-8, PLY-53)', async () => {
+        const matrix = effectiveAccess(design())
+        const writer = design().roles.find((r) => accessOf(matrix, ROOM.umpire, r.id) === 'write')
+        if (writer === undefined) throw new Error('no White Force writer')
+        const base = Object.values(sampleWorldState().assets)[0]
+        if (base === undefined) throw new Error('fixture')
+        const assets = Object.fromEntries(
+          Array.from({ length: 1_600 }, (_, i) => {
+            const id = `a0000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`
+            return [id, { ...base, id, title: `Unit ${i}` }]
+          }),
+        )
+        const body = JSON.stringify({
+          type: 'world-proposal',
+          schemaVersion: 1,
+          content: { state: { turn: 1, assets }, summary: `Proposal ${run}` },
+        })
+        expect(body.length).toBeGreaterThan(400_000)
+        const session = await login(writer.loginName)
+        must(await session.muc.join(room(ROOM.umpire), writer.loginName), 'join')
+        const sent = must(
+          await session.muc.send(room(ROOM.umpire), body, {
+            maxBytes: LIMITS.worldStateStanzaBytes,
+          }),
+          'post the proposal',
+        )
+        const admin = theOps().session
+        must(await admin.muc.join(room(ROOM.umpire), 'admin'), 'admin joins')
+        const page = must(await admin.mam.queryRoom(room(ROOM.umpire), { max: 1 }), 'MAM')
+        expect(page.messages.at(-1)?.stanzaId).toBe(sent.stanzaId)
+        expect(page.messages.at(-1)?.body).toBe(body)
+        must(await admin.muc.leave(room(ROOM.umpire)), 'admin leaves')
+        await closeAll()
+      }, 120_000)
 
       afterAll(closeAll)
     })

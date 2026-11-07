@@ -2,6 +2,7 @@
 // and shared headers (PLY-43, PLY-45), local wall-clock times, links found in plain text
 // (PLY-14), and the composer's size check against the stanza cap (PLY-53). No React, no store.
 import { fitsInStanza } from '@wrx/domain'
+import type { WorldState } from '@wrx/schemas'
 import { LIMITS } from '@wrx/schemas'
 import type { TemplateCardView } from '../templates/card.ts'
 
@@ -36,6 +37,14 @@ export interface ChatMessage {
    * the sender its template now (shown as a card).
    */
   readonly warning?: string | undefined
+  /** A White Force proposal in the umpire room (PY-8), shown as a card (WP 6.4). */
+  readonly proposal?: ProposalView | undefined
+}
+
+/** A proposal's card: what it says it changes, and the state it proposes (PY-8). */
+export interface ProposalView {
+  readonly summary: string
+  readonly state: WorldState
 }
 
 /** A row of the list: one message, with what is drawn above it. */

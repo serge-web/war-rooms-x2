@@ -12,6 +12,7 @@ import {
   LIMITS,
   MAP_ROOM_TYPE,
   SINGLETON_NODES,
+  UMPIRE_ROOM_TYPE,
   checkItemSize,
   chatRoomConfigReader,
   parseDocument,
@@ -30,6 +31,7 @@ import type {
   Room,
   Template,
   TemplateValue,
+  WorldProposalContent,
   WorldState,
 } from '@wrx/schemas'
 import { checkTemplatedMessage, createTemplateValidator, templatesFor } from '@wrx/templates'
@@ -390,10 +392,14 @@ export interface SessionStore {
   watchRoom(roomId: string): Promise<DomainResult<RoomWatch>>
   /** Pages one MAM page further back (PLY-49). Concurrent calls share one query. */
   loadOlder(roomId: string): Promise<DomainResult<{ added: number; complete: boolean }>>
-  /** Posts a chat message. On refusal the text comes back in the error (PLY-33). */
+  /**
+   * Posts a chat message. On refusal the text comes back in the error (PLY-33) and is kept as the
+   * room's unsent text, unless `options.quiet` (a script's send, WP 6.4: not the composer's).
+   */
   sendMessage(
     roomId: string,
     text: string,
+    options?: SendOptions,
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }>
   /**
    * Posts a templated message (TPL-3) after the receiver's own check, run on this session as the
@@ -404,7 +410,17 @@ export interface SessionStore {
     roomId: string,
     templateId: string,
     values: Readonly<Record<string, TemplateValue>>,
+    options?: SendOptions,
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }>
+  /**
+   * Posts a White Force proposal to the umpire room (PD6, PY-8): a White Force role that is not
+   * an observer only, checked against the proposal schema and the 500 KB cap (PLY-53) before it
+   * is sent. Not paused in adjudication: the White Force is exempt (PLY-56).
+   */
+  sendProposal(
+    roomId: string,
+    proposal: WorldProposalContent,
+  ): Promise<DomainResult<{ stanzaId: string }>>
   /** Tries a closed or withdrawn room once more, on the user's request. */
   rejoinRoom(roomId: string): Promise<DomainResult<Joined>>
   /**
@@ -1560,6 +1576,19 @@ class Store implements SessionStore {
       }
       return { ...base, kind: 'unreadable', reason: `not a ${definition.type} message` }
     }
+    // PY-8: a proposal counts only from the admin or a White Force role that is not an observer
+    // (PD6: the roles that may post one; its observers are read-only, which the server enforces
+    // only through the vault, Phase 6 review). Its type already keeps it out of every other room.
+    if (parsed.value.type === 'world-proposal' && !base.sender.isAdmin) {
+      if (!this.isWhiteForceWriter(base.sender.loginName)) {
+        this.logger.warn('Ignoring a proposal not from the White Force', {
+          room: entry.roomId,
+          stanzaId: message.stanzaId,
+          from: base.sender.jid,
+        })
+        return { ...base, kind: 'unreadable', reason: 'not from the White Force' }
+      }
+    }
     // PLY-58: only the admin's world states count; anyone else's is ignored, and logged.
     if (parsed.value.type === 'world-state' && !base.sender.isAdmin) {
       this.logger.warn('Ignoring a world state not from the admin', {
@@ -1569,6 +1598,15 @@ class Store implements SessionStore {
       })
     }
     return { ...base, kind: 'message', body: parsed.value }
+  }
+
+  /** Whether a login name is a White Force role's (the umpire flag on its force), not an observer. */
+  private isWhiteForceWriter(loginName: string | undefined): boolean {
+    if (loginName === undefined) return false
+    const role = this.collection('role').find((r) => r.loginName === loginName)
+    return (
+      role !== undefined && !role.isObserver && this.docOf('force', role.forceId)?.isUmpire === true
+    )
   }
 
   /** Identity from the occupant JID only, never the body (§3 rule 3). */
@@ -1854,6 +1892,62 @@ class Store implements SessionStore {
     return domainOk({ stanzaId: sent.value.stanzaId })
   }
 
+  async sendProposal(
+    roomId: string,
+    proposal: WorldProposalContent,
+  ): Promise<DomainResult<{ stanzaId: string }>> {
+    if (this.isEnded()) return domainErr('session-ended', 'the session has ended')
+    const role = this.ownRole()
+    const force = role === undefined ? undefined : this.docOf('force', role.forceId)
+    if (this.identity.isAdmin || role === undefined || role.isObserver || !force?.isUmpire) {
+      return domainErr(
+        'not-permitted',
+        'only White Force roles that are not observers post proposals (PD6)',
+      )
+    }
+    const entry = this.roomEntries.get(roomId)
+    if (entry?.status !== 'joined' || entry.joined === undefined) {
+      return domainErr('not-joined', 'the room is not joined')
+    }
+    if (this.docOf('room', roomId)?.roomType !== UMPIRE_ROOM_TYPE) {
+      return domainErr('invalid', 'proposals go to the umpire room only (PY-8)')
+    }
+    if (entry.joined.role === 'visitor' || entry.joined.role === 'none') {
+      return domainErr('not-permitted', 'read-only in this room (PLY-12)')
+    }
+    const candidate = parseDocument('message', {
+      type: 'world-proposal',
+      schemaVersion: 1,
+      content: proposal,
+    })
+    if (!candidate.ok || candidate.value.type !== 'world-proposal') {
+      return domainErr(
+        'invalid',
+        candidate.ok ? 'not a proposal' : `not a valid proposal: ${candidate.error.message}`,
+      )
+    }
+    const json = JSON.stringify(candidate.value)
+    // PLY-53: a proposal carries a world state, so it has the map room's cap.
+    const size = fitsWorldStateStanza(json)
+    if (!size.ok) {
+      return domainErr(
+        'too-large',
+        `the proposal is ${size.bytes} bytes; the limit is ${size.limitBytes}`,
+      )
+    }
+    const sent = await this.session.muc.send(entry.jid, json, {
+      maxBytes: LIMITS.worldStateStanzaBytes,
+    })
+    if (!sent.ok) {
+      const error = fromTransport(sent.error, 'Posting the proposal')
+      return {
+        ok: false,
+        error: error.code === 'access-withdrawn' ? { ...error, code: 'not-permitted' } : error,
+      }
+    }
+    return domainOk({ stanzaId: sent.value.stanzaId })
+  }
+
   // ---- Operations -------------------------------------------------------------------------
 
   async watchRoom(roomId: string): Promise<DomainResult<RoomWatch>> {
@@ -1923,11 +2017,12 @@ class Store implements SessionStore {
   async sendMessage(
     roomId: string,
     text: string,
+    options: SendOptions = {},
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: SendError }> {
     const entry = this.roomEntries.get(roomId)
     const refuse = (error: DomainError) => {
       const sendError: SendError = { ...error, unsentText: text }
-      if (entry !== undefined) {
+      if (entry !== undefined && options.quiet !== true) {
         entry.unsent = { text, error }
         this.roomChanged(entry)
       }
@@ -1983,6 +2078,7 @@ class Store implements SessionStore {
     roomId: string,
     templateId: string,
     values: Readonly<Record<string, TemplateValue>>,
+    options: SendOptions = {},
   ): Promise<{ ok: true; value: { stanzaId: string } } | { ok: false; error: TemplateSendError }> {
     const entry = this.roomEntries.get(roomId)
     const refuse = (error: DomainError, check?: TemplateCheck) => {
@@ -1992,7 +2088,7 @@ class Store implements SessionStore {
         unsentValues: values,
         ...(check === undefined ? {} : { check }),
       }
-      if (entry !== undefined) {
+      if (entry !== undefined && options.quiet !== true) {
         entry.unsentTemplate = { templateId, values, error: sendError }
         this.roomChanged(entry)
       }
@@ -2288,6 +2384,11 @@ function endedError(reason: SessionEndReason): DomainError {
 /** How the admin's messages are labelled: the umpire, in the White Force (SC-5). */
 export const UMPIRE_NAME = 'Umpire'
 
+/** How a send is made: `quiet`, for a script's send, keeps a refused text out of the composer. */
+export interface SendOptions {
+  readonly quiet?: boolean
+}
+
 /** The admin's key in `authors()`: the reserved account name, never a login name. */
 export const ADMIN_AUTHOR_ID = 'admin'
 
@@ -2310,4 +2411,22 @@ export function canEditObjectives(who: {
   readonly isObserver: boolean
 }): boolean {
   return who.isAdmin || (who.isUmpire && !who.isObserver)
+}
+
+// WP 6.3 (SRD Annex C PD4, PY-6): one rule for the script panel and the runner's bridge.
+/** The roles a browser script runs as (PD4). */
+export type ScriptRole = 'admin' | 'white-force'
+
+/**
+ * The role this session's scripts run as, if any (PD4, PY-6): the admin, or a White Force role
+ * that is not an observer. Observer roles are read-only and their logins are handed out more
+ * widely (§3, ADM-37), so they get no scripts; nor does an anonymous session. A preview as a
+ * role reports the role but reads through the admin's session: the host leaves it out.
+ */
+export function scriptRoleOf(
+  me: Pick<Me, 'identity' | 'isUmpire' | 'isObserver' | 'role'>,
+): ScriptRole | undefined {
+  if (me.identity.anonymous) return undefined
+  if (me.identity.isAdmin) return 'admin'
+  return me.isUmpire && me.role !== undefined && !me.isObserver ? 'white-force' : undefined
 }

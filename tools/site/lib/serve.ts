@@ -8,6 +8,12 @@ import { extname, join, normalize, sep } from 'node:path'
 const TYPES: Readonly<Record<string, string>> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  // The Python runner (WP 6.2): Pyodide's loader, interpreter, standard library and wheels, as
+  // GitHub Pages serves them (streaming WebAssembly compilation needs application/wasm).
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.wasm': 'application/wasm',
+  '.zip': 'application/zip',
+  '.whl': 'application/zip',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json',
   '.svg': 'image/svg+xml',

@@ -32,6 +32,12 @@ afterEach(cleanup)
 
 const NOW = new Date('2026-10-25T09:30:00.000Z')
 
+/** The ids the draft gives the rooms it adds: the map room, then the umpire room (§3 rule 18). */
+function fixedRoomIds(): () => string {
+  const ids: string[] = [ROOM.map, ROOM.umpire]
+  return () => ids.shift() ?? 'unused'
+}
+
 function registry(): ReactRoomTypeRegistry {
   return withSlots<PlayerPanel, AdminEditor>(defaultRoomTypes(), {})
 }
@@ -47,7 +53,7 @@ function setup({ design = sampleDesign(), draft, section = 'game', props = {} }:
   const store = createDraftStore({
     persistence: memoryDraftPersistence(),
     // The map room the draft adds has the fixture's id, so tests can name it (§3 rule 18).
-    initial: () => draft ?? draftFromDesign(design, {}, () => ROOM.map),
+    initial: () => draft ?? draftFromDesign(design, {}, fixedRoomIds()),
   })
   const user = userEvent.setup()
   render(
@@ -517,6 +523,7 @@ describe('reordering (ADM-8)', () => {
       tid('red-hq'),
       tid('negotiation'),
       ROOM.map,
+      ROOM.umpire,
     ])
     expect(document.body.textContent).toContain('Moving Blue HQ cancelled.')
   })
@@ -529,6 +536,7 @@ describe('reordering (ADM-8)', () => {
       'negotiation:1',
       'red-hq:2',
       'map:3',
+      'umpire:4',
     ])
     expect(screen.getByRole('button', { name: 'Move Blue HQ up' })).toHaveProperty('disabled', true)
 

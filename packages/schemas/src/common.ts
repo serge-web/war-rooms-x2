@@ -21,6 +21,8 @@ export const LIMITS = Object.freeze({
    * about 2,500 assets in plain JSON. Every other message keeps `messageStanzaBytes`.
    */
   worldStateStanzaBytes: 500_000,
+  /** A White Force proposal's summary, in characters (PY-8); the proposal keeps the 500 KB cap. */
+  proposalSummaryChars: 2_000,
   /** Most assets one world state may hold; the stanza cap is reached first in practice. */
   worldStateAssets: 5_000,
   /** An asset's category and state, in characters (§3 rule 17). */
@@ -37,6 +39,17 @@ export const LIMITS = Object.freeze({
   briefingChars: 20_000,
   objectivesChars: 50_000,
   slugChars: 64,
+  /**
+   * Cap on one XEP-0049 private-storage value, as UTF-8 after XML escaping (WP 6.3): the
+   * reference server ends a stream whose stanza is over 262,144 bytes (`max_stanza_size`), so
+   * the transports refuse a larger value with `too-large` before sending. The script store
+   * (PY-7) holds every script of an account in one value.
+   */
+  privateValueBytes: 200_000,
+  /** A script run's time limit when none is set, in seconds (PY-10; the runner's default). */
+  scriptRunDefaultSeconds: 30,
+  /** The longest time limit a script run may have, in seconds (PY-10). */
+  scriptRunMaxSeconds: 600,
 })
 
 /**

@@ -3,7 +3,14 @@
 // stays the default (PLY-21). Tests load it into the running mock with `importDatabase`, and the
 // admin's draft is the same design (`scaleDesign`). Deterministic: the same options give the same
 // state, so measurements are comparable between runs. Every password is a DEMO PASSWORD (NFR-6).
-import { DESIGN_FILE_VERSION, MAP_ROOM_TYPE, mapParticipants } from '@wrx/schemas'
+import {
+  DESIGN_FILE_VERSION,
+  MAP_ROOM_TYPE,
+  UMPIRE_ROOM_NAME,
+  UMPIRE_ROOM_TYPE,
+  mapParticipants,
+  umpireParticipants,
+} from '@wrx/schemas'
 import type { ChatRoomConfig, DesignFile, Template, WorldAsset, WorldState } from '@wrx/schemas'
 import { sampleTemplates } from '../../schemas/src/fixtures.ts'
 import { stateFromDesign } from './seed.ts'
@@ -221,6 +228,16 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
     config: {},
     order: rooms.length,
   })
+  // And its umpire room (§3 rule 19, PD8), likewise.
+  rooms.push({
+    schemaVersion: 1,
+    id: scaleId('umpire'),
+    name: UMPIRE_ROOM_NAME,
+    roomType: UMPIRE_ROOM_TYPE,
+    participants: umpireParticipants({ forces, roles, rooms }),
+    config: {},
+    order: rooms.length,
+  })
 
   return {
     format: 'wrx1-design',
@@ -230,7 +247,7 @@ export function scaleDesign(options: ScaleOptions = {}): DesignFile {
       schemaVersion: 1,
       name: 'Scale exercise',
       description:
-        'The NFR-11 scale fixture: 50 roles, 30 rooms and the map room, 10,000 messages in one room.',
+        'The NFR-11 scale fixture: 50 roles, 30 rooms with the map and umpire rooms, 10,000 messages in one room.',
       briefing: '## Briefing\n\nA generated game for measuring the client at scale.',
       designVersion: 1,
       theme: { tokens: { primary: '#1d4ed8', fontFamily: 'sans' } },

@@ -41,6 +41,29 @@ War Rooms X1 is a browser client for running a wargame over an XMPP server (ejab
 
 Rooms can take structured messages: the admin builds forms in the design editor, offers them per room to forces and roles, and players send them as cards. Every client checks each message against its template; a template locks once a published room offers it, and changes go through a copy. See the site's message templates page.
 
+### The Python API (Phase 6, after v1)
+
+Gate G6, Nov 6, 2026 (SRD Annex C). The umpire team, the admin and the White Force's roles that are not observers, write and run short Python scripts in the browser, with exactly their role's rights. Players and observers have none of it. See the site's pages "Umpires and Python scripts" and "Scripting for umpires", and `docs/python-sdk.md`.
+
+- **The SDK, `wrx`.** Typed models generated from the game's JSON Schemas; reads of the game, its turn, forces, roles, rooms and messages, the world state and objectives, with pandas tables; sending text and templated messages; reacting to new messages and turn changes; the admin's world-state draft; White Force proposals.
+- **The Scripts panel**, a workspace tab: scripts kept with the login on the server, an editor, Run and Stop, a time limit, the output and errors, export and import as files.
+- **The umpires room**, one per game, fixed like the map room, for the admin and the White Force: White Force proposals arrive there as cards the admin loads into the draft after a change summary.
+- **The admin's scripts** change the draft on top of hand edits; nothing reaches players until the admin publishes, unless the admin turns on **Publish without review** for a script, after a confirmation.
+- **In the build:** Python runs in a locked-down worker from files in the build (`py/`, about 23 MB, checked by sha256), loaded only when the Scripts panel first opens; the page's start-up code does not carry it. Python is ready, with the SDK loaded, about 3 s after the panel opens.
+- **A fresh Python for every run** (the owner's decision of Nov 6, 2026, on the security review's M1): nothing one run leaves in the interpreter reaches the next. The next run's Python starts in the background as soon as a run ends, so a run a few seconds after the last starts at once; one straight after waits about 3 s; a run that makes a pandas table pays pandas' import, about 3.5 s, every time.
+- **Accessibility (WP 6.5):** every inline form and confirmation of the panel and the umpires room now gives focus back when it closes.
+- **Security review fixes (WP 6.5):** a script can no longer take a hidden world state ("Look further back") for an empty map, and publishing without review refuses to publish against one; proposals count only from White Force roles that are not observers.
+
+**Known limits of the Python API**
+
+- A script runs only while its tab is open (PY-11); long-running automated players wait for a native runner.
+- Nothing limits how many messages, proposals or calls a run makes, beyond its time limit and the server's per-login shaping; a handler that answers every message can fill a room (accepted by the owner, Nov 6, 2026).
+- Publishing without review publishes the whole draft, including unreviewed hand edits (accepted by the owner, Nov 6, 2026; its confirmation says so).
+- Everyone sharing a role's login shares its scripts; another session's save replaces the open script within 5 s when it has no unsaved edits.
+- Events a script does not take in time are dropped after 1,000, without a warning.
+- Chromium only was tested here; WebKit runs in CI.
+- Blog snapshots carry Python only for posts about it (`python: true` in the post); others say Python is not in that build.
+
 ### Supported browsers
 
 Decided in WP 0.4, and on Nov 3, 2026 for Firefox:
@@ -62,6 +85,12 @@ The reference deployment is one container: the official ejabberd 26.09 image, pi
 2. Get a server certificate from the organisation's CA, or make a small internal CA with `ops/ca/make-internal-ca.sh` and issue one with `ops/ca/issue-server-cert.sh`. Browsers must trust the CA.
 3. On the host, `ops/offline-install.sh` checks the bundle, installs it, starts the server, creates the admin account and runs the deployment checks. Running it again with a newer bundle upgrades, after a backup.
 4. `ops/backup.sh` and `ops/restore.sh` save and restore everything on the server while it runs.
+
+**The Python runner in the build (after v1; SRD Annex C, WP 6.2).** Builds from Phase 6 on carry the browser runner for Python scripts in `py/` (about 23 MB: Pyodide and the packages the SDK uses), loaded only when the Scripts panel is first opened. For it, the client's Content-Security-Policy, for every role, adds `'wasm-unsafe-eval'` to `script-src` and `blob:` to `worker-src` (`eval` stays refused), and a server must send `.wasm` as `application/wasm`. The reference configuration does both; another host updates its header and MIME types as `deploy/README.md` gives them.
+
+**Python scripts for umpires (after v1; SRD Annex C, WP 6.3).** The admin, in the game view, and White Force roles that are not observers have a Scripts panel: a list of the login's scripts, an editor, Run and Stop with a time limit, and the output and errors. Scripts are kept in the login's private storage on the server (at most 200,000 bytes per login), shared by everyone using that login, and export and import as files; importing never runs them. An admin script can fill the world-state draft, which is published only from the map room as before.
+
+**Acting and adjudicating (after v1; SRD Annex C, WP 6.4).** Scripts send text and templated messages to the rooms their role writes in (paused in adjudication for roles outside the White Force, as the message entry is), and react to new messages and turn changes while they run. Every game gains an **umpires room**, fixed like the map room, for the admin and the White Force only: the next publish of an existing game creates it, which counts as a structural change and resets players' layouts once. White Force scripts post proposed world states there; the admin loads one into the world-state draft after its change summary. An admin script's changes now land on top of the draft, keeping edits made by hand. Per admin script, the admin may turn on **Publish without review**, after a confirmation: a clean run that changes the draft then publishes it at once, and each such publish is recorded in the Scripts panel. The bridge protocol is version 2; scripts that used the interim `wrx_draft` module call `game.write_draft(state)` instead. Pull request previews of the site include Python only when the pull request changes it.
 
 The full guide, with the checklist for the first install on real hardware, is `ops/README.md`. The real-hardware run is still to be done, and the certificate authority is chosen per install: the organisation's own CA or a small internal one, whichever suits each site's security model (product owner, Nov 4, 2026).
 

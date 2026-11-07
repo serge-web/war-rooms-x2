@@ -26,6 +26,7 @@ import { s12 } from './checks/s12-live-changes.ts'
 import { s13 } from './checks/s13-absent-role-change.ts'
 import { s15 } from './checks/s15-item-order.ts'
 import { t01 } from './checks/t01-templates.ts'
+import { u01 } from './checks/u01-umpire-room.ts'
 import { w01 } from './checks/w01-world-state.ts'
 import type { Ctx } from './context.ts'
 import { bare, makeFixture, provision, teardown } from './fixture.ts'
@@ -135,6 +136,7 @@ export function defineContractSuite(backend: ContractBackend, options: SuiteOpti
     s15(ctx)
     t01(ctx)
     w01(ctx)
+    u01(ctx)
     errors(ctx)
     ordering(ctx)
   })

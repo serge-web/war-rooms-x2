@@ -22,8 +22,8 @@ const BUSY_LIST = `[role="region"][aria-label="Messages in ${SCALE_BUSY_ROOM_NAM
 
 async function asUmpire(page: Page): Promise<void> {
   await logIn(page, 'admin', 'demo-admin')
-  // The 30 rooms and the map room (§3 rule 18).
-  await expect(roomTabs(page)).toHaveCount(31, { timeout: 30_000 })
+  // The 30 rooms, the map room and the umpire room (§3 rules 18 and 19).
+  await expect(roomTabs(page)).toHaveCount(32, { timeout: 30_000 })
 }
 
 /**
@@ -187,10 +187,10 @@ test('NFR-11: the access matrix and the publish plan stay usable at 50 roles and
     page,
     'access-matrix',
     { click: 'nav[aria-label="Admin sections"] button', text: 'Access' },
-    // The 30 rooms and the map room every draft has (§3 rule 18).
-    { selector: 'table.wrx-admin-matrix tbody tr', count: 31 },
+    // The 30 rooms, and the map and umpire rooms every draft has (§3 rules 18 and 19).
+    { selector: 'table.wrx-admin-matrix tbody tr', count: 32 },
   )
-  await expect(page.locator('table.wrx-admin-matrix tbody tr')).toHaveCount(31)
+  await expect(page.locator('table.wrx-admin-matrix tbody tr')).toHaveCount(32)
   await expect(page.locator('table.wrx-admin-matrix thead tr').nth(1).locator('th')).toHaveCount(50)
 
   // Typing in the editor at this size: each keystroke re-validates the draft and the matrix.

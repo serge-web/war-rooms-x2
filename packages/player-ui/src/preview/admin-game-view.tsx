@@ -11,6 +11,7 @@ import { UMPIRE_NAME } from '@wrx/domain'
 import { SessionStoreProvider, useForces, useMe, useRoles, useSessionStore } from '@wrx/hooks'
 import { Banner } from '@wrx/ui'
 import { useId, useMemo, useState } from 'react'
+import { NoScriptsHere } from '../scripts/index.ts'
 import { Shell } from '../shell.tsx'
 import type { ShellProps } from '../shell.tsx'
 import { previewAsRole } from './preview-store.ts'
@@ -79,17 +80,24 @@ export function AdminGameView(props: Omit<ShellProps, 'headerItems' | 'notice' |
   return (
     // A fresh subtree per previewed role: its workspace restores that role's layout (PLY-5).
     <SessionStoreProvider key={previewed.id} store={preview}>
-      <Shell
-        {...props}
-        role={{ name: UMPIRE_NAME, forceName: white?.name, forceColour: white?.colour }}
-        headerItems={selector}
-        notice={
-          <Banner className="wrx-preview-notice" tone="info" title={`Viewing as ${previewed.name}`}>
-            You see exactly this role’s rooms, layout, themes and objectives. Anything you post is
-            sent from your admin login and shown as from the {UMPIRE_NAME}, not from this role.
-          </Banner>
-        }
-      />
+      {/* WP 6.3: a preview runs no scripts; they would run as the admin under the role's name. */}
+      <NoScriptsHere>
+        <Shell
+          {...props}
+          role={{ name: UMPIRE_NAME, forceName: white?.name, forceColour: white?.colour }}
+          headerItems={selector}
+          notice={
+            <Banner
+              className="wrx-preview-notice"
+              tone="info"
+              title={`Viewing as ${previewed.name}`}
+            >
+              You see exactly this role’s rooms, layout, themes and objectives. Anything you post is
+              sent from your admin login and shown as from the {UMPIRE_NAME}, not from this role.
+            </Banner>
+          }
+        />
+      </NoScriptsHere>
     </SessionStoreProvider>
   )
 }

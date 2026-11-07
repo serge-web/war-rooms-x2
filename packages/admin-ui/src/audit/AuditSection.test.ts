@@ -185,7 +185,9 @@ describe('the Audit section in the admin app, on a mock server', () => {
     if (!created.ok) throw new Error('vault')
     ops.useVault(created.value)
     const book = new CredentialsBook('demo')
-    const prepared = await preparePublish(ops, withSampleMapRoom(sampleDesign()), {
+    // The design as the draft holds it: with its map and umpire rooms (§3 rule 18).
+    const design = draftFromDesign(withSampleMapRoom(sampleDesign())).design
+    const prepared = await preparePublish(ops, design, {
       vault: created.value,
     })
     if (!prepared.ok) throw new Error('plan')
@@ -205,7 +207,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
 
     const store = createDraftStore({
       persistence: memoryDraftPersistence(),
-      initial: () => draftFromDesign(withSampleMapRoom(sampleDesign())),
+      initial: () => draftFromDesign(design),
     })
     render(
       createElement(AdminApp, {
@@ -226,7 +228,7 @@ describe('the Audit section in the admin app, on a mock server', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Unlock' }))
     await waitFor(
       () => {
-        expect(screen.getByText(/Voice checked through 6 role logins/)).toBeTruthy()
+        expect(screen.getByText(/Voice checked through 7 role logins/)).toBeTruthy()
       },
       { timeout: 20_000 },
     )

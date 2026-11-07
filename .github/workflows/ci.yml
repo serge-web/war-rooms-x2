@@ -32,6 +32,17 @@ jobs:
         run: pnpm check:trace
       - name: Data dictionary is current (DOC-3)
         run: pnpm check:dictionary
+      - name: JSON Schema export is current (D26, ARC-6)
+        run: pnpm check:json-schema
+      # The Python SDK (WP 6.1, Annex C PY-1): its generated models and fixtures are current and
+      # its tests pass. Not in `pnpm check`, which must run on machines without Python.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: python/requirements-dev.txt
+      - name: Python SDK models, fixtures and tests (PY-1 to PY-3)
+        run: pnpm check:python
       - name: Blog posts' front matter, gate links and deny-list (DOC-24 to DOC-26)
         run: pnpm check:blog
       - name: Install Chromium for the Mermaid check
@@ -50,6 +61,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - run: pnpm build
       - name: Bundle has no external references (NFR-7, DOC-11)
         run: pnpm check:bundle
@@ -121,6 +139,13 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - run: pnpm --filter @wrx/web exec playwright install --with-deps ${{ matrix.browser }}
       # Test failures here are warnings, not a red job (product owner, Nov 3, 2026): each failed
       # test becomes a warning annotation and a line in the job summary, and the job passes. A run

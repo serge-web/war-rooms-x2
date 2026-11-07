@@ -1,0 +1,36 @@
+# The Python SDK's development environment (WP 6.1): `pnpm check:python` installs it into
+# python/.venv. Every version is pinned, the formatters too, so the generated models are the
+# same on every machine. pydantic matches Pyodide 314.0.7's (2.12.5, pydantic_core 2.41.5) and
+# pandas its 3.0.2 (spike S17).
+pydantic==2.12.5
+pydantic_core==2.41.5
+annotated-types==0.8.0
+typing-inspection==0.4.5
+typing_extensions==4.16.0
+pandas==3.0.2
+numpy==2.5.4
+python-dateutil==4.0.0
+tzdata==2026.6
+pytest==9.2.0
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.7.0
+Pygments==2.21.0
+# The model generator and its formatters (tools/python/generate_models.py).
+datamodel-code-generator==0.90.0
+argcomplete==3.7.2
+black==26.10.1
+click==8.5.0
+genson==1.4.0
+inflect==7.6.0
+isort==8.0.1
+jaraco.functools==4.6.0
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+more-itertools==11.2.1
+mypy_extensions==1.2.0
+pathspec==1.1.1
+platformdirs==4.14.5
+pytokens==0.4.1
+PyYAML==6.0.3
+typeguard==4.6.0

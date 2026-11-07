@@ -87,7 +87,7 @@ describe('Workspace', () => {
   it('shows one tab per visible room in the PLY-40 columns, and the panels in the strip', async () => {
     await mount()
     expect(columns()).toEqual([['blue-hq'], ['red-hq'], ['negotiation']])
-    expect(stripTabs()).toEqual(['Game info', 'Online'])
+    expect(stripTabs()).toEqual(['Game info', 'Online', 'Scripts'])
     // Each room panel is the placeholder until WP 2.6, inside the room's theme scope.
     const panel = screen.getByRole('region', { name: 'blue-hq' })
     expect(panel.hasAttribute('data-wrx-theme')).toBe(true)
@@ -96,6 +96,15 @@ describe('Workspace', () => {
     expect(within(panel).getByText(/not in this build yet/)).toBeTruthy()
   })
 
+  // PD4, PY-6 (WP 6.3): the Scripts panel is the White Force's, observers and players excepted.
+  it.each([
+    ['blue-co', false],
+    ['white-observer', false],
+    ['white-1', true],
+  ])('offers %s the Scripts panel: %s', async (roleId, offered) => {
+    await mount({}, { roleId })
+    expect(stripTabs().includes('Scripts')).toBe(offered)
+  })
   it('shows only the role’s rooms, read-only ones marked', async () => {
     await mount({}, { roleId: 'blue-observer' })
     expect(columns()).toEqual([['blue-hq']])
@@ -326,7 +335,7 @@ describe('Workspace', () => {
     const storage: LayoutStorage = memoryLayoutStorage([[KEY('white-1'), saved]])
     await mount({ storage })
     expect(columns()).toEqual([['blue-hq'], ['red-hq'], ['negotiation']])
-    expect(stripTabs()).toEqual(['Game info', 'Online'])
+    expect(stripTabs()).toEqual(['Game info', 'Online', 'Scripts'])
   })
 
   it('restores a saved layout of the same rooms, its panels kept where they were (D6)', async () => {
@@ -352,7 +361,7 @@ describe('Workspace', () => {
     const storage: LayoutStorage = memoryLayoutStorage([[KEY('white-1'), saved]])
     await mount({ storage })
     expect(columns()).toEqual([['red-hq', 'negotiation', 'Online'], ['blue-hq']])
-    expect(stripTabs()).toEqual(['Game info'])
+    expect(stripTabs()).toEqual(['Game info', 'Scripts'])
   })
 
   it('Reset layout restores the default for the current rooms (PLY-42)', async () => {

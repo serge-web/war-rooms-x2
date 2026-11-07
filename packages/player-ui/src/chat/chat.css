@@ -351,3 +351,44 @@
     width: 100%;
   }
 }
+
+/* A White Force proposal in the umpire room (PY-8; WP 6.4), and the admin's load confirmation. */
+.wrx-chat__proposal,
+.wrx-chat__proposal-load {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--wrx-border);
+  border-radius: 6px;
+  background: var(--wrx-surface);
+}
+
+.wrx-chat__proposal-load {
+  margin: 0.5rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.wrx-chat__proposal-load p {
+  margin: 0;
+}
+
+.wrx-chat__proposal-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.wrx-chat__proposal-meta {
+  margin: 0;
+  color: var(--wrx-muted);
+  font-size: 0.875rem;
+}
+
+.wrx-chat__proposal-actions {
+  display: flex;
+  gap: 0.5rem;
+}

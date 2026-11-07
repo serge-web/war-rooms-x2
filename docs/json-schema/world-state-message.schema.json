@@ -13,6 +13,17 @@
       "const": 1
     },
     "content": {
+      "$ref": "#/$defs/WorldState"
+    }
+  },
+  "required": [
+    "type",
+    "schemaVersion",
+    "content"
+  ],
+  "description": "A world-state message in the map room, posted by the admin only",
+  "$defs": {
+    "WorldState": {
       "type": "object",
       "properties": {
         "turn": {
@@ -29,81 +40,10 @@
             "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
           },
           "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-                "description": "The asset GUID; also its key in `assets` (§3 rules 1, 16)"
-              },
-              "forceId": {
-                "type": "string",
-                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-                "description": "The force that owns the asset"
-              },
-              "title": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 120,
-                "description": "Display name, e.g. \"1st Armoured Squadron\""
-              },
-              "category": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 60,
-                "description": "What kind of asset it is, e.g. \"armour\" or \"frigate\""
-              },
-              "sidc": {
-                "type": "string",
-                "pattern": "^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$",
-                "description": "MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)"
-              },
-              "lat": {
-                "type": "number",
-                "minimum": -90,
-                "maximum": 90,
-                "description": "Latitude, WGS 84 decimal degrees"
-              },
-              "lon": {
-                "type": "number",
-                "minimum": -180,
-                "maximum": 180,
-                "description": "Longitude, WGS 84 decimal degrees"
-              },
-              "state": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 60,
-                "description": "Its condition in words, e.g. \"operational\" or \"damaged\""
-              },
-              "health": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 100,
-                "description": "Health, 0 (destroyed) to 100 (full)"
-              },
-              "fuel": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 100,
-                "description": "Fuel, 0 (empty) to 100 (full)"
-              }
-            },
-            "required": [
-              "id",
-              "forceId",
-              "title",
-              "category",
-              "sidc",
-              "lat",
-              "lon",
-              "state",
-              "health",
-              "fuel"
-            ],
-            "description": "A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)"
+            "$ref": "#/$defs/WorldAsset"
           },
-          "description": "Every asset, keyed by its GUID; each key is its asset’s `id`"
+          "description": "Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it)",
+          "maxProperties": 5000
         }
       },
       "required": [
@@ -111,12 +51,81 @@
         "assets"
       ],
       "description": "The full world state: every asset with its position and status (D25)"
+    },
+    "WorldAsset": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The asset GUID; also its key in `assets` (§3 rules 1, 16)"
+        },
+        "forceId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "The force that owns the asset"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name, e.g. \"1st Armoured Squadron\""
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "What kind of asset it is, e.g. \"armour\" or \"frigate\""
+        },
+        "sidc": {
+          "type": "string",
+          "pattern": "^(?:[SGWIOE][PUAFNSHGWMDLJK*-][A-Z*-][APCDXF*-][A-Z0-9*-]{8}[A-Z*-]{3}|[0-9]{20}|[0-9]{30})$",
+          "description": "MIL-STD-2525/APP-6 symbol identification code (SIDC): 15 letter-based characters (2525C, APP-6 B/C) or 20 or 30 digits (2525D/E, APP-6 D)"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "description": "Latitude, WGS 84 decimal degrees"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "description": "Longitude, WGS 84 decimal degrees"
+        },
+        "state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Its condition in words, e.g. \"operational\" or \"damaged\""
+        },
+        "health": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Health, 0 (destroyed) to 100 (full)"
+        },
+        "fuel": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Fuel, 0 (empty) to 100 (full)"
+        }
+      },
+      "required": [
+        "id",
+        "forceId",
+        "title",
+        "category",
+        "sidc",
+        "lat",
+        "lon",
+        "state",
+        "health",
+        "fuel"
+      ],
+      "description": "A unit or platform on the map, with the fixed fields of v1 (§3 rule 17)"
     }
-  },
-  "required": [
-    "type",
-    "schemaVersion",
-    "content"
-  ],
-  "description": "A world-state message in the map room, posted by the admin only"
+  }
 }

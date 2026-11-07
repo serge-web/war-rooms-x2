@@ -276,7 +276,7 @@ A templated message.
 | `schemaVersion` | constant | yes | = 1 |  |
 | `content` | object | yes |  |  |
 | `content.templateId` | string | yes | pattern `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` | The template used |
-| `content.values` | map of any | yes |  | Field values by field name; pickers hold GUIDs, never names (TPL-8) |
+| `content.values` | map of any | yes | entries ≤ 100 | Field values by field name; pickers hold GUIDs, never names (TPL-8) |
 
 ## Map room config
 
@@ -306,7 +306,7 @@ A world-state message in the map room, posted by the admin only.
 | `schemaVersion` | constant | yes | = 1 |  |
 | `content` | object | yes |  | The full world state: every asset with its position and status (D25) |
 | `content.turn` | integer | yes | ≥ 1; ≤ 10000 | The turn this state belongs to |
-| `content.assets` | map of object | yes |  | Every asset, keyed by its GUID; each key is its asset’s `id` |
+| `content.assets` | map of object | yes | entries ≤ 5000 | Every asset, keyed by its GUID; each key is its asset’s `id` (JSON Schema cannot say so: zod and the Python SDK check it) |
 
 ## World-state asset
 
@@ -327,6 +327,32 @@ A unit or platform on the map, with the fixed fields of v1 (§3 rule 17).
 | `state` | string | yes | length ≥ 1; length ≤ 60 | Its condition in words, e.g. "operational" or "damaged" |
 | `health` | number | yes | ≥ 0; ≤ 100 | Health, 0 (destroyed) to 100 (full) |
 | `fuel` | number | yes | ≥ 0; ≤ 100 | Fuel, 0 (empty) to 100 (full) |
+
+## Umpire room config
+
+Umpire room config: nothing to set.
+
+- **Location:** The `config` field of the `umpire` room document; nothing to set, `{}` reads as version 1
+- **Access:** As the room document. The room’s participants are fixed: the White Force, plus a read entry for each White Force observer assigned rooms elsewhere (§3 rule 18).
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `schemaVersion` | constant | yes | = 1 |  |
+
+## White Force proposal message body
+
+A White Force proposal in the umpire room (PY-8).
+
+- **Location:** Body of a MUC groupchat message in the umpire room, up to 500,000 bytes as a stanza; carries a full world state and a summary
+- **Access:** The admin and the White Force read the umpire room; its roles that are not observers post. Clients accept it only in the umpire room and only from the admin or a White Force role; the admin may load it into the world-state draft (PY-8).
+
+| Field | Type | Required | Rules | Description |
+| --- | --- | --- | --- | --- |
+| `type` | constant | yes | = "world-proposal" |  |
+| `schemaVersion` | constant | yes | = 1 |  |
+| `content` | object | yes |  | A proposed world state and its summary |
+| `content.state` | object | yes |  | The proposed world state, in full (D25) |
+| `content.summary` | string | yes | length ≥ 1; length ≤ 2000 | What the proposal changes, in words, for the admin; plain text |
 
 ## Design file
 

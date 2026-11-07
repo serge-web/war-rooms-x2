@@ -257,8 +257,35 @@ describe('the Content-Security-Policy’s images (F7, WP 5.5)', () => {
     expect(imgSrc(contentSecurityPolicy(false, 'none'))).toBe("'self' data: blob:")
     // Never eval, whatever the tiles.
     for (const policy of [contentSecurityPolicy(false), contentSecurityPolicy(true)]) {
-      expect(policy).not.toContain('unsafe-eval')
-      expect(policy).toContain("script-src 'self';")
+      expect(policy).not.toMatch(/(^|\s)'unsafe-eval'/)
+      expect(policy).toContain("script-src 'self' 'wasm-unsafe-eval';")
+    }
+  })
+})
+
+describe('the Content-Security-Policy for the Python runner (Annex C PR3, WP 6.2)', () => {
+  const directive = (policy: string, name: string) =>
+    new RegExp(`(?:^|; )${name} ([^;]+)`).exec(policy)?.[1]
+  const every = (['demo', 'any', 'none'] as const).flatMap((tiles) => [
+    contentSecurityPolicy(false, tiles),
+    contentSecurityPolicy(true, tiles),
+  ])
+
+  it('is one policy for every role: WebAssembly and blob: workers, nothing more', () => {
+    for (const policy of every) {
+      expect(directive(policy, 'script-src')).toBe("'self' 'wasm-unsafe-eval'")
+      expect(directive(policy, 'worker-src')).toBe("'self' blob:")
+      expect(directive(policy, 'default-src')).toBe("'self'")
+      expect(directive(policy, 'object-src')).toBe("'none'")
+    }
+  })
+
+  it('never allows eval: no unsafe-eval and no inline script, in any directive', () => {
+    for (const policy of every) {
+      for (const part of policy.split(';')) {
+        expect(part.trim().split(/\s+/)).not.toContain("'unsafe-eval'")
+      }
+      expect(directive(policy, 'script-src')).not.toMatch(/unsafe-inline|blob:|data:|\*/)
     }
   })
 })

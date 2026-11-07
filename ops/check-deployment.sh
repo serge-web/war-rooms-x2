@@ -77,7 +77,16 @@ case "$csp" in
   *"connect-src 'self'"*"frame-ancestors 'none'"*) pass "Content-Security-Policy: connect-src 'self', frame-ancestors 'none'" ;;
   *) fail "Content-Security-Policy header missing or not narrowed: '$csp'" ;;
 esac
-case "$csp" in *unsafe-eval*) fail "the policy allows unsafe-eval" ;; esac
+# The Python runner (WP 6.2, SRD Annex C PR3): WebAssembly and blob: workers, never eval.
+case "$csp" in
+  *"'unsafe-eval'"*) fail "the policy allows 'unsafe-eval'" ;;
+  *"script-src 'self' 'wasm-unsafe-eval';"*"worker-src 'self' blob:;"*)
+    pass "Content-Security-Policy: 'wasm-unsafe-eval' and blob: workers, no 'unsafe-eval'" ;;
+  *) fail "Content-Security-Policy lacks the Python runner's script-src or worker-src: '$csp'" ;;
+esac
+wasm=$(header /py/pyodide/pyodide.asm.wasm Content-Type)
+[ "$wasm" = application/wasm ] && pass "Pyodide's .wasm is served as application/wasm" ||
+  fail "Pyodide's .wasm is served as '${wasm:-nothing}', not application/wasm"
 [ "$(header / X-Content-Type-Options)" = nosniff ] && pass "X-Content-Type-Options: nosniff" ||
   fail "no X-Content-Type-Options: nosniff"
 [ "$(header / Referrer-Policy)" = no-referrer ] && pass "Referrer-Policy: no-referrer" ||

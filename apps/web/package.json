@@ -21,6 +21,7 @@
     "@wrx/mock-host": "workspace:*",
     "@wrx/mock-server": "workspace:*",
     "@wrx/player-ui": "workspace:*",
+    "@wrx/py-runner": "workspace:*",
     "@wrx/schemas": "workspace:*",
     "@wrx/transport": "workspace:*",
     "@wrx/transport-xmpp": "workspace:*",

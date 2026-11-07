@@ -71,6 +71,9 @@ importers:
       '@wrx/player-ui':
         specifier: workspace:*
         version: link:../../packages/player-ui
+      '@wrx/py-runner':
+        specifier: workspace:*
+        version: link:../../packages/py-runner
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -411,6 +414,9 @@ importers:
       '@wrx/hooks':
         specifier: workspace:*
         version: link:../hooks
+      '@wrx/py-runner':
+        specifier: workspace:*
+        version: link:../py-runner
       '@wrx/schemas':
         specifier: workspace:*
         version: link:../schemas
@@ -466,6 +472,31 @@ importers:
       vite:
         specifier: ^8.3.5
         version: 8.3.5(@types/node@22.20.5)
+
+  packages/py-runner:
+    dependencies:
+      '@wrx/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@wrx/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.5
+      pyodide:
+        specifier: 314.0.7
+        version: 314.0.7
+      vite:
+        specifier: ^8.3.5
+        version: 8.3.5(@types/node@22.20.5)
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(happy-dom@20.14.6)(jsdom@29.1.1)(vite@8.3.5(@types/node@22.20.5))
 
   packages/schemas:
     dependencies:
@@ -2234,6 +2265,9 @@ packages:
   '@types/doctrine@0.0.9':
     resolution: {integrity: sha512-eOIHzCUSH7SMfonMG1LsC2f8vxBFtho6NGBznK41R84YzPuvSBzrhEps33IsQiOW9+VL6NQ9DbjQJznk/S4uRA==}
 
+  '@types/emscripten@1.41.6':
+    resolution: {integrity: sha512-uN+9i8bFT5CUcZfyIEYDrSueACEyKGbUs5kC/72DGlZZoinh84sJfVV0i8UOJD1asdzkvLPBRrKs41kZ8MdEXg==}
+
   '@types/esrecurse@4.3.1':
     resolution: {integrity: sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==}
 
@@ -3560,6 +3594,10 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
+
+  pyodide@314.0.7:
+    resolution: {integrity: sha512-0YvXxEhfEdpLfb/XkM2BFAeMROq0iMUX2bzzH9pOttyMcWkwq+HbE5uyuGD82LN7y2q+SNvi/6V5JEsOlD2R1A==}
+    engines: {node: '>=18.0.0'}
 
   qified@0.10.1:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
@@ -5589,6 +5627,8 @@ snapshots:
 
   '@types/doctrine@0.0.9': {}
 
+  '@types/emscripten@1.41.6': {}
+
   '@types/esrecurse@4.3.1': {}
 
   '@types/estree@1.0.9': {}
@@ -6996,6 +7036,14 @@ snapshots:
   property-information@7.2.0: {}
 
   punycode@2.3.1: {}
+
+  pyodide@314.0.7:
+    dependencies:
+      '@types/emscripten': 1.41.6
+      ws: 8.22.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   qified@0.10.1:
     dependencies:

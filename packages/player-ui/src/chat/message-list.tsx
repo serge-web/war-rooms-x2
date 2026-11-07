@@ -10,7 +10,7 @@ import { cardClock } from '../templates/card.ts'
 import type { CardClock } from '../templates/card.ts'
 import { TemplateCard } from '../templates/card-view.tsx'
 import { chatClock, linkify } from './format.ts'
-import type { ChatRow, TimeFormat } from './format.ts'
+import type { ChatMessage, ChatRow, TimeFormat } from './format.ts'
 
 export interface MessageListCoreProps {
   /** From `chatRows`, oldest first. */
@@ -29,6 +29,8 @@ export interface MessageListCoreProps {
   readonly timeFormat?: TimeFormat | undefined
   /** The scrolling element, e.g. to watch whether the panel is on screen. */
   readonly scrollRef?: RefObject<HTMLDivElement | null>
+  /** The admin's: offers "Load into draft…" on each proposal card (PY-8, WP 6.4). */
+  readonly onLoadProposal?: ((message: ChatMessage) => void) | undefined
 }
 
 /** Within this many pixels of the bottom counts as at the bottom. */
@@ -38,8 +40,8 @@ const TOP_SLACK = 400
 
 function estimate(row: ChatRow | undefined): number {
   if (row === undefined) return 40
-  const { card, warning } = row.message
-  const body = card === undefined ? 28 : 44 + 24 * card.fields.length
+  const { card, warning, proposal } = row.message
+  const body = proposal !== undefined ? 120 : card === undefined ? 28 : 44 + 24 * card.fields.length
   return (
     body +
     (warning === undefined ? 0 : 28) +
@@ -59,6 +61,7 @@ export function MessageListCore({
   onLoadOlder,
   timeFormat,
   scrollRef,
+  onLoadProposal,
 }: MessageListCoreProps) {
   const ownRef = useRef<HTMLDivElement>(null)
   const ref = scrollRef ?? ownRef
@@ -230,6 +233,7 @@ export function MessageListCore({
                 dates={dates}
                 position={item.index + 1}
                 setSize={hasOlder ? -1 : rows.length}
+                onLoadProposal={onLoadProposal}
               />
             </div>
           )
@@ -245,12 +249,14 @@ function MessageRow({
   dates,
   position,
   setSize,
+  onLoadProposal,
 }: {
   readonly row: ChatRow
   readonly clock: ReturnType<typeof chatClock>
   readonly dates: CardClock
   readonly position: number
   readonly setSize: number
+  readonly onLoadProposal?: ((message: ChatMessage) => void) | undefined
 }) {
   const { message } = row
   const ms = Date.parse(message.timestamp)
@@ -309,7 +315,9 @@ function MessageRow({
             <span className="wrx-chat__warning-label">Warning:</span> {message.warning}
           </p>
         )}
-        {message.card !== undefined ? (
+        {message.proposal !== undefined ? (
+          <ProposalCard message={message} onLoad={onLoadProposal} />
+        ) : message.card !== undefined ? (
           <TemplateCard card={message.card} clock={dates} />
         ) : message.text === undefined ? (
           <p className="wrx-chat__text wrx-chat__text--unreadable">
@@ -322,6 +330,44 @@ function MessageRow({
         )}
       </article>
     </>
+  )
+}
+
+/**
+ * A White Force proposal (PY-8): its summary and the size of the state it proposes. The admin's
+ * client offers to load it into the world-state draft; every other client shows the card only.
+ */
+function ProposalCard({
+  message,
+  onLoad,
+}: {
+  readonly message: ChatMessage
+  readonly onLoad?: ((message: ChatMessage) => void) | undefined
+}) {
+  const proposal = message.proposal
+  if (proposal === undefined) return null
+  const assets = Object.keys(proposal.state.assets).length
+  return (
+    <section className="wrx-chat__proposal" aria-label="Proposed world state">
+      <p className="wrx-chat__proposal-title">Proposed world state</p>
+      <p className="wrx-chat__text">
+        <MessageText text={proposal.summary} />
+      </p>
+      <p className="wrx-chat__proposal-meta">
+        Turn {proposal.state.turn}, {assets.toLocaleString('en-GB')}{' '}
+        {assets === 1 ? 'asset' : 'assets'}.
+      </p>
+      {onLoad === undefined ? null : (
+        <Button
+          size="small"
+          onClick={() => {
+            onLoad(message)
+          }}
+        >
+          Load into draft…
+        </Button>
+      )}
+    </section>
   )
 }
 

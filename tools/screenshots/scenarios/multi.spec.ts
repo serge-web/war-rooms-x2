@@ -23,7 +23,7 @@ test('multi-client view, three panes', { tag: '@screenshot' }, async ({ page }) 
     await expect(pane.getByRole('tab', { name: 'Out of game', exact: true })).toBeVisible()
   }
   const umpire = page.getByRole('region', { name: 'Pane 3', exact: true })
-  await expect(roomTabs(umpire)).toHaveCount(5)
+  await expect(roomTabs(umpire)).toHaveCount(6)
   await page.mouse.move(0, 0)
   await shoot(page, 'multi-client-view')
 

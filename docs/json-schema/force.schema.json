@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wrx1:json-schema:force.schema.json",
+  "title": "Force (`forces:<forceId>`)",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "number",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Entity id: a lowercase GUID, generated at creation, never reused (SRD §3 rule 1)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Display name"
+    },
+    "colour": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "description": "Colour for message authors; not a theme token (§3 rule 13)"
+    },
+    "iconAssetId": {
+      "description": "Id of an `assets:<id>` node",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "isUmpire": {
+      "type": "boolean",
+      "description": "The umpire flag: this is the White Force, which the admin plays in as umpire; exactly one force has it (ADM-4, D8)"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "Admin-set display order; ties sort by id (SRD §3 rule 7)"
+    },
+    "theme": {
+      "description": "Styles the force panel only (D19)",
+      "$ref": "#/$defs/Theme"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "colour",
+    "isUmpire",
+    "order"
+  ],
+  "description": "A side in the game",
+  "$defs": {
+    "Theme": {
+      "type": "object",
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/ThemeTokens"
+        },
+        "logoAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "iconAssetId": {
+          "description": "Id of an `assets:<id>` node",
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      },
+      "required": [
+        "tokens"
+      ],
+      "description": "Theme: tokens plus optional logo and icon assets"
+    },
+    "ThemeTokens": {
+      "type": "object",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "secondary": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "background": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "surface": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "Colour as #rrggbb"
+        },
+        "fontFamily": {
+          "description": "Bundled font id",
+          "type": "string",
+          "enum": [
+            "sans",
+            "serif",
+            "mono"
+          ]
+        }
+      },
+      "description": "Design tokens; an unset token inherits from the game theme, then the default"
+    }
+  }
+}

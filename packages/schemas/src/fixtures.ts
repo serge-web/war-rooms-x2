@@ -3,6 +3,7 @@ import { DESIGN_FILE_VERSION } from './design.ts'
 import type { DesignFile } from './design.ts'
 import type { Asset, Room } from './documents.ts'
 import type { ChatRoomConfig, Template } from './template.ts'
+import { UMPIRE_ROOM_NAME, UMPIRE_ROOM_TYPE, umpireParticipants } from './umpire.ts'
 import { MAP_ROOM_TYPE, mapParticipants } from './world.ts'
 import type { WorldAsset, WorldState } from './world.ts'
 import type { DesignFileV1 } from './legacy.ts'
@@ -51,6 +52,8 @@ export const ROOM = Object.freeze({
   blueReports: fixed(3, 4),
   /** The game's map room (§3 rule 18, `demoDesign`). */
   map: fixed(3, 5),
+  /** The game's umpire room (§3 rule 18, PD8, `demoDesign`). */
+  umpire: fixed(3, 6),
 })
 export const TEMPLATE = Object.freeze({
   sitrep: fixed(5, 1),
@@ -92,6 +95,7 @@ const KNOWN: Readonly<Record<string, string>> = Object.freeze({
   negotiation: ROOM.negotiation,
   'blue-reports': ROOM.blueReports,
   map: ROOM.map,
+  umpire: ROOM.umpire,
   sitrep: TEMPLATE.sitrep,
   contact: TEMPLATE.contact,
   support: TEMPLATE.support,
@@ -486,6 +490,22 @@ export function mapRoom(design: Pick<DesignFile, 'forces' | 'rooms'>, id: string
   }
 }
 
+/** The umpire room for a design (§3 rule 18, PD8): the admin and the White Force only. */
+export function umpireRoom(
+  design: Pick<DesignFile, 'forces' | 'roles' | 'rooms'>,
+  id: string = ROOM.umpire,
+): Room {
+  return {
+    schemaVersion: 1,
+    id,
+    name: UMPIRE_ROOM_NAME,
+    roomType: UMPIRE_ROOM_TYPE,
+    participants: umpireParticipants(design),
+    config: {},
+    order: design.rooms.length,
+  }
+}
+
 /** A design with its map room added last (§3 rule 18). */
 export function withSampleMapRoom(design: DesignFile): DesignFile {
   return { ...design, rooms: [...design.rooms, mapRoom(design)] }
@@ -493,12 +513,16 @@ export function withSampleMapRoom(design: DesignFile): DesignFile {
 
 /**
  * The demo design: the templated sample design (`templatedDesign`), White Cell, a White Force
- * role that is not an observer (`sampleDesignWithWhiteCell`, D21), and the game's map room, every
- * force a write entry (§3 rule 18). The mock's demo seed posts `sampleWorldState()` to it as the
+ * role that is not an observer (`sampleDesignWithWhiteCell`, D21), the game's map room, every
+ * force a write entry, and its umpire room, the White Force only (§3 rule 18, PD8). The mock's demo seed posts `sampleWorldState()` to it as the
  * admin.
  */
 export function demoDesign(): DesignFile {
-  return withSampleMapRoom({ ...templatedDesign(), roles: sampleDesignWithWhiteCell().roles })
+  const design = withSampleMapRoom({
+    ...templatedDesign(),
+    roles: sampleDesignWithWhiteCell().roles,
+  })
+  return { ...design, rooms: [...design.rooms, umpireRoom(design)] }
 }
 
 function worldAsset(

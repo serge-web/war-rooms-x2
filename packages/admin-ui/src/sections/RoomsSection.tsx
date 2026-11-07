@@ -1,11 +1,12 @@
 // Rooms (ADM-6, ADM-7): name, room type from the registry, participants, and the type's own
 // settings through the registry's admin editor slot (ARC-5). Reordered by drag and drop (ADM-8).
-// The map room is the draft's own (§3 rule 18): it is never added, deleted or retyped here, and
-// its participants are fixed, so the form says so instead of offering them.
-import { roomConfig } from '@wrx/domain'
+// The map room and the umpire room are the draft's own (§3 rule 18, PD8): they are never added,
+// deleted or retyped here, and their participants are fixed, so the form says so instead of
+// offering them; the umpire room's members are listed, read only.
+import { effectiveAccess, roomConfig } from '@wrx/domain'
 import type { ReactRoomTypeRegistry } from '@wrx/hooks'
-import { LIMITS, MAP_ROOM_TYPE } from '@wrx/schemas'
-import type { Room } from '@wrx/schemas'
+import { LIMITS, isFixedRoomType } from '@wrx/schemas'
+import type { DesignFile, Room } from '@wrx/schemas'
 import { useState } from 'react'
 import {
   AddForm,
@@ -25,7 +26,9 @@ import {
   chatConfigOf,
   deleteRoom,
   isMapRoom,
+  isUmpireRoom,
   moveRoom,
+  sortedRoles,
   removeParticipant,
   setFreeText,
   setParticipant,
@@ -45,8 +48,8 @@ export function RoomsSectionCore({ draft, validation, onChange, registry }: Room
   const rooms = draft.design.rooms
   const [chosen, setChosen] = useState<string | undefined>(undefined)
   const selected = rooms.find((r) => r.id === chosen) ?? rooms[0]
-  // The map room comes with the draft; no other is added (§3 rule 18).
-  const types = registry.list().filter((t) => t.type !== MAP_ROOM_TYPE)
+  // The map and umpire rooms come with the draft; no other is added (§3 rule 18).
+  const types = registry.list().filter((t) => !isFixedRoomType(t.type))
   const [newType, setNewType] = useState<string | undefined>(undefined)
   const addType =
     types.find((t) => t.type === newType)?.type ??
@@ -127,6 +130,32 @@ function RoomNamesNotice() {
   )
 }
 
+/** The umpire room's members, as access gives them (§3 rules 4, 18): read only, never edited. */
+function UmpireMembers({ design, room }: { readonly design: DesignFile; readonly room: Room }) {
+  const cells = effectiveAccess(design).cells.get(room.id)
+  const members = sortedRoles(design).flatMap((role) => {
+    const access = cells?.get(role.id)?.access ?? 'none'
+    return access === 'none' ? [] : [{ role, access }]
+  })
+  return (
+    <section className="wrx-admin-fieldset" aria-label="Umpire room members">
+      <h3 className="wrx-admin-group-title">Members</h3>
+      <ul>
+        <li>You, the admin (umpire): write</li>
+        {members.map(({ role, access }) => (
+          <li key={role.id}>
+            {role.name.trim() === '' ? role.loginName : role.name}:{' '}
+            {access === 'write' ? 'write' : 'read only (observer)'}
+          </li>
+        ))}
+      </ul>
+      {members.length === 0 ? (
+        <p className="wrx-admin-hint">The White Force has no roles yet.</p>
+      ) : null}
+    </section>
+  )
+}
+
 function RoomForm({
   room,
   draft,
@@ -140,12 +169,15 @@ function RoomForm({
   const config = roomConfig(registry, room, design.game)
   const Editor = definition?.adminEditor
   const chat = chatConfigOf(room)
+  const types = registry.list().filter((t) => !isFixedRoomType(t.type))
   const map = isMapRoom(room)
+  const umpire = isUmpireRoom(room)
+  const fixed = map || umpire
   return (
     <EditForm
       title={`Room: ${room.name.trim() === '' ? '(unnamed)' : room.name}`}
       actions={
-        map ? undefined : (
+        fixed ? undefined : (
           <ConfirmDialog
             triggerLabel={`Delete ${room.name}`}
             title={`Delete ${room.name}?`}
@@ -179,13 +211,22 @@ function RoomForm({
           This is the game’s map room. Every game has exactly one, and every role sees it. Its type
           and participants are fixed; players see only the admin’s world states on it.
         </Notice>
+      ) : umpire ? (
+        <>
+          <Notice tone="info">
+            This is the game’s umpire room. Every game has exactly one: you and the White Force are
+            its only members, and White Force scripts post their proposed world states here for you
+            to load into the world-state draft. Its type and participants are fixed.
+          </Notice>
+          <UmpireMembers design={design} room={room} />
+        </>
       ) : (
         <SelectField
           label="Room type"
           hint="Changing the type clears the type's settings."
           value={room.roomType}
           options={[
-            ...registry.list().map((t) => ({ value: t.type, label: t.label })),
+            ...types.map((t) => ({ value: t.type, label: t.label })),
             ...(definition === undefined
               ? [{ value: room.roomType, label: `${room.roomType} (not supported)` }]
               : []),
@@ -196,7 +237,7 @@ function RoomForm({
           }}
         />
       )}
-      {!map && (
+      {!fixed && (
         <ParticipantsEditor
           design={design}
           room={room}
@@ -210,7 +251,7 @@ function RoomForm({
           }}
         />
       )}
-      {map && <IssueList issues={validation.at(`${at}.participants`)} />}
+      {fixed && <IssueList issues={validation.at(`${at}.participants`)} />}
       {chat !== undefined && (
         <RoomTemplatesEditor
           design={design}

@@ -90,7 +90,7 @@ Players open `https://<domain>/`; the admin backend is `https://<domain>/#/admin
 sudo sh /opt/wrx1/ops/check-deployment.sh
 ```
 
-One line per check, exit 1 if any fails: the certificate verifies against `tls/ca.crt` and names the domain, and is not about to expire; TLS 1.0 and 1.1 are refused; the page has the Content-Security-Policy, `nosniff` and `no-referrer` headers; `config.json` names `/ws` and the domain; the WebSocket answers; `/api`, `/admin`, `/register` and `/upload` answer 404. Run it from an analyst's machine too, with `--connect <server>:443`, to see what the network lets through.
+One line per check, exit 1 if any fails: the certificate verifies against `tls/ca.crt` and names the domain, and is not about to expire; TLS 1.0 and 1.1 are refused; the page has the Content-Security-Policy (with the Python runner's `'wasm-unsafe-eval'` and `blob:` workers, no `'unsafe-eval'`), `nosniff` and `no-referrer` headers; Pyodide's `.wasm` is `application/wasm`; `config.json` names `/ws` and the domain; the WebSocket answers; `/api`, `/admin`, `/register` and `/upload` answer 404. Run it from an analyst's machine too, with `--connect <server>:443`, to see what the network lets through.
 
 ## 5. Upgrade, new certificate, admin password
 
@@ -134,7 +134,7 @@ Three tests in `ops/test/` exercise this guide end to end; each needs `pnpm inst
 
 - **`offline-install-dind.sh`:** a Docker-in-Docker container started with `--network none` plays the air-gapped host. The test shows it has only loopback (no registry reachable, `docker pull` fails, no images), runs the bundle's own `offline-install.sh` inside it, installs again over it as an upgrade (backup taken, data kept), then reaches it through `docker exec` (no network) to run the deployment checks and the whole contract suite.
 - **`backup-restore.sh`:** installs, publishes the sample game with a vault and posts messages, backs up, deletes the deployment and its volumes, installs again, restores, and checks that the vault unlocks with the same passphrase, the audit is clean (observers' voice read through their restored logins) and every account, room, message count, node and item matches.
-- **`browser-check.ts`:** opens the installed client in Chromium, under the header policy: welcome page, admin login over `wss://` on the same origin, logout, no policy violation.
+- **`browser-check.ts`:** opens the installed client in Chromium, under the header policy: welcome page, the policy's `'wasm-unsafe-eval'` and `blob:` workers (never `'unsafe-eval'`), a Python script run in the browser runner (Pyodide's `.wasm` served as `application/wasm`), admin login over `wss://` on the same origin, logout, no policy violation.
 
 The contract suite, the admin-ops, publish and audit scenarios, and `pnpm test:deployment:ejabberd` all take `WRX_XMPP_WS`, `WRX_XMPP_DOMAIN`, `WRX_XMPP_CA` and `WRX_ADMIN_PASSWORD`, so they run against an installed deployment as well as the contract stack.
 

@@ -36,8 +36,11 @@ pnpm --filter @wrx/site e2e    # build under a nested base path and check it off
   status: work-in-progress # or gate (DOC-26)
   snapshotBranch: phase-1 # optional, with snapshotCommit, for a post that shows the app
   snapshotCommit: <full 40-character commit id>
+  python: true # optional, default false: the post is about Python
   ---
   ```
+
+  `python: true` marks a post about Python: only such a post's snapshot carries the Python runner and Pyodide (the app's `py/`, about 23 MB). Every other snapshot is built with `WRX_PY_RUNNER=off` and the stub runner, so its Scripts panel says Python is not in that build, as a PR preview that does not touch Python does (owner decision, Nov 6, 2026). It has no effect on a post without a snapshot. `pnpm check:blog` refuses any value but `true` or `false`.
 
   Work-in-progress posts get a banner saying so (DOC-26), and a gate post must link every work-in-progress post of its phase. `pnpm check:blog` checks both. Label the PR `blog`, or use a `blog/` branch, for it to auto-merge (DOC-23).
 - **Security detail stays off the site (DOC-2).** CI scans every built page against a deny-list kept in `tools/site/`, outside this folder, so the list itself is never published.

@@ -131,6 +131,8 @@ function rules(schema: JsonSchema): string {
   }
   if (schema.minItems !== undefined) out.push(`items ≥ ${schema.minItems}`)
   if (schema.maxItems !== undefined) out.push(`items ≤ ${schema.maxItems}`)
+  if (schema.minProperties !== undefined) out.push(`entries ≥ ${schema.minProperties}`)
+  if (schema.maxProperties !== undefined) out.push(`entries ≤ ${schema.maxProperties}`)
   if (schema.format !== undefined) out.push(`format ${schema.format}`)
   if (schema.contentEncoding !== undefined) out.push(`encoding ${schema.contentEncoding}`)
   if (

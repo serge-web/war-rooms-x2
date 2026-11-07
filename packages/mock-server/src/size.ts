@@ -45,3 +45,8 @@ export function payloadWithinCap(json: string): boolean {
 
 /** XEP-0049 keys become part of an XML namespace on the real transport, so the same alphabet. */
 export const PRIVATE_KEY_PATTERN = /^[a-z0-9][a-z0-9.-]{0,63}$/
+
+/** As the real transport (WP 6.3): a private-storage value, escaped, within its cap. */
+export function privateValueWithinCap(value: string): boolean {
+  return utf8Bytes(escapeText(value)) <= LIMITS.privateValueBytes
+}

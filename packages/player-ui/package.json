@@ -19,6 +19,7 @@
     "@tanstack/react-virtual": "3.14.13",
     "@wrx/domain": "workspace:*",
     "@wrx/hooks": "workspace:*",
+    "@wrx/py-runner": "workspace:*",
     "@wrx/schemas": "workspace:*",
     "@wrx/templates": "workspace:*",
     "@wrx/theme": "workspace:*",

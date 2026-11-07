@@ -8,9 +8,11 @@
 // until the role is first published, then fixed (ADM-5). Deleting a published force or role
 // records its last name in the design's `retired` list, which also holds its login name for good.
 //
-// The draft always has exactly one map room (§3 rule 18): a new draft, an import and a stored
-// draft gain one if they have none, its participants follow the forces (every force, write),
-// and it cannot be deleted, retyped, duplicated or given other participants.
+// The draft always has exactly one map room and one umpire room (§3 rule 18, PD8): a new draft,
+// an import and a stored draft gain them if they have none, their participants follow the design
+// (the map room: every force, write; the umpire room: the White Force, and its observers that
+// are assigned rooms elsewhere, `umpireParticipants`), and they cannot be deleted, retyped,
+// duplicated or given other participants.
 import { byOrderThenId } from '@wrx/domain'
 import {
   ANONYMOUS_LIKE_NAME,
@@ -18,13 +20,18 @@ import {
   LIMITS,
   MAP_ROOM_TYPE,
   RESERVED_LOGIN_NAMES,
+  UMPIRE_ROOM_TYPE,
   chatRoomConfigReader,
   chatRoomConfigSchema,
   hasMapParticipants,
+  hasUmpireParticipants,
+  isFixedRoomType,
   isReservedLoginName,
   mapParticipants,
   newEntityId,
+  umpireParticipants,
   withMapRoom,
+  withUmpireRoom,
 } from '@wrx/schemas'
 import type {
   ChatRoomConfig,
@@ -112,6 +119,8 @@ export interface NewDraftOptions {
   readonly whiteForceId?: string
   /** The id of the map room the design starts with (§3 rule 18); a new GUID by default. */
   readonly mapRoomId?: string
+  /** The id of the umpire room the design starts with (PD8); a new GUID by default. */
+  readonly umpireRoomId?: string
 }
 
 /**
@@ -151,7 +160,14 @@ export function createDraft(options: NewDraftOptions = {}): Draft {
     retired: [],
     templates: [],
   }
-  return { design: withMapRoom(design, () => mapRoomId), meta: EMPTY_META }
+  const umpireRoomId = options.umpireRoomId ?? newEntityId()
+  return {
+    design: withUmpireRoom(
+      withMapRoom(design, () => mapRoomId),
+      () => umpireRoomId,
+    ),
+    meta: EMPTY_META,
+  }
 }
 
 /**
@@ -171,7 +187,7 @@ export function draftFromDesign(
     rest = withoutWorld
   }
   return {
-    design: normalise(withMapRoom(rest, newId)),
+    design: normalise(withUmpireRoom(withMapRoom(rest, newId), newId)),
     meta: {
       publishedRoleIds: meta.publishedRoleIds ?? EMPTY_META.publishedRoleIds,
       publishedForceIds: meta.publishedForceIds ?? EMPTY_META.publishedForceIds,
@@ -502,8 +518,8 @@ export function addRoom(
   roomType: string = DEFAULT_ROOM_TYPE,
   newId: IdSource = newEntityId,
 ): Added {
-  // §3 rule 18: the draft has its one map room already; another is never added.
-  if (roomType === MAP_ROOM_TYPE) return { draft, id: '' }
+  // §3 rule 18: the draft has its one map room and umpire room already; another is never added.
+  if (isFixedRoomType(roomType)) return { draft, id: '' }
   const id = newId()
   const room: Room = {
     schemaVersion: 1,
@@ -520,11 +536,11 @@ export function addRoom(
 export function updateRoom(draft: Draft, id: string, patch: RoomPatch): Draft {
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, id, (room) => {
-      // §3 rule 18: the map room stays the map room, and no other room becomes one.
+      // §3 rule 18: the map and umpire rooms keep their types, and no other room becomes one.
       const retype =
         patch.roomType !== undefined &&
-        patch.roomType !== MAP_ROOM_TYPE &&
-        room.roomType !== MAP_ROOM_TYPE
+        !isFixedRoomType(patch.roomType) &&
+        !isFixedRoomType(room.roomType)
       const typeChanged = retype && patch.roomType !== room.roomType
       return {
         ...room,
@@ -541,7 +557,7 @@ export function updateRoom(draft: Draft, id: string, patch: RoomPatch): Draft {
  * each force or role appears at most once (ADM-6, §3 rule 4).
  */
 export function setParticipant(draft: Draft, roomId: string, entry: Participant): Draft {
-  if (isMapRoomId(draft, roomId)) return draft
+  if (isFixedRoomId(draft, roomId)) return draft
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, roomId, (room) => {
       const at = room.participants.findIndex((p) => p.kind === entry.kind && p.id === entry.id)
@@ -560,7 +576,7 @@ export function removeParticipant(
   kind: Participant['kind'],
   id: string,
 ): Draft {
-  if (isMapRoomId(draft, roomId)) return draft
+  if (isFixedRoomId(draft, roomId)) return draft
   return withDesign(draft, {
     rooms: replaceById(draft.design.rooms, roomId, (room) => ({
       ...room,
@@ -573,9 +589,9 @@ export function moveRoom(draft: Draft, id: string, index: number): Draft {
   return withDesign(draft, { rooms: moveInOrder(draft.design.rooms, id, index) })
 }
 
-/** Deletes a room; the map room is never deleted (§3 rule 18). */
+/** Deletes a room; the map and umpire rooms are never deleted (§3 rule 18). */
 export function deleteRoom(draft: Draft, id: string): Draft {
-  if (!draft.design.rooms.some((r) => r.id === id) || isMapRoomId(draft, id)) return draft
+  if (!draft.design.rooms.some((r) => r.id === id) || isFixedRoomId(draft, id)) return draft
   return withDesign(draft, { rooms: draft.design.rooms.filter((r) => r.id !== id) })
 }
 
@@ -584,8 +600,18 @@ export function isMapRoom(room: Pick<Room, 'roomType'>): boolean {
   return room.roomType === MAP_ROOM_TYPE
 }
 
-function isMapRoomId(draft: Draft, roomId: string): boolean {
-  return draft.design.rooms.some((r) => r.id === roomId && isMapRoom(r))
+/** Whether a room is the game's umpire room, whose participants are fixed (PD8, §3 rule 18). */
+export function isUmpireRoom(room: Pick<Room, 'roomType'>): boolean {
+  return room.roomType === UMPIRE_ROOM_TYPE
+}
+
+/** Whether a room is one of the game's fixed rooms: the map room or the umpire room. */
+export function isFixedRoom(room: Pick<Room, 'roomType'>): boolean {
+  return isFixedRoomType(room.roomType)
+}
+
+function isFixedRoomId(draft: Draft, roomId: string): boolean {
+  return draft.design.rooms.some((r) => r.id === roomId && isFixedRoom(r))
 }
 
 // --- Templates (Annex A, WP 4.3) ---------------------------------------------------------------
@@ -769,8 +795,8 @@ export function referencesTo(design: DesignFile, kind: IdKind, id: string): Refe
   }
   if (kind === 'forces' || kind === 'roles') {
     const entryKind = kind === 'forces' ? 'force' : 'role'
-    // The map room's entries follow the forces by themselves (§3 rule 18).
-    for (const room of [...design.rooms].sort(byOrderThenId).filter((r) => !isMapRoom(r))) {
+    // The fixed rooms' entries follow the design by themselves (§3 rule 18).
+    for (const room of [...design.rooms].sort(byOrderThenId).filter((r) => !isFixedRoom(r))) {
       if (room.participants.some((p) => p.kind === entryKind && p.id === id)) {
         refs.push({
           kind: 'room',
@@ -830,19 +856,26 @@ export function normalise(design: DesignFile): DesignFile {
 }
 
 function withDesign(draft: Draft, changes: Partial<DesignFile>): Draft {
-  const design = normalise(withMapParticipants({ ...draft.design, ...changes }))
+  const design = normalise(withFixedParticipants({ ...draft.design, ...changes }))
   return { ...draft, design }
 }
 
-/** The map room's participants follow the forces: every force, write (§3 rule 18). */
-function withMapParticipants(design: DesignFile): DesignFile {
-  if (design.rooms.every((r) => !isMapRoom(r) || hasMapParticipants(r, design.forces))) {
-    return design
-  }
-  const participants = mapParticipants(design.forces)
+/**
+ * The fixed rooms' participants follow the design (§3 rule 18): the map room's every force,
+ * write; the umpire room's the White Force and its assigned observers (`umpireParticipants`).
+ */
+function withFixedParticipants(design: DesignFile): DesignFile {
+  const stale = (r: Room) =>
+    (isMapRoom(r) && !hasMapParticipants(r, design.forces)) ||
+    (isUmpireRoom(r) && !hasUmpireParticipants(r, design))
+  if (!design.rooms.some(stale)) return design
+  const map = mapParticipants(design.forces)
+  const umpire = umpireParticipants(design)
   return {
     ...design,
-    rooms: design.rooms.map((r) => (isMapRoom(r) ? { ...r, participants } : r)),
+    rooms: design.rooms.map((r) =>
+      !stale(r) ? r : isMapRoom(r) ? { ...r, participants: map } : { ...r, participants: umpire },
+    ),
   }
 }
 

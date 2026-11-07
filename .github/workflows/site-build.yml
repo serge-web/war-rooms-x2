@@ -40,13 +40,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The Pyodide wheels the app's build ships (WP 6.2), fetched once and checked by sha256
+      # against the lock: keyed on it, so only a Pyodide or package change downloads again.
+      - name: Pyodide wheel cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/pyodide
+          key: pyodide-${{ hashFiles('packages/py-runner/pyodide.lock.json') }}
       - name: PR list for the index (DOC-9)
         run: node tools/site/fetch-pulls.ts "$RUNNER_TEMP/pulls.json"
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      # Owner decision (Nov 6, 2026): a PR preview carries py/ (Python and Pyodide, 23 MB) only
+      # when the PR touches the runner, the SDK or Python files; the main site always does.
+      - name: Include Python in the app only if the PR touches it
+        id: python
+        run: |
+          if [ -z "$PR" ]; then on=true; else on=$(node tools/site/python-changed.ts --pr "$PR"); fi
+          if [ "$on" = true ]; then echo "runner=on" >> "$GITHUB_OUTPUT"; else echo "runner=off" >> "$GITHUB_OUTPUT"; fi
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
       - name: Build the site and the mock-only app (DOC-1, DOC-6, DOC-11)
         run: pnpm site:build
         env:
+          WRX_PY_RUNNER: ${{ steps.python.outputs.runner }}
           WRX_SITE_TARGET: ${{ inputs.target }}
           WRX_PULLS_FILE: ${{ runner.temp }}/pulls.json
           SITE_PAGES_ROOT: ${{ vars.SITE_PAGES_ROOT }}

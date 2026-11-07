@@ -68,6 +68,11 @@ export interface Fixture {
     readonly negotiation: string
     /** The map room (§3 rule 18): every role a member; world states of up to 500 KB (D25). */
     readonly map: string
+    /**
+     * The umpire room (§3 rule 19, PD8): the White Force only, its observer read-only; White
+     * Force proposals of up to 500 KB (PY-8).
+     */
+    readonly umpire: string
   }
   readonly nodes: {
     readonly gameSetup: string
@@ -101,6 +106,7 @@ export function makeFixture(domain: string): Fixture {
       redHq: `${tag}-red-hq`,
       negotiation: `${tag}-negotiation`,
       map: `${tag}-map`,
+      umpire: `${tag}-umpire-room`,
     },
     nodes: {
       gameSetup: `${tag}:game-setup`,
@@ -128,6 +134,7 @@ export function plan(fx: Fixture) {
       { room: fx.rooms.redHq, members: [redCo, umpire] },
       { room: fx.rooms.negotiation, members: [blueCo, redCo, umpire] },
       { room: fx.rooms.map, members: everyRole },
+      { room: fx.rooms.umpire, members: [umpire, whiteObs] },
     ],
     nodes: [
       { node: fx.nodes.gameSetup, config: OPEN_NODE, readers: [], publishers: [] },
